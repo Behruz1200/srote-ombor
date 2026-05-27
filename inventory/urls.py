@@ -2,6 +2,10 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # PWA — manifest and service worker at root scope
+    path('manifest.webmanifest', views.manifest, name='manifest'),
+    path('sw.js', views.service_worker, name='service_worker'),
+
     path('', views.home, name='home'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),

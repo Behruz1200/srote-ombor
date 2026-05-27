@@ -627,6 +627,33 @@ def reports(request):
     })
 
 
+# ---------- PWA ----------
+
+def _serve_static_file(rel_path, content_type):
+    from django.conf import settings
+    import os
+    path = os.path.join(settings.BASE_DIR, 'static', rel_path)
+    if not os.path.exists(path):
+        return HttpResponse(status=404)
+    with open(path, 'rb') as f:
+        data = f.read()
+    response = HttpResponse(data, content_type=content_type)
+    response['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
+def manifest(request):
+    """PWA manifest served at /manifest.webmanifest"""
+    return _serve_static_file('manifest.webmanifest', 'application/manifest+json')
+
+
+def service_worker(request):
+    """PWA service worker — must be served at root scope."""
+    response = _serve_static_file('sw.js', 'application/javascript')
+    response['Service-Worker-Allowed'] = '/'
+    return response
+
+
 # ---------- QR / ETIKETKA ----------
 
 @login_required
