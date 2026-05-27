@@ -7,6 +7,19 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load .env file from project root if present (gitignored).
+# Simple parser: KEY=value or KEY="value", one per line, # = comment.
+_env_path = BASE_DIR / '.env'
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        _line = _line.strip()
+        if not _line or _line.startswith('#') or '=' not in _line:
+            continue
+        _k, _v = _line.split('=', 1)
+        _k = _k.strip()
+        _v = _v.strip().strip('"').strip("'")
+        os.environ.setdefault(_k, _v)
+
 SECRET_KEY = 'django-insecure-c+=*&dh#&)r!htow17kij3%cax9=bgqa7=a99i#j7=2wimlf#p'
 
 DEBUG = True
