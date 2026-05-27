@@ -188,6 +188,52 @@ class Intake(models.Model):
         return self.quantity * self.cost_per_unit
 
 
+class AuditLog(models.Model):
+    """Har bir muhim yozuvga (kim, qachon, nima qildi) izlash."""
+
+    class Action(models.TextChoices):
+        CREATE = 'create', 'Yaratdi'
+        UPDATE = 'update', "O'zgartirdi"
+        DELETE = 'delete', "O'chirdi"
+        LOGIN = 'login', 'Kirdi'
+        LOGOUT = 'logout', 'Chiqdi'
+        LOGIN_FAILED = 'login_failed', "Kirish urinishi (xato)"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='audit_logs',
+    )
+    username_snapshot = models.CharField(
+        max_length=150, blank=True,
+        help_text='User o\'chirilsa ham foydalanuvchi nomi qoladi'
+    )
+    action = models.CharField(max_length=20, choices=Action.choices)
+    model_name = models.CharField(max_length=80, blank=True)
+    object_id = models.CharField(max_length=80, blank=True)
+    object_repr = models.CharField(
+        max_length=300, blank=True,
+        help_text="Qaysi obyekt: masalan 'Sale: OYO-0001 — 3 dona'"
+    )
+    changes = models.JSONField(
+        default=dict, blank=True,
+        help_text='{"field": ["old", "new"], ...}'
+    )
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = 'Audit log'
+        verbose_name_plural = 'Audit log'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['model_name', 'object_id']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.created_at:%Y-%m-%d %H:%M} — {self.username_snapshot} {self.action}'
+
+
 class Sale(models.Model):
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='sales')
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='sales')

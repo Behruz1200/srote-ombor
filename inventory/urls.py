@@ -35,6 +35,7 @@ urlpatterns = [
 
     path('reports/', views.reports, name='reports'),
     path('insights/', views.insights, name='insights'),
+    path('audit/', views.audit_list, name='audit_list'),
 
     path('products/<str:code>/qr.png', views.qr_image, name='qr_image'),
     path('products/<str:code>/label/', views.product_labels, name='product_label'),
