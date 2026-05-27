@@ -11,3 +11,7 @@ python manage.py collectstatic --no-input
 
 # Apply migrations
 python manage.py migrate --no-input
+
+# Auto-create superuser if DJANGO_SUPERUSER_* env vars are set.
+# Idempotent: skips if the username already exists.
+python manage.py ensure_superuser
