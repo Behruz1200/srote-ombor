@@ -210,41 +210,48 @@ print(f"  Jami qabullar: {total_intakes}")
 
 
 # ---------- SOTUVLAR ----------
-print("\nSotuvlar yaratilmoqda (oxirgi 30 kun)...")
-total_sales = 0
-total_revenue = 0
-
-with transaction.atomic():
-    for day_offset in range(0, 30):
-        day = days_ago(day_offset)
-        for br in branches:
-            sales_today = random.randint(2, 12)
-            sellers = sellers_per_branch.get(br.id, [])
-            if not sellers:
-                continue
-            for _ in range(sales_today):
-                stocks = list(BranchStock.objects.filter(
-                    branch=br, stock_count__gte=1
-                ).select_related('variant__product'))
-                if not stocks:
+# Idempotent: if any sales already exist, skip the historical generator
+# so re-running this script doesn't pile up duplicate fake sales.
+if Sale.objects.exists():
+    total_sales = Sale.objects.count()
+    total_revenue = 0
+    print(f"\nSotuvlar tarixi allaqachon bor ({total_sales} yozuv) — o'tkazib yuborildi.")
+else:
+    print("\nSotuvlar yaratilmoqda (oxirgi 30 kun)...")
+    total_sales = 0
+    total_revenue = 0
+    with transaction.atomic():
+        for day_offset in range(0, 30):
+            day = days_ago(day_offset)
+            for br in branches:
+                sales_today = random.randint(2, 12)
+                sellers = sellers_per_branch.get(br.id, [])
+                if not sellers:
                     continue
-                bs = random.choice(stocks)
-                qty = random.randint(1, min(3, bs.stock_count))
-                price = bs.sale_price if bs.sale_price > 0 else bs.variant.product.default_sale_price
-                if random.random() < 0.15:
-                    price = price * Decimal('0.9')
-                seller = random.choice(sellers)
-                Sale.objects.create(
-                    variant=bs.variant, branch=br,
-                    quantity=qty, sale_price=price,
-                    sold_by=seller,
-                    sold_at=rand_time_on(day),
-                    note=random.choice(['', '', '', 'Mijoz: doimiy', 'Naqd', 'Karta']),
-                )
-                bs.stock_count -= qty
-                bs.save()
-                total_sales += 1
-                total_revenue += qty * price
+                for _ in range(sales_today):
+                    stocks = list(BranchStock.objects.filter(
+                        branch=br, stock_count__gte=1
+                    ).select_related('variant__product'))
+                    if not stocks:
+                        continue
+                    bs = random.choice(stocks)
+                    qty = random.randint(1, min(3, bs.stock_count))
+                    price = bs.sale_price if bs.sale_price > 0 else bs.variant.product.default_sale_price
+                    if random.random() < 0.15:
+                        price = price * Decimal('0.9')
+                    seller = random.choice(sellers)
+                    Sale.objects.create(
+                        variant=bs.variant, branch=br,
+                        quantity=qty, sale_price=price,
+                        cost_at_sale=bs.cost_price,
+                        sold_by=seller,
+                        sold_at=rand_time_on(day),
+                        note=random.choice(['', '', '', 'Mijoz: doimiy', 'Naqd', 'Karta']),
+                    )
+                    bs.stock_count -= qty
+                    bs.save()
+                    total_sales += 1
+                    total_revenue += qty * price
 
 print(f"  Jami sotuvlar:  {total_sales}")
 print(f"  Jami daromad:   {total_revenue:,.0f} so'm")
