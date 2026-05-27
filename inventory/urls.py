@@ -6,6 +6,7 @@ urlpatterns = [
     path('manifest.webmanifest', views.manifest, name='manifest'),
     path('sw.js', views.service_worker, name='service_worker'),
 
+    path('healthz', views.healthz, name='healthz'),
     path('', views.home, name='home'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
