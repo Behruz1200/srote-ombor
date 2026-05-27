@@ -48,7 +48,11 @@ class ProductForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'image': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'image': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*',
+                'capture': 'environment',  # Phone: open rear camera directly
+            }),
             'default_sale_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '1'}),
             'markup_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
         }

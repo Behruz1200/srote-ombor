@@ -102,6 +102,16 @@ def post_save_handler(sender, instance, created, **kwargs):
         if changes:
             _write_log(AuditLog.Action.UPDATE, instance=instance, changes=changes)
 
+    # Low-stock Telegram alert when a BranchStock drops to/below threshold
+    if sender is BranchStock:
+        try:
+            from .notifications import maybe_low_stock_alert
+            maybe_low_stock_alert(instance)
+        except Exception as e:
+            # Never let a notification failure break the request
+            import logging
+            logging.getLogger(__name__).warning('Low-stock alert failed: %s', e)
+
 
 def post_delete_handler(sender, instance, **kwargs):
     _write_log(AuditLog.Action.DELETE, instance=instance,

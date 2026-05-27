@@ -72,10 +72,48 @@
 
 <style>
 @media print {
+    /* hide screen UI */
     body * { visibility: hidden; }
     #receipt, #receipt * { visibility: visible; }
-    #receipt { position: absolute; left: 0; top: 0; width: 80mm; padding: 4mm; box-shadow: none; border: none; }
-    @page { margin: 0; }
+
+    /* thermal printer page setup — 80mm roll */
+    @page { size: 80mm auto; margin: 0; }
+    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+
+    #receipt {
+        position: absolute; left: 0; top: 0;
+        width: 80mm;
+        max-width: 80mm;
+        padding: 3mm 3mm 6mm 3mm;
+        box-shadow: none !important;
+        border: none !important;
+        background: #fff !important;
+        /* monospace makes columns align nicely on thermal */
+        font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+        font-size: 10pt;
+        line-height: 1.25;
+        color: #000;
+    }
+
+    #receipt h4 { font-size: 14pt; font-weight: 700; margin: 0 0 1mm 0; letter-spacing: 1px; }
+    #receipt h5 { font-size: 11pt; margin: 1mm 0; }
+    #receipt hr { border: 0; border-top: 1px dashed #000; margin: 1.5mm 0; }
+    #receipt .small { font-size: 9pt; }
+    #receipt .fs-4 { font-size: 13pt !important; font-weight: 700; }
+
+    #receipt table { width: 100%; border-collapse: collapse; }
+    #receipt th, #receipt td {
+        padding: 1mm 0.5mm !important;
+        font-size: 9pt;
+        vertical-align: top;
+        border: none !important;
+    }
+    #receipt thead th { border-bottom: 1px solid #000 !important; font-weight: 700; }
+    #receipt tfoot th { border-top: 1px solid #000 !important; font-size: 11pt !important; }
+    #receipt .text-end { text-align: right; }
+    #receipt .text-center { text-align: center; }
+    #receipt .text-muted { color: #444 !important; }
+    #receipt code, #receipt strong { font-weight: 700; }
 }
 </style>
 {% endblock %}
