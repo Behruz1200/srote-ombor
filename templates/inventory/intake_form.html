@@ -1,0 +1,140 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}Qabul qilish — {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <h3 class="mb-1"><i class="bi bi-box-arrow-in-down"></i> Yangi qabul</h3>
+            <p class="text-muted">
+                Mahsulot: <strong>{{ product.name }}</strong>
+                <span class="code-pill">{{ product.code }}</span>
+            </p>
+
+            <div class="card p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">{{ form.branch.label }}</label>
+                            {{ form.branch }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.size.label }}</label>
+                            {{ form.size }}
+                            <small class="text-muted">Mavjud o'lcham bo'lsa, soni shunga qo'shiladi.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.color.label }}</label>
+                            {{ form.color }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{{ form.quantity.label }}</label>
+                            {{ form.quantity }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{{ form.cost_per_unit.label }}</label>
+                            {{ form.cost_per_unit }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">{{ form.markup_percent.label }}</label>
+                            {{ form.markup_percent }}
+                            <small class="text-muted">{{ form.markup_percent.help_text }}</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">{{ form.sale_price.label }}</label>
+                            {{ form.sale_price }}
+                            <small class="text-muted">{{ form.sale_price.help_text }}</small>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="alert alert-info py-2 mb-0" id="price-preview" style="display:none;">
+                                <i class="bi bi-calculator"></i>
+                                <strong>Hisob:</strong> Tannarx <span id="pv-cost">0</span> so'm
+                                + <span id="pv-markup">0</span>% =
+                                <span id="pv-sale" class="fs-5 text-success">0</span> so'm
+                                &nbsp; <small class="text-muted">(foyda: <span id="pv-profit">0</span> so'm/dona)</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check">
+                                {{ form.update_product_price }}
+                                <label class="form-check-label">{{ form.update_product_price.label }}</label>
+                                <small class="text-muted d-block">
+                                    Belgilab qo'yilsa, mahsulot kartochkasidagi va boshqa filiallardagi (hali narx belgilanmagan)
+                                    sotuv narxi ham yangilanadi.
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">{{ form.supplier.label }}</label>
+                            {{ form.supplier }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">{{ form.note.label }}</label>
+                            {{ form.note }}
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-save"></i> Qabulni saqlash
+                        </button>
+                        <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-secondary">
+                            Bekor qilish
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const cost   = document.getElementById('id_cost_per_unit');
+    const markup = document.getElementById('id_markup_percent');
+    const sale   = document.getElementById('id_sale_price');
+    const preview = document.getElementById('price-preview');
+    const pvCost = document.getElementById('pv-cost');
+    const pvMarkup = document.getElementById('pv-markup');
+    const pvSale = document.getElementById('pv-sale');
+    const pvProfit = document.getElementById('pv-profit');
+
+    let saleEdited = false;
+    sale.addEventListener('input', () => { saleEdited = sale.value !== ''; render(); });
+
+    function fmt(n) {
+        return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+    }
+
+    function render() {
+        const c = parseFloat(cost.value) || 0;
+        const m = parseFloat(markup.value) || 0;
+        let s;
+        if (saleEdited && sale.value !== '') {
+            s = parseFloat(sale.value) || 0;
+        } else {
+            s = c * (1 + m/100);
+            sale.value = Math.round(s);
+        }
+        if (c > 0) {
+            preview.style.display = 'block';
+            pvCost.textContent = fmt(c);
+            pvMarkup.textContent = m.toString();
+            pvSale.textContent = fmt(s);
+            pvProfit.textContent = fmt(s - c);
+        } else {
+            preview.style.display = 'none';
+        }
+    }
+
+    cost.addEventListener('input', () => { if (!saleEdited) sale.value = ''; render(); });
+    markup.addEventListener('input', () => { if (!saleEdited) sale.value = ''; render(); });
+
+    render();
+})();
+</script>
+{% endblock %}

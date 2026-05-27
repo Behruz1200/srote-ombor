@@ -1,0 +1,443 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Tahlil — Srote{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Biznes tahlili</h3>
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="get" class="d-flex gap-2">
+                <select name="period" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="today" {% if period == 'today' %}selected{% endif %}>Bugun</option>
+                    <option value="week" {% if period == 'week' %}selected{% endif %}>Oxirgi 7 kun</option>
+                    <option value="month" {% if period == 'month' %}selected{% endif %}>Oxirgi 30 kun</option>
+                    <option value="quarter" {% if period == 'quarter' %}selected{% endif %}>Oxirgi 90 kun</option>
+                </select>
+                <select name="branch" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">Barcha filiallar</option>
+                    {% for b in branches_all %}
+                        <option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <a href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=pdf"
+               class="btn btn-danger btn-sm">
+                <i class="bi bi-filetype-pdf"></i> PDF
+            </a>
+            <a href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=csv"
+               class="btn btn-success btn-sm">
+                <i class="bi bi-filetype-csv"></i> CSV
+            </a>
+        </div>
+    </div>
+    <p class="text-muted small mb-3">
+        Davr: {{ d_start }} — {{ d_end }} ({{ days }} kun){% if selected_branch %} · Filial: <strong>{{ selected_branch.name }}</strong>{% endif %}
+    </p>
+
+    <!-- KPI cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card stat-card green p-3">
+                <div class="text-muted small">Jami daromad</div>
+                <h3 class="mb-0">{{ revenue|som }} so'm</h3>
+                {% if rev_growth is not None %}
+                    <small class="{% if rev_growth >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        <i class="bi bi-arrow-{% if rev_growth >= 0 %}up{% else %}down{% endif %}"></i>
+                        {{ rev_growth|floatformat:1 }}% oldingi davrga nisbatan
+                    </small>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card orange p-3">
+                <div class="text-muted small">Tannarx</div>
+                <h3 class="mb-0">{{ total_cost|som }} so'm</h3>
+                <small class="text-muted">{{ sales_count }} sotuv · {{ qty }} dona</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card p-3">
+                <div class="text-muted small">Sof foyda</div>
+                <h3 class="mb-0 text-primary">{{ profit|som }} so'm</h3>
+                <small class="text-muted">Marja: {{ margin|floatformat:1 }}%</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card red p-3">
+                <div class="text-muted small">O'rtacha 1 sotuv</div>
+                <h3 class="mb-0">{{ avg_sale_value|som }} so'm</h3>
+                {% if largest_sale %}
+                    <small class="text-muted">Eng katta: {{ largest_sale.line|som }} so'm</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Growth comparison -->
+    <div class="card p-3 mb-3">
+        <h6 class="text-muted text-uppercase small mb-2">Oldingi davr bilan taqqoslash</h6>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <div class="d-flex justify-content-between">
+                    <span>Daromad:</span>
+                    <span>{{ prev_revenue|som }} → <strong>{{ revenue|som }}</strong>
+                        {% if rev_growth is not None %}
+                        <span class="badge bg-{% if rev_growth >= 0 %}success{% else %}danger{% endif %}">
+                            {{ rev_growth|floatformat:1 }}%
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex justify-content-between">
+                    <span>Sotuvlar:</span>
+                    <span>{{ prev_n }} → <strong>{{ sales_count }}</strong>
+                        {% if sales_growth is not None %}
+                        <span class="badge bg-{% if sales_growth >= 0 %}success{% else %}danger{% endif %}">
+                            {{ sales_growth|floatformat:1 }}%
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex justify-content-between">
+                    <span>Dona:</span>
+                    <span>{{ prev_qty }} → <strong>{{ qty }}</strong>
+                        {% if qty_growth is not None %}
+                        <span class="badge bg-{% if qty_growth >= 0 %}success{% else %}danger{% endif %}">
+                            {{ qty_growth|floatformat:1 }}%
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trend chart -->
+    <div class="card p-3 mb-3">
+        <h5><i class="bi bi-activity"></i> Kunlik sotuv trendi</h5>
+        <canvas id="trendChart" style="max-height: 280px;"></canvas>
+    </div>
+
+    <!-- Branch comparison -->
+    <div class="card p-3 mb-3">
+        <h5><i class="bi bi-building"></i> Filiallar yonma-yon taqqoslash</h5>
+        <div class="table-responsive">
+        <table class="table table-sm table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Filial</th>
+                    <th class="text-end">Daromad</th>
+                    <th class="text-end">Tannarx</th>
+                    <th class="text-end">Sof foyda</th>
+                    <th class="text-end">Marja %</th>
+                    <th class="text-end">Sotuvlar</th>
+                    <th class="text-end">Dona</th>
+                    <th class="text-end">O'rt. sotuv</th>
+                    <th class="text-end">Omborda</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for b in branch_compare %}
+                <tr>
+                    <td><strong>{{ b.branch.name }}</strong></td>
+                    <td class="text-end">{{ b.revenue|som }}</td>
+                    <td class="text-end">{{ b.cost|som }}</td>
+                    <td class="text-end text-primary"><strong>{{ b.profit|som }}</strong></td>
+                    <td class="text-end">{{ b.margin|floatformat:1 }}%</td>
+                    <td class="text-end">{{ b.sales_count }}</td>
+                    <td class="text-end">{{ b.qty }}</td>
+                    <td class="text-end">{{ b.avg_sale|som }}</td>
+                    <td class="text-end">{{ b.stock }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <!-- Top by revenue -->
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h5><i class="bi bi-trophy text-warning"></i> TOP-10 daromad bo'yicha</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th>Dona</th><th>Daromad</th></tr></thead>
+                    <tbody>
+                    {% for p in top_products %}
+                        <tr>
+                            <td><strong>{{ forloop.counter }}</strong></td>
+                            <td><a href="{% url 'product_detail' p.variant__product__code %}">
+                                <span class="code-pill">{{ p.variant__product__code }}</span></a></td>
+                            <td>{{ p.variant__product__name|truncatechars:28 }}</td>
+                            <td>{{ p.qty }}</td>
+                            <td><strong>{{ p.revenue|som }}</strong></td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TOP by profit -->
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h5><i class="bi bi-cash-stack text-success"></i> TOP-10 sof foyda bo'yicha</h5>
+                <small class="text-muted">Daromad — tannarx</small>
+                <table class="table table-sm mt-1">
+                    <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th>Foyda</th><th>Marja</th></tr></thead>
+                    <tbody>
+                    {% for p in top_profit %}
+                        <tr>
+                            <td><strong>{{ forloop.counter }}</strong></td>
+                            <td><a href="{% url 'product_detail' p.code %}">
+                                <span class="code-pill">{{ p.code }}</span></a></td>
+                            <td>{{ p.name|truncatechars:28 }}</td>
+                            <td><strong class="text-success">{{ p.profit|som }}</strong></td>
+                            <td>{{ p.margin|floatformat:1 }}%</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <!-- Slow movers -->
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h5><i class="bi bi-snow text-info"></i> Sotilmayotgan mahsulotlar</h5>
+                <small class="text-muted">Bu davrda umuman sotilmaganlar</small>
+                <table class="table table-sm mt-1">
+                    <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kategoriya</th><th>Omborda</th></tr></thead>
+                    <tbody>
+                    {% for p in slow_products %}
+                        <tr>
+                            <td><a href="{% url 'product_detail' p.code %}"><span class="code-pill">{{ p.code }}</span></a></td>
+                            <td>{{ p.name|truncatechars:28 }}</td>
+                            <td><small>{{ p.category.name|default:"—" }}</small></td>
+                            <td>{{ p.stock|default:0 }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="text-success text-center">Hammasi sotilmoqda!</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Turnover / Days of stock left -->
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h5><i class="bi bi-arrow-repeat text-warning"></i> Tovar aylanmasi (top sotilganlar)</h5>
+                <small class="text-muted">Hozirgi sur'atda qancha kun yetadi</small>
+                <table class="table table-sm mt-1">
+                    <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kunlik o'rt.</th><th>Omborda</th><th>Yetadi</th></tr></thead>
+                    <tbody>
+                    {% for t in turnover %}
+                        <tr>
+                            <td><a href="{% url 'product_detail' t.code %}"><span class="code-pill">{{ t.code }}</span></a></td>
+                            <td>{{ t.name|truncatechars:25 }}</td>
+                            <td>{{ t.daily_avg|floatformat:1 }}</td>
+                            <td>{{ t.stock }}</td>
+                            <td>
+                                {% if t.days_left is not None %}
+                                    {% if t.days_left < 7 %}
+                                        <span class="badge bg-danger">{{ t.days_left|floatformat:0 }} kun</span>
+                                    {% elif t.days_left < 14 %}
+                                        <span class="badge bg-warning text-dark">{{ t.days_left|floatformat:0 }} kun</span>
+                                    {% else %}
+                                        <span class="badge bg-success">{{ t.days_left|floatformat:0 }} kun</span>
+                                    {% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="text-muted text-center">Ma'lumot yo'q.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <!-- Top sellers -->
+        <div class="col-lg-7">
+            <div class="card p-3">
+                <h5><i class="bi bi-person-check text-success"></i> Eng yaxshi sotuvchilar</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>#</th><th>Sotuvchi</th><th>Filial</th><th>Sotuvlar</th><th>Dona</th><th>Daromad</th></tr></thead>
+                    <tbody>
+                    {% for s in top_sellers %}
+                        <tr>
+                            <td><strong>{{ forloop.counter }}</strong></td>
+                            <td>{{ s.sold_by__username }}
+                                {% if s.sold_by__first_name %}
+                                    <small class="text-muted d-block">{{ s.sold_by__first_name }} {{ s.sold_by__last_name }}</small>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ s.sold_by__branch__name|default:"—" }}</small></td>
+                            <td>{{ s.n_sales }}</td>
+                            <td>{{ s.qty }}</td>
+                            <td><strong>{{ s.revenue|som }}</strong></td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- Branch donut -->
+        <div class="col-lg-5">
+            <div class="card p-3 h-100">
+                <h5><i class="bi bi-pie-chart"></i> Filial bo'yicha ulush</h5>
+                <canvas id="branchChart" style="max-height: 250px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h5><i class="bi bi-clock"></i> Soatlar bo'yicha (dona)</h5>
+                <canvas id="hourChart" style="max-height: 200px;"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h5><i class="bi bi-calendar-week"></i> Hafta kunlari bo'yicha (dona)</h5>
+                <canvas id="weekdayChart" style="max-height: 200px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h5><i class="bi bi-tags"></i> Kategoriya bo'yicha</h5>
+                <canvas id="categoryChart" style="max-height: 230px;"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h5><i class="bi bi-x-octagon text-danger"></i> Omborda tugagan</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>Filial</th><th>Kod</th><th>O'lcham/Rang</th></tr></thead>
+                    <tbody>
+                    {% for bs in out_of_stock %}
+                        <tr>
+                            <td><small>{{ bs.branch.name }}</small></td>
+                            <td><a href="{% url 'product_detail' bs.variant.product.code %}">{{ bs.variant.product.code }}</a></td>
+                            <td>{{ bs.variant.size }} / {{ bs.variant.color }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="3" class="text-success text-center">Hech narsa tugamagan!</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-3 mb-4">
+        <h5><i class="bi bi-percent text-success"></i> Eng yuqori foiz markup'li mahsulotlar</h5>
+        <div class="row g-2">
+        {% for p in high_margin %}
+            <div class="col-md-3">
+                <div class="border rounded p-2">
+                    <div class="small text-muted">{{ p.code }}</div>
+                    <div>{{ p.name|truncatechars:25 }}</div>
+                    <div class="text-success"><strong>{{ p.markup_percent }}%</strong> markup</div>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const CH_COLORS = ['#0d6efd', '#198754', '#fd7e14', '#dc3545', '#6f42c1',
+                   '#20c997', '#ffc107', '#0dcaf0', '#d63384', '#6610f2'];
+
+new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+        labels: {{ daily_labels|safe }},
+        datasets: [{
+            label: "Daromad (so'm)",
+            data: {{ daily_revenue|safe }},
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13,110,253,0.1)',
+            fill: true, tension: 0.3, yAxisID: 'y',
+        }, {
+            label: 'Sotilgan dona',
+            data: {{ daily_qty|safe }},
+            borderColor: '#198754', tension: 0.3, yAxisID: 'y1',
+        }],
+    },
+    options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            y:  { position: 'left', title: { display: true, text: "so'm" } },
+            y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'dona' } },
+        },
+    },
+});
+
+new Chart(document.getElementById('branchChart'), {
+    type: 'doughnut',
+    data: {
+        labels: [{% for b in by_branch %}"{{ b.branch__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for b in by_branch %}{{ b.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
+            backgroundColor: CH_COLORS,
+        }],
+    },
+});
+
+new Chart(document.getElementById('hourChart'), {
+    type: 'bar',
+    data: {
+        labels: [...Array(24).keys()].map(h => h + ':00'),
+        datasets: [{ label: 'Sotilgan dona', data: {{ hour_buckets|safe }}, backgroundColor: '#0d6efd' }],
+    },
+    options: { plugins: { legend: { display: false } } },
+});
+
+new Chart(document.getElementById('weekdayChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ weekday_labels|safe }},
+        datasets: [{ label: 'Sotilgan dona', data: {{ weekday_buckets|safe }}, backgroundColor: '#fd7e14' }],
+    },
+    options: { plugins: { legend: { display: false } } },
+});
+
+new Chart(document.getElementById('categoryChart'), {
+    type: 'pie',
+    data: {
+        labels: [{% for c in by_category %}"{{ c.variant__product__category__name|default:'(yo`q)'|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for c in by_category %}{{ c.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
+            backgroundColor: CH_COLORS,
+        }],
+    },
+});
+</script>
+{% endblock %}

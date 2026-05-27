@@ -1,0 +1,52 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Sotuvlar — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-receipt"></i> Sotuvlar tarixi</h3>
+        <div class="text-end">
+            <div class="text-muted small">Ko'rsatilganlar jami</div>
+            <h4 class="text-success mb-0">{{ total|som }} so'm</h4>
+        </div>
+    </div>
+
+    <div class="alert alert-light">
+        Batafsil hisobot va eksport uchun: <a href="{% url 'reports' %}">Hisobotlar</a>
+    </div>
+
+    <div class="card">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Sana</th><th>Filial</th><th>Kod</th><th>Mahsulot</th>
+                    <th>O'lcham/Rang</th><th>Soni</th><th>Narx</th><th>Jami</th>
+                    <th>Sotuvchi</th><th>Izoh</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in sales %}
+                <tr>
+                    <td><small>{{ s.sold_at|date:"d.m.Y H:i" }}</small></td>
+                    <td>{{ s.branch.name }}</td>
+                    <td><span class="code-pill">{{ s.variant.product.code }}</span></td>
+                    <td>{{ s.variant.product.name|truncatechars:30 }}</td>
+                    <td>{{ s.variant.size }} / {{ s.variant.color }}</td>
+                    <td>{{ s.quantity }}</td>
+                    <td>{{ s.sale_price|som }}</td>
+                    <td><strong>{{ s.total|som }}</strong> so'm</td>
+                    <td><small>{{ s.sold_by.username }}</small></td>
+                    <td><small class="text-muted">{{ s.note|default:"" }}</small></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="10" class="text-center text-muted py-4">
+                    Hozircha sotuvlar yo'q.
+                </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

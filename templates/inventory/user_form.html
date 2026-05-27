@@ -1,0 +1,77 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <h3 class="mb-4">{{ title }}</h3>
+            <div class="card p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        {% if is_create %}
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.username.label }}</label>
+                            {{ form.username }}
+                            {% if form.username.errors %}<div class="text-danger small">{{ form.username.errors|join:', ' }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.password.label }}</label>
+                            {{ form.password }}
+                            {% if form.password.errors %}<div class="text-danger small">{{ form.password.errors|join:', ' }}</div>{% endif %}
+                        </div>
+                        {% else %}
+                        <div class="col-12">
+                            <div class="alert alert-secondary py-2 mb-0">
+                                Foydalanuvchi: <strong>{{ target_user.username }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">{{ form.new_password.label }}</label>
+                            {{ form.new_password }}
+                            {% if form.new_password.errors %}<div class="text-danger small">{{ form.new_password.errors|join:', ' }}</div>{% endif %}
+                        </div>
+                        {% endif %}
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.first_name.label }}</label>
+                            {{ form.first_name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.last_name.label }}</label>
+                            {{ form.last_name }}
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">{{ form.email.label }}</label>
+                            {{ form.email }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.role.label }}</label>
+                            {{ form.role }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.branch.label }}</label>
+                            {{ form.branch }}
+                            <small class="text-muted">Sotuvchilar uchun majburiy.</small>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-check">
+                                {{ form.is_active }}
+                                <label class="form-check-label">{{ form.is_active.label }}</label>
+                                <small class="text-muted d-block">
+                                    Faol emas — tizimga kira olmaydi.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Saqlash
+                        </button>
+                        <a href="{% url 'user_list' %}" class="btn btn-outline-secondary">Bekor qilish</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}Qabul qilish — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h3 class="mb-4"><i class="bi bi-box-arrow-in-down"></i> Qabul qilish</h3>
+
+    <div class="row g-4">
+        <div class="col-md-5">
+            <div class="card p-4 h-100">
+                <h5><i class="bi bi-plus-circle text-primary"></i> Yangi mahsulot</h5>
+                <p class="text-muted">Omborda umuman bo'lmagan, yangi turdagi mahsulot uchun.</p>
+                <a href="{% url 'product_create' %}" class="btn btn-primary mt-auto">
+                    Yangi mahsulot yaratish
+                </a>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card p-4 h-100">
+                <h5><i class="bi bi-arrow-repeat text-success"></i> Mavjud mahsulotga qo'shish</h5>
+                <p class="text-muted">Mahsulotni tanlang yoki kod bo'yicha qidiring.</p>
+
+                <form method="get" action="{% url 'lookup' %}" class="d-flex gap-2 mb-3">
+                    <input type="text" name="code" placeholder="Kod kiriting (masalan: A7K3X9B2)"
+                           class="form-control" style="text-transform: uppercase;">
+                    <button type="submit" class="btn btn-outline-primary">Topish</button>
+                </form>
+
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light sticky-top">
+                            <tr><th>Kod</th><th>Nomi</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        {% for p in products %}
+                            <tr>
+                                <td><span class="code-pill">{{ p.code }}</span></td>
+                                <td>{{ p.name|truncatechars:40 }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'intake_for_product' p.code %}" class="btn btn-sm btn-success">
+                                        Qabul qilish
+                                    </a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="3" class="text-muted text-center">Mahsulotlar yo'q.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

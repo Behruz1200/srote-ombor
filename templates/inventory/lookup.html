@@ -1,0 +1,226 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Qidirish — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card p-4 mb-4 hero-search">
+                <h4 class="mb-3"><i class="bi bi-search"></i> Mahsulotni kod orqali qidirish</h4>
+                <form method="get" class="d-flex gap-2" id="lookupForm">
+                    <input type="text" name="code" id="lookupCode" value="{{ code }}"
+                           placeholder="Masalan: OYO-0001 yoki TEL-1"
+                           class="form-control" autofocus
+                           style="text-transform: uppercase;">
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-search"></i> Topish
+                    </button>
+                    <button type="button" class="btn btn-success px-4"
+                            data-bs-toggle="modal" data-bs-target="#scanModal">
+                        <i class="bi bi-qr-code-scan"></i> Skanerlash
+                    </button>
+                </form>
+                {% if not user.is_admin and user.branch %}
+                    <small class="text-muted mt-2">
+                        <i class="bi bi-building"></i> Sizning filialingiz: <strong>{{ user.branch.name }}</strong>
+                    </small>
+                {% elif not user.is_admin %}
+                    <div class="alert alert-warning mt-2 mb-0">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Sizga filial biriktirilmagan. Administrator bilan bog'laning.
+                    </div>
+                {% endif %}
+            </div>
+
+            {% if product %}
+            <div class="card p-4 mb-3">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h4 class="mb-1">{{ product.name }}</h4>
+                        <span class="code-pill">{{ product.code }}</span>
+                        {% if product.category %}
+                            <span class="badge bg-secondary ms-2">{{ product.category.name }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-end">
+                        <div class="text-muted small">Sotuv narxi</div>
+                        <h4 class="text-primary mb-0">{{ product.default_sale_price|som }} so'm</h4>
+                    </div>
+                </div>
+                {% if product.description %}
+                    <p class="text-muted">{{ product.description }}</p>
+                {% endif %}
+            </div>
+
+            {% for bd in branches_data %}
+            <div class="card p-4 mb-3">
+                <div class="d-flex justify-content-between mb-2">
+                    <h5 class="mb-0">
+                        <i class="bi bi-building text-primary"></i>
+                        {{ bd.branch.name }}
+                    </h5>
+                    <span class="badge bg-light text-dark fs-6">
+                        Jami: <strong>{{ bd.total }}</strong> dona
+                    </span>
+                </div>
+                {% if bd.matrix %}
+                <div class="table-responsive">
+                    <table class="table table-bordered matrix-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width:100px;">O'lcham \ Rang</th>
+                                {% for color in bd.colors %}<th>{{ color }}</th>{% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for size in bd.sizes %}
+                            <tr>
+                                <th>{{ size }}</th>
+                                {% for color in bd.colors %}
+                                    <td class="stock-cell">
+                                        {% for k, s in bd.matrix.items %}
+                                            {% if k.0 == size and k.1 == color %}
+                                                {% if s.stock_count == 0 %}
+                                                    <span class="stock-zero">0</span>
+                                                {% elif s.stock_count <= 3 %}
+                                                    <span class="stock-low">{{ s.stock_count }}</span>
+                                                {% else %}
+                                                    <span class="stock-ok">{{ s.stock_count }}</span>
+                                                {% endif %}
+                                                {% if s.sale_price > 0 %}
+                                                    <div class="small text-primary">{{ s.sale_price|som }} so'm</div>
+                                                {% endif %}
+                                                {% if s.stock_count > 0 %}
+                                                    <a href="{% url 'sale_create' s.id %}"
+                                                       class="btn btn-sm btn-outline-success mt-1">
+                                                        <i class="bi bi-cart-check"></i> Sotish
+                                                    </a>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p class="text-muted mb-0">Bu filialda ushbu mahsulot mavjud emas.</p>
+                {% endif %}
+            </div>
+            {% empty %}
+                {% if user.is_admin %}
+                    <div class="alert alert-warning">Faol filiallar yo'q.</div>
+                {% endif %}
+            {% endfor %}
+
+            {% if user.is_admin %}
+            <div class="d-flex gap-2">
+                <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-primary">
+                    <i class="bi bi-info-circle"></i> Mahsulot batafsil
+                </a>
+                <a href="{% url 'intake_for_product' product.code %}" class="btn btn-outline-success">
+                    <i class="bi bi-box-arrow-in-down"></i> Qabul qilish
+                </a>
+            </div>
+            {% endif %}
+
+            {% elif code %}
+                <div class="card p-4 text-center text-muted">
+                    <i class="bi bi-exclamation-circle" style="font-size: 3rem;"></i>
+                    <p class="mt-2">Kod bo'yicha mahsulot topilmadi.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- QR/Barcode Scanner Modal -->
+<div class="modal fade" id="scanModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-qr-code-scan"></i> Mahsulot kodini skanerlash
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scanStatus" class="alert alert-info py-2 mb-2">
+                    <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
+                </div>
+                <div id="scanReader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+                <div class="text-center mt-3 small text-muted">
+                    Kamerani mahsulot ustidagi QR yoki shtrix-kodga to'g'rilang.
+                    Aniqlangach, qidiruv avtomatik bajariladi.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Yopish</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+(function() {
+    let html5QrCode = null;
+    const modalEl = document.getElementById('scanModal');
+    const status = document.getElementById('scanStatus');
+    const codeInput = document.getElementById('lookupCode');
+    const form = document.getElementById('lookupForm');
+
+    function setStatus(text, type) {
+        status.className = 'alert py-2 mb-2 alert-' + (type || 'info');
+        status.innerHTML = text;
+    }
+
+    function stopScanner() {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().catch(() => {}).finally(() => {
+                html5QrCode.clear();
+                html5QrCode = null;
+            });
+        }
+    }
+
+    modalEl.addEventListener('shown.bs.modal', function() {
+        setStatus('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
+        html5QrCode = new Html5Qrcode('scanReader');
+        const config = {
+            fps: 10,
+            qrbox: function(w, h) {
+                const m = Math.min(w, h);
+                const size = Math.floor(m * 0.75);
+                return { width: size, height: size };
+            },
+            aspectRatio: 1.0,
+        };
+        html5QrCode.start(
+            { facingMode: 'environment' },
+            config,
+            function(decoded) {
+                setStatus('<i class="bi bi-check-circle"></i> Aniqlandi: <strong>' + decoded + '</strong>', 'success');
+                codeInput.value = decoded;
+                stopScanner();
+                setTimeout(() => {
+                    bootstrap.Modal.getInstance(modalEl).hide();
+                    form.submit();
+                }, 400);
+            },
+            function() { /* har frame xatosini e'tiborsiz qoldirish */ }
+        ).then(() => {
+            setStatus('<i class="bi bi-camera-video"></i> Skanerlashga tayyor', 'info');
+        }).catch(function(err) {
+            setStatus('<i class="bi bi-exclamation-triangle"></i> Kamerani ochib bo\'lmadi: ' + err, 'danger');
+        });
+    });
+
+    modalEl.addEventListener('hide.bs.modal', stopScanner);
+})();
+</script>
+{% endblock %}

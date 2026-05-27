@@ -1,0 +1,43 @@
+{% extends 'inventory/base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <h3 class="mb-4">{{ title }}</h3>
+            <div class="card p-4">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label class="form-label">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <small class="form-text text-muted">{{ field.help_text }}</small>
+                            {% endif %}
+                            {% if field.errors %}
+                                <div class="text-danger small">{{ field.errors|join:', ' }}</div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+
+                    {% if not product %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Saqlangandan keyin mahsulotga unikal kod (SKU) avtomatik beriladi.
+                        Keyin "Qabul qilish" orqali o'lcham, rang va sonini kiritasiz.
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Saqlash
+                        </button>
+                        <a href="{% url 'product_list' %}" class="btn btn-outline-secondary">Bekor qilish</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
