@@ -22,7 +22,7 @@ from reportlab.platypus import (
 
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
-    Category, Intake, Sale,
+    Category, Intake, Sale, AuditLog,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -625,6 +625,50 @@ def reports(request):
 
     return render(request, 'inventory/reports.html', {
         'form': form, 'rows': None, 'headers': [], 'title': '',
+    })
+
+
+# ---------- AUDIT LOG ----------
+
+@admin_required
+def audit_list(request):
+    logs = AuditLog.objects.select_related('user').all()
+    # Filters
+    action = request.GET.get('action') or ''
+    user_filter = request.GET.get('user') or ''
+    model = request.GET.get('model') or ''
+    q = (request.GET.get('q') or '').strip()
+    if action:
+        logs = logs.filter(action=action)
+    if user_filter:
+        logs = logs.filter(username_snapshot=user_filter)
+    if model:
+        logs = logs.filter(model_name=model)
+    if q:
+        logs = logs.filter(
+            Q(username_snapshot__icontains=q) |
+            Q(object_repr__icontains=q) |
+            Q(model_name__icontains=q) |
+            Q(object_id=q)
+        )
+
+    # Pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(logs, 50)
+    page = paginator.get_page(request.GET.get('page'))
+
+    actions = AuditLog.Action.choices
+    users = (AuditLog.objects.values_list('username_snapshot', flat=True)
+             .distinct().order_by('username_snapshot'))
+    users = [u for u in users if u]
+    models_list = (AuditLog.objects.values_list('model_name', flat=True)
+                   .distinct().order_by('model_name'))
+    models_list = [m for m in models_list if m]
+
+    return render(request, 'inventory/audit_list.html', {
+        'page': page, 'actions': actions, 'users': users,
+        'models_list': models_list,
+        'f_action': action, 'f_user': user_filter, 'f_model': model, 'q': q,
     })
 
 

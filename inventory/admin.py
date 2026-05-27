@@ -1,6 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Branch, Category, Product, ProductVariant, BranchStock, Intake, Sale
+from .models import (
+    User, Branch, Category, Product, ProductVariant,
+    BranchStock, Intake, Sale, AuditLog,
+)
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'username_snapshot', 'action',
+                    'model_name', 'object_repr', 'ip')
+    list_filter = ('action', 'model_name', 'created_at')
+    search_fields = ('username_snapshot', 'object_repr', 'object_id', 'ip')
+    readonly_fields = ('user', 'username_snapshot', 'action', 'model_name',
+                       'object_id', 'object_repr', 'changes', 'ip', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(User)
