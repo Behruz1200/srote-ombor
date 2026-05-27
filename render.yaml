@@ -4,8 +4,15 @@
 # What this provisions:
 #   1. Web service  (Django served by gunicorn)
 #   2. Background worker (Telegram polling — replies to /stock /today /help)
-#   3. Cron job (daily Telegram summary at 20:00 Asia/Tashkent = 15:00 UTC)
-#   4. Postgres database (free 90 days, then $7/mo)
+#   3. Postgres database (free 90 days, then $7/mo)
+#
+# Daily summary cron is intentionally NOT here because Render does
+# not offer a free plan for cron jobs (min $1/mo + compute). Options:
+#   a) Add a cron block below with `plan: starter` (cheap, paid).
+#   b) Run `python manage.py send_daily_summary` from the web shell
+#      whenever you want.
+#   c) Use an external free scheduler (cron-job.org, github actions)
+#      that hits a token-protected endpoint we add later.
 #
 # How to use:
 #   1. Push this file to GitHub (already in this PR)
@@ -81,32 +88,18 @@ services:
         sync: false
 
   # ------------ Daily summary cron ------------
-  - type: cron
-    name: srote-daily-summary
-    runtime: python
-    plan: free
-    region: frankfurt
-    branch: main
-    autoDeploy: true
-    # 15:00 UTC = 20:00 Asia/Tashkent (UTC+5)
-    schedule: "0 15 * * *"
-    buildCommand: ./build.sh
-    startCommand: python manage.py send_daily_summary
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.13.5
-      - key: DEBUG
-        value: "0"
-      - key: SECRET_KEY
-        fromService:
-          type: web
-          name: srote-web
-          envVarKey: SECRET_KEY
-      - key: DATABASE_URL
-        fromDatabase:
-          name: srote-db
-          property: connectionString
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_CHAT_IDS
-        sync: false
+  # Removed for free-tier compatibility. Render cron has no free plan.
+  # To enable later, add:
+  #
+  # - type: cron
+  #   name: srote-daily-summary
+  #   runtime: python
+  #   plan: starter           # ~$1/mo flat + per-second compute
+  #   region: frankfurt
+  #   branch: main
+  #   autoDeploy: true
+  #   schedule: "0 15 * * *"  # 20:00 Asia/Tashkent
+  #   buildCommand: ./build.sh
+  #   startCommand: python manage.py send_daily_summary
+  #   envVars:
+  #     ... (same as worker above)
