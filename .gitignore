@@ -37,3 +37,6 @@ secrets.json
 
 # Claude Code metadata
 .claude/
+
+# Telegram polling state
+.telegram_offset
