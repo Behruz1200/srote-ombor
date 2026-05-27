@@ -1,0 +1,49 @@
+{
+  "name": "Srote — Ombor Boshqaruvi",
+  "short_name": "Srote",
+  "description": "Ko'p filialli ombor va sotuv boshqaruv tizimi",
+  "start_url": "/lookup/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f6fa",
+  "theme_color": "#212529",
+  "lang": "uz",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/static/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Qidirish",
+      "short_name": "Qidirish",
+      "description": "Mahsulot kodi orqali qidirish",
+      "url": "/lookup/",
+      "icons": [{ "src": "/static/img/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tahlil",
+      "short_name": "Tahlil",
+      "description": "Biznes tahlili",
+      "url": "/insights/",
+      "icons": [{ "src": "/static/img/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

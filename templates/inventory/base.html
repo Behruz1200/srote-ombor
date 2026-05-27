@@ -3,8 +3,20 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{% block title %}Srote — Ombor Boshqaruvi{% endblock %}</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#212529">
+    <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
+    <!-- iOS Safari -->
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/icon-180.png' %}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Srote">
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
@@ -155,5 +167,67 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- PWA install hint (iOS Safari can't auto-prompt; show a one-time banner) -->
+<div id="iosInstallHint" class="position-fixed bottom-0 start-0 end-0 m-2 p-3 bg-dark text-light rounded shadow"
+     style="display:none; z-index: 1080; max-width: 480px; margin: 0 auto !important;">
+    <button type="button" class="btn-close btn-close-white float-end" aria-label="Close"
+            onclick="this.parentElement.style.display='none'; localStorage.setItem('iosInstallDismissed', '1');"></button>
+    <i class="bi bi-phone"></i> <strong>Srote'ni telefonga o'rnatish:</strong>
+    <div class="small mt-1">
+        <i class="bi bi-share"></i> Share tugmasini bosing →
+        <strong>"Add to Home Screen"</strong> ni tanlang.
+        Ilova ikona kabi ko'rinadi va to'liq ekranda ochiladi.
+    </div>
+</div>
+
+<script>
+// PWA: register the service worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => console.log('Srote PWA: SW registered, scope =', reg.scope))
+            .catch(err => console.warn('Srote PWA: SW registration failed', err));
+    });
+}
+
+// iOS Safari install hint (Safari doesn't support beforeinstallprompt)
+(function() {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    const dismissed = localStorage.getItem('iosInstallDismissed') === '1';
+    if (isIOS && !isStandalone && !dismissed) {
+        setTimeout(() => {
+            const hint = document.getElementById('iosInstallHint');
+            if (hint) hint.style.display = 'block';
+        }, 3000);
+    }
+})();
+
+// Android/Chrome native install prompt
+let deferredInstall;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstall = e;
+    const hint = document.getElementById('iosInstallHint');
+    if (hint && localStorage.getItem('iosInstallDismissed') !== '1') {
+        hint.innerHTML = `
+            <button type="button" class="btn-close btn-close-white float-end"
+                    onclick="this.parentElement.style.display='none'; localStorage.setItem('iosInstallDismissed','1');"></button>
+            <i class="bi bi-phone"></i> <strong>Srote'ni o'rnatishingiz mumkin</strong>
+            <button class="btn btn-light btn-sm ms-2" id="installBtn">
+                <i class="bi bi-download"></i> O'rnatish
+            </button>`;
+        hint.style.display = 'block';
+        document.getElementById('installBtn').addEventListener('click', async () => {
+            hint.style.display = 'none';
+            deferredInstall.prompt();
+            await deferredInstall.userChoice;
+            deferredInstall = null;
+        });
+    }
+});
+</script>
 </body>
 </html>
