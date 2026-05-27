@@ -1,0 +1,81 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Chek #{{ txn.pk }} — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-receipt"></i> Chek #{{ txn.pk }}</h3>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-printer"></i> Chop etish
+            </button>
+            <a href="{% url 'lookup' %}" class="btn btn-success btn-sm">
+                <i class="bi bi-plus-lg"></i> Yangi sotuv
+            </a>
+        </div>
+    </div>
+
+    <div class="card p-4" id="receipt">
+        <div class="text-center mb-3">
+            <h4 class="mb-0">SROTE</h4>
+            <div class="text-muted small">{{ txn.branch.name }}</div>
+            <div class="text-muted small">{{ txn.branch.address }}</div>
+        </div>
+        <hr>
+        <div class="d-flex justify-content-between small">
+            <span>Sana: <strong>{{ txn.sold_at|date:"d.m.Y H:i" }}</strong></span>
+            <span>Chek: <strong>#{{ txn.pk }}</strong></span>
+        </div>
+        <div class="small">Sotuvchi: <strong>{{ txn.sold_by.username }}</strong></div>
+        {% if txn.customer_name or txn.customer_phone %}
+        <div class="small">Mijoz: <strong>{{ txn.customer_name }}</strong>
+            {% if txn.customer_phone %} · {{ txn.customer_phone }}{% endif %}</div>
+        {% endif %}
+        <hr>
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr><th>Mahsulot</th><th class="text-end">Soni</th>
+                    <th class="text-end">Narx</th><th class="text-end">Jami</th></tr>
+            </thead>
+            <tbody>
+            {% for s in txn.lines.all %}
+                <tr>
+                    <td>
+                        <strong>{{ s.variant.product.code }}</strong><br>
+                        <small>{{ s.variant.product.name|truncatechars:32 }}</small><br>
+                        <small class="text-muted">{{ s.variant.size }} / {{ s.variant.color }}</small>
+                    </td>
+                    <td class="text-end">{{ s.quantity }}</td>
+                    <td class="text-end">{{ s.sale_price|som }}</td>
+                    <td class="text-end"><strong>{{ s.total|som }}</strong></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><th colspan="3" class="text-end">JAMI:</th>
+                    <th class="text-end fs-4">{{ txn.total|som }} so'm</th></tr>
+            </tfoot>
+        </table>
+        <hr>
+        <div class="d-flex justify-content-between small">
+            <span>To'lov: <strong>{{ txn.get_payment_method_display }}</strong></span>
+            <span>{{ txn.item_count }} ta mahsulot</span>
+        </div>
+        {% if txn.note %}
+            <div class="small text-muted mt-2">Izoh: {{ txn.note }}</div>
+        {% endif %}
+        <div class="text-center text-muted small mt-3">— Xaridingiz uchun rahmat! —</div>
+    </div>
+</div>
+
+<style>
+@media print {
+    body * { visibility: hidden; }
+    #receipt, #receipt * { visibility: visible; }
+    #receipt { position: absolute; left: 0; top: 0; width: 80mm; padding: 4mm; box-shadow: none; border: none; }
+    @page { margin: 0; }
+}
+</style>
+{% endblock %}

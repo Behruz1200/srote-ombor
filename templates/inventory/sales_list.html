@@ -23,7 +23,7 @@
                 <tr>
                     <th>Sana</th><th>Filial</th><th>Kod</th><th>Mahsulot</th>
                     <th>O'lcham/Rang</th><th>Soni</th><th>Narx</th><th>Jami</th>
-                    <th>Sotuvchi</th><th>Izoh</th>
+                    <th>Sotuvchi</th><th>Izoh</th><th></th>
                 </tr>
             </thead>
             <tbody>
@@ -39,9 +39,27 @@
                     <td><strong>{{ s.total|som }}</strong> so'm</td>
                     <td><small>{{ s.sold_by.username }}</small></td>
                     <td><small class="text-muted">{{ s.note|default:"" }}</small></td>
+                    <td>
+                        {% if s.transaction_id %}
+                            <a href="{% url 'transaction_detail' s.transaction_id %}"
+                               class="btn btn-sm btn-outline-secondary" title="Chek">
+                                <i class="bi bi-receipt"></i>
+                            </a>
+                        {% endif %}
+                        {% if s.returned_qty < s.quantity %}
+                            <a href="{% url 'return_create' s.id %}"
+                               class="btn btn-sm btn-outline-warning" title="Qaytarish">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </a>
+                        {% else %}
+                            <span class="badge bg-secondary" title="To'liq qaytarilgan">
+                                <i class="bi bi-check"></i>
+                            </span>
+                        {% endif %}
+                    </td>
                 </tr>
             {% empty %}
-                <tr><td colspan="10" class="text-center text-muted py-4">
+                <tr><td colspan="11" class="text-center text-muted py-4">
                     Hozircha sotuvlar yo'q.
                 </td></tr>
             {% endfor %}

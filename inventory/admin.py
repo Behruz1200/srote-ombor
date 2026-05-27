@@ -2,8 +2,30 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
     User, Branch, Category, Product, ProductVariant,
-    BranchStock, Intake, Sale, AuditLog,
+    BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return,
 )
+
+
+class SaleInline(admin.TabularInline):
+    model = Sale
+    extra = 0
+    readonly_fields = ('variant', 'quantity', 'sale_price', 'cost_at_sale')
+
+
+@admin.register(SaleTransaction)
+class SaleTransactionAdmin(admin.ModelAdmin):
+    list_display = ('pk', 'branch', 'sold_by', 'payment_method',
+                    'customer_name', 'sold_at')
+    list_filter = ('branch', 'payment_method', 'sold_at')
+    search_fields = ('customer_name', 'customer_phone')
+    inlines = [SaleInline]
+
+
+@admin.register(Return)
+class ReturnAdmin(admin.ModelAdmin):
+    list_display = ('refunded_at', 'sale', 'quantity', 'refund_amount', 'refunded_by')
+    list_filter = ('refunded_at',)
+    search_fields = ('sale__variant__product__code', 'reason')
 
 
 @admin.register(AuditLog)

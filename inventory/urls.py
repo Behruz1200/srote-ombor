@@ -23,6 +23,17 @@ urlpatterns = [
     path('sale/<int:stock_id>/', views.sale_create, name='sale_create'),
     path('sales/', views.sales_list, name='sales_list'),
 
+    # Cart / multi-item sale
+    path('cart/', views.cart_view, name='cart_view'),
+    path('cart/add/<int:stock_id>/', views.cart_add, name='cart_add'),
+    path('cart/update/', views.cart_update, name='cart_update'),
+    path('cart/clear/', views.cart_clear, name='cart_clear'),
+    path('checkout/', views.checkout, name='checkout'),
+    path('transaction/<int:pk>/', views.transaction_detail, name='transaction_detail'),
+
+    # Returns
+    path('sale/<int:sale_id>/return/', views.return_create, name='return_create'),
+
     path('categories/', views.category_list, name='category_list'),
 
     path('branches/', views.branch_list, name='branch_list'),
