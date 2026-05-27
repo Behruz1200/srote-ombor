@@ -66,8 +66,7 @@
             </span>
         </div>
         {% if bd.matrix %}
-        <div class="table-responsive">
-            <table class="table table-bordered matrix-table">
+        <div class="table-responsive"><table class="table table-bordered matrix-table">
                 <thead class="table-light">
                     <tr>
                         <th style="min-width:100px;">O'lcham \ Rang</th>
@@ -108,8 +107,7 @@
                     </tr>
                     {% endfor %}
                 </tbody>
-            </table>
-        </div>
+            </table></div>
         {% else %}
             <p class="text-muted mb-0">Bu filialda hech narsa yo'q.</p>
         {% endif %}
@@ -119,7 +117,7 @@
     <div class="card p-4">
         <h5>So'nggi qabullar</h5>
         {% if recent_intakes %}
-        <table class="table table-sm">
+        <div class="table-responsive"><table class="table table-sm">
             <thead><tr>
                 <th>Sana</th><th>Filial</th><th>O'lcham/Rang</th><th>Soni</th>
                 <th>Tannarx</th><th>Yetkazib beruvchi</th><th>Qabul qildi</th>
@@ -137,7 +135,7 @@
                 </tr>
             {% endfor %}
             </tbody>
-        </table>
+        </table></div>
         {% else %}
             <p class="text-muted mb-0">Hali qabullar yo'q.</p>
         {% endif %}
