@@ -234,7 +234,54 @@ class AuditLog(models.Model):
         return f'{self.created_at:%Y-%m-%d %H:%M} — {self.username_snapshot} {self.action}'
 
 
+class SaleTransaction(models.Model):
+    """Sotuv chek'i: bir nechta mahsulot bir vaqtda mijozga sotilganda."""
+
+    class PaymentMethod(models.TextChoices):
+        CASH = 'cash', 'Naqd'
+        CARD = 'card', 'Karta'
+        TRANSFER = 'transfer', "O'tkazma"
+        MIXED = 'mixed', 'Aralash'
+
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='transactions')
+    sold_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                related_name='transactions')
+    sold_at = models.DateTimeField(default=timezone.now)
+    payment_method = models.CharField(
+        max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH
+    )
+    customer_name = models.CharField(max_length=120, blank=True)
+    customer_phone = models.CharField(max_length=40, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = 'Sotuv chek'
+        verbose_name_plural = 'Sotuv cheklari'
+        ordering = ['-sold_at']
+
+    def __str__(self):
+        return f'#{self.pk} — {self.branch.name} ({self.sold_at:%d.%m.%Y %H:%M})'
+
+    @property
+    def total(self):
+        return sum(s.total for s in self.lines.all())
+
+    @property
+    def profit(self):
+        return sum(s.profit for s in self.lines.all())
+
+    @property
+    def item_count(self):
+        return sum(s.quantity for s in self.lines.all())
+
+
 class Sale(models.Model):
+    """Bitta sotuv qatori (chek ichidagi mahsulot)."""
+    transaction = models.ForeignKey(
+        SaleTransaction, on_delete=models.CASCADE,
+        related_name='lines', null=True, blank=True,
+        help_text="Bitta chekka tegishli sotuvlar guruhi. Eski sotuvlar uchun bo'sh."
+    )
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='sales')
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='sales')
     quantity = models.PositiveIntegerField()
@@ -266,3 +313,33 @@ class Sale(models.Model):
         if self.sale_price and self.sale_price > 0:
             return (self.sale_price - self.cost_at_sale) / self.sale_price * 100
         return 0
+
+    @property
+    def returned_qty(self):
+        # Use annotation if the queryset provided one (avoids N+1 on lists)
+        if hasattr(self, '_returned'):
+            return self._returned
+        return self.returns.aggregate(s=models.Sum('quantity'))['s'] or 0
+
+
+class Return(models.Model):
+    """Qaytarilgan mahsulot — sotuv qatorini qisman yoki to'liq qaytarish."""
+    sale = models.ForeignKey(Sale, on_delete=models.PROTECT, related_name='returns')
+    quantity = models.PositiveIntegerField()
+    reason = models.CharField(max_length=200, blank=True,
+                              help_text='Sabab: nuqson, kichik o\'lcham, mijoz fikri o\'zgardi...')
+    refunded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                    related_name='returns')
+    refunded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Qaytarilish'
+        verbose_name_plural = 'Qaytarilishlar'
+        ordering = ['-refunded_at']
+
+    def __str__(self):
+        return f'Qaytarilish: {self.sale.variant.product.code} × {self.quantity}'
+
+    @property
+    def refund_amount(self):
+        return self.quantity * self.sale.sale_price

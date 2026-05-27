@@ -1,0 +1,59 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Qaytarish — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <h3 class="mb-3"><i class="bi bi-arrow-counterclockwise text-warning"></i> Mahsulotni qaytarish</h3>
+
+            <div class="card p-3 mb-3 bg-light">
+                <div><strong>{{ sale.variant.product.name }}</strong>
+                    <span class="code-pill ms-2">{{ sale.variant.product.code }}</span></div>
+                <div class="text-muted">
+                    <i class="bi bi-building"></i> {{ sale.branch.name }} ·
+                    {{ sale.variant.size }} / {{ sale.variant.color }}
+                </div>
+                <div class="d-flex gap-3 mt-2 small">
+                    <span>Sotilgan: <strong>{{ sale.quantity }}</strong> dona</span>
+                    <span>Qaytarilgan: <strong>{{ sale.returned_qty }}</strong> dona</span>
+                    <span class="text-warning">Qaytarish mumkin: <strong>{{ max_returnable }}</strong> dona</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Narx: {{ sale.sale_price|som }} so'm/dona ·
+                    Sana: {{ sale.sold_at|date:"d.m.Y H:i" }} ·
+                    Sotuvchi: {{ sale.sold_by.username }}
+                </div>
+            </div>
+
+            <div class="card p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Qaytariladigan soni</label>
+                        <input type="number" name="quantity" min="1" max="{{ max_returnable }}"
+                               value="{{ max_returnable }}" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sabab</label>
+                        <textarea name="reason" rows="2" class="form-control"
+                                  placeholder="Masalan: nuqson, o'lcham to'g'ri kelmadi, mijoz fikrini o'zgartirdi..."></textarea>
+                    </div>
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-info-circle"></i>
+                        Qaytarilgan tovar omborga qaytariladi va bu harakat audit log'da qayd qilinadi.
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-arrow-counterclockwise"></i> Qaytarishni tasdiqlash
+                        </button>
+                        <a href="{% url 'sales_list' %}" class="btn btn-outline-secondary">Bekor qilish</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

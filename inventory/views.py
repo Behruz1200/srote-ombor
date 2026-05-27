@@ -3,6 +3,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count
+from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponse
 from django.utils import timezone
@@ -22,7 +23,7 @@ from reportlab.platypus import (
 
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
-    Category, Intake, Sale, AuditLog,
+    Category, Intake, Sale, AuditLog, SaleTransaction, Return,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -458,8 +459,11 @@ def category_list(request):
 
 @admin_required
 def sales_list(request):
-    sales = Sale.objects.select_related('variant__product', 'branch', 'sold_by') \
-                        .order_by('-sold_at')[:200]
+    # Annotate returned_qty so the template doesn't trigger N+1
+    sales = (Sale.objects
+        .select_related('variant__product', 'branch', 'sold_by')
+        .annotate(_returned=Coalesce(Sum('returns__quantity'), 0))
+        .order_by('-sold_at')[:200])
     total = sum(s.total for s in sales)
     return render(request, 'inventory/sales_list.html', {'sales': sales, 'total': total})
 
@@ -625,6 +629,234 @@ def reports(request):
 
     return render(request, 'inventory/reports.html', {
         'form': form, 'rows': None, 'headers': [], 'title': '',
+    })
+
+
+# ---------- CART / MULTI-ITEM SALE ----------
+
+CART_KEY = 'cart'  # session dict: {str(stock_id): qty}
+
+
+def _get_cart(request):
+    return request.session.get(CART_KEY, {}) or {}
+
+
+def _save_cart(request, cart):
+    # drop zero/negative entries
+    cart = {k: int(v) for k, v in cart.items() if int(v) > 0}
+    request.session[CART_KEY] = cart
+    request.session.modified = True
+    return cart
+
+
+def _cart_lines(cart):
+    """Resolve cart {stock_id: qty} → list of {stock, qty, available, ok}."""
+    if not cart:
+        return []
+    stock_ids = [int(sid) for sid in cart.keys() if str(sid).isdigit()]
+    stocks = {bs.id: bs for bs in BranchStock.objects.filter(id__in=stock_ids)
+              .select_related('variant__product', 'branch')}
+    lines = []
+    for sid, qty in cart.items():
+        stock = stocks.get(int(sid))
+        if not stock:
+            continue
+        lines.append({
+            'stock': stock,
+            'qty': int(qty),
+            'available': stock.stock_count,
+            'ok': int(qty) <= stock.stock_count,
+            'subtotal': int(qty) * (stock.sale_price or stock.variant.product.default_sale_price),
+        })
+    return lines
+
+
+def cart_count(request):
+    """Helper used by base.html navbar to show cart badge."""
+    cart = _get_cart(request)
+    return sum(int(v) for v in cart.values())
+
+
+@login_required
+def cart_add(request, stock_id):
+    """POST /cart/add/<stock_id>/  with qty (default 1)."""
+    stock = get_object_or_404(BranchStock.objects.select_related('branch'), pk=stock_id)
+    if not request.user.is_admin() and request.user.branch_id != stock.branch_id:
+        return HttpResponseForbidden("Bu filialda sotishga ruxsat yo'q.")
+
+    try:
+        qty = max(1, int(request.POST.get('qty') or 1))
+    except ValueError:
+        qty = 1
+    cart = _get_cart(request)
+    new_qty = int(cart.get(str(stock_id), 0)) + qty
+    if new_qty > stock.stock_count:
+        new_qty = stock.stock_count
+        messages.warning(request,
+            f"Omborda faqat {stock.stock_count} dona bor.")
+    cart[str(stock_id)] = new_qty
+    _save_cart(request, cart)
+    messages.success(request,
+        f"Savatga qo'shildi: {stock.variant.product.code} × {qty} dona.")
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or 'lookup'
+    return redirect(next_url if next_url.startswith('/') else 'lookup')
+
+
+@login_required
+def cart_view(request):
+    cart = _get_cart(request)
+    lines = _cart_lines(cart)
+    # If user is a seller, only their branch's items
+    if not request.user.is_admin():
+        lines = [l for l in lines if l['stock'].branch_id == request.user.branch_id]
+    total = sum(l['subtotal'] for l in lines)
+    return render(request, 'inventory/cart.html', {
+        'lines': lines, 'total': total,
+        'payment_methods': SaleTransaction.PaymentMethod.choices,
+    })
+
+
+@login_required
+def cart_update(request):
+    """POST: update qty of an item or remove it."""
+    cart = _get_cart(request)
+    stock_id = request.POST.get('stock_id')
+    action = request.POST.get('action')
+    if stock_id in cart:
+        if action == 'remove':
+            del cart[stock_id]
+        else:
+            try:
+                qty = int(request.POST.get('qty') or 0)
+            except ValueError:
+                qty = 0
+            if qty <= 0:
+                del cart[stock_id]
+            else:
+                stock = BranchStock.objects.filter(pk=stock_id).first()
+                if stock:
+                    cart[stock_id] = min(qty, stock.stock_count)
+    _save_cart(request, cart)
+    return redirect('cart_view')
+
+
+@login_required
+def cart_clear(request):
+    request.session[CART_KEY] = {}
+    request.session.modified = True
+    messages.info(request, "Savat bo'shatildi.")
+    return redirect('lookup')
+
+
+@login_required
+def checkout(request):
+    cart = _get_cart(request)
+    lines = _cart_lines(cart)
+    if not request.user.is_admin():
+        lines = [l for l in lines if l['stock'].branch_id == request.user.branch_id]
+    if not lines:
+        messages.warning(request, "Savat bo'sh.")
+        return redirect('lookup')
+
+    # All lines must be from same branch
+    branches = {l['stock'].branch_id for l in lines}
+    if len(branches) > 1:
+        messages.error(request,
+            "Bitta chekda turli filiallardan tovar bo'lmaydi. Ortiqcha tovarlarni olib tashlang.")
+        return redirect('cart_view')
+    if any(not l['ok'] for l in lines):
+        messages.error(request, "Ba'zi tovarlar yetarli emas — savatni tekshiring.")
+        return redirect('cart_view')
+
+    if request.method == 'POST':
+        with transaction.atomic():
+            branch = lines[0]['stock'].branch
+            txn = SaleTransaction.objects.create(
+                branch=branch,
+                sold_by=request.user,
+                payment_method=request.POST.get('payment_method') or 'cash',
+                customer_name=request.POST.get('customer_name') or '',
+                customer_phone=request.POST.get('customer_phone') or '',
+                note=request.POST.get('note') or '',
+            )
+            for line in lines:
+                stock = line['stock']
+                qty = line['qty']
+                stock.stock_count = F('stock_count') - qty
+                stock.save()
+                Sale.objects.create(
+                    transaction=txn,
+                    variant=stock.variant, branch=stock.branch,
+                    quantity=qty,
+                    sale_price=stock.sale_price or stock.variant.product.default_sale_price,
+                    cost_at_sale=stock.cost_price,
+                    sold_by=request.user,
+                )
+            request.session[CART_KEY] = {}
+            request.session.modified = True
+        messages.success(request,
+            f"Sotuv yakunlandi: {len(lines)} ta mahsulot.")
+        return redirect('transaction_detail', pk=txn.pk)
+
+    return render(request, 'inventory/checkout.html', {
+        'lines': lines, 'total': sum(l['subtotal'] for l in lines),
+        'payment_methods': SaleTransaction.PaymentMethod.choices,
+    })
+
+
+@login_required
+def transaction_detail(request, pk):
+    txn = get_object_or_404(
+        SaleTransaction.objects.select_related('branch', 'sold_by')
+            .prefetch_related('lines__variant__product'),
+        pk=pk,
+    )
+    if not request.user.is_admin() and request.user.branch_id != txn.branch_id:
+        return HttpResponseForbidden("Bu chekni ko'rishga ruxsat yo'q.")
+    return render(request, 'inventory/transaction_detail.html', {'txn': txn})
+
+
+# ---------- RETURNS ----------
+
+@login_required
+def return_create(request, sale_id):
+    sale = get_object_or_404(Sale.objects.select_related('variant__product', 'branch'),
+                             pk=sale_id)
+    if not request.user.is_admin() and request.user.branch_id != sale.branch_id:
+        return HttpResponseForbidden()
+
+    max_returnable = sale.quantity - sale.returned_qty
+    if max_returnable <= 0:
+        messages.warning(request, "Bu sotuv allaqachon to'liq qaytarilgan.")
+        return redirect('sales_list')
+
+    if request.method == 'POST':
+        try:
+            qty = int(request.POST.get('quantity') or 0)
+        except ValueError:
+            qty = 0
+        reason = (request.POST.get('reason') or '').strip()
+        if qty < 1 or qty > max_returnable:
+            messages.error(request,
+                f"Qaytarish miqdori 1 dan {max_returnable} gacha bo'lishi kerak.")
+            return redirect('return_create', sale_id=sale.id)
+        with transaction.atomic():
+            stock = BranchStock.objects.filter(
+                variant=sale.variant, branch=sale.branch
+            ).first()
+            if stock:
+                stock.stock_count = F('stock_count') + qty
+                stock.save()
+            Return.objects.create(
+                sale=sale, quantity=qty, reason=reason,
+                refunded_by=request.user,
+            )
+        messages.success(request,
+            f"Qaytarildi: {qty} dona × {sale.sale_price} so'm.")
+        return redirect('sales_list')
+
+    return render(request, 'inventory/return_form.html', {
+        'sale': sale, 'max_returnable': max_returnable,
     })
 
 
