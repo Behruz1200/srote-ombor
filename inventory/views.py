@@ -91,12 +91,32 @@ def home(request):
 
 @login_required
 def lookup(request):
-    raw_code = (request.GET.get('code') or '').strip().upper()
-    code = normalize_code(raw_code)
+    raw_query = (request.GET.get('code') or '').strip()
+    code = normalize_code(raw_query.upper())
     product = None
     branches_data = []
-    if code:
+    suggestions = []
+
+    if raw_query:
+        # Try exact code first
         product = Product.objects.filter(code=code).first()
+
+        # If no code match, fall back to name / category / description search
+        if not product:
+            matches = (Product.objects
+                .filter(Q(name__icontains=raw_query) |
+                        Q(category__name__icontains=raw_query) |
+                        Q(description__icontains=raw_query))
+                .select_related('category')[:20])
+            if matches.count() == 1:
+                product = matches.first()
+                code = product.code
+            elif matches.exists():
+                suggestions = list(matches)
+            else:
+                messages.warning(request,
+                    f"'{raw_query}' bo'yicha mahsulot topilmadi.")
+
         if product:
             variants = list(product.variants.all())
             sizes = sorted({v.size for v in variants}, key=lambda s: (len(s), s))
@@ -118,11 +138,10 @@ def lookup(request):
                     'branch': br, 'matrix': matrix,
                     'sizes': sizes, 'colors': colors, 'total': total,
                 })
-        else:
-            messages.warning(request, f"Kod '{code}' bo'yicha mahsulot topilmadi.")
 
     return render(request, 'inventory/lookup.html', {
-        'code': code, 'product': product, 'branches_data': branches_data,
+        'code': raw_query, 'product': product,
+        'branches_data': branches_data, 'suggestions': suggestions,
     })
 
 

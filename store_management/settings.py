@@ -3,6 +3,7 @@ Django settings for store_management project.
 """
 
 from pathlib import Path
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -11,6 +12,11 @@ SECRET_KEY = 'django-insecure-c+=*&dh#&)r!htow17kij3%cax9=bgqa7=a99i#j7=2wimlf#p
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
+
+# --- Telegram low-stock alerts (optional) ---
+# Set these to enable. See inventory/notifications.py for setup steps.
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')  # comma-separated
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',

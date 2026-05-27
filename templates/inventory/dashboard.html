@@ -5,7 +5,19 @@
 
 {% block content %}
 <div class="container">
-    <h3 class="mb-4"><i class="bi bi-speedometer2"></i> Boshqaruv paneli</h3>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-speedometer2"></i> Boshqaruv paneli</h3>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-dark" id="refreshStatus">
+                <i class="bi bi-clock"></i>
+                <span id="refreshCountdown">30</span>s
+            </span>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
+                <label class="form-check-label small" for="autoRefreshToggle">Avto-yangilash</label>
+            </div>
+        </div>
+    </div>
 
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-3">
@@ -138,4 +150,51 @@
         </div>
     </div>
 </div>
+
+<script>
+(function() {
+    const REFRESH_S = 30;
+    const KEY = 'dashAutoRefresh';
+    const toggle = document.getElementById('autoRefreshToggle');
+    const status = document.getElementById('refreshStatus');
+    const countdown = document.getElementById('refreshCountdown');
+
+    if (localStorage.getItem(KEY) === '0') toggle.checked = false;
+
+    toggle.addEventListener('change', () => {
+        localStorage.setItem(KEY, toggle.checked ? '1' : '0');
+        if (toggle.checked) start(); else stop();
+    });
+
+    let timer = null;
+    let remaining = REFRESH_S;
+
+    function tick() {
+        remaining -= 1;
+        countdown.textContent = remaining;
+        if (remaining <= 0) {
+            sessionStorage.setItem('dashScrollY', window.scrollY);
+            location.reload();
+        }
+    }
+
+    function start() {
+        if (timer) return;
+        remaining = REFRESH_S;
+        countdown.textContent = remaining;
+        status.classList.remove('bg-secondary'); status.classList.add('bg-light', 'text-dark');
+        timer = setInterval(tick, 1000);
+    }
+    function stop() {
+        if (timer) { clearInterval(timer); timer = null; }
+        status.classList.add('bg-secondary'); status.classList.remove('bg-light', 'text-dark');
+        countdown.textContent = '—';
+    }
+
+    // Restore scroll after auto-reload
+    const y = sessionStorage.getItem('dashScrollY');
+    if (y) { window.scrollTo(0, parseInt(y)); sessionStorage.removeItem('dashScrollY'); }
+    if (toggle.checked) start(); else stop();
+})();
+</script>
 {% endblock %}
