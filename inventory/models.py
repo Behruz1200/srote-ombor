@@ -193,6 +193,10 @@ class Sale(models.Model):
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='sales')
     quantity = models.PositiveIntegerField()
     sale_price = models.DecimalField(max_digits=12, decimal_places=2)
+    cost_at_sale = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Sotuv paytidagi tannarx (keyinroq narx o'zgarsa ham aniq foyda hisobi uchun)"
+    )
     sold_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                 related_name='sales')
     sold_at = models.DateTimeField(default=timezone.now)
@@ -206,3 +210,13 @@ class Sale(models.Model):
     @property
     def total(self):
         return self.quantity * self.sale_price
+
+    @property
+    def profit(self):
+        return self.quantity * (self.sale_price - self.cost_at_sale)
+
+    @property
+    def margin(self):
+        if self.sale_price and self.sale_price > 0:
+            return (self.sale_price - self.cost_at_sale) / self.sale_price * 100
+        return 0

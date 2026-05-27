@@ -340,6 +340,7 @@ def sale_create(request, stock_id):
                 Sale.objects.create(
                     variant=stock.variant, branch=stock.branch,
                     quantity=qty, sale_price=cd['sale_price'],
+                    cost_at_sale=stock.cost_price,  # snapshot for accurate historical profit
                     note=cd.get('note') or '', sold_by=request.user,
                 )
             messages.success(request,
@@ -759,31 +760,30 @@ def _insights_context(request):
     # Sale modelida cost_price yo'q, lekin oxirgi BranchStock dan oladi (taxmin).
     # Aniqroq bo'lishi uchun har sotuv pay'tida cost_price'ni Sale'da saqlash kerak edi;
     # hozircha BranchStock.cost_price'dan foydalanamiz.
-    # Tannarx hisoblash uchun branch_stock cost_price'larni cache qilamiz
-    cost_lookup = {}
-    for bs in BranchStock.objects.select_related('variant', 'branch').all():
-        cost_lookup[(bs.variant_id, bs.branch_id)] = bs.cost_price
+    # Cost is snapshotted on the Sale itself (cost_at_sale), so we can aggregate in SQL.
+    cost_expr = ExpressionWrapper(
+        F('quantity') * F('cost_at_sale'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+    total_cost = sales.aggregate(c=Sum(cost_expr))['c'] or 0
 
-    total_cost = 0
-    profit_by_product = {}  # product_id → {revenue, cost, profit, qty, code, name}
-    for s in sales.values('variant_id', 'branch_id', 'quantity', 'sale_price',
-                          'variant__product_id', 'variant__product__code',
-                          'variant__product__name'):
-        cost_unit = cost_lookup.get((s['variant_id'], s['branch_id']), 0)
-        line_cost = s['quantity'] * cost_unit
-        line_rev = s['quantity'] * s['sale_price']
-        total_cost += line_cost
-        pid = s['variant__product_id']
-        if pid not in profit_by_product:
-            profit_by_product[pid] = {
-                'code': s['variant__product__code'],
-                'name': s['variant__product__name'],
-                'revenue': 0, 'cost': 0, 'profit': 0, 'qty': 0,
-            }
-        profit_by_product[pid]['revenue'] += line_rev
-        profit_by_product[pid]['cost'] += line_cost
-        profit_by_product[pid]['profit'] += (line_rev - line_cost)
-        profit_by_product[pid]['qty'] += s['quantity']
+    profit_by_product_qs = sales.values(
+        'variant__product_id', 'variant__product__code', 'variant__product__name',
+    ).annotate(
+        revenue=Sum(revenue_expr),
+        cost=Sum(cost_expr),
+        qty=Sum('quantity'),
+    )
+    profit_by_product = {}
+    for row in profit_by_product_qs:
+        profit_by_product[row['variant__product_id']] = {
+            'code': row['variant__product__code'],
+            'name': row['variant__product__name'],
+            'revenue': row['revenue'] or 0,
+            'cost': row['cost'] or 0,
+            'profit': (row['revenue'] or 0) - (row['cost'] or 0),
+            'qty': row['qty'] or 0,
+        }
 
     profit = revenue - total_cost
     margin = (profit / revenue * 100) if revenue else 0
@@ -826,13 +826,11 @@ def _insights_context(request):
     for br in branches_all:
         b_sales = sales.filter(branch=br)
         b_agg = b_sales.aggregate(
-            rev=Sum(revenue_expr), qty=Sum('quantity'), n=Count('id'),
+            rev=Sum(revenue_expr), cost=Sum(cost_expr),
+            qty=Sum('quantity'), n=Count('id'),
         )
-        b_cost = 0
-        for s in b_sales.values('variant_id', 'branch_id', 'quantity'):
-            c = cost_lookup.get((s['variant_id'], s['branch_id']), 0)
-            b_cost += s['quantity'] * c
         b_rev = b_agg['rev'] or 0
+        b_cost = b_agg['cost'] or 0
         b_profit = b_rev - b_cost
         b_n = b_agg['n'] or 0
         b_qty = b_agg['qty'] or 0
