@@ -15,3 +15,14 @@ python manage.py migrate --no-input
 # Auto-create superuser if DJANGO_SUPERUSER_* env vars are set.
 # Idempotent: skips if the username already exists.
 python manage.py ensure_superuser
+
+# Optionally seed demo data on first deploy. Set SEED_DEMO_DATA=1 on
+# the host to populate 3 branches, 5 sellers (sotuvchi123 password),
+# 32 products, ~970 intakes, ~610 historical sales.
+# Idempotent: each section of seed.py checks for existing rows.
+if [ "$SEED_DEMO_DATA" = "1" ]; then
+    echo "SEED_DEMO_DATA=1 → running seed.py"
+    python seed.py
+else
+    echo "SEED_DEMO_DATA not set → skipping demo data"
+fi
