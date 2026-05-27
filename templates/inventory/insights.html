@@ -38,7 +38,7 @@
 
     <!-- KPI cards -->
     <div class="row g-3 mb-3">
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card green p-3">
                 <div class="text-muted small">Jami daromad</div>
                 <h3 class="mb-0">{{ revenue|som }} so'm</h3>
@@ -50,21 +50,21 @@
                 {% endif %}
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card orange p-3">
                 <div class="text-muted small">Tannarx</div>
                 <h3 class="mb-0">{{ total_cost|som }} so'm</h3>
                 <small class="text-muted">{{ sales_count }} sotuv · {{ qty }} dona</small>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card p-3">
                 <div class="text-muted small">Sof foyda</div>
                 <h3 class="mb-0 text-primary">{{ profit|som }} so'm</h3>
                 <small class="text-muted">Marja: {{ margin|floatformat:1 }}%</small>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card red p-3">
                 <div class="text-muted small">O'rtacha 1 sotuv</div>
                 <h3 class="mb-0">{{ avg_sale_value|som }} so'm</h3>
@@ -127,8 +127,7 @@
     <!-- Branch comparison -->
     <div class="card p-3 mb-3">
         <h5><i class="bi bi-building"></i> Filiallar yonma-yon taqqoslash</h5>
-        <div class="table-responsive">
-        <table class="table table-sm table-hover">
+        <div class="table-responsive"><table class="table table-sm table-hover">
             <thead class="table-light">
                 <tr>
                     <th>Filial</th>
@@ -157,8 +156,7 @@
                 </tr>
             {% endfor %}
             </tbody>
-        </table>
-        </div>
+        </table></div>
     </div>
 
     <div class="row g-3 mb-3">
@@ -166,7 +164,7 @@
         <div class="col-lg-6">
             <div class="card p-3 h-100">
                 <h5><i class="bi bi-trophy text-warning"></i> TOP-10 daromad bo'yicha</h5>
-                <table class="table table-sm">
+                <div class="table-responsive"><table class="table table-sm">
                     <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th>Dona</th><th>Daromad</th></tr></thead>
                     <tbody>
                     {% for p in top_products %}
@@ -182,8 +180,7 @@
                         <tr><td colspan="5" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
                     {% endfor %}
                     </tbody>
-                </table>
-            </div>
+                </table></div>
         </div>
 
         <!-- TOP by profit -->
@@ -191,7 +188,7 @@
             <div class="card p-3 h-100">
                 <h5><i class="bi bi-cash-stack text-success"></i> TOP-10 sof foyda bo'yicha</h5>
                 <small class="text-muted">Daromad — tannarx</small>
-                <table class="table table-sm mt-1">
+                <div class="table-responsive"><table class="table table-sm mt-1">
                     <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th>Foyda</th><th>Marja</th></tr></thead>
                     <tbody>
                     {% for p in top_profit %}
@@ -207,8 +204,7 @@
                         <tr><td colspan="5" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
                     {% endfor %}
                     </tbody>
-                </table>
-            </div>
+                </table></div>
         </div>
     </div>
 
@@ -218,7 +214,7 @@
             <div class="card p-3 h-100">
                 <h5><i class="bi bi-snow text-info"></i> Sotilmayotgan mahsulotlar</h5>
                 <small class="text-muted">Bu davrda umuman sotilmaganlar</small>
-                <table class="table table-sm mt-1">
+                <div class="table-responsive"><table class="table table-sm mt-1">
                     <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kategoriya</th><th>Omborda</th></tr></thead>
                     <tbody>
                     {% for p in slow_products %}
@@ -232,8 +228,7 @@
                         <tr><td colspan="4" class="text-success text-center">Hammasi sotilmoqda!</td></tr>
                     {% endfor %}
                     </tbody>
-                </table>
-            </div>
+                </table></div>
         </div>
 
         <!-- Turnover / Days of stock left -->
@@ -241,7 +236,7 @@
             <div class="card p-3 h-100">
                 <h5><i class="bi bi-arrow-repeat text-warning"></i> Tovar aylanmasi (top sotilganlar)</h5>
                 <small class="text-muted">Hozirgi sur'atda qancha kun yetadi</small>
-                <table class="table table-sm mt-1">
+                <div class="table-responsive"><table class="table table-sm mt-1">
                     <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kunlik o'rt.</th><th>Omborda</th><th>Yetadi</th></tr></thead>
                     <tbody>
                     {% for t in turnover %}
@@ -268,8 +263,7 @@
                         <tr><td colspan="5" class="text-muted text-center">Ma'lumot yo'q.</td></tr>
                     {% endfor %}
                     </tbody>
-                </table>
-            </div>
+                </table></div>
         </div>
     </div>
 
@@ -278,7 +272,7 @@
         <div class="col-lg-7">
             <div class="card p-3">
                 <h5><i class="bi bi-person-check text-success"></i> Eng yaxshi sotuvchilar</h5>
-                <table class="table table-sm">
+                <div class="table-responsive"><table class="table table-sm">
                     <thead><tr><th>#</th><th>Sotuvchi</th><th>Filial</th><th>Sotuvlar</th><th>Dona</th><th>Daromad</th></tr></thead>
                     <tbody>
                     {% for s in top_sellers %}
@@ -298,8 +292,7 @@
                         <tr><td colspan="6" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
                     {% endfor %}
                     </tbody>
-                </table>
-            </div>
+                </table></div>
         </div>
         <!-- Branch donut -->
         <div class="col-lg-5">
@@ -335,7 +328,7 @@
         <div class="col-md-6">
             <div class="card p-3">
                 <h5><i class="bi bi-x-octagon text-danger"></i> Omborda tugagan</h5>
-                <table class="table table-sm">
+                <div class="table-responsive"><table class="table table-sm">
                     <thead><tr><th>Filial</th><th>Kod</th><th>O'lcham/Rang</th></tr></thead>
                     <tbody>
                     {% for bs in out_of_stock %}
@@ -348,8 +341,7 @@
                         <tr><td colspan="3" class="text-success text-center">Hech narsa tugamagan!</td></tr>
                     {% endfor %}
                     </tbody>
-                </table>
-            </div>
+                </table></div>
         </div>
     </div>
 
@@ -357,7 +349,7 @@
         <h5><i class="bi bi-percent text-success"></i> Eng yuqori foiz markup'li mahsulotlar</h5>
         <div class="row g-2">
         {% for p in high_margin %}
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="border rounded p-2">
                     <div class="small text-muted">{{ p.code }}</div>
                     <div>{{ p.name|truncatechars:25 }}</div>

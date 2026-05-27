@@ -9,18 +9,20 @@
         <div class="col-lg-10">
             <div class="card p-4 mb-4 hero-search">
                 <h4 class="mb-3"><i class="bi bi-search"></i> Mahsulotni kod orqali qidirish</h4>
-                <form method="get" class="d-flex gap-2" id="lookupForm">
+                <form method="get" id="lookupForm">
                     <input type="text" name="code" id="lookupCode" value="{{ code }}"
                            placeholder="Masalan: OYO-0001 yoki TEL-1"
-                           class="form-control" autofocus
+                           class="form-control mb-2" autofocus
                            style="text-transform: uppercase;">
-                    <button type="submit" class="btn btn-primary px-4">
-                        <i class="bi bi-search"></i> Topish
-                    </button>
-                    <button type="button" class="btn btn-success px-4"
-                            data-bs-toggle="modal" data-bs-target="#scanModal">
-                        <i class="bi bi-qr-code-scan"></i> Skanerlash
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-grow-1">
+                            <i class="bi bi-search"></i> Topish
+                        </button>
+                        <button type="button" class="btn btn-success flex-grow-1"
+                                data-bs-toggle="modal" data-bs-target="#scanModal">
+                            <i class="bi bi-qr-code-scan"></i> Skanerlash
+                        </button>
+                    </div>
                 </form>
                 {% if not user.is_admin and user.branch %}
                     <small class="text-muted mt-2">

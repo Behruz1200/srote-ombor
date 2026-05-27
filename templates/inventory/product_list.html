@@ -38,7 +38,7 @@
     </div>
 
     <div class="card">
-        <table class="table table-hover mb-0">
+        <div class="table-responsive"><table class="table table-hover mb-0">
             <thead class="table-light">
                 <tr>
                     <th style="width:38px;">
@@ -71,17 +71,17 @@
                             <a href="{% url 'product_detail' p.code %}"
                                class="btn btn-outline-primary"
                                title="Batafsil ko'rish">
-                                <i class="bi bi-eye"></i> Ko'rish
+                                <i class="bi bi-eye"></i><span class="d-none d-sm-inline"> Ko'rish</span>
                             </a>
                             <a href="{% url 'intake_for_product' p.code %}"
                                class="btn btn-outline-success"
                                title="Yangi qabul qilish (mol kelganda)">
-                                <i class="bi bi-truck"></i> Qabul
+                                <i class="bi bi-truck"></i><span class="d-none d-sm-inline"> Qabul</span>
                             </a>
                             <a href="{% url 'product_label' p.code %}" target="_blank"
                                class="btn btn-outline-secondary"
                                title="QR etiketka chop etish">
-                                <i class="bi bi-printer"></i> Etiketka
+                                <i class="bi bi-printer"></i><span class="d-none d-sm-inline"> Etiketka</span>
                             </a>
                         </div>
                     </td>
@@ -92,7 +92,7 @@
                 </td></tr>
             {% endfor %}
             </tbody>
-        </table>
+        </table></div>
     </div>
     </form>
 </div>

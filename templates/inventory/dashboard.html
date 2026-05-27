@@ -8,26 +8,26 @@
     <h3 class="mb-4"><i class="bi bi-speedometer2"></i> Boshqaruv paneli</h3>
 
     <div class="row g-3 mb-4">
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card p-3">
                 <div class="text-muted small">Mahsulot turlari</div>
                 <h3 class="mb-0">{{ total_products }}</h3>
                 <small class="text-muted">{{ total_branches }} ta filial</small>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card green p-3">
                 <div class="text-muted small">Jami dona (barcha filial)</div>
                 <h3 class="mb-0">{{ total_stock }}</h3>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card orange p-3">
                 <div class="text-muted small">Ombor qiymati (tannarx)</div>
                 <h3 class="mb-0">{{ stock_value|som }} so'm</h3>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card stat-card red p-3">
                 <div class="text-muted small">7 kunlik sotuv</div>
                 <h3 class="mb-0">{{ sales_revenue|som }} so'm</h3>
@@ -39,7 +39,7 @@
     <div class="card p-3 mb-4">
         <h5><i class="bi bi-building text-primary"></i> Filiallar bo'yicha</h5>
         {% if branch_summary %}
-        <table class="table table-sm mb-0">
+        <div class="table-responsive"><table class="table table-sm mb-0">
             <thead class="table-light">
                 <tr><th>Filial</th><th>Dona</th><th>Qiymat (tannarx)</th><th>7 kun sotuv</th></tr>
             </thead>
@@ -55,7 +55,7 @@
                 </tr>
             {% endfor %}
             </tbody>
-        </table>
+        </table></div>
         {% else %}
             <p class="text-muted mb-0">Filiallar yo'q. <a href="{% url 'branch_create' %}">Birinchisini qo'shing</a>.</p>
         {% endif %}
@@ -66,7 +66,7 @@
             <div class="card p-3">
                 <h5><i class="bi bi-exclamation-triangle text-warning"></i> Tugab borayotgan</h5>
                 {% if low_stock %}
-                <table class="table table-sm">
+                <div class="table-responsive"><table class="table table-sm">
                     <thead><tr><th>Filial</th><th>Kod</th><th>O'lcham/Rang</th><th>Qoldiq</th></tr></thead>
                     <tbody>
                     {% for s in low_stock %}
@@ -78,7 +78,7 @@
                         </tr>
                     {% endfor %}
                     </tbody>
-                </table>
+                </table></div>
                 {% else %}
                     <p class="text-muted">Hech narsa kritik holatda emas.</p>
                 {% endif %}
@@ -89,7 +89,7 @@
             <div class="card p-3">
                 <h5><i class="bi bi-box-arrow-in-down text-success"></i> So'nggi qabullar</h5>
                 {% if recent_intakes %}
-                <table class="table table-sm">
+                <div class="table-responsive"><table class="table table-sm">
                     <thead><tr><th>Sana</th><th>Filial</th><th>Mahsulot</th><th>Soni</th></tr></thead>
                     <tbody>
                     {% for i in recent_intakes %}
@@ -102,7 +102,7 @@
                         </tr>
                     {% endfor %}
                     </tbody>
-                </table>
+                </table></div>
                 {% else %}
                     <p class="text-muted">Hozircha qabullar yo'q.</p>
                 {% endif %}
@@ -113,7 +113,7 @@
             <div class="card p-3">
                 <h5><i class="bi bi-receipt text-primary"></i> So'nggi sotuvlar</h5>
                 {% if recent_sales %}
-                <table class="table table-sm">
+                <div class="table-responsive"><table class="table table-sm">
                     <thead><tr><th>Sana</th><th>Filial</th><th>Kod</th><th>Mahsulot</th>
                         <th>O'lcham/Rang</th><th>Soni</th><th>Narx</th><th>Sotuvchi</th></tr></thead>
                     <tbody>
@@ -130,7 +130,7 @@
                         </tr>
                     {% endfor %}
                     </tbody>
-                </table>
+                </table></div>
                 {% else %}
                     <p class="text-muted">Hozircha sotuvlar yo'q.</p>
                 {% endif %}
