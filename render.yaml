@@ -1,0 +1,112 @@
+# Render Infrastructure-as-Code blueprint for Srote.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# What this provisions:
+#   1. Web service  (Django served by gunicorn)
+#   2. Background worker (Telegram polling — replies to /stock /today /help)
+#   3. Cron job (daily Telegram summary at 20:00 Asia/Tashkent = 15:00 UTC)
+#   4. Postgres database (free 90 days, then $7/mo)
+#
+# How to use:
+#   1. Push this file to GitHub (already in this PR)
+#   2. Render → New → Blueprint → connect this repo
+#   3. Render reads render.yaml, prompts for any "sync:false" env vars
+#      (SECRET_KEY auto-generated; TELEGRAM_BOT_TOKEN you paste manually)
+#   4. Render builds + deploys all four services in ~5 min
+
+databases:
+  - name: srote-db
+    plan: free
+    databaseName: srote
+    user: srote
+    region: frankfurt           # closest free region to Uzbekistan
+
+services:
+  # ------------ Web service ------------
+  - type: web
+    name: srote-web
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: ./build.sh
+    startCommand: gunicorn store_management.wsgi:application --workers 2 --timeout 60
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: DEBUG
+        value: "0"
+      - key: SECRET_KEY
+        generateValue: true       # Render generates a strong random value
+      - key: DATABASE_URL
+        fromDatabase:
+          name: srote-db
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false               # set this manually in Render dashboard
+      - key: TELEGRAM_CHAT_IDS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false               # add custom domain here when ready
+
+  # ------------ Telegram polling worker ------------
+  - type: worker
+    name: srote-telegram-polling
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: ./build.sh
+    startCommand: python manage.py telegram_polling
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: DEBUG
+        value: "0"
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: srote-web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: srote-db
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_IDS
+        sync: false
+
+  # ------------ Daily summary cron ------------
+  - type: cron
+    name: srote-daily-summary
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    # 15:00 UTC = 20:00 Asia/Tashkent (UTC+5)
+    schedule: "0 15 * * *"
+    buildCommand: ./build.sh
+    startCommand: python manage.py send_daily_summary
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: DEBUG
+        value: "0"
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: srote-web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: srote-db
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_IDS
+        sync: false

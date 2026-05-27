@@ -59,6 +59,13 @@ def normalize_code(typed):
     return t
 
 
+# ---------- HEALTH ----------
+
+def healthz(request):
+    """Liveness probe for Render / monitoring. Cheap, no DB hit."""
+    return HttpResponse('ok', content_type='text/plain')
+
+
 # ---------- AUTH ----------
 
 def login_view(request):
