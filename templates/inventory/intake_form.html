@@ -1,140 +1,213 @@
 {% extends 'inventory/base.html' %}
+{% load srote_extras %}
 
 {% block title %}Qabul qilish — {{ product.name }}{% endblock %}
 
 {% block content %}
 <div class="container">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <h3 class="mb-1"><i class="bi bi-box-arrow-in-down"></i> Yangi qabul</h3>
-            <p class="text-muted">
-                Mahsulot: <strong>{{ product.name }}</strong>
-                <span class="code-pill">{{ product.code }}</span>
-            </p>
+    <h3 class="mb-1"><i class="bi bi-box-arrow-in-down"></i> Yangi qabul (matritsa)</h3>
+    <p class="text-muted">
+        Mahsulot: <strong>{{ product.name }}</strong>
+        <span class="code-pill">{{ product.code }}</span>
+    </p>
 
-            <div class="card p-4">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label">{{ form.branch.label }}</label>
-                            {{ form.branch }}
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">{{ form.size.label }}</label>
-                            {{ form.size }}
-                            <small class="text-muted">Mavjud o'lcham bo'lsa, soni shunga qo'shiladi.</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">{{ form.color.label }}</label>
-                            {{ form.color }}
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">{{ form.quantity.label }}</label>
-                            {{ form.quantity }}
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">{{ form.cost_per_unit.label }}</label>
-                            {{ form.cost_per_unit }}
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">{{ form.markup_percent.label }}</label>
-                            {{ form.markup_percent }}
-                            <small class="text-muted">{{ form.markup_percent.help_text }}</small>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">{{ form.sale_price.label }}</label>
-                            {{ form.sale_price }}
-                            <small class="text-muted">{{ form.sale_price.help_text }}</small>
-                        </div>
+    <form method="post" id="intakeForm">
+        {% csrf_token %}
 
-                        <div class="col-12">
-                            <div class="alert alert-info py-2 mb-0" id="price-preview" style="display:none;">
-                                <i class="bi bi-calculator"></i>
-                                <strong>Hisob:</strong> Tannarx <span id="pv-cost">0</span> so'm
-                                + <span id="pv-markup">0</span>% =
-                                <span id="pv-sale" class="fs-5 text-success">0</span> so'm
-                                &nbsp; <small class="text-muted">(foyda: <span id="pv-profit">0</span> so'm/dona)</small>
-                            </div>
-                        </div>
+        <div class="card p-3 mb-3">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Filial</label>
+                    <select name="branch" class="form-select" required>
+                        <option value="">— tanlang —</option>
+                        {% for b in branches %}
+                            <option value="{{ b.id }}">{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Yetkazib beruvchi</label>
+                    <input type="text" name="supplier" class="form-control"
+                           placeholder="Masalan: Chorsu Bozori">
+                </div>
 
-                        <div class="col-12">
-                            <div class="form-check">
-                                {{ form.update_product_price }}
-                                <label class="form-check-label">{{ form.update_product_price.label }}</label>
-                                <small class="text-muted d-block">
-                                    Belgilab qo'yilsa, mahsulot kartochkasidagi va boshqa filiallardagi (hali narx belgilanmagan)
-                                    sotuv narxi ham yangilanadi.
-                                </small>
-                            </div>
-                        </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tannarx (1 dona, so'm)</label>
+                    <input type="number" name="cost_per_unit" id="costInput"
+                           class="form-control" min="0" step="1" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Markup (%)</label>
+                    <input type="number" name="markup_percent" id="markupInput"
+                           class="form-control" min="0" step="0.1"
+                           value="{{ product.markup_percent|default:40 }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Sotuv narxi (so'm)</label>
+                    <input type="number" name="sale_price" id="salePriceInput"
+                           class="form-control" min="0" step="1"
+                           placeholder="auto: tannarx × markup">
+                </div>
 
-                        <div class="col-12">
-                            <label class="form-label">{{ form.supplier.label }}</label>
-                            {{ form.supplier }}
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">{{ form.note.label }}</label>
-                            {{ form.note }}
-                        </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input type="checkbox" name="update_product_price"
+                               class="form-check-input" id="updPrice" checked>
+                        <label class="form-check-label" for="updPrice">
+                            Mahsulotning umumiy sotuv narxini ham yangilash
+                        </label>
                     </div>
-                    <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-save"></i> Qabulni saqlash
-                        </button>
-                        <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-secondary">
-                            Bekor qilish
-                        </a>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
-    </div>
+
+        <div class="card p-3 mb-3">
+            <h6 class="text-muted text-uppercase small mb-2">Variantlar (vergul bilan ajrating)</h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">O'lchamlar</label>
+                    <input type="text" id="sizesInput" class="form-control"
+                           placeholder="Masalan: 40, 41, 42, 43, 44 yoki S, M, L, XL"
+                           value="{% for s in existing_sizes %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Ranglar</label>
+                    <input type="text" id="colorsInput" class="form-control"
+                           placeholder="Masalan: Qora, Oq, Ko'k"
+                           value="{% for c in existing_colors %}{{ c }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                </div>
+                <div class="col-12">
+                    <small class="text-muted">
+                        Pastdagi katakchalarga har bir o'lcham/rang uchun nechta dona kelganini yozing.
+                        Bo'sh yoki <code>0</code> katakchalar e'tiborga olinmaydi.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="text-muted text-uppercase small mb-0">Matritsa</h6>
+                <span class="badge bg-light text-dark">
+                    Jami: <strong id="totalQty">0</strong> dona
+                    · <strong id="totalCells">0</strong> ta variant
+                </span>
+            </div>
+            <div id="matrixWrap" class="table-responsive">
+                <table class="table table-bordered matrix-table align-middle mb-0" id="matrixTable">
+                    <thead class="table-light">
+                        <tr id="matrixHead">
+                            <th style="min-width:100px;">O'lcham \ Rang</th>
+                        </tr>
+                    </thead>
+                    <tbody id="matrixBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card p-3 mb-3">
+            <label class="form-label">Izoh</label>
+            <textarea name="note" rows="2" class="form-control"
+                      placeholder="Masalan: 15-may yangi kolleksiya"></textarea>
+        </div>
+
+        <div class="d-flex gap-2 mb-5">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-save"></i> Hammasini saqlash
+            </button>
+            <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-secondary btn-lg">
+                Bekor qilish
+            </a>
+        </div>
+    </form>
 </div>
 
 <script>
 (function() {
-    const cost   = document.getElementById('id_cost_per_unit');
-    const markup = document.getElementById('id_markup_percent');
-    const sale   = document.getElementById('id_sale_price');
-    const preview = document.getElementById('price-preview');
-    const pvCost = document.getElementById('pv-cost');
-    const pvMarkup = document.getElementById('pv-markup');
-    const pvSale = document.getElementById('pv-sale');
-    const pvProfit = document.getElementById('pv-profit');
+    const sizesInput  = document.getElementById('sizesInput');
+    const colorsInput = document.getElementById('colorsInput');
+    const head        = document.getElementById('matrixHead');
+    const body        = document.getElementById('matrixBody');
+    const totalQty    = document.getElementById('totalQty');
+    const totalCells  = document.getElementById('totalCells');
+    const costInput   = document.getElementById('costInput');
+    const markupInput = document.getElementById('markupInput');
+    const saleInput   = document.getElementById('salePriceInput');
 
-    let saleEdited = false;
-    sale.addEventListener('input', () => { saleEdited = sale.value !== ''; render(); });
-
-    function fmt(n) {
-        return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+    function split(v) {
+        return (v || '').split(',').map(s => s.trim()).filter((s, i, a) => s && a.indexOf(s) === i);
     }
 
-    function render() {
-        const c = parseFloat(cost.value) || 0;
-        const m = parseFloat(markup.value) || 0;
-        let s;
-        if (saleEdited && sale.value !== '') {
-            s = parseFloat(sale.value) || 0;
-        } else {
-            s = c * (1 + m/100);
-            sale.value = Math.round(s);
+    function rebuild() {
+        const sizes  = split(sizesInput.value);
+        const colors = split(colorsInput.value);
+        // Capture existing values so user doesn't lose work when retyping
+        const prev = {};
+        body.querySelectorAll('input[type=number]').forEach(inp => {
+            if (inp.value) prev[inp.name] = inp.value;
+        });
+
+        // Head
+        head.innerHTML = '<th style="min-width:100px;">O\'lcham \\ Rang</th>';
+        for (const c of colors) {
+            const th = document.createElement('th');
+            th.textContent = c;
+            th.className = 'text-center';
+            head.appendChild(th);
         }
-        if (c > 0) {
-            preview.style.display = 'block';
-            pvCost.textContent = fmt(c);
-            pvMarkup.textContent = m.toString();
-            pvSale.textContent = fmt(s);
-            pvProfit.textContent = fmt(s - c);
-        } else {
-            preview.style.display = 'none';
+
+        // Body
+        body.innerHTML = '';
+        for (const s of sizes) {
+            const tr = document.createElement('tr');
+            const th = document.createElement('th');
+            th.textContent = s;
+            tr.appendChild(th);
+            for (const c of colors) {
+                const td = document.createElement('td');
+                td.className = 'p-1';
+                const name = `qty[${s}|${c}]`;
+                const inp = document.createElement('input');
+                inp.type = 'number';
+                inp.min = '0';
+                inp.step = '1';
+                inp.name = name;
+                inp.className = 'form-control form-control-sm text-center';
+                inp.style.width = '70px';
+                inp.style.margin = '0 auto';
+                if (prev[name]) inp.value = prev[name];
+                inp.addEventListener('input', updateTotals);
+                td.appendChild(inp);
+                tr.appendChild(td);
+            }
+            body.appendChild(tr);
         }
+        updateTotals();
     }
 
-    cost.addEventListener('input', () => { if (!saleEdited) sale.value = ''; render(); });
-    markup.addEventListener('input', () => { if (!saleEdited) sale.value = ''; render(); });
+    function updateTotals() {
+        let qty = 0, cells = 0;
+        body.querySelectorAll('input[type=number]').forEach(inp => {
+            const v = parseInt(inp.value || '0');
+            if (v > 0) { qty += v; cells += 1; }
+        });
+        totalQty.textContent = qty;
+        totalCells.textContent = cells;
+    }
 
-    render();
+    function recomputeSalePrice() {
+        if (document.activeElement === saleInput) return; // don't fight user
+        const c = parseFloat(costInput.value || '0');
+        const m = parseFloat(markupInput.value || '0');
+        if (c > 0) saleInput.value = Math.round(c * (1 + m / 100));
+    }
+
+    sizesInput.addEventListener('input', rebuild);
+    colorsInput.addEventListener('input', rebuild);
+    costInput.addEventListener('input', recomputeSalePrice);
+    markupInput.addEventListener('input', recomputeSalePrice);
+
+    rebuild();
 })();
 </script>
 {% endblock %}
