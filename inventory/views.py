@@ -285,51 +285,114 @@ def product_edit(request, code):
 
 # ---------- INTAKE ----------
 
+def _split_csv(text):
+    """Split a comma- or newline-separated string into trimmed tokens."""
+    if not text:
+        return []
+    parts = []
+    for chunk in text.replace('\n', ',').split(','):
+        c = chunk.strip()
+        if c and c not in parts:
+            parts.append(c)
+    return parts
+
+
 @admin_required
 def intake_for_product(request, code):
+    """Bulk intake: matrix of (size × color) → counts in one form."""
+    from decimal import Decimal
     product = get_object_or_404(Product, code=normalize_code(code))
+
     if request.method == 'POST':
-        form = IntakeForm(request.POST)
-        if form.is_valid():
+        try:
+            branch_id = int(request.POST.get('branch') or 0)
+            branch = Branch.objects.filter(pk=branch_id, is_active=True).first()
+            if not branch:
+                messages.error(request, "Filial tanlang.")
+                return redirect('intake_for_product', code=product.code)
+
+            cost = Decimal(request.POST.get('cost_per_unit') or '0')
+            markup = Decimal(request.POST.get('markup_percent') or '0')
+            sale_price_raw = request.POST.get('sale_price') or ''
+            if sale_price_raw.strip():
+                sale_price = Decimal(sale_price_raw)
+            else:
+                sale_price = (cost * (1 + markup / 100)).quantize(Decimal('1'))
+
+            supplier = (request.POST.get('supplier') or '').strip()
+            note = (request.POST.get('note') or '').strip()
+            update_price = bool(request.POST.get('update_product_price'))
+
+            # Iterate matrix cells. Inputs are named qty[<size>|<color>].
+            total_qty = 0
+            variants_touched = 0
             with transaction.atomic():
-                cd = form.cleaned_data
-                variant, _ = ProductVariant.objects.get_or_create(
-                    product=product, size=cd['size'], color=cd['color'],
-                )
-                stock, created = BranchStock.objects.get_or_create(
-                    variant=variant, branch=cd['branch'],
-                    defaults={'cost_price': cd['cost_per_unit'],
-                              'sale_price': cd['sale_price']},
-                )
-                stock.stock_count = F('stock_count') + cd['quantity']
-                stock.cost_price = cd['cost_per_unit']
-                stock.sale_price = cd['sale_price']
-                stock.save()
-                Intake.objects.create(
-                    variant=variant, branch=cd['branch'],
-                    quantity=cd['quantity'],
-                    cost_per_unit=cd['cost_per_unit'],
-                    supplier=cd.get('supplier') or '',
-                    note=cd.get('note') or '',
-                    received_by=request.user,
-                )
-                if cd.get('update_product_price'):
-                    product.default_sale_price = cd['sale_price']
-                    if cd.get('markup_percent') is not None:
-                        product.markup_percent = cd['markup_percent']
+                for key, value in request.POST.items():
+                    if not key.startswith('qty[') or not key.endswith(']'):
+                        continue
+                    payload = key[4:-1]
+                    if '|' not in payload:
+                        continue
+                    size, color = payload.split('|', 1)
+                    size = size.strip()
+                    color = color.strip()
+                    if not size or not color:
+                        continue
+                    try:
+                        qty = int(value)
+                    except (ValueError, TypeError):
+                        continue
+                    if qty <= 0:
+                        continue
+                    variant, _ = ProductVariant.objects.get_or_create(
+                        product=product, size=size, color=color,
+                    )
+                    stock, _ = BranchStock.objects.get_or_create(
+                        variant=variant, branch=branch,
+                        defaults={'cost_price': cost, 'sale_price': sale_price},
+                    )
+                    stock.stock_count = F('stock_count') + qty
+                    stock.cost_price = cost
+                    stock.sale_price = sale_price
+                    stock.save()
+                    Intake.objects.create(
+                        variant=variant, branch=branch,
+                        quantity=qty, cost_per_unit=cost,
+                        supplier=supplier, note=note,
+                        received_by=request.user,
+                    )
+                    total_qty += qty
+                    variants_touched += 1
+
+                if update_price and sale_price > 0:
+                    product.default_sale_price = sale_price
+                    product.markup_percent = markup
                     product.save()
-                    # Boshqa filiallarda hali sotuv narxi belgilanmagan variantlarni ham yangilash
                     BranchStock.objects.filter(
                         variant__product=product, sale_price=0
-                    ).update(sale_price=cd['sale_price'])
-            messages.success(request,
-                f"Qabul saqlandi: {cd['branch'].name}ga {cd['quantity']} dona qo'shildi. "
-                f"Sotuv narxi: {cd['sale_price']:,.0f} so'm.")
-            return redirect('product_detail', code=product.code)
-    else:
-        form = IntakeForm(initial={'markup_percent': product.markup_percent})
+                    ).update(sale_price=sale_price)
+
+            if variants_touched == 0:
+                messages.warning(request,
+                    "Hech qaysi katakka son kiritilmadi — saqlanmadi.")
+            else:
+                messages.success(request,
+                    f"Qabul saqlandi: {branch.name}ga {variants_touched} ta "
+                    f"variant uchun jami {total_qty} dona.")
+                return redirect('product_detail', code=product.code)
+        except (ValueError, TypeError) as e:
+            messages.error(request, f"Maydonlarni tekshiring: {e}")
+
+    # Pre-fill sizes/colors from existing variants if present
+    variants = list(product.variants.all())
+    existing_sizes = sorted({v.size for v in variants}, key=lambda s: (len(s), s))
+    existing_colors = sorted({v.color for v in variants})
+
     return render(request, 'inventory/intake_form.html', {
-        'form': form, 'product': product,
+        'product': product,
+        'branches': Branch.objects.filter(is_active=True),
+        'existing_sizes': existing_sizes,
+        'existing_colors': existing_colors,
     })
 
 

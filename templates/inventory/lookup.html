@@ -117,18 +117,10 @@
                                                     <div class="small text-primary">{{ s.sale_price|som }} so'm</div>
                                                 {% endif %}
                                                 {% if s.stock_count > 0 %}
-                                                <form method="post" action="{% url 'cart_add' s.id %}" class="d-inline">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                    <button type="submit" class="btn btn-sm btn-success mt-1"
-                                                            title="Savatga qo'shish">
-                                                        <i class="bi bi-cart-plus"></i>
-                                                    </button>
-                                                </form>
                                                 <a href="{% url 'sale_create' s.id %}"
-                                                   class="btn btn-sm btn-outline-success mt-1"
-                                                   title="Tezkor sotish (1 ta mahsulot)">
-                                                    <i class="bi bi-lightning"></i>
+                                                   class="btn btn-sm btn-success mt-1"
+                                                   title="Sotish">
+                                                    <i class="bi bi-cart-check"></i> Sotish
                                                 </a>
                                                 {% endif %}
                                             {% endif %}
