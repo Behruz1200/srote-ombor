@@ -17,6 +17,14 @@ def som(value):
     return sign + f'{abs(n):,}'.replace(',', ' ')
 
 
+@register.filter
+def get_item(d, key):
+    """dict[key] template'da. Dict bo'lmasa None qaytaradi."""
+    if hasattr(d, 'get'):
+        return d.get(key)
+    return None
+
+
 @register.simple_tag(takes_context=True)
 def querystring(context, **kwargs):
     """Joriy GET parametrlarini saqlab, ba'zilarini almashtiradi.

@@ -4,38 +4,160 @@
 {% block title %}Smenlar — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h3 class="mb-3"><i class="bi bi-clipboard-check"></i> Smenlar</h3>
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Smenlar</h3>
+        <a href="{% url 'shift_open' %}" class="btn btn-success">
+            <i class="bi bi-door-open"></i> Yangi smen ochish
+        </a>
+    </div>
+
+    <!-- Ochiq smenlar banner -->
+    {% if open_shifts %}
+    <div class="card border-success mb-3">
+        <div class="card-body p-3">
+            <h6 class="text-success text-uppercase small mb-2">
+                <i class="bi bi-circle-fill"></i> Hozir ochiq smenlar ({{ open_shifts|length }})
+            </h6>
+            <div class="row g-2">
+                {% for s in open_shifts %}
+                <div class="col-md-4">
+                    <div class="d-flex justify-content-between border rounded p-2">
+                        <div>
+                            <strong>{{ s.opened_by.username }}</strong>
+                            <div class="small text-muted">
+                                <i class="bi bi-building"></i> {{ s.branch.name }}<br>
+                                <i class="bi bi-clock"></i> {{ s.opened_at|date:"d.m H:i" }}'dan
+                            </div>
+                        </div>
+                        <a href="{% url 'shift_detail' s.pk %}" class="btn btn-sm btn-outline-success align-self-center">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Variance statistika -->
+    {% if shifts %}
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Musbat farq (ortiqcha)</div>
+                <div class="h4 text-success mb-0">+{{ variance_positive|som }} so'm</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Manfiy farq (yetishmadi)</div>
+                <div class="h4 text-danger mb-0">{{ variance_negative|som }} so'm</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">O'rtacha smen farqi</div>
+                <div class="h4 mb-0 {% if avg_variance < 0 %}text-danger{% elif avg_variance > 0 %}text-success{% endif %}">
+                    {{ avg_variance|som }} so'm
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filtrlar -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Filial</label>
+                <select name="branch" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Sotuvchi</label>
+                <select name="seller" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for u in sellers %}
+                        <option value="{{ u.id }}" {% if seller_id == u.id|stringformat:"s" %}selected{% endif %}>{{ u.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Holat</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    <option value="open" {% if status == 'open' %}selected{% endif %}>Ochiq</option>
+                    <option value="closed" {% if status == 'closed' %}selected{% endif %}>Yopilgan</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Sana (dan)</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Sana (gacha)</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+                <a href="{% url 'shift_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </div>
+    </form>
 
     <div class="card">
         <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light">
                 <tr>
-                    <th>Ochildi</th><th>Yopildi</th><th>Filial</th>
-                    <th>Sotuvchi</th><th>Boshlang'ich</th>
-                    <th>Sanalgan</th><th>Kassa farqi</th><th>Holat</th><th></th>
+                    <th>Ochildi</th>
+                    <th>Yopildi</th>
+                    <th>Filial</th>
+                    <th>Sotuvchi</th>
+                    <th class="text-end">Boshlang'ich</th>
+                    <th class="text-end">Sanalgan</th>
+                    <th class="text-end">Kutilgan</th>
+                    <th class="text-end">Farq</th>
+                    <th>Holat</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
             {% for s in shifts %}
-                <tr>
+                <tr {% if s.status == 'open' %}class="table-success bg-opacity-25"{% endif %}>
                     <td><small>{{ s.opened_at|date:"d.m H:i" }}</small></td>
                     <td><small>{% if s.closed_at %}{{ s.closed_at|date:"d.m H:i" }}{% else %}—{% endif %}</small></td>
-                    <td>{{ s.branch.name }}</td>
+                    <td><small>{{ s.branch.name }}</small></td>
                     <td><small>{{ s.opened_by.username }}</small></td>
-                    <td>{{ s.opening_cash|som }}</td>
-                    <td>{% if s.counted_cash is not None %}{{ s.counted_cash|som }}{% else %}—{% endif %}</td>
-                    <td>
+                    <td class="text-end">{{ s.opening_cash|som }}</td>
+                    <td class="text-end">{% if s.counted_cash is not None %}{{ s.counted_cash|som }}{% else %}—{% endif %}</td>
+                    <td class="text-end text-muted">
+                        {% if s.expected_cash is not None %}<small>{{ s.expected_cash|som }}</small>{% else %}—{% endif %}
+                    </td>
+                    <td class="text-end">
                         {% with v=s.variance %}
                         {% if v is not None %}
-                            <span class="{% if v >= 0 %}text-success{% else %}text-danger{% endif %}">{{ v|som }}</span>
-                        {% else %}—{% endif %}
+                            <span class="badge bg-{% if v == 0 %}success{% elif v > 0 %}info{% else %}danger{% endif %}">
+                                {% if v > 0 %}+{% endif %}{{ v|som }}
+                            </span>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
                         {% endwith %}
                     </td>
                     <td>
                         {% if s.status == 'open' %}
-                            <span class="badge bg-success">Ochiq</span>
+                            <span class="badge bg-success">
+                                <i class="bi bi-circle-fill"></i> Ochiq
+                            </span>
                         {% else %}
                             <span class="badge bg-secondary">Yopilgan</span>
                         {% endif %}
@@ -44,7 +166,9 @@
                         <i class="bi bi-eye"></i></a></td>
                 </tr>
             {% empty %}
-                <tr><td colspan="9" class="text-muted text-center py-3">Smenlar yo'q.</td></tr>
+                <tr><td colspan="10" class="text-muted text-center py-3">
+                    Filterga mos smenlar yo'q.
+                </td></tr>
             {% endfor %}
             </tbody>
         </table>

@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count
+from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count, Max
 from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
@@ -892,9 +892,40 @@ def intake_session_detail(request, pk):
 
 @admin_required
 def stocktake_list(request):
-    sessions = (Stocktake.objects.select_related('branch', 'started_by', 'applied_by')
-                .order_by('-started_at')[:50])
-    return render(request, 'inventory/stocktake_list.html', {'sessions': sessions})
+    """Inventarizatsiyalar + filtrlar + ochiq sessiyalar banner."""
+    status = request.GET.get('status') or ''
+    branch_id = request.GET.get('branch') or ''
+
+    qs = (Stocktake.objects.select_related('branch', 'started_by', 'applied_by'))
+    if status:
+        qs = qs.filter(status=status)
+    if branch_id:
+        try:
+            qs = qs.filter(branch_id=int(branch_id))
+        except ValueError:
+            branch_id = ''
+    sessions = list(qs.order_by('-started_at')[:50])
+
+    # Variance summary per session
+    for s in sessions:
+        agg = s.counts.aggregate(
+            variance=Sum(F('counted_qty') - F('system_qty')),
+            cnt=Count('id'),
+        )
+        s.variance_total = agg['variance'] or 0
+        s.count_lines = agg['cnt'] or 0
+
+    open_sessions = Stocktake.objects.filter(status=Stocktake.Status.OPEN) \
+        .select_related('branch', 'started_by').order_by('-started_at')
+
+    return render(request, 'inventory/stocktake_list.html', {
+        'sessions': sessions,
+        'open_sessions': open_sessions,
+        'status': status,
+        'branch_id': branch_id,
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'status_choices': Stocktake.Status.choices,
+    })
 
 
 @admin_required
@@ -980,11 +1011,47 @@ def stocktake_detail(request, pk):
 
 @admin_required
 def transfer_list(request):
-    transfers = (Transfer.objects.select_related('from_branch', 'to_branch',
-                                                  'created_by', 'received_by')
-                 .prefetch_related('lines')
-                 .order_by('-created_at')[:100])
-    return render(request, 'inventory/transfer_list.html', {'transfers': transfers})
+    """Ko'chirishlar ro'yxati + filtrlar + overdue alert + status counts."""
+    status = request.GET.get('status') or ''
+    branch_id = request.GET.get('branch') or ''
+
+    qs = (Transfer.objects.select_related('from_branch', 'to_branch',
+                                          'created_by', 'received_by')
+          .prefetch_related('lines'))
+
+    if status:
+        qs = qs.filter(status=status)
+    if branch_id:
+        try:
+            bid = int(branch_id)
+            qs = qs.filter(Q(from_branch_id=bid) | Q(to_branch_id=bid))
+        except ValueError:
+            branch_id = ''
+
+    transfers = list(qs.order_by('-created_at')[:100])
+
+    # Per-status counts (all transfers, not filtered)
+    counts = {s: 0 for s, _ in Transfer.Status.choices}
+    for s, n in (Transfer.objects.values_list('status')
+                 .annotate(n=Count('id')).values_list('status', 'n')):
+        counts[s] = n
+
+    # Overdue alert: in_transit older than 3 days
+    overdue_cutoff = timezone.now() - timedelta(days=3)
+    overdue_transfers = list(Transfer.objects
+        .filter(status=Transfer.Status.IN_TRANSIT, dispatched_at__lt=overdue_cutoff)
+        .select_related('from_branch', 'to_branch')
+        .order_by('dispatched_at')[:5])
+
+    return render(request, 'inventory/transfer_list.html', {
+        'transfers': transfers,
+        'status': status,
+        'branch_id': branch_id,
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'status_choices': Transfer.Status.choices,
+        'counts': counts,
+        'overdue_transfers': overdue_transfers,
+    })
 
 
 @admin_required
@@ -1189,9 +1256,74 @@ def shift_detail(request, pk):
 
 @admin_required
 def shift_list(request):
-    shifts = (Shift.objects.select_related('branch', 'opened_by', 'closed_by')
-              .order_by('-opened_at')[:100])
-    return render(request, 'inventory/shift_list.html', {'shifts': shifts})
+    """Smenlar ro'yxati + filtrlar + ochiq smenlar banner."""
+    branch_id = request.GET.get('branch') or ''
+    status = request.GET.get('status') or ''
+    seller_id = request.GET.get('seller') or ''
+    date_from = request.GET.get('date_from') or ''
+    date_to = request.GET.get('date_to') or ''
+
+    qs = Shift.objects.select_related('branch', 'opened_by', 'closed_by')
+
+    if branch_id:
+        try:
+            qs = qs.filter(branch_id=int(branch_id))
+        except ValueError:
+            branch_id = ''
+    if status:
+        qs = qs.filter(status=status)
+    if seller_id:
+        try:
+            qs = qs.filter(opened_by_id=int(seller_id))
+        except ValueError:
+            seller_id = ''
+    try:
+        if date_from:
+            qs = qs.filter(opened_at__date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
+    except ValueError:
+        date_from = ''
+    try:
+        if date_to:
+            qs = qs.filter(opened_at__date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
+    except ValueError:
+        date_to = ''
+
+    shifts = list(qs.order_by('-opened_at')[:100])
+
+    # Ochiq smenlar — har doim alohida ko'rsatamiz
+    open_shifts = (Shift.objects.filter(status=Shift.Status.OPEN)
+                   .select_related('branch', 'opened_by')
+                   .order_by('-opened_at'))
+
+    # Variance stats — total positive vs negative variance from closed shifts.
+    # Shift.variance is a method, so call it (cache per row).
+    closed = []
+    for s in shifts:
+        if s.status == Shift.Status.CLOSED:
+            v = s.variance() if callable(s.variance) else s.variance
+            s._variance_value = v
+            closed.append(s)
+    variance_positive = sum(float(s._variance_value) for s in closed
+                            if s._variance_value is not None and s._variance_value > 0)
+    variance_negative = sum(float(s._variance_value) for s in closed
+                            if s._variance_value is not None and s._variance_value < 0)
+    avg_variance = (sum(float(s._variance_value) for s in closed
+                        if s._variance_value is not None) / len(closed)) if closed else 0
+
+    return render(request, 'inventory/shift_list.html', {
+        'shifts': shifts,
+        'open_shifts': open_shifts,
+        'variance_positive': variance_positive,
+        'variance_negative': variance_negative,
+        'avg_variance': avg_variance,
+        'branch_id': branch_id,
+        'status': status,
+        'seller_id': seller_id,
+        'date_from': date_from,
+        'date_to': date_to,
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'sellers': User.objects.filter(is_active=True).order_by('username'),
+    })
 
 
 # ---------- POS TERMINAL ----------
@@ -2255,8 +2387,54 @@ def branch_edit(request, pk):
 
 @admin_required
 def user_list(request):
-    users = User.objects.select_related('branch').order_by('-is_active', 'username')
-    return render(request, 'inventory/user_list.html', {'users': users})
+    """Foydalanuvchilar: 30 kunlik performans + oxirgi kirish."""
+    role_filter = request.GET.get('role') or ''
+    branch_id = request.GET.get('branch') or ''
+    only_active = request.GET.get('active') == '1'
+
+    users = User.objects.select_related('branch')
+    if role_filter:
+        users = users.filter(role=role_filter)
+    if branch_id:
+        try:
+            users = users.filter(branch_id=int(branch_id))
+        except ValueError:
+            branch_id = ''
+    if only_active:
+        users = users.filter(is_active=True)
+
+    users = list(users.order_by('-is_active', 'username'))
+
+    # 30-kunlik sotuv stat'lari
+    since = timezone.now() - timedelta(days=30)
+    rev_expr = ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+    stats = (Sale.objects.filter(sold_at__gte=since)
+             .values('sold_by_id')
+             .annotate(
+                 revenue=Sum(rev_expr),
+                 qty=Sum('quantity'),
+                 n=Count('transaction', distinct=True),
+             ))
+    stat_map = {s['sold_by_id']: s for s in stats}
+    for u in users:
+        s = stat_map.get(u.id, {})
+        u.s_revenue = float(s.get('revenue') or 0)
+        u.s_qty = s.get('qty') or 0
+        u.s_txns = s.get('n') or 0
+        pct = float(u.commission_percent or 0)
+        u.s_commission = u.s_revenue * pct / 100 if pct else 0
+
+    return render(request, 'inventory/user_list.html', {
+        'users': users,
+        'role_filter': role_filter,
+        'branch_id': branch_id,
+        'only_active': only_active,
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'role_choices': User.Role.choices,
+    })
 
 
 @admin_required
@@ -2430,6 +2608,9 @@ def _resolve_period(period, date_from, date_to):
     if period == 'today':
         start = today
         end = today + timedelta(days=1)
+    elif period == 'yesterday':
+        start = today - timedelta(days=1)
+        end = today
     elif period == 'week':
         start = today - timedelta(days=7)
         end = today + timedelta(days=1)
@@ -2828,6 +3009,10 @@ def audit_list(request):
     user_filter = request.GET.get('user') or ''
     model = request.GET.get('model') or ''
     q = (request.GET.get('q') or '').strip()
+    date_from = request.GET.get('date_from') or ''
+    date_to = request.GET.get('date_to') or ''
+    export = request.GET.get('export') == 'csv'
+
     if action:
         logs = logs.filter(action=action)
     if user_filter:
@@ -2841,6 +3026,38 @@ def audit_list(request):
             Q(model_name__icontains=q) |
             Q(object_id=q)
         )
+    try:
+        if date_from:
+            logs = logs.filter(created_at__date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
+    except ValueError:
+        date_from = ''
+    try:
+        if date_to:
+            logs = logs.filter(created_at__date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
+    except ValueError:
+        date_to = ''
+
+    logs = logs.order_by('-created_at')
+
+    if export:
+        resp = HttpResponse(content_type='text/csv; charset=utf-8')
+        resp['Content-Disposition'] = 'attachment; filename="audit_log.csv"'
+        resp.write('﻿')
+        w = csv.writer(resp)
+        w.writerow(['Sana', 'Vaqt', 'Foydalanuvchi', 'Amal', 'Model',
+                    'Obyekt ID', 'Obyekt', 'IP'])
+        for l in logs[:10000]:
+            w.writerow([
+                l.created_at.strftime('%Y-%m-%d'),
+                l.created_at.strftime('%H:%M:%S'),
+                l.username_snapshot or '',
+                l.get_action_display(),
+                l.model_name or '',
+                l.object_id or '',
+                l.object_repr or '',
+                l.ip_address or '',
+            ])
+        return resp
 
     # Pagination
     from django.core.paginator import Paginator
@@ -2859,6 +3076,7 @@ def audit_list(request):
         'page': page, 'actions': actions, 'users': users,
         'models_list': models_list,
         'f_action': action, 'f_user': user_filter, 'f_model': model, 'q': q,
+        'date_from': date_from, 'date_to': date_to,
     })
 
 
@@ -2866,11 +3084,15 @@ def audit_list(request):
 
 @admin_required
 def customer_list(request):
+    """Mijozlar ro'yxati: qidiruv + segment filter + CSV export."""
     q = (request.GET.get('q') or '').strip()
+    segment = request.GET.get('segment') or ''
+    export = request.GET.get('export') == 'csv'
+
     customers = Customer.objects.all()
     if q:
         customers = customers.filter(Q(name__icontains=q) | Q(phone__icontains=q))
-    # annotate quick stats
+
     revenue_expr = ExpressionWrapper(
         F('transactions__lines__quantity') * F('transactions__lines__sale_price'),
         output_field=DecimalField(max_digits=14, decimal_places=2),
@@ -2879,9 +3101,68 @@ def customer_list(request):
         txn_count=Count('transactions', distinct=True),
         total_spent=Coalesce(Sum(revenue_expr), 0,
                              output_field=DecimalField(max_digits=14, decimal_places=2)),
-    ).order_by('-total_spent', 'name')[:200]
+        last_visit=Max('transactions__sold_at'),
+    ).order_by('-total_spent', 'name')
+
+    # Segment thresholds (sums in UZS)
+    VIP_THRESHOLD = 5_000_000   # 5M+ → VIP
+    REGULAR_THRESHOLD = 500_000  # 500k+ → Regular
+
+    if segment == 'vip':
+        customers = customers.filter(total_spent__gte=VIP_THRESHOLD)
+    elif segment == 'regular':
+        customers = customers.filter(total_spent__gte=REGULAR_THRESHOLD,
+                                     total_spent__lt=VIP_THRESHOLD)
+    elif segment == 'new':
+        customers = customers.filter(total_spent__lt=REGULAR_THRESHOLD)
+
+    customers = customers[:300]
+
+    if export:
+        resp = HttpResponse(content_type='text/csv; charset=utf-8')
+        resp['Content-Disposition'] = 'attachment; filename="customers.csv"'
+        resp.write('﻿')
+        w = csv.writer(resp)
+        w.writerow(['Ism', 'Telefon', 'Tag', 'Cheklar', 'Jami sarf',
+                    "O'rtacha chek", 'Oxirgi tashrif'])
+        for c in customers:
+            avg = (c.total_spent / c.txn_count) if c.txn_count else 0
+            w.writerow([
+                c.name or '', c.phone or '', c.tags or '',
+                c.txn_count or 0,
+                float(c.total_spent or 0),
+                float(avg),
+                c.last_visit.strftime('%Y-%m-%d %H:%M') if c.last_visit else '',
+            ])
+        return resp
+
+    customers = list(customers)
+    # Compute average ticket and segment label for display
+    for c in customers:
+        c.avg_ticket = (float(c.total_spent) / c.txn_count) if c.txn_count else 0
+        spent = float(c.total_spent or 0)
+        if spent >= VIP_THRESHOLD:
+            c.segment_label = 'VIP'
+            c.segment_class = 'bg-warning text-dark'
+        elif spent >= REGULAR_THRESHOLD:
+            c.segment_label = 'Doimiy'
+            c.segment_class = 'bg-success'
+        else:
+            c.segment_label = 'Yangi'
+            c.segment_class = 'bg-secondary'
+
+    # Aggregate stats for header
+    total_count = Customer.objects.count()
+    total_revenue = Customer.objects.annotate(
+        s=Coalesce(Sum(revenue_expr), 0,
+                   output_field=DecimalField(max_digits=14, decimal_places=2))
+    ).aggregate(t=Sum('s'))['t'] or 0
+
     return render(request, 'inventory/customer_list.html', {
-        'customers': customers, 'q': q,
+        'customers': customers,
+        'q': q, 'segment': segment,
+        'total_count': total_count,
+        'total_revenue': total_revenue,
     })
 
 

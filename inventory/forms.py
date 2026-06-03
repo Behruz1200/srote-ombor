@@ -259,6 +259,7 @@ REPORT_TYPES = [
 
 PERIOD_CHOICES = [
     ('today', 'Bugun'),
+    ('yesterday', 'Kecha'),
     ('week', 'Oxirgi 7 kun'),
     ('month', 'Oxirgi 30 kun'),
     ('this_month', 'Joriy oy'),

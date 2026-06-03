@@ -4,40 +4,115 @@
 {% block title %}Inventarizatsiya — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3><i class="bi bi-clipboard-check"></i> Inventarizatsiya</h3>
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Inventarizatsiya</h3>
         <a href="{% url 'stocktake_create' %}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Yangi
+            <i class="bi bi-plus-circle"></i> Yangi inventarizatsiya
         </a>
     </div>
 
+    <!-- Ochiq sessiyalar banner -->
+    {% if open_sessions %}
+    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+        <i class="bi bi-clock-history flex-shrink-0 mt-1"></i>
+        <div class="flex-grow-1">
+            <strong>{{ open_sessions|length }} ta ochiq sessiya — yakunlanmagan</strong>
+            <div class="mt-1">
+                {% for s in open_sessions %}
+                    <a href="{% url 'stocktake_detail' s.pk %}"
+                       class="badge bg-white text-warning border border-warning text-decoration-none me-1">
+                        #{{ s.pk }} {{ s.branch.name }}
+                        <small class="ms-1">{{ s.started_at|timesince }} oldin</small>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filtrlar -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Holat</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for v, l in status_choices %}
+                        <option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Filial</label>
+                <select name="branch" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+                <a href="{% url 'stocktake_list' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i> Tozalash
+                </a>
+            </div>
+        </div>
+    </form>
+
     <div class="card">
         <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light"><tr>
-                <th>#</th><th>Boshlandi</th><th>Filial</th><th>Boshladi</th>
-                <th>Tasdiqlandi</th><th>Holat</th><th></th>
+                <th>#</th>
+                <th>Boshlandi</th>
+                <th>Filial</th>
+                <th>Boshladi</th>
+                <th class="text-end">Variantlar</th>
+                <th class="text-end">Farq (jami)</th>
+                <th>Tasdiqlandi</th>
+                <th>Holat</th>
+                <th></th>
             </tr></thead>
             <tbody>
             {% for s in sessions %}
-                <tr>
+                <tr {% if s.status == 'open' %}class="table-warning"{% endif %}>
                     <td><strong>#{{ s.pk }}</strong></td>
                     <td><small>{{ s.started_at|date:"d.m.Y H:i" }}</small></td>
-                    <td>{{ s.branch.name }}</td>
+                    <td><small>{{ s.branch.name }}</small></td>
                     <td><small>{{ s.started_by.username }}</small></td>
+                    <td class="text-end">{{ s.count_lines }}</td>
+                    <td class="text-end">
+                        {% if s.variance_total > 0 %}
+                            <span class="badge bg-info">+{{ s.variance_total }}</span>
+                        {% elif s.variance_total < 0 %}
+                            <span class="badge bg-danger">{{ s.variance_total }}</span>
+                        {% else %}
+                            <span class="text-muted">0</span>
+                        {% endif %}
+                    </td>
                     <td><small>{% if s.applied_at %}{{ s.applied_at|date:"d.m H:i" }}{% else %}—{% endif %}</small></td>
                     <td>
-                        {% if s.status == 'open' %}<span class="badge bg-warning text-dark">{{ s.get_status_display }}</span>
+                        {% if s.status == 'open' %}<span class="badge bg-warning text-dark"><i class="bi bi-circle-fill"></i> {{ s.get_status_display }}</span>
                         {% elif s.status == 'applied' %}<span class="badge bg-success">{{ s.get_status_display }}</span>
                         {% else %}<span class="badge bg-secondary">{{ s.get_status_display }}</span>
                         {% endif %}
                     </td>
-                    <td><a href="{% url 'stocktake_detail' s.pk %}" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-eye"></i></a></td>
+                    <td>
+                        <a href="{% url 'stocktake_detail' s.pk %}" class="btn btn-sm btn-outline-primary">
+                            {% if s.status == 'open' %}
+                                <i class="bi bi-play-fill"></i>
+                            {% else %}
+                                <i class="bi bi-eye"></i>
+                            {% endif %}
+                        </a>
+                    </td>
                 </tr>
             {% empty %}
-                <tr><td colspan="7" class="text-muted text-center py-3">Inventarizatsiyalar yo'q.</td></tr>
+                <tr><td colspan="9" class="text-muted text-center py-3">Inventarizatsiyalar yo'q.</td></tr>
             {% endfor %}
             </tbody>
         </table>

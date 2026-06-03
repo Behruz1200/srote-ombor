@@ -4,58 +4,119 @@
 {% block title %}Mijozlar — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container-fluid px-3">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3><i class="bi bi-person-rolodex"></i> Mijozlar</h3>
-        <span class="text-muted small">Jami: <strong>{{ customers|length }}</strong></span>
+        <h3 class="mb-0"><i class="bi bi-person-rolodex"></i> Mijozlar</h3>
+        <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-file-earmark-spreadsheet"></i> CSV export
+        </a>
     </div>
 
-    <div class="card p-3 mb-3">
-        <form method="get" class="d-flex gap-2">
-            <input type="text" name="q" value="{{ q }}"
-                   placeholder="Telefon yoki ism..."
-                   class="form-control" autofocus>
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-search"></i>
-            </button>
-            {% if q %}<a href="{% url 'customer_list' %}" class="btn btn-outline-secondary">Tozalash</a>{% endif %}
-        </form>
-        <small class="text-muted mt-2">Mijozlar POS'da sotuv vaqtida telefon kiritilsa avtomatik yaratiladi.</small>
+    <!-- Top stats -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Jami mijozlar</div>
+                <div class="h3 mb-0">{{ total_count }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Hozir ko'rsatilgan</div>
+                <div class="h3 mb-0">{{ customers|length }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Jami sarf qilingan</div>
+                <div class="h3 mb-0 text-success">{{ total_revenue|som }}</div>
+            </div>
+        </div>
     </div>
+
+    <!-- Filterlar -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label small text-muted mb-1">Qidirish</label>
+                <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+                       placeholder="Telefon yoki ism..." autofocus>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small text-muted mb-1">Segment</label>
+                <select name="segment" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    <option value="vip" {% if segment == 'vip' %}selected{% endif %}>⭐ VIP (5M+ so'm)</option>
+                    <option value="regular" {% if segment == 'regular' %}selected{% endif %}>✓ Doimiy (500K+)</option>
+                    <option value="new" {% if segment == 'new' %}selected{% endif %}>🆕 Yangi (&lt;500K)</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+                <a href="{% url 'customer_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </div>
+        <small class="text-muted mt-2">
+            <i class="bi bi-info-circle"></i> Mijozlar POS'da telefon kiritilsa avtomatik yaratiladi.
+        </small>
+    </form>
 
     <div class="card">
         <div class="table-responsive">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Ism</th><th>Telefon</th><th>Tag</th>
-                    <th class="text-end">Sotuvlar</th>
-                    <th class="text-end">Jami sarf</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for c in customers %}
-                <tr>
-                    <td><strong>{{ c.name|default:"—" }}</strong></td>
-                    <td>{{ c.phone|default:"—" }}</td>
-                    <td><small class="text-muted">{{ c.tags|default:"" }}</small></td>
-                    <td class="text-end">{{ c.txn_count }}</td>
-                    <td class="text-end"><strong>{{ c.total_spent|som }}</strong> so'm</td>
-                    <td class="text-end">
-                        <a href="{% url 'customer_detail' c.pk %}"
-                           class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-eye"></i>
-                        </a>
-                    </td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="6" class="text-center text-muted py-4">
-                    {% if q %}"{{ q }}" bo'yicha mijoz topilmadi.{% else %}Hozircha mijozlar yo'q.{% endif %}
-                </td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mijoz</th>
+                        <th>Telefon</th>
+                        <th>Segment</th>
+                        <th class="text-end">Cheklar</th>
+                        <th class="text-end">Jami sarf</th>
+                        <th class="text-end">O'rt. chek</th>
+                        <th>Oxirgi tashrif</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for c in customers %}
+                    <tr>
+                        <td>
+                            <strong>{{ c.name|default:"Anonim" }}</strong>
+                            {% if c.tags %}
+                                <div class="small text-muted">{{ c.tags }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ c.phone|default:"—" }}</td>
+                        <td><span class="badge {{ c.segment_class }}">{{ c.segment_label }}</span></td>
+                        <td class="text-end">{{ c.txn_count }}</td>
+                        <td class="text-end"><strong>{{ c.total_spent|som }}</strong></td>
+                        <td class="text-end text-muted">{{ c.avg_ticket|som }}</td>
+                        <td>
+                            {% if c.last_visit %}
+                                <small>{{ c.last_visit|date:"d.m.Y" }}</small>
+                                <div class="small text-muted">{{ c.last_visit|timesince }} oldin</div>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'customer_detail' c.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">
+                        {% if q %}"{{ q }}" bo'yicha topilmadi.
+                        {% elif segment %}Tanlangan segmentda mijoz yo'q.
+                        {% else %}Hozircha mijozlar yo'q.{% endif %}
+                    </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

@@ -7,7 +7,12 @@
 <div class="container-fluid px-3">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h3 class="mb-0"><i class="bi bi-clipboard-data"></i> Audit log</h3>
-        <span class="text-muted small">Jami: <strong>{{ page.paginator.count }}</strong> yozuv</span>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="text-muted small">Jami: <strong>{{ page.paginator.count }}</strong></span>
+            <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-sm btn-outline-success">
+                <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+            </a>
+        </div>
     </div>
 
     <div class="card p-3 mb-3">
@@ -44,11 +49,21 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-sm btn-primary">
-                    <i class="bi bi-funnel"></i> Filtrlash
+            <div class="col-md-1">
+                <label class="form-label small mb-1">Dan</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small mb-1">Gacha</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-1 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-sm btn-primary flex-fill" title="Filter">
+                    <i class="bi bi-funnel"></i>
                 </button>
-                <a href="{% url 'audit_list' %}" class="btn btn-sm btn-outline-secondary">Tozalash</a>
+                <a href="{% url 'audit_list' %}" class="btn btn-sm btn-outline-secondary" title="Tozalash">
+                    <i class="bi bi-x"></i>
+                </a>
             </div>
         </form>
     </div>

@@ -4,42 +4,125 @@
 {% block title %}Tovar ko'chirish — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3><i class="bi bi-arrow-left-right"></i> Filiallar orasi ko'chirish</h3>
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-arrow-left-right"></i> Filiallar orasi ko'chirish</h3>
         <a href="{% url 'transfer_create' %}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Yangi ko'chirish
         </a>
     </div>
 
+    <!-- Overdue alert -->
+    {% if overdue_transfers %}
+    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+        <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+        <div class="flex-grow-1">
+            <strong>{{ overdue_transfers|length }} ta ko'chirish 3 kundan ortiq yo'lda turibdi</strong>
+            <div class="small mt-1">
+                {% for t in overdue_transfers %}
+                    <a href="{% url 'transfer_detail' t.pk %}" class="badge bg-white text-warning border border-warning me-1">
+                        #{{ t.pk }} {{ t.from_branch.name }} → {{ t.to_branch.name }}
+                        ({{ t.dispatched_at|timesince }})
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Status counts -->
+    <div class="row g-2 mb-3">
+        {% for s, label in status_choices %}
+        <div class="col-md-3">
+            <a href="?status={{ s }}" class="card p-2 text-decoration-none
+                     {% if status == s %}border-primary{% endif %}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">
+                        {% if s == 'draft' %}<i class="bi bi-file-earmark text-secondary"></i>
+                        {% elif s == 'in_transit' %}<i class="bi bi-truck text-warning"></i>
+                        {% elif s == 'received' %}<i class="bi bi-check-circle text-success"></i>
+                        {% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}
+                        {{ label }}
+                    </span>
+                    <strong class="h5 mb-0">{{ counts|get_item:s }}</strong>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Filtrlar -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Holat</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for s, l in status_choices %}
+                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Filial (dan yoki ga)</label>
+                <select name="branch" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+                <a href="{% url 'transfer_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x"></i> Tozalash
+                </a>
+            </div>
+        </div>
+    </form>
+
     <div class="card">
         <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light"><tr>
                 <th>#</th><th>Sana</th><th>Qayerdan</th><th>Qayerga</th>
-                <th>Variantlar</th><th>Dona</th><th>Holat</th><th></th>
+                <th class="text-end">Variantlar</th><th class="text-end">Dona</th>
+                <th>Holat</th><th>Davomiyligi</th><th></th>
             </tr></thead>
             <tbody>
             {% for t in transfers %}
-                <tr>
+                <tr {% if t.status == 'in_transit' %}
+                        {% if t.dispatched_at and t.dispatched_at|timesince|slice:"0:1" > "2" %}
+                            class="table-warning"
+                        {% endif %}
+                    {% endif %}>
                     <td><strong>#{{ t.pk }}</strong></td>
-                    <td><small>{{ t.created_at|date:"d.m.Y H:i" }}</small></td>
-                    <td>{{ t.from_branch.name }}</td>
-                    <td>{{ t.to_branch.name }}</td>
-                    <td>{{ t.lines.count }}</td>
-                    <td>{{ t.total_qty }}</td>
+                    <td><small>{{ t.created_at|date:"d.m H:i" }}</small></td>
+                    <td><small>{{ t.from_branch.name }}</small></td>
+                    <td><small>{{ t.to_branch.name }}</small></td>
+                    <td class="text-end">{{ t.lines.count }}</td>
+                    <td class="text-end">{{ t.total_qty }}</td>
                     <td>
                         {% if t.status == 'draft' %}<span class="badge bg-secondary">{{ t.get_status_display }}</span>
-                        {% elif t.status == 'in_transit' %}<span class="badge bg-warning text-dark">{{ t.get_status_display }}</span>
+                        {% elif t.status == 'in_transit' %}<span class="badge bg-warning text-dark"><i class="bi bi-truck"></i> {{ t.get_status_display }}</span>
                         {% elif t.status == 'received' %}<span class="badge bg-success">{{ t.get_status_display }}</span>
                         {% else %}<span class="badge bg-danger">{{ t.get_status_display }}</span>
                         {% endif %}
                     </td>
+                    <td><small class="text-muted">
+                        {% if t.status == 'received' and t.received_at and t.dispatched_at %}
+                            {{ t.received_at|timesince:t.dispatched_at }}
+                        {% elif t.status == 'in_transit' and t.dispatched_at %}
+                            {{ t.dispatched_at|timesince }} oldin
+                        {% endif %}
+                    </small></td>
                     <td><a href="{% url 'transfer_detail' t.pk %}" class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-eye"></i></a></td>
                 </tr>
             {% empty %}
-                <tr><td colspan="8" class="text-muted text-center py-3">Ko'chirishlar yo'q.</td></tr>
+                <tr><td colspan="9" class="text-muted text-center py-3">Filterga mos ko'chirishlar yo'q.</td></tr>
             {% endfor %}
             </tbody>
         </table>
