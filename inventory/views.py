@@ -712,34 +712,72 @@ def shift_list(request):
 
 # ---------- POS TERMINAL ----------
 
+POS_BRANCH_SESSION_KEY = 'pos_branch_id'
+
+
 def _user_branch_or_403(request):
-    """Sellers must have a branch. Admins use (in order):
-       1) their assigned branch, 2) the branch of an open shift they
-       themselves opened, 3) any open shift, 4) first active branch.
+    """Sellers are locked to their assigned branch. Admins can pick
+    which branch the POS operates on via a dropdown — the choice is
+    stored in the session under POS_BRANCH_SESSION_KEY.
+
+    Fallback order for admins:
+      1) session-selected branch
+      2) ?branch_id= query (used once by pos_terminal to set the session)
+      3) admin's own assigned branch (if set)
+      4) branch of admin's own open shift
+      5) any open shift's branch
+      6) first active branch
     """
-    if request.user.is_admin():
-        if request.user.branch_id:
-            return request.user.branch
-        own_shift = Shift.objects.filter(
-            opened_by=request.user, status=Shift.Status.OPEN
-        ).select_related('branch').order_by('-opened_at').first()
-        if own_shift:
-            return own_shift.branch
-        any_shift = Shift.objects.filter(
-            status=Shift.Status.OPEN
-        ).select_related('branch').order_by('-opened_at').first()
-        if any_shift:
-            return any_shift.branch
-        first = Branch.objects.filter(is_active=True).first()
-        if first:
-            return first
-        return None
-    return request.user.branch
+    if not request.user.is_admin():
+        return request.user.branch
+
+    sb_id = request.session.get(POS_BRANCH_SESSION_KEY)
+    if sb_id:
+        b = Branch.objects.filter(pk=sb_id, is_active=True).first()
+        if b:
+            return b
+
+    q_id = request.GET.get('branch_id')
+    if q_id:
+        try:
+            b = Branch.objects.filter(pk=int(q_id), is_active=True).first()
+            if b:
+                return b
+        except ValueError:
+            pass
+
+    if request.user.branch_id:
+        return request.user.branch
+
+    own_shift = Shift.objects.filter(
+        opened_by=request.user, status=Shift.Status.OPEN
+    ).select_related('branch').order_by('-opened_at').first()
+    if own_shift:
+        return own_shift.branch
+
+    any_shift = Shift.objects.filter(
+        status=Shift.Status.OPEN
+    ).select_related('branch').order_by('-opened_at').first()
+    if any_shift:
+        return any_shift.branch
+
+    return Branch.objects.filter(is_active=True).first()
 
 
 @login_required
 def pos_terminal(request):
     """Single-page POS UI. Browser maintains the cart, posts via AJAX."""
+    # If admin clicked the branch dropdown, persist the choice
+    if request.user.is_admin():
+        q_id = request.GET.get('branch_id')
+        if q_id:
+            try:
+                b = Branch.objects.filter(pk=int(q_id), is_active=True).first()
+                if b:
+                    request.session[POS_BRANCH_SESSION_KEY] = b.pk
+            except ValueError:
+                pass
+
     branch = _user_branch_or_403(request)
     if branch is None:
         messages.error(request, "Filial biriktirilmagan. Administrator bilan bog'laning.")
@@ -754,11 +792,16 @@ def pos_terminal(request):
                    .prefetch_related('lines')
                    .order_by('-sold_at')[:5])
 
+    branches_list = []
+    if request.user.is_admin():
+        branches_list = list(Branch.objects.filter(is_active=True).order_by('name'))
+
     return render(request, 'inventory/pos.html', {
         'branch': branch,
         'shift': open_shift,
         'recent_txns': recent_txns,
         'payment_methods': SaleTransaction.PaymentMethod.choices,
+        'branches_list': branches_list,
     })
 
 
