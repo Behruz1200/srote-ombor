@@ -11,11 +11,19 @@
             <small class="text-muted fs-6 ms-2">
                 <i class="bi bi-building"></i> {{ branch.name }}
                 · <i class="bi bi-person"></i> {{ user.username }}
+                {% if shift %}
+                · <span class="badge bg-success">Smen #{{ shift.pk }}</span>
+                {% endif %}
             </small>
         </h3>
-        <div class="text-muted small">
-            <i class="bi bi-clock"></i>
-            <span id="posClock"></span>
+        <div class="d-flex gap-2 align-items-center">
+            <div class="text-muted small">
+                <i class="bi bi-clock"></i>
+                <span id="posClock"></span>
+            </div>
+            <a href="{% url 'shift_close' %}" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-door-closed"></i> Smen yopish
+            </a>
         </div>
     </div>
 

@@ -12,6 +12,12 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('lookup/', views.lookup, name='lookup'),
 
+    # Shifts (open/close, cash reconciliation)
+    path('shift/open/', views.shift_open, name='shift_open'),
+    path('shift/close/', views.shift_close, name='shift_close'),
+    path('shift/<int:pk>/', views.shift_detail, name='shift_detail'),
+    path('shifts/', views.shift_list, name='shift_list'),
+
     # POS terminal (BILLZ-style single-page scanner workflow)
     path('pos/', views.pos_terminal, name='pos_terminal'),
     path('pos/lookup/', views.pos_lookup, name='pos_lookup'),

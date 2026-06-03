@@ -1,0 +1,97 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Smen #{{ shift.pk }} — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <a href="{% url 'shift_list' %}" class="btn btn-link p-0 mb-2">← Smenlar ro'yxati</a>
+    <h3 class="mb-3"><i class="bi bi-clipboard-check"></i> Smen #{{ shift.pk }}</h3>
+
+    <div class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <small class="text-muted">Filial</small><br>
+                <strong>{{ shift.branch.name }}</strong>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">Ochildi</small><br>
+                <strong>{{ shift.opened_at|date:"d.m.Y H:i" }}</strong>
+                <small class="d-block">{{ shift.opened_by.username }}</small>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">Yopildi</small><br>
+                {% if shift.closed_at %}
+                <strong>{{ shift.closed_at|date:"d.m.Y H:i" }}</strong>
+                <small class="d-block">{{ shift.closed_by.username }}</small>
+                {% else %}
+                <span class="badge bg-success">Hali ochiq</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card p-3"><div class="text-muted small">Boshlang'ich naqd</div>
+                <h4 class="mb-0">{{ shift.opening_cash|som }} so'm</h4></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3"><div class="text-muted small">Naqd sotuvlar</div>
+                <h4 class="mb-0 text-success">+{{ cash_sales|som }}</h4></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3"><div class="text-muted small">Kutilgan</div>
+                <h4 class="mb-0 text-primary">{{ expected|som }}</h4></div>
+        </div>
+        <div class="col-md-3">
+            {% if shift.counted_cash is not None %}
+                <div class="card p-3"><div class="text-muted small">Sanalgan</div>
+                    <h4 class="mb-0">{{ shift.counted_cash|som }}</h4>
+                    {% with v=shift.variance %}
+                    {% if v != 0 %}
+                        <small class="{% if v > 0 %}text-success{% else %}text-danger{% endif %}">
+                            Kassa farqi: {{ v|som }} so'm
+                        </small>
+                    {% else %}
+                        <small class="text-success">✓ To'g'ri</small>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+            {% else %}
+                <div class="card p-3 bg-light text-muted"><div class="small">Sanalmagan</div>
+                    <h4 class="mb-0">—</h4></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <h5 class="mb-2">Sotuvlar ({{ txns|length }})</h5>
+    <div class="card">
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr><th>Vaqt</th><th>Sotuvchi</th><th>To'lov</th><th>Dona</th>
+                    <th class="text-end">Summa</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for t in txns %}
+                <tr>
+                    <td><small>{{ t.sold_at|date:"H:i:s" }}</small></td>
+                    <td><small>{{ t.sold_by.username }}</small></td>
+                    <td><small>{{ t.get_payment_method_display }}</small></td>
+                    <td>{{ t.item_count }}</td>
+                    <td class="text-end"><strong>{{ t.total|som }}</strong></td>
+                    <td><a href="{% url 'transaction_detail' t.pk %}" target="_blank"
+                           class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-receipt"></i>
+                    </a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6" class="text-muted text-center py-3">Sotuv yo'q.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

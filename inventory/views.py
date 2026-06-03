@@ -24,7 +24,7 @@ from reportlab.platypus import (
 
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
-    Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
+    Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -403,6 +403,106 @@ def intake_new(request):
     return render(request, 'inventory/intake_choose.html', {'products': products})
 
 
+# ---------- SHIFTS ----------
+
+def _open_shift_for(branch):
+    """Returns the single open shift for a branch, or None."""
+    return Shift.objects.filter(branch=branch, status=Shift.Status.OPEN).first()
+
+
+@login_required
+def shift_open(request):
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        messages.error(request, "Filial biriktirilmagan.")
+        return redirect('lookup')
+
+    existing = _open_shift_for(branch)
+    if existing:
+        messages.info(request, f"Ochiq smen allaqachon bor (#{existing.pk}).")
+        return redirect('pos_terminal')
+
+    if request.method == 'POST':
+        try:
+            opening_cash = max(0, float(request.POST.get('opening_cash') or 0))
+        except ValueError:
+            opening_cash = 0
+        Shift.objects.create(
+            branch=branch, opened_by=request.user,
+            opening_cash=opening_cash,
+            note=(request.POST.get('note') or '').strip()[:200],
+        )
+        messages.success(request, f"Smen ochildi (boshlang'ich naqd: {opening_cash:,.0f} so'm).")
+        return redirect('pos_terminal')
+
+    return render(request, 'inventory/shift_open.html', {'branch': branch})
+
+
+@login_required
+def shift_close(request):
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return redirect('lookup')
+
+    shift = _open_shift_for(branch)
+    if not shift:
+        messages.warning(request, "Ochiq smen yo'q.")
+        return redirect('pos_terminal')
+
+    if request.method == 'POST':
+        try:
+            counted = max(0, float(request.POST.get('counted_cash') or 0))
+        except ValueError:
+            counted = 0
+        with transaction.atomic():
+            shift.counted_cash = counted
+            shift.closed_by = request.user
+            shift.closed_at = timezone.now()
+            shift.status = Shift.Status.CLOSED
+            shift.note = (
+                (shift.note + ' | ' if shift.note else '')
+                + (request.POST.get('note') or '').strip()
+            )[:200]
+            shift.save()
+        var = shift.variance()
+        if var is not None and abs(var) >= 1:
+            messages.warning(request,
+                f"Smen yopildi. Kassa farqi: {var:+,.0f} so'm "
+                f"({'ortiq' if var > 0 else 'kam'}).")
+        else:
+            messages.success(request, "Smen yopildi. Kassa to'g'ri.")
+        return redirect('shift_detail', pk=shift.pk)
+
+    return render(request, 'inventory/shift_close.html', {
+        'shift': shift,
+        'expected': shift.expected_cash(),
+        'cash_sales': shift.cash_sales(),
+    })
+
+
+@login_required
+def shift_detail(request, pk):
+    shift = get_object_or_404(Shift, pk=pk)
+    if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
+        return HttpResponseForbidden()
+    txns = (shift.transactions.select_related('sold_by')
+            .prefetch_related('lines')
+            .order_by('-sold_at')[:200])
+    return render(request, 'inventory/shift_detail.html', {
+        'shift': shift,
+        'txns': txns,
+        'cash_sales': shift.cash_sales(),
+        'expected': shift.expected_cash(),
+    })
+
+
+@admin_required
+def shift_list(request):
+    shifts = (Shift.objects.select_related('branch', 'opened_by', 'closed_by')
+              .order_by('-opened_at')[:100])
+    return render(request, 'inventory/shift_list.html', {'shifts': shifts})
+
+
 # ---------- POS TERMINAL ----------
 
 def _user_branch_or_403(request):
@@ -425,13 +525,18 @@ def pos_terminal(request):
         messages.error(request, "Filial biriktirilmagan. Administrator bilan bog'laning.")
         return redirect('lookup')
 
-    recent_txns = (SaleTransaction.objects.filter(branch=branch)
+    open_shift = _open_shift_for(branch)
+    if not open_shift:
+        return redirect('shift_open')
+
+    recent_txns = (SaleTransaction.objects.filter(branch=branch, shift=open_shift)
                    .select_related('sold_by')
                    .prefetch_related('lines')
                    .order_by('-sold_at')[:5])
 
     return render(request, 'inventory/pos.html', {
         'branch': branch,
+        'shift': open_shift,
         'recent_txns': recent_txns,
         'payment_methods': SaleTransaction.PaymentMethod.choices,
     })
@@ -569,6 +674,8 @@ def pos_checkout(request):
                 customer.name = customer_name
                 customer.save(update_fields=['name'])
 
+    open_shift = _open_shift_for(branch)
+
     with transaction.atomic():
         txn = SaleTransaction.objects.create(
             branch=branch,
@@ -580,6 +687,7 @@ def pos_checkout(request):
             note=note,
             order_discount=order_discount,
             discount_reason=discount_reason,
+            shift=open_shift,
         )
         for stock, qty, price, ld in resolved:
             stock.stock_count = F('stock_count') - qty
