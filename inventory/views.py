@@ -713,10 +713,23 @@ def shift_list(request):
 # ---------- POS TERMINAL ----------
 
 def _user_branch_or_403(request):
-    """Sellers must have a branch. Admins can use any (POS picks the first)."""
+    """Sellers must have a branch. Admins use (in order):
+       1) their assigned branch, 2) the branch of an open shift they
+       themselves opened, 3) any open shift, 4) first active branch.
+    """
     if request.user.is_admin():
         if request.user.branch_id:
             return request.user.branch
+        own_shift = Shift.objects.filter(
+            opened_by=request.user, status=Shift.Status.OPEN
+        ).select_related('branch').order_by('-opened_at').first()
+        if own_shift:
+            return own_shift.branch
+        any_shift = Shift.objects.filter(
+            status=Shift.Status.OPEN
+        ).select_related('branch').order_by('-opened_at').first()
+        if any_shift:
+            return any_shift.branch
         first = Branch.objects.filter(is_active=True).first()
         if first:
             return first
@@ -808,6 +821,17 @@ def pos_lookup(request):
         'cost_price': float(s.cost_price),
     } for s in stocks]
 
+    # If the product exists but has no variants in this branch, tell the
+    # user explicitly — the silent "topilmadi" is misleading.
+    other_branches_with_stock = []
+    if not variants:
+        other_ids = (BranchStock.objects
+                     .filter(variant__product=product, stock_count__gt=0)
+                     .exclude(branch=branch)
+                     .values_list('branch_id', flat=True).distinct())
+        for b in Branch.objects.filter(pk__in=other_ids):
+            other_branches_with_stock.append({'name': b.name, 'id': b.id})
+
     return JsonResponse({
         'found': True,
         'product': {
@@ -815,7 +839,9 @@ def pos_lookup(request):
             'name': product.name,
             'default_sale_price': float(product.default_sale_price),
         },
+        'branch_name': branch.name,
         'variants': variants,
+        'other_branches': other_branches_with_stock,
     })
 
 

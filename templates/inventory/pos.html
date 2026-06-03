@@ -258,7 +258,12 @@ async function search(q) {
         const product = data.product;
         const inStock = data.variants.filter(v => v.stock_count > 0);
         if (inStock.length === 0) {
-            setStatus(`${product.code} ${product.name} — omborda yo'q.`, 'error');
+            let msg = `${product.code} ${product.name} — bu filialda omborda yo'q`;
+            if (data.other_branches && data.other_branches.length) {
+                const names = data.other_branches.map(b => b.name).join(', ');
+                msg += ` (boshqa filialda bor: ${names})`;
+            }
+            setStatus(msg + '.', 'error');
             return;
         }
         if (inStock.length === 1) {
