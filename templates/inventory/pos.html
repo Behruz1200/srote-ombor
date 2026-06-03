@@ -199,9 +199,9 @@
     {% endif %}
 </div>
 
+<form id="posCsrfForm" style="display:none">{% csrf_token %}</form>
 <script>
-{% csrf_token %}
-const CSRF = document.querySelector('input[name=csrfmiddlewaretoken]').value;
+const CSRF = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]').value;
 
 const scanInput      = document.getElementById('scanInput');
 const searchBtn      = document.getElementById('searchBtn');
