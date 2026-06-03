@@ -25,7 +25,7 @@ from reportlab.platypus import (
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
-    Transfer, TransferLine,
+    Transfer, TransferLine, Stocktake, StocktakeCount,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -402,6 +402,94 @@ def intake_for_product(request, code):
 def intake_new(request):
     products = Product.objects.order_by('-created_at')[:50]
     return render(request, 'inventory/intake_choose.html', {'products': products})
+
+
+# ---------- STOCKTAKE (physical count vs system) ----------
+
+@admin_required
+def stocktake_list(request):
+    sessions = (Stocktake.objects.select_related('branch', 'started_by', 'applied_by')
+                .order_by('-started_at')[:50])
+    return render(request, 'inventory/stocktake_list.html', {'sessions': sessions})
+
+
+@admin_required
+def stocktake_create(request):
+    branches = Branch.objects.filter(is_active=True)
+    if request.method == 'POST':
+        try:
+            branch_id = int(request.POST.get('branch') or 0)
+        except ValueError:
+            branch_id = 0
+        branch = Branch.objects.filter(pk=branch_id, is_active=True).first()
+        if not branch:
+            messages.error(request, "Filial tanlang.")
+            return redirect('stocktake_create')
+        # Snapshot every variant with stock>0 in this branch
+        with transaction.atomic():
+            session = Stocktake.objects.create(
+                branch=branch, started_by=request.user,
+                note=(request.POST.get('note') or '').strip()[:200],
+            )
+            stocks = BranchStock.objects.filter(branch=branch).select_related('variant')
+            counts = [
+                StocktakeCount(session=session, variant=s.variant,
+                               system_qty=s.stock_count, counted_qty=s.stock_count)
+                for s in stocks
+            ]
+            StocktakeCount.objects.bulk_create(counts)
+        messages.success(request, f"Inventarizatsiya boshlandi: {len(counts)} ta variant.")
+        return redirect('stocktake_detail', pk=session.pk)
+    return render(request, 'inventory/stocktake_create.html', {'branches': branches})
+
+
+@admin_required
+def stocktake_detail(request, pk):
+    session = get_object_or_404(
+        Stocktake.objects.select_related('branch', 'started_by', 'applied_by'),
+        pk=pk,
+    )
+    counts = (session.counts.select_related('variant__product')
+              .order_by('variant__product__code', 'variant__size'))
+
+    if request.method == 'POST' and session.status == Stocktake.Status.OPEN:
+        action = request.POST.get('action')
+        if action == 'save':
+            # Update counted_qty for each row
+            with transaction.atomic():
+                for c in counts:
+                    val = request.POST.get(f'count[{c.pk}]')
+                    if val is None or val == '':
+                        continue
+                    try:
+                        c.counted_qty = max(0, int(val))
+                        c.save(update_fields=['counted_qty'])
+                    except ValueError:
+                        pass
+            messages.success(request, "Hisoblangan miqdorlar saqlandi.")
+            return redirect('stocktake_detail', pk=session.pk)
+
+        if action == 'apply':
+            # Apply: adjust BranchStock to match counted_qty
+            with transaction.atomic():
+                for c in counts:
+                    bs = BranchStock.objects.filter(
+                        variant=c.variant, branch=session.branch
+                    ).first()
+                    if bs:
+                        bs.stock_count = c.counted_qty
+                        bs.save(update_fields=['stock_count'])
+                session.status = Stocktake.Status.APPLIED
+                session.applied_by = request.user
+                session.applied_at = timezone.now()
+                session.save()
+            messages.success(request, "Inventarizatsiya tasdiqlandi va ombor yangilandi.")
+            return redirect('stocktake_detail', pk=session.pk)
+
+    diffs = sum(1 for c in counts if c.diff != 0)
+    return render(request, 'inventory/stocktake_detail.html', {
+        'session': session, 'counts': counts, 'diff_count': diffs,
+    })
 
 
 # ---------- TRANSFERS (inter-branch stock moves) ----------
