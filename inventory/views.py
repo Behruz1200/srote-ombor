@@ -25,6 +25,7 @@ from reportlab.platypus import (
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
+    Transfer, TransferLine,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -403,6 +404,124 @@ def intake_new(request):
     return render(request, 'inventory/intake_choose.html', {'products': products})
 
 
+# ---------- TRANSFERS (inter-branch stock moves) ----------
+
+@admin_required
+def transfer_list(request):
+    transfers = (Transfer.objects.select_related('from_branch', 'to_branch',
+                                                  'created_by', 'received_by')
+                 .prefetch_related('lines')
+                 .order_by('-created_at')[:100])
+    return render(request, 'inventory/transfer_list.html', {'transfers': transfers})
+
+
+@admin_required
+def transfer_create(request):
+    branches = Branch.objects.filter(is_active=True)
+    if request.method == 'POST':
+        try:
+            from_id = int(request.POST.get('from_branch') or 0)
+            to_id = int(request.POST.get('to_branch') or 0)
+        except ValueError:
+            messages.error(request, "Filial tanlanmagan."); return redirect('transfer_create')
+        if from_id == to_id:
+            messages.error(request, "Bir xil filialga ko'chirib bo'lmaydi.")
+            return redirect('transfer_create')
+        from_branch = Branch.objects.filter(pk=from_id).first()
+        to_branch = Branch.objects.filter(pk=to_id).first()
+        if not from_branch or not to_branch:
+            messages.error(request, "Filiallar topilmadi."); return redirect('transfer_create')
+
+        # Parse line items: qty[<variant_id>]
+        lines_data = []
+        for key, value in request.POST.items():
+            if not key.startswith('qty[') or not key.endswith(']'):
+                continue
+            try:
+                variant_id = int(key[4:-1])
+                qty = int(value)
+            except ValueError:
+                continue
+            if qty <= 0:
+                continue
+            lines_data.append((variant_id, qty))
+
+        if not lines_data:
+            messages.error(request, "Birorta tovar miqdori kiritilmagan.")
+            return redirect('transfer_create')
+
+        # Validate enough stock in source branch
+        problems = []
+        for variant_id, qty in lines_data:
+            stock = BranchStock.objects.filter(variant_id=variant_id, branch=from_branch).first()
+            available = stock.stock_count if stock else 0
+            if qty > available:
+                v = ProductVariant.objects.get(pk=variant_id)
+                problems.append(f"{v.product.code} {v.size}/{v.color}: {from_branch.name}da {available} bor, so'rov {qty}")
+        if problems:
+            for p in problems:
+                messages.error(request, p)
+            return redirect('transfer_create')
+
+        with transaction.atomic():
+            t = Transfer.objects.create(
+                from_branch=from_branch, to_branch=to_branch,
+                created_by=request.user,
+                status=Transfer.Status.IN_TRANSIT,
+                dispatched_at=timezone.now(),
+                note=(request.POST.get('note') or '').strip()[:200],
+            )
+            for variant_id, qty in lines_data:
+                TransferLine.objects.create(transfer=t, variant_id=variant_id, quantity=qty)
+                # Decrement source branch immediately on dispatch
+                stock = BranchStock.objects.filter(
+                    variant_id=variant_id, branch=from_branch).first()
+                stock.stock_count = F('stock_count') - qty
+                stock.save()
+
+        messages.success(request, f"Ko'chirish #{t.pk} yo'lga chiqarildi.")
+        return redirect('transfer_detail', pk=t.pk)
+
+    return render(request, 'inventory/transfer_create.html', {'branches': branches})
+
+
+@admin_required
+def transfer_detail(request, pk):
+    t = get_object_or_404(
+        Transfer.objects.select_related('from_branch', 'to_branch',
+                                         'created_by', 'received_by')
+                         .prefetch_related('lines__variant__product'),
+        pk=pk,
+    )
+    return render(request, 'inventory/transfer_detail.html', {'transfer': t})
+
+
+@admin_required
+def transfer_receive(request, pk):
+    t = get_object_or_404(Transfer, pk=pk)
+    if t.status != Transfer.Status.IN_TRANSIT:
+        messages.warning(request, "Bu ko'chirish allaqachon yopilgan.")
+        return redirect('transfer_detail', pk=t.pk)
+
+    if request.method == 'POST':
+        with transaction.atomic():
+            for line in t.lines.all():
+                stock, _ = BranchStock.objects.get_or_create(
+                    variant=line.variant, branch=t.to_branch,
+                    defaults={'cost_price': 0, 'sale_price': 0},
+                )
+                stock.stock_count = F('stock_count') + line.quantity
+                stock.save()
+            t.status = Transfer.Status.RECEIVED
+            t.received_by = request.user
+            t.received_at = timezone.now()
+            t.save()
+        messages.success(request, f"Ko'chirish #{t.pk} qabul qilindi.")
+        return redirect('transfer_detail', pk=t.pk)
+
+    return render(request, 'inventory/transfer_receive.html', {'transfer': t})
+
+
 # ---------- SHIFTS ----------
 
 def _open_shift_for(branch):
@@ -544,14 +663,23 @@ def pos_terminal(request):
 
 @login_required
 def pos_lookup(request):
-    """GET /pos/lookup/?q=OYO-0001 or ?q=nike
+    """GET /pos/lookup/?q=OYO-0001 [&branch=ID]
+    Admins may pass &branch= to query a different branch (used by transfers).
     Returns JSON:
       { found: bool,
         product: {code, name, default_sale_price},
-        variants: [{stock_id, size, color, stock_count, sale_price, cost_price}],
+        variants: [{variant_id, stock_id, size, color, stock_count, sale_price, cost_price}],
         suggestions: [{code, name}] }
     """
-    branch = _user_branch_or_403(request)
+    # Admins may override the branch context (e.g. transfer create form)
+    branch_override = request.GET.get('branch')
+    if branch_override and request.user.is_admin():
+        try:
+            branch = Branch.objects.get(pk=int(branch_override))
+        except (Branch.DoesNotExist, ValueError):
+            branch = _user_branch_or_403(request)
+    else:
+        branch = _user_branch_or_403(request)
     if branch is None:
         return JsonResponse({'error': 'no branch'}, status=403)
 
@@ -584,6 +712,7 @@ def pos_lookup(request):
 
     variants = [{
         'stock_id': s.id,
+        'variant_id': s.variant_id,
         'size': s.variant.size,
         'color': s.variant.color,
         'stock_count': s.stock_count,

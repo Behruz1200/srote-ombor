@@ -391,6 +391,55 @@ class SaleTransaction(models.Model):
         return sum(s.quantity for s in self.lines.all())
 
 
+class Transfer(models.Model):
+    """Filiallar orasi tovar ko'chirish."""
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Tayyorlanmoqda'
+        IN_TRANSIT = 'in_transit', 'Yo\'lda'
+        RECEIVED = 'received', 'Qabul qilindi'
+        CANCELLED = 'cancelled', 'Bekor qilindi'
+
+    from_branch = models.ForeignKey(Branch, on_delete=models.PROTECT,
+                                    related_name='transfers_out')
+    to_branch = models.ForeignKey(Branch, on_delete=models.PROTECT,
+                                  related_name='transfers_in')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name='transfers_created')
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL,
+                                    on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='transfers_received')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(default=timezone.now)
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = 'Tovar ko\'chirish'
+        verbose_name_plural = "Tovar ko'chirishlar"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'#{self.pk}: {self.from_branch.name} → {self.to_branch.name}'
+
+    @property
+    def total_qty(self):
+        return sum(l.quantity for l in self.lines.all())
+
+
+class TransferLine(models.Model):
+    transfer = models.ForeignKey(Transfer, on_delete=models.CASCADE, related_name='lines')
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField()
+
+    class Meta:
+        verbose_name = 'Ko\'chirish qatori'
+        verbose_name_plural = "Ko'chirish qatorlari"
+
+    def __str__(self):
+        return f'{self.variant} × {self.quantity}'
+
+
 class Shift(models.Model):
     """Sotuvchining ish smen'i — kassa pulini hisoblash uchun."""
 

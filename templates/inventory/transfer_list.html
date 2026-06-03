@@ -1,0 +1,49 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Tovar ko'chirish — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="bi bi-arrow-left-right"></i> Filiallar orasi ko'chirish</h3>
+        <a href="{% url 'transfer_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Yangi ko'chirish
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light"><tr>
+                <th>#</th><th>Sana</th><th>Qayerdan</th><th>Qayerga</th>
+                <th>Variantlar</th><th>Dona</th><th>Holat</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for t in transfers %}
+                <tr>
+                    <td><strong>#{{ t.pk }}</strong></td>
+                    <td><small>{{ t.created_at|date:"d.m.Y H:i" }}</small></td>
+                    <td>{{ t.from_branch.name }}</td>
+                    <td>{{ t.to_branch.name }}</td>
+                    <td>{{ t.lines.count }}</td>
+                    <td>{{ t.total_qty }}</td>
+                    <td>
+                        {% if t.status == 'draft' %}<span class="badge bg-secondary">{{ t.get_status_display }}</span>
+                        {% elif t.status == 'in_transit' %}<span class="badge bg-warning text-dark">{{ t.get_status_display }}</span>
+                        {% elif t.status == 'received' %}<span class="badge bg-success">{{ t.get_status_display }}</span>
+                        {% else %}<span class="badge bg-danger">{{ t.get_status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td><a href="{% url 'transfer_detail' t.pk %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i></a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="8" class="text-muted text-center py-3">Ko'chirishlar yo'q.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
