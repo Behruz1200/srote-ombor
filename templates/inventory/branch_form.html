@@ -36,6 +36,20 @@
                         <small class="text-muted">{{ form.fiscal_module_id.help_text }}</small>
                     </div>
                     <hr>
+                    <h6 class="text-muted text-uppercase small">Qat'iy oylik xarajatlar (P&L uchun)</h6>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.monthly_rent.label }}</label>
+                            {{ form.monthly_rent }}
+                            <small class="text-muted">{{ form.monthly_rent.help_text }}</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.monthly_other_costs.label }}</label>
+                            {{ form.monthly_other_costs }}
+                            <small class="text-muted">{{ form.monthly_other_costs.help_text }}</small>
+                        </div>
+                    </div>
+                    <hr>
                     <div class="form-check mb-3">
                         {{ form.is_active }}
                         <label class="form-check-label">{{ form.is_active.label }}</label>

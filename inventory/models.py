@@ -18,6 +18,14 @@ class Branch(models.Model):
         help_text="Filialning kassa apparati ID (OFD beradi)"
     )
     is_active = models.BooleanField(default=True)
+    monthly_rent = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Oylik ijara (so'm). Filial P&L hisobida qatnashadi."
+    )
+    monthly_other_costs = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Oylik boshqa qat'iy xarajatlar: ish haqi, kommunal, internet va h.k."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -38,6 +46,10 @@ class User(AbstractUser):
     branch = models.ForeignKey(Branch, on_delete=models.SET_NULL,
                                null=True, blank=True, related_name='staff',
                                help_text="Sotuvchi ishlaydigan filial")
+    commission_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Sotuvchi komissiyasi (sotuv summasidan foiz). 0 = komissiyasiz."
+    )
 
     def is_admin(self):
         return self.role == self.Role.ADMIN or self.is_superuser
@@ -315,7 +327,12 @@ class SaleTransaction(models.Model):
         help_text='Sotuv qaysi smen davomida amalga oshirilgan'
     )
     payment_method = models.CharField(
-        max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH
+        max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH,
+        help_text="Asosiy yoki yagona to'lov turi. Mixed bo'lsa payment_breakdown'da batafsil."
+    )
+    payment_breakdown = models.JSONField(
+        default=list, blank=True,
+        help_text="Mixed to'lov bo'lganda har turning summasi: [{method, amount}]"
     )
     customer = models.ForeignKey(
         'Customer', on_delete=models.SET_NULL, null=True, blank=True,
@@ -623,6 +640,163 @@ class Sale(models.Model):
         if hasattr(self, '_returned'):
             return self._returned
         return self.returns.aggregate(s=models.Sum('quantity'))['s'] or 0
+
+
+class PaymentQR(models.Model):
+    """Static QR — har filial uchun provider'ning oldindan chop etilgan kodi.
+    Mijoz scan qilib o'z ilovasidan summa kiritib to'laydi. Kassir
+    manual ravishda 'to'lov olindi' deb tasdiqlaydi."""
+
+    class Provider(models.TextChoices):
+        PAYME = 'payme', 'Payme'
+        CLICK = 'click', 'Click'
+        UZUM = 'uzum', 'Uzum Bank'
+        HUMO = 'humo', 'Humo Pay'
+        ANOR = 'anor', 'Anor (muddatli)'
+        ALIF = 'alif', 'Alif (muddatli)'
+        IMAN = 'iman', 'Iman (muddatli)'
+        ZOODPAY = 'zoodpay', 'Zoodpay (muddatli)'
+        OTHER = 'other', 'Boshqa'
+
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE,
+                               related_name='payment_qrs')
+    provider = models.CharField(max_length=20, choices=Provider.choices)
+    label = models.CharField(
+        max_length=120, blank=True,
+        help_text="Ko'rsatma: \"Yetakchi hisob\", \"Qo'shimcha karta\" va h.k."
+    )
+    qr_image = models.ImageField(
+        upload_to='payment_qrs/', blank=True, null=True,
+        help_text="QR rasm fayli. Bo'sh bo'lsa qr_payload'dan generatsiya qilinadi."
+    )
+    qr_payload = models.CharField(
+        max_length=500, blank=True,
+        help_text="QR ichidagi matn/URL (masalan to'lov ilovasiga deeplink). "
+                  "qr_image bo'lmasa shu asosida QR generatsiya qilinadi."
+    )
+    instructions = models.CharField(
+        max_length=200, blank=True,
+        help_text="Mijozga ko'rsatma: \"Summa: TOTAL so'm\" yoki maxsus izoh"
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'To\'lov QR'
+        verbose_name_plural = "To'lov QR'lar"
+        ordering = ['branch', 'provider']
+
+    def __str__(self):
+        return f'{self.branch.name} · {self.get_provider_display()}'
+
+
+class PaymentIntent(models.Model):
+    """Kassir QR tugmasini bosganda yaratiladigan to'lov niyati.
+    Mijoz to'lagandan keyin provider webhook/polling orqali status 'paid'
+    bo'ladi va POS avtomatik chekni yakunlaydi."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Kutilmoqda'
+        PAID = 'paid', "To'langan"
+        CANCELLED = 'cancelled', 'Bekor qilindi'
+        EXPIRED = 'expired', 'Muddati tugadi'
+
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE,
+                               related_name='payment_intents')
+    initiated_by = models.ForeignKey(settings.AUTH_USER_MODEL,
+                                     on_delete=models.PROTECT,
+                                     related_name='payment_intents_initiated')
+    provider = models.CharField(max_length=20, help_text="payme, click, uzum...")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    ref_code = models.CharField(
+        max_length=12, db_index=True,
+        help_text="Mijoz to'lov izohi sifatida kiritadigan kod"
+    )
+    cart_snapshot = models.TextField(
+        blank=True,
+        help_text="POS savatining JSON snapshot'i — paid bo'lgach checkout uchun"
+    )
+    status = models.CharField(max_length=20, choices=Status.choices,
+                              default=Status.PENDING, db_index=True)
+    provider_txn_id = models.CharField(max_length=120, blank=True,
+                                       help_text="Provider tomonidan berilgan ID")
+    created_at = models.DateTimeField(default=timezone.now)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    sale_transaction = models.OneToOneField(
+        'SaleTransaction', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='payment_intent',
+        help_text="Paid bo'lib checkout amalga oshgan bo'lsa, shu SaleTransaction"
+    )
+
+    class Meta:
+        verbose_name = "To'lov niyati"
+        verbose_name_plural = "To'lov niyatlari"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'#{self.pk} {self.provider} {self.amount} ({self.status})'
+
+
+class Promotion(models.Model):
+    """Aksiya/kampaniya — POS chekida avtomatik qo'llaniladi.
+
+    Tur:
+      - percent_off: butun chekka yoki kategoriya/mahsulotga foiz chegirma
+        (min_qty mahsulot kerak)
+      - buy_x_get_y: N ta olganda M ta arzonroq mahsulot bepul
+        (qty_required = N, qty_free = M, target category/products)
+      - nth_percent_off: har qty_required-mahsulotga foiz chegirma
+    """
+    class Type(models.TextChoices):
+        PERCENT_OFF = 'percent_off', 'Foiz chegirma'
+        BUY_X_GET_Y = 'buy_x_get_y', "N olganga M bepul"
+        NTH_PERCENT = 'nth_percent_off', 'Har N-mahsulotga chegirma'
+
+    name = models.CharField(max_length=120)
+    promo_type = models.CharField(max_length=30, choices=Type.choices,
+                                  default=Type.PERCENT_OFF)
+    percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Foiz chegirma (0-100). percent_off va nth_percent_off uchun."
+    )
+    qty_required = models.PositiveIntegerField(
+        default=1,
+        help_text="Buy-X-Get-Y'da X. Nth_percent'da N. percent_off'da min mahsulot soni."
+    )
+    qty_free = models.PositiveIntegerField(
+        default=0,
+        help_text="Buy-X-Get-Y'da Y (eng arzonidan)"
+    )
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='promotions',
+        help_text="Faqat shu kategoriyaga. Bo'sh — barcha mahsulotlar."
+    )
+    target_products = models.ManyToManyField(
+        Product, blank=True, related_name='promotions',
+        help_text="Aniq mahsulotlar. Bo'sh va kategoriya bo'sh — barchasi."
+    )
+    valid_from = models.DateTimeField(default=timezone.now)
+    valid_until = models.DateTimeField(null=True, blank=True,
+                                       help_text="Bo'sh — muddatsiz")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Aksiya'
+        verbose_name_plural = 'Aksiyalar'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.name} ({self.get_promo_type_display()})'
+
+    def is_live(self):
+        now = timezone.now()
+        if not self.is_active or self.valid_from > now:
+            return False
+        if self.valid_until and self.valid_until < now:
+            return False
+        return True
 
 
 class ParkedSale(models.Model):

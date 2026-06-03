@@ -69,6 +69,33 @@ SMS_PROVIDER = os.environ.get('SMS_PROVIDER', '')
 ESKIZ_EMAIL = os.environ.get('ESKIZ_EMAIL', '')
 ESKIZ_PASSWORD = os.environ.get('ESKIZ_PASSWORD', '')
 
+# ---------- Payment providers (QR + muddatli to'lov) ----------
+# Vergul bilan ajratilgan provider nomlari ro'yxati. Default: hamma yoqilgan
+# (stub rejimda). Real merchant accountlari ulanganda bu yerda chegarlash mumkin.
+# Misol: PAYMENT_PROVIDERS_ENABLED=click,payme,uzum
+_pp = os.environ.get('PAYMENT_PROVIDERS_ENABLED', '')
+PAYMENT_PROVIDERS_ENABLED = [p.strip() for p in _pp.split(',') if p.strip()] or None
+# Per-provider credentials (real wiring uchun)
+CLICK_MERCHANT_ID = os.environ.get('CLICK_MERCHANT_ID', '')
+CLICK_SECRET_KEY = os.environ.get('CLICK_SECRET_KEY', '')
+CLICK_SERVICE_ID = os.environ.get('CLICK_SERVICE_ID', '')
+PAYME_MERCHANT_ID = os.environ.get('PAYME_MERCHANT_ID', '')
+PAYME_SECRET_KEY = os.environ.get('PAYME_SECRET_KEY', '')
+UZUM_MERCHANT_ID = os.environ.get('UZUM_MERCHANT_ID', '')
+UZUM_API_KEY = os.environ.get('UZUM_API_KEY', '')
+ANOR_API_KEY = os.environ.get('ANOR_API_KEY', '')
+ALIF_API_KEY = os.environ.get('ALIF_API_KEY', '')
+IMAN_API_KEY = os.environ.get('IMAN_API_KEY', '')
+ZOODPAY_API_KEY = os.environ.get('ZOODPAY_API_KEY', '')
+
+# Demo: real merchant API ulanmagan paytda PaymentIntent'lar shu soniyalar
+# o'tib ketganidan keyin avtomatik 'paid' deb belgilanadi (status polling
+# orqali POS shunday ko'radi). Production'da 0 qiling — webhook keladi.
+try:
+    DEMO_AUTO_PAY_SECONDS = int(os.environ.get('DEMO_AUTO_PAY_SECONDS', '8'))
+except ValueError:
+    DEMO_AUTO_PAY_SECONDS = 8
+
 
 # ---------- CSRF ----------
 CSRF_TRUSTED_ORIGINS = [

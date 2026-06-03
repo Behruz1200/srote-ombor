@@ -103,11 +103,41 @@
 </div>
 
 <script>
-// POS: auto-trigger print dialog when called via ?autoprint=1
-if (new URLSearchParams(location.search).get('autoprint') === '1') {
+// POS: auto-trigger print dialog when called via ?autoprint=1.
+// Auto-close tab after the dialog is dismissed so kassir doesn't have to
+// click anything between sales. True silent print (no preview) requires
+// the browser to be launched with `--kiosk-printing` (Chrome/Edge) — see
+// docs at the top of the file.
+const isAutoprint = new URLSearchParams(location.search).get('autoprint') === '1';
+if (isAutoprint) {
     window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+    // Some browsers fire afterprint even when user cancels — that's fine,
+    // closing the tab is the right behavior in both cases.
+    window.addEventListener('afterprint', () => {
+        setTimeout(() => window.close(), 200);
+    });
 }
 </script>
+<!--
+SILENT PRINT SETUP (no preview dialog)
+======================================
+Browsers block silent printing by default. To get truly preview-less
+printing on a dedicated cashier workstation:
+
+Chrome / Edge:
+  Launch the browser with `--kiosk-printing` flag, e.g.:
+    chrome --kiosk-printing --app=https://srote-web.onrender.com/pos/
+  The "default printer" set in OS print settings will be used directly,
+  no dialog shown.
+
+Firefox:
+  about:config → set `print.always_print_silent = true`
+  Then `window.print()` skips the dialog.
+
+POS terminal devices (Android):
+  Use a webview wrapper app that intercepts print() and routes to the
+  ESC/POS thermal printer over USB/Bluetooth. We don't have that yet.
+-->
 <style>
 @media print {
     /* hide screen UI */

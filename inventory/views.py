@@ -6,12 +6,17 @@ from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count
 from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 import json as _json
 from django.utils import timezone
 from datetime import timedelta, datetime, date
 import csv
 import io
 import re
+
+import logging
+logger = logging.getLogger(__name__)
 
 import qrcode
 from reportlab.lib.pagesizes import A4, landscape
@@ -25,7 +30,8 @@ from reportlab.platypus import (
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
-    Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale,
+    Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
+    PaymentQR, PaymentIntent,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -829,6 +835,47 @@ def pos_terminal(request):
                         .select_related('parked_by')
                         .order_by('-created_at')[:20])
 
+    # Static QR codes for this branch — user uploads once per provider.
+    # Mijoz QR'ni telefon ilovasidan scan qiladi, summa kiritadi, to'laydi.
+    # Kassir manual ravishda chekni yakunlaydi.
+    static_qrs = list(PaymentQR.objects
+                      .filter(branch=branch, is_active=True)
+                      .order_by('provider'))
+    # Map provider -> QR for fast lookup in template
+    qr_by_provider = {}
+    for q in static_qrs:
+        qr_by_provider.setdefault(q.provider, q)
+
+    # Build the provider list shown on the POS. Combine: providers that
+    # have a static QR uploaded (manual confirm flow) + the in-code
+    # provider abstraction (currently stubbed, future merchant API).
+    from .payments import available_providers, _REGISTRY
+    payment_providers = []
+    for p in available_providers():
+        static = qr_by_provider.get(p.name)
+        payment_providers.append({
+            'name': p.name,
+            'display_name': p.display_name,
+            'icon': p.icon,
+            'is_installment': p.is_installment,
+            'has_static_qr': bool(static),
+            'static_qr_id': static.id if static else None,
+        })
+    # Also include providers that have a static QR but aren't in the
+    # in-code registry (e.g. "humo" or "other")
+    in_registry = {p['name'] for p in payment_providers}
+    for q in static_qrs:
+        if q.provider in in_registry:
+            continue
+        payment_providers.append({
+            'name': q.provider,
+            'display_name': q.get_provider_display(),
+            'icon': 'bi-qr-code',
+            'is_installment': q.provider in ('anor', 'alif', 'iman', 'zoodpay'),
+            'has_static_qr': True,
+            'static_qr_id': q.id,
+        })
+
     return render(request, 'inventory/pos.html', {
         'branch': branch,
         'shift': open_shift,
@@ -836,6 +883,7 @@ def pos_terminal(request):
         'favorites': favorites,
         'parked_sales': parked_sales,
         'payment_methods': SaleTransaction.PaymentMethod.choices,
+        'payment_providers': payment_providers,
         'branches_list': branches_list,
     })
 
@@ -949,6 +997,11 @@ def pos_checkout(request):
         return JsonResponse({'ok': False, 'error': 'savat boʻsh'}, status=400)
 
     payment_method = (data.get('payment_method') or 'cash').strip()
+    # Mixed payment: client sends [{method, amount}]. Validate sum after we
+    # know the total. Keep as list of dicts for storage.
+    payment_breakdown = data.get('payment_breakdown') or []
+    if not isinstance(payment_breakdown, list):
+        payment_breakdown = []
     customer_name = (data.get('customer_name') or '').strip()[:120]
     customer_phone = (data.get('customer_phone') or '').strip()[:40]
     note = (data.get('note') or '').strip()[:200]
@@ -998,11 +1051,28 @@ def pos_checkout(request):
 
     open_shift = _open_shift_for(branch)
 
+    # Sanitize breakdown (drop bad entries, round to nearest som)
+    clean_breakdown = []
+    for entry in payment_breakdown:
+        try:
+            m = (entry.get('method') or '').strip()
+            a = float(entry.get('amount') or 0)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if not m or a <= 0:
+            continue
+        clean_breakdown.append({'method': m, 'amount': round(a, 2)})
+
+    # If mixed but breakdown empty, fallback to single-method
+    if payment_method == 'mixed' and not clean_breakdown:
+        payment_method = 'cash'
+
     with transaction.atomic():
         txn = SaleTransaction.objects.create(
             branch=branch,
             sold_by=request.user,
             payment_method=payment_method,
+            payment_breakdown=clean_breakdown,
             customer=customer,
             customer_name=customer_name,
             customer_phone=customer_phone,
@@ -1111,6 +1181,489 @@ def pos_parked_resume(request, pk):
     }
     parked.delete()
     return JsonResponse(payload)
+
+
+@admin_required
+def payment_qr_list(request):
+    """Admin: barcha filiallardagi static QR'lar ro'yxati + yangi qo'shish formasi."""
+    if request.method == 'POST':
+        action = request.POST.get('action') or 'create'
+        if action == 'delete':
+            try:
+                pk = int(request.POST.get('pk') or 0)
+            except ValueError:
+                pk = 0
+            PaymentQR.objects.filter(pk=pk).delete()
+            messages.success(request, "QR o'chirildi.")
+            return redirect('payment_qr_list')
+        # create
+        try:
+            branch_id = int(request.POST.get('branch') or 0)
+            branch_obj = Branch.objects.filter(pk=branch_id, is_active=True).first()
+            provider = (request.POST.get('provider') or '').strip()
+            if not branch_obj or not provider:
+                messages.error(request, "Filial va provider tanlang.")
+                return redirect('payment_qr_list')
+            qr = PaymentQR(
+                branch=branch_obj,
+                provider=provider,
+                label=(request.POST.get('label') or '').strip()[:120],
+                qr_payload=(request.POST.get('qr_payload') or '').strip()[:500],
+                instructions=(request.POST.get('instructions') or '').strip()[:200],
+                is_active=True,
+            )
+            if 'qr_image' in request.FILES:
+                qr.qr_image = request.FILES['qr_image']
+            if not qr.qr_image and not qr.qr_payload:
+                messages.error(request,
+                    "QR rasm yuklang yoki QR ichidagi matn/URL kiriting.")
+                return redirect('payment_qr_list')
+            qr.save()
+            messages.success(request,
+                f"{branch_obj.name} uchun {qr.get_provider_display()} QR saqlandi.")
+        except (ValueError, TypeError) as e:
+            messages.error(request, f"Xatolik: {e}")
+        return redirect('payment_qr_list')
+
+    qrs = (PaymentQR.objects.select_related('branch')
+           .order_by('branch__name', 'provider'))
+    branches = Branch.objects.filter(is_active=True).order_by('name')
+    return render(request, 'inventory/payment_qr_list.html', {
+        'qrs': qrs, 'branches': branches,
+        'providers': PaymentQR.Provider.choices,
+    })
+
+
+@login_required
+def pos_static_qr(request, pk):
+    """GET /pos/qr/<pk>/ — joriy filialdagi static QR ma'lumotini qaytaradi.
+    Image URL (yoki qr_payload'dan generatsiya qilingan data URL) + ko'rsatma."""
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    qr = PaymentQR.objects.filter(pk=pk, branch=branch, is_active=True).first()
+    if not qr:
+        return JsonResponse({'ok': False, 'error': 'topilmadi'}, status=404)
+
+    image_url = ''
+    if qr.qr_image:
+        image_url = qr.qr_image.url
+    elif qr.qr_payload:
+        # Generate QR on the fly into a data: URL
+        import io, base64
+        img = qrcode.make(qr.qr_payload)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        b64 = base64.b64encode(buf.getvalue()).decode('ascii')
+        image_url = f'data:image/png;base64,{b64}'
+
+    return JsonResponse({
+        'ok': True,
+        'provider': qr.provider,
+        'provider_display': qr.get_provider_display(),
+        'label': qr.label,
+        'image_url': image_url,
+        'instructions': qr.instructions,
+    })
+
+
+@login_required
+def pos_payment_create(request):
+    """POST /pos/payment/create/ JSON: {provider, amount, lines}
+    PaymentIntent yaratadi va ref_code qaytaradi. POS modal'i shu ref_code'ni
+    mijozga ko'rsatadi (mijoz to'lov izohi sifatida kiritadi)."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    provider = (data.get('provider') or '').strip()
+    try:
+        amount = float(data.get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if not provider or amount <= 0:
+        return JsonResponse({'ok': False, 'error': 'parametr yetishmaydi'}, status=400)
+    import secrets as _secrets
+    ref_code = _secrets.token_hex(3).upper()  # 6 belgili kod
+    intent = PaymentIntent.objects.create(
+        branch=branch, initiated_by=request.user,
+        provider=provider, amount=amount, ref_code=ref_code,
+        cart_snapshot=_json.dumps(data.get('lines') or []),
+    )
+    return JsonResponse({
+        'ok': True,
+        'intent_id': intent.id,
+        'ref_code': ref_code,
+        'status': intent.status,
+    })
+
+
+@login_required
+def pos_payment_check(request, pk):
+    """GET /pos/payment/check/<id>/ — intent holatini qaytaradi.
+
+    Real merchant API yo'q paytda DEMO_AUTO_PAY_SECONDS o'tgan bo'lsa
+    avtomatik 'paid' deb belgilanadi (sinov uchun)."""
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    intent = PaymentIntent.objects.filter(pk=pk, branch=branch).first()
+    if not intent:
+        return JsonResponse({'ok': False, 'error': 'topilmadi'}, status=404)
+
+    # Demo auto-pay: ma'lum vaqt o'tgach 'paid' bo'lib turadi
+    demo_seconds = getattr(settings, 'DEMO_AUTO_PAY_SECONDS', 0)
+    if (intent.status == PaymentIntent.Status.PENDING and demo_seconds > 0):
+        elapsed = (timezone.now() - intent.created_at).total_seconds()
+        if elapsed >= demo_seconds:
+            intent.status = PaymentIntent.Status.PAID
+            intent.paid_at = timezone.now()
+            intent.provider_txn_id = f'demo-{intent.id}'
+            intent.save(update_fields=['status', 'paid_at', 'provider_txn_id'])
+
+    return JsonResponse({
+        'ok': True,
+        'intent_id': intent.id,
+        'status': intent.status,
+        'ref_code': intent.ref_code,
+        'provider_txn_id': intent.provider_txn_id,
+        'paid_at': intent.paid_at.isoformat() if intent.paid_at else None,
+    })
+
+
+@csrf_exempt
+def payments_webhook(request, provider):
+    """POST /payments/webhook/<provider>/ — real merchant API callback.
+
+    Hozir stub: keladi-keladi log'ga yoziladi va ref_code yoki amount bo'yicha
+    mos PaymentIntent topilsa 'paid' deb belgilanadi. Real Payme/Click ulanganda
+    bu yerga signature verification qo'shiladi."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+
+    body_raw = request.body
+    try:
+        payload = _json.loads(body_raw.decode('utf-8')) if body_raw else {}
+    except (ValueError, UnicodeDecodeError):
+        payload = {}
+
+    logger.info('[payments webhook %s] %s', provider, payload)
+
+    # Eng oson search: ref_code yoki amount + provider bo'yicha
+    ref_code = (payload.get('ref_code') or payload.get('comment')
+                or payload.get('memo') or '').strip().upper()
+    intent = None
+    if ref_code:
+        intent = (PaymentIntent.objects
+                  .filter(provider=provider, ref_code=ref_code,
+                          status=PaymentIntent.Status.PENDING)
+                  .order_by('-created_at').first())
+    if not intent:
+        # Amount + recent window fallback
+        try:
+            amt = float(payload.get('amount') or 0)
+        except (TypeError, ValueError):
+            amt = 0
+        if amt > 0:
+            since = timezone.now() - timedelta(minutes=30)
+            intent = (PaymentIntent.objects
+                      .filter(provider=provider, amount=amt,
+                              status=PaymentIntent.Status.PENDING,
+                              created_at__gte=since)
+                      .order_by('-created_at').first())
+    if not intent:
+        return JsonResponse({'ok': False, 'error': 'mos intent topilmadi'},
+                            status=404)
+
+    intent.status = PaymentIntent.Status.PAID
+    intent.paid_at = timezone.now()
+    intent.provider_txn_id = str(payload.get('txn_id') or payload.get('id') or '')[:120]
+    intent.save(update_fields=['status', 'paid_at', 'provider_txn_id'])
+    return JsonResponse({'ok': True, 'intent_id': intent.id})
+
+
+@login_required
+def pos_promo_eval(request):
+    """POST /pos/promo-eval/ {lines: [{stock_id, qty, sale_price}]}
+    Aktiv aksiyalarni tekshiradi va qo'llab bo'ladigan chegirmalar
+    ro'yxatini qaytaradi. Hech narsa o'zgartirmaydi — faqat ko'rsatish."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+
+    lines_raw = data.get('lines') or []
+    if not lines_raw:
+        return JsonResponse({'ok': True, 'promotions': [], 'total_discount': 0})
+
+    # Stock IDs -> product/category lookup
+    stock_ids = [int(l['stock_id']) for l in lines_raw if 'stock_id' in l]
+    stocks = {s.id: s for s in BranchStock.objects
+              .filter(id__in=stock_ids)
+              .select_related('variant__product__category')}
+
+    # Build a per-line view: stock_id, qty, price, product_id, category_id
+    cart_lines = []
+    for ln in lines_raw:
+        try:
+            sid = int(ln['stock_id'])
+            qty = int(ln['qty'])
+            price = float(ln['sale_price'])
+        except (KeyError, ValueError, TypeError):
+            continue
+        s = stocks.get(sid)
+        if not s:
+            continue
+        cart_lines.append({
+            'stock_id': sid,
+            'qty': qty,
+            'price': price,
+            'product_id': s.variant.product_id,
+            'category_id': s.variant.product.category_id,
+        })
+
+    now = timezone.now()
+    promos = (Promotion.objects
+              .filter(is_active=True, valid_from__lte=now)
+              .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=now))
+              .prefetch_related('target_products'))
+
+    applied = []
+    total_discount = 0.0
+    for promo in promos:
+        # Find lines that match this promo's target
+        target_product_ids = set(promo.target_products.values_list('id', flat=True))
+        def matches(line):
+            if target_product_ids and line['product_id'] not in target_product_ids:
+                return False
+            if promo.category_id and line['category_id'] != promo.category_id:
+                return False
+            return True
+        matched = [l for l in cart_lines if matches(l)]
+        if not matched:
+            continue
+        total_matched_qty = sum(l['qty'] for l in matched)
+        discount = 0.0
+        detail = ''
+        if promo.promo_type == Promotion.Type.PERCENT_OFF:
+            if total_matched_qty < promo.qty_required:
+                continue
+            matched_subtotal = sum(l['qty'] * l['price'] for l in matched)
+            discount = matched_subtotal * float(promo.percent) / 100
+            detail = f"{promo.percent}% × {total_matched_qty} dona"
+        elif promo.promo_type == Promotion.Type.BUY_X_GET_Y:
+            x = promo.qty_required
+            y = promo.qty_free
+            if x == 0 or total_matched_qty < x + y:
+                continue
+            # Number of full groups
+            groups = total_matched_qty // (x + y)
+            free_qty = groups * y
+            # Free the cheapest items
+            unit_prices = []
+            for l in matched:
+                unit_prices.extend([l['price']] * l['qty'])
+            unit_prices.sort()
+            discount = sum(unit_prices[:free_qty])
+            detail = f"{x}+{y} bepul × {groups} marta = {free_qty} dona bepul"
+        elif promo.promo_type == Promotion.Type.NTH_PERCENT:
+            n = promo.qty_required
+            if n == 0 or total_matched_qty < n:
+                continue
+            count = total_matched_qty // n
+            # Apply to cheapest items
+            unit_prices = []
+            for l in matched:
+                unit_prices.extend([l['price']] * l['qty'])
+            unit_prices.sort()
+            target_prices = unit_prices[:count]
+            discount = sum(p * float(promo.percent) / 100 for p in target_prices)
+            detail = f"{count} ta mahsulotga −{promo.percent}%"
+        if discount > 0:
+            applied.append({
+                'id': promo.id,
+                'name': promo.name,
+                'type': promo.promo_type,
+                'discount': round(discount, 2),
+                'detail': detail,
+            })
+            total_discount += discount
+
+    return JsonResponse({
+        'ok': True,
+        'promotions': applied,
+        'total_discount': round(total_discount, 2),
+    })
+
+
+@login_required
+def pos_payment_intent(request):
+    """POST /pos/payment/intent/ {provider, amount, txn_ref}
+    Provider'dan QR/deeplink oladi. Sotuv hali yakunlanmagan — bu faqat
+    intent yaratish. Mijoz to'laganidan keyin POS pos_checkout'ni chaqiradi."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    from .payments import get_provider
+    provider_name = (data.get('provider') or '').strip()
+    provider = get_provider(provider_name)
+    if not provider:
+        return JsonResponse({'ok': False, 'error': "noma'lum provider"}, status=400)
+    try:
+        amount = float(data.get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if amount <= 0:
+        return JsonResponse({'ok': False, 'error': "summa noto'g'ri"}, status=400)
+    txn_ref = (data.get('txn_ref') or f'tmp-{request.user.id}-{int(timezone.now().timestamp())}')[:60]
+    try:
+        intent = provider.create_intent(amount, txn_ref)
+    except Exception as e:
+        logger.exception('Payment intent failed: %s', e)
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    return JsonResponse({
+        'ok': True,
+        'provider': provider.name,
+        'provider_display': provider.display_name,
+        'is_installment': provider.is_installment,
+        **intent,
+    })
+
+
+@login_required
+def pos_payment_status(request):
+    """GET /pos/payment/status/?provider=click&intent_id=..."""
+    provider_name = request.GET.get('provider') or ''
+    intent_id = request.GET.get('intent_id') or ''
+    from .payments import get_provider
+    provider = get_provider(provider_name)
+    if not provider or not intent_id:
+        return JsonResponse({'ok': False, 'error': 'parametr yetishmaydi'}, status=400)
+    try:
+        status = provider.check_status(intent_id)
+    except Exception as e:
+        logger.exception('Payment status check failed: %s', e)
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    return JsonResponse({'ok': True, **status})
+
+
+@login_required
+def pos_unlock(request):
+    """POST /pos/unlock/ {password} — joriy foydalanuvchining paroli to'g'ri
+    bo'lsa, idle lock ochiladi. AJAX'dan chaqiriladi."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    password = (data.get('password') or '').strip()
+    if not password:
+        return JsonResponse({'ok': False, 'error': 'parol kerak'}, status=400)
+    if request.user.check_password(password):
+        return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False, 'error': "noto'g'ri parol"}, status=401)
+
+
+@login_required
+def pos_txn_refundable(request, pk):
+    """GET /pos/txn/<pk>/refundable/ — returns lines that can still be refunded."""
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    txn = (SaleTransaction.objects.filter(pk=pk, branch=branch)
+           .prefetch_related('lines__variant__product', 'lines__returns')
+           .first())
+    if not txn:
+        return JsonResponse({'ok': False, 'error': 'topilmadi'}, status=404)
+    lines = []
+    for s in txn.lines.all():
+        already = sum(r.quantity for r in s.returns.all())
+        remaining = s.quantity - already
+        if remaining <= 0:
+            continue
+        lines.append({
+            'sale_id': s.id,
+            'product_code': s.variant.product.code,
+            'product_name': s.variant.product.name,
+            'size': s.variant.size,
+            'color': s.variant.color,
+            'sold_qty': s.quantity,
+            'already_returned': already,
+            'remaining': remaining,
+            'sale_price': float(s.sale_price),
+        })
+    return JsonResponse({'ok': True, 'txn_id': txn.pk, 'lines': lines})
+
+
+@login_required
+def pos_refund(request):
+    """POST /pos/refund/ JSON body: {lines: [{sale_id, qty, reason}]}.
+    Processes refunds atomically; restores stock; returns total refunded."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+
+    items = data.get('lines') or []
+    if not items:
+        return JsonResponse({'ok': False, 'error': 'qator yo\'q'}, status=400)
+
+    refunded_total = 0
+    refunded_qty = 0
+    with transaction.atomic():
+        for it in items:
+            try:
+                sid = int(it['sale_id'])
+                qty = int(it['qty'])
+            except (KeyError, ValueError, TypeError):
+                return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
+            if qty <= 0:
+                continue
+            reason = (it.get('reason') or '').strip()[:200]
+            sale = (Sale.objects.select_related('variant', 'branch')
+                    .filter(pk=sid, branch=branch).first())
+            if not sale:
+                return JsonResponse({'ok': False, 'error': f'sale {sid} topilmadi'}, status=400)
+            already = sale.returns.aggregate(s=Sum('quantity'))['s'] or 0
+            remaining = sale.quantity - already
+            if qty > remaining:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f"{sale.variant.product.code}: faqat {remaining} dona qaytarish mumkin",
+                }, status=400)
+            stock = BranchStock.objects.filter(
+                variant=sale.variant, branch=sale.branch
+            ).first()
+            if stock:
+                stock.stock_count = F('stock_count') + qty
+                stock.save()
+            Return.objects.create(
+                sale=sale, quantity=qty, reason=reason,
+                refunded_by=request.user,
+            )
+            refunded_qty += qty
+            refunded_total += float(qty * sale.sale_price)
+    return JsonResponse({
+        'ok': True,
+        'refunded_qty': refunded_qty,
+        'refunded_total': refunded_total,
+    })
 
 
 @login_required
@@ -1997,7 +2550,8 @@ def _insights_context(request):
     qty_growth = growth(qty, prev_qty)
     sales_growth = growth(sales_count, prev_n)
 
-    # Filiallar taqqoslash (current period)
+    # Filiallar taqqoslash (current period) + P&L (qat'iy xarajatlardan keyin)
+    period_fraction = days / 30.0
     branch_compare = []
     for br in branches_all:
         b_sales = sales.filter(branch=br)
@@ -2005,18 +2559,27 @@ def _insights_context(request):
             rev=Sum(revenue_expr), cost=Sum(cost_expr),
             qty=Sum('quantity'), n=Count('id'),
         )
-        b_rev = b_agg['rev'] or 0
-        b_cost = b_agg['cost'] or 0
+        b_rev = float(b_agg['rev'] or 0)
+        b_cost = float(b_agg['cost'] or 0)
         b_profit = b_rev - b_cost
         b_n = b_agg['n'] or 0
         b_qty = b_agg['qty'] or 0
         b_stock = BranchStock.objects.filter(branch=br).aggregate(
             s=Sum('stock_count'))['s'] or 0
+        rent_period = float(br.monthly_rent or 0) * period_fraction
+        other_period = float(br.monthly_other_costs or 0) * period_fraction
+        fixed_period = rent_period + other_period
+        net_profit = b_profit - fixed_period
         branch_compare.append({
             'branch': br,
             'revenue': b_rev,
             'cost': b_cost,
-            'profit': b_profit,
+            'profit': b_profit,  # gross (foyda tannarxdan keyin)
+            'fixed_period': fixed_period,
+            'rent_period': rent_period,
+            'other_period': other_period,
+            'net_profit': net_profit,
+            'net_margin': (net_profit / b_rev * 100) if b_rev else 0,
             'margin': (b_profit / b_rev * 100) if b_rev else 0,
             'sales_count': b_n,
             'qty': b_qty,
@@ -2058,18 +2621,24 @@ def _insights_context(request):
         .annotate(stock=Sum('variants__branch_stocks__stock_count'))[:15]
     )
 
-    # TOP sotuvchilar
+    # TOP sotuvchilar + komissiya
     top_sellers = list(sales.values(
         'sold_by__id', 'sold_by__username',
         'sold_by__first_name', 'sold_by__last_name',
         'sold_by__branch__name',
+        'sold_by__commission_percent',
     ).annotate(
         revenue=Sum(revenue_expr),
         qty=Sum('quantity'),
         n_sales=Count('id'),
     ).order_by('-revenue')[:10])
+    for s in top_sellers:
+        pct = float(s.get('sold_by__commission_percent') or 0)
+        rev = float(s.get('revenue') or 0)
+        s['commission_percent'] = pct
+        s['commission'] = rev * pct / 100 if pct else 0
 
-    # Filiallar bo'yicha
+    # Filiallar bo'yicha (donut/bar uchun)
     by_branch = list(sales.values(
         'branch__id', 'branch__name'
     ).annotate(

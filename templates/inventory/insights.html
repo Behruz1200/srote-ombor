@@ -126,19 +126,23 @@
 
     <!-- Branch comparison -->
     <div class="card p-3 mb-3">
-        <h5><i class="bi bi-building"></i> Filiallar yonma-yon taqqoslash</h5>
+        <h5><i class="bi bi-building"></i> Filiallar yonma-yon taqqoslash — P&L</h5>
+        <div class="small text-muted mb-2">
+            Sof foyda = Daromad − Tannarx − Qat'iy xarajatlar (ijara + boshqa).
+            Qat'iy xarajatlar davr uzunligiga moslangan ({{ days }} kun / 30).
+        </div>
         <div class="table-responsive">
         <table class="table table-sm table-hover">
             <thead class="table-light">
                 <tr>
                     <th>Filial</th>
                     <th class="text-end">Daromad</th>
-                    <th class="text-end">Tannarx</th>
+                    <th class="text-end">Tannarx (COGS)</th>
+                    <th class="text-end">Brutto foyda</th>
+                    <th class="text-end">Qat'iy xarajat</th>
                     <th class="text-end">Sof foyda</th>
-                    <th class="text-end">Marja %</th>
+                    <th class="text-end">Sof marja %</th>
                     <th class="text-end">Sotuvlar</th>
-                    <th class="text-end">Dona</th>
-                    <th class="text-end">O'rt. sotuv</th>
                     <th class="text-end">Omborda</th>
                 </tr>
             </thead>
@@ -147,12 +151,21 @@
                 <tr>
                     <td><strong>{{ b.branch.name }}</strong></td>
                     <td class="text-end">{{ b.revenue|som }}</td>
-                    <td class="text-end">{{ b.cost|som }}</td>
-                    <td class="text-end text-primary"><strong>{{ b.profit|som }}</strong></td>
-                    <td class="text-end">{{ b.margin|floatformat:1 }}%</td>
+                    <td class="text-end text-muted">{{ b.cost|som }}</td>
+                    <td class="text-end">{{ b.profit|som }}</td>
+                    <td class="text-end text-muted"
+                        title="Ijara: {{ b.rent_period|som }} so'm · Boshqa: {{ b.other_period|som }} so'm">
+                        {{ b.fixed_period|som }}
+                    </td>
+                    <td class="text-end {% if b.net_profit < 0 %}text-danger{% else %}text-primary{% endif %}">
+                        <strong>{{ b.net_profit|som }}</strong>
+                    </td>
+                    <td class="text-end">
+                        <span class="badge bg-{% if b.net_margin < 0 %}danger{% elif b.net_margin < 10 %}warning{% else %}success{% endif %}">
+                            {{ b.net_margin|floatformat:1 }}%
+                        </span>
+                    </td>
                     <td class="text-end">{{ b.sales_count }}</td>
-                    <td class="text-end">{{ b.qty }}</td>
-                    <td class="text-end">{{ b.avg_sale|som }}</td>
                     <td class="text-end">{{ b.stock }}</td>
                 </tr>
             {% endfor %}
@@ -279,7 +292,7 @@
             <div class="card p-3">
                 <h5><i class="bi bi-person-check text-success"></i> Eng yaxshi sotuvchilar</h5>
                 <div class="table-responsive"><table class="table table-sm">
-                    <thead><tr><th>#</th><th>Sotuvchi</th><th>Filial</th><th>Sotuvlar</th><th>Dona</th><th>Daromad</th></tr></thead>
+                    <thead><tr><th>#</th><th>Sotuvchi</th><th>Filial</th><th>Sotuvlar</th><th>Dona</th><th>Daromad</th><th class="text-end">Komissiya</th></tr></thead>
                     <tbody>
                     {% for s in top_sellers %}
                         <tr>
@@ -293,9 +306,17 @@
                             <td>{{ s.n_sales }}</td>
                             <td>{{ s.qty }}</td>
                             <td><strong>{{ s.revenue|som }}</strong></td>
+                            <td class="text-end">
+                                {% if s.commission_percent %}
+                                    <strong class="text-success">{{ s.commission|som }}</strong>
+                                    <div class="small text-muted">{{ s.commission_percent }}%</div>
+                                {% else %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% empty %}
-                        <tr><td colspan="6" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
+                        <tr><td colspan="7" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
                     {% endfor %}
                     </tbody>
                 </table></div>

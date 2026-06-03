@@ -24,7 +24,8 @@ class LoginForm(AuthenticationForm):
 class BranchForm(forms.ModelForm):
     class Meta:
         model = Branch
-        fields = ['name', 'address', 'phone', 'inn', 'fiscal_module_id', 'is_active']
+        fields = ['name', 'address', 'phone', 'inn', 'fiscal_module_id',
+                  'monthly_rent', 'monthly_other_costs', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'address': forms.TextInput(attrs={'class': 'form-control'}),
@@ -32,6 +33,8 @@ class BranchForm(forms.ModelForm):
             'inn': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '9 yoki 14 raqam'}),
             'fiscal_module_id': forms.TextInput(attrs={'class': 'form-control',
                                                        'placeholder': 'OFD beradi'}),
+            'monthly_rent': forms.NumberInput(attrs={'class': 'form-control', 'step': '1000'}),
+            'monthly_other_costs': forms.NumberInput(attrs={'class': 'form-control', 'step': '1000'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
@@ -40,6 +43,8 @@ class BranchForm(forms.ModelForm):
             'phone': 'Telefon',
             'inn': 'STIR (INN)',
             'fiscal_module_id': "Kassa apparati ID",
+            'monthly_rent': "Oylik ijara (so'm)",
+            'monthly_other_costs': "Oylik boshqa xarajatlar (so'm)",
             'is_active': 'Faol',
         }
 
@@ -180,7 +185,8 @@ class UserCreateForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'email', 'role', 'branch', 'is_active']
+        fields = ['username', 'first_name', 'last_name', 'email', 'role', 'branch',
+                  'commission_percent', 'is_active']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -188,12 +194,14 @@ class UserCreateForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'role': forms.Select(attrs={'class': 'form-select'}),
             'branch': forms.Select(attrs={'class': 'form-select'}),
+            'commission_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'username': 'Foydalanuvchi nomi',
             'first_name': 'Ism', 'last_name': 'Familiya',
             'email': 'Email', 'role': 'Rol', 'branch': 'Filial',
+            'commission_percent': 'Komissiya (%)',
             'is_active': 'Faol',
         }
 
@@ -214,18 +222,21 @@ class UserEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'role', 'branch', 'is_active']
+        fields = ['first_name', 'last_name', 'email', 'role', 'branch',
+                  'commission_percent', 'is_active']
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'role': forms.Select(attrs={'class': 'form-select'}),
             'branch': forms.Select(attrs={'class': 'form-select'}),
+            'commission_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'first_name': 'Ism', 'last_name': 'Familiya',
             'email': 'Email', 'role': 'Rol', 'branch': 'Filial',
+            'commission_percent': 'Komissiya (%)',
             'is_active': 'Faol',
         }
 

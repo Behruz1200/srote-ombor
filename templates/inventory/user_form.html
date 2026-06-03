@@ -53,6 +53,11 @@
                             {{ form.branch }}
                             <small class="text-muted">Sotuvchilar uchun majburiy.</small>
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label">{{ form.commission_percent.label }}</label>
+                            {{ form.commission_percent }}
+                            <small class="text-muted">Sotuv summasidan foiz. 0 = komissiyasiz.</small>
+                        </div>
                         <div class="col-md-12">
                             <div class="form-check">
                                 {{ form.is_active }}

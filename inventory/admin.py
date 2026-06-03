@@ -3,8 +3,38 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     User, Branch, Category, Product, ProductVariant,
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
-    ParkedSale,
+    ParkedSale, Promotion, PaymentQR, PaymentIntent,
 )
+
+
+@admin.register(PaymentIntent)
+class PaymentIntentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'branch', 'provider', 'amount', 'ref_code',
+                    'status', 'initiated_by', 'created_at', 'paid_at')
+    list_filter = ('status', 'provider', 'branch')
+    search_fields = ('ref_code', 'provider_txn_id')
+    readonly_fields = ('created_at', 'paid_at', 'cart_snapshot')
+    actions = ['mark_paid', 'mark_cancelled']
+
+    def mark_paid(self, request, queryset):
+        from django.utils import timezone
+        n = queryset.filter(status='pending').update(
+            status='paid', paid_at=timezone.now()
+        )
+        self.message_user(request, f"{n} ta intent paid deb belgilandi.")
+    mark_paid.short_description = "Tanlanganlarni 'To'landi' deb belgilash (test)"
+
+    def mark_cancelled(self, request, queryset):
+        n = queryset.filter(status='pending').update(status='cancelled')
+        self.message_user(request, f"{n} ta intent bekor qilindi.")
+    mark_cancelled.short_description = "Tanlanganlarni 'Bekor' deb belgilash"
+
+
+@admin.register(PaymentQR)
+class PaymentQRAdmin(admin.ModelAdmin):
+    list_display = ('branch', 'provider', 'label', 'is_active', 'created_at')
+    list_filter = ('branch', 'provider', 'is_active')
+    search_fields = ('label',)
 
 
 @admin.register(ParkedSale)
@@ -13,6 +43,15 @@ class ParkedSaleAdmin(admin.ModelAdmin):
     list_filter = ('branch',)
     search_fields = ('label', 'customer_name', 'customer_phone')
     readonly_fields = ('cart_json', 'created_at')
+
+
+@admin.register(Promotion)
+class PromotionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'promo_type', 'percent', 'qty_required', 'qty_free',
+                    'category', 'is_active', 'valid_from', 'valid_until')
+    list_filter = ('promo_type', 'is_active', 'category')
+    search_fields = ('name',)
+    filter_horizontal = ('target_products',)
 
 
 @admin.register(Customer)

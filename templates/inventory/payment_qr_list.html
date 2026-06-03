@@ -1,0 +1,139 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}To'lov QR'lar — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h3 class="mb-3">
+        <i class="bi bi-qr-code"></i> To'lov QR'lari
+        <small class="text-muted fs-6">— Payme, Click va boshqalar uchun</small>
+    </h3>
+
+    <div class="alert alert-info small">
+        <i class="bi bi-info-circle"></i>
+        Har provider uchun bir martalik QR yuklang. POS'da kassir provider'ni
+        bossa shu QR ekranda ko'rinadi va mijoz scan qiladi.
+        Mijoz o'z ilovasidan to'liq summa kiritib to'laydi.
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card p-3 mb-3">
+                <h5 class="mb-3">Mavjud QR'lar</h5>
+                {% if qrs %}
+                <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>QR</th>
+                            <th>Filial / Provider</th>
+                            <th>Yorliq</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for q in qrs %}
+                        <tr {% if not q.is_active %}class="text-muted"{% endif %}>
+                            <td>
+                                {% if q.qr_image %}
+                                    <img src="{{ q.qr_image.url }}" alt="QR" style="height: 60px;"
+                                         class="border rounded">
+                                {% else %}
+                                    <i class="bi bi-qr-code" style="font-size: 2rem;"></i>
+                                    <div class="small text-muted">payload'dan</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ q.branch.name }}</strong>
+                                <div class="small">
+                                    <span class="badge bg-primary">{{ q.get_provider_display }}</span>
+                                    {% if not q.is_active %}
+                                        <span class="badge bg-secondary">Faol emas</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div>{{ q.label|default:'—' }}</div>
+                                {% if q.instructions %}
+                                    <div class="small text-muted">{{ q.instructions|truncatechars:60 }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="post" class="d-inline"
+                                      onsubmit="return confirm('Ushbu QR\'ni o\'chirishni tasdiqlaysizmi?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="pk" value="{{ q.pk }}">
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}
+                    <div class="text-muted text-center py-4">
+                        Hali QR yuklanmagan. O'ng tomondagi formani to'ldiring.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card p-3">
+                <h5 class="mb-3">Yangi QR qo'shish</h5>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create">
+                    <div class="mb-3">
+                        <label class="form-label">Filial</label>
+                        <select name="branch" class="form-select" required>
+                            <option value="">— tanlang —</option>
+                            {% for b in branches %}
+                                <option value="{{ b.pk }}">{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Provider</label>
+                        <select name="provider" class="form-select" required>
+                            <option value="">— tanlang —</option>
+                            {% for v, label in providers %}
+                                <option value="{{ v }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Yorliq (ixtiyoriy)</label>
+                        <input type="text" name="label" class="form-control"
+                               placeholder="Asosiy hisob, Qo'shimcha karta...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">QR rasm</label>
+                        <input type="file" name="qr_image" class="form-control" accept="image/*">
+                        <small class="text-muted">PNG/JPG. Provider ilovasidan eksport qiling.</small>
+                    </div>
+                    <div class="text-center text-muted small mb-2">— yoki —</div>
+                    <div class="mb-3">
+                        <label class="form-label">QR ichidagi matn/URL</label>
+                        <input type="text" name="qr_payload" class="form-control"
+                               placeholder="https://payme.uz/...">
+                        <small class="text-muted">Rasm bo'lmasa, shu asosida QR yaratiladi.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Ko'rsatma (ixtiyoriy)</label>
+                        <input type="text" name="instructions" class="form-control"
+                               placeholder="Maxsus izoh, mijozga ko'rsatish uchun">
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">
+                        <i class="bi bi-save"></i> Saqlash
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
