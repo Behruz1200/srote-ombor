@@ -50,6 +50,10 @@ urlpatterns = [
     path('users/new/', views.user_create, name='user_create'),
     path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
 
+    path('customers/', views.customer_list, name='customer_list'),
+    path('customers/<int:pk>/', views.customer_detail, name='customer_detail'),
+    path('pos/customer/', views.pos_customer_lookup, name='pos_customer_lookup'),
+
     path('reports/', views.reports, name='reports'),
     path('insights/', views.insights, name='insights'),
     path('audit/', views.audit_list, name='audit_list'),

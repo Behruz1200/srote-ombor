@@ -24,7 +24,7 @@ from reportlab.platypus import (
 
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
-    Category, Intake, Sale, AuditLog, SaleTransaction, Return,
+    Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -549,11 +549,26 @@ def pos_checkout(request):
             }, status=400)
         resolved.append((stock, qty, price))
 
+    # Resolve / auto-create Customer by phone (most reliable key)
+    customer = None
+    if customer_phone:
+        cleaned_phone = ''.join(c for c in customer_phone if c.isdigit() or c == '+')
+        if cleaned_phone:
+            customer = Customer.objects.filter(phone=cleaned_phone).first()
+            if not customer:
+                customer = Customer.objects.create(
+                    phone=cleaned_phone, name=customer_name,
+                )
+            elif customer_name and not customer.name:
+                customer.name = customer_name
+                customer.save(update_fields=['name'])
+
     with transaction.atomic():
         txn = SaleTransaction.objects.create(
             branch=branch,
             sold_by=request.user,
             payment_method=payment_method,
+            customer=customer,
             customer_name=customer_name,
             customer_phone=customer_phone,
             note=note,
@@ -1190,6 +1205,65 @@ def audit_list(request):
         'models_list': models_list,
         'f_action': action, 'f_user': user_filter, 'f_model': model, 'q': q,
     })
+
+
+# ---------- CUSTOMERS ----------
+
+@admin_required
+def customer_list(request):
+    q = (request.GET.get('q') or '').strip()
+    customers = Customer.objects.all()
+    if q:
+        customers = customers.filter(Q(name__icontains=q) | Q(phone__icontains=q))
+    # annotate quick stats
+    revenue_expr = ExpressionWrapper(
+        F('transactions__lines__quantity') * F('transactions__lines__sale_price'),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
+    customers = customers.annotate(
+        txn_count=Count('transactions', distinct=True),
+        total_spent=Coalesce(Sum(revenue_expr), 0,
+                             output_field=DecimalField(max_digits=14, decimal_places=2)),
+    ).order_by('-total_spent', 'name')[:200]
+    return render(request, 'inventory/customer_list.html', {
+        'customers': customers, 'q': q,
+    })
+
+
+@admin_required
+def customer_detail(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    txns = (customer.transactions.select_related('branch', 'sold_by')
+            .prefetch_related('lines__variant__product')
+            .order_by('-sold_at')[:50])
+    revenue_expr = ExpressionWrapper(
+        F('lines__quantity') * F('lines__sale_price'),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
+    stats = customer.transactions.aggregate(
+        n=Count('id', distinct=True),
+        total=Coalesce(Sum(revenue_expr), 0,
+                       output_field=DecimalField(max_digits=14, decimal_places=2)),
+    )
+    return render(request, 'inventory/customer_detail.html', {
+        'customer': customer, 'txns': txns,
+        'stats': stats,
+    })
+
+
+@login_required
+def pos_customer_lookup(request):
+    """JSON: GET /pos/customer/?phone=998... → returns matches."""
+    phone = (request.GET.get('phone') or '').strip()
+    if len(phone) < 3:
+        return JsonResponse({'matches': []})
+    cleaned = ''.join(c for c in phone if c.isdigit() or c == '+')
+    if not cleaned:
+        return JsonResponse({'matches': []})
+    qs = Customer.objects.filter(phone__icontains=cleaned)[:5]
+    return JsonResponse({'matches': [
+        {'id': c.pk, 'name': c.name, 'phone': c.phone} for c in qs
+    ]})
 
 
 # ---------- PWA ----------

@@ -260,6 +260,38 @@ class AuditLog(models.Model):
         return f'{self.created_at:%Y-%m-%d %H:%M} — {self.username_snapshot} {self.action}'
 
 
+class Customer(models.Model):
+    """Mijoz — telefon raqami orqali yagona deb hisoblanadi."""
+    name = models.CharField(max_length=120, blank=True)
+    phone = models.CharField(max_length=40, db_index=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    tags = models.CharField(
+        max_length=200, blank=True,
+        help_text="Vergul bilan: VIP, doimiy, optom..."
+    )
+    inn = models.CharField(
+        max_length=14, blank=True,
+        help_text="B2B mijoz uchun STIR (e-faktura)",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Mijoz'
+        verbose_name_plural = 'Mijozlar'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['phone'])]
+
+    def __str__(self):
+        bits = [self.name or '—']
+        if self.phone:
+            bits.append(self.phone)
+        return ' · '.join(bits)
+
+    @property
+    def display_name(self):
+        return self.name or self.phone or f'#{self.pk}'
+
+
 class SaleTransaction(models.Model):
     """Sotuv chek'i: bir nechta mahsulot bir vaqtda mijozga sotilganda."""
 
@@ -275,6 +307,10 @@ class SaleTransaction(models.Model):
     sold_at = models.DateTimeField(default=timezone.now)
     payment_method = models.CharField(
         max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH
+    )
+    customer = models.ForeignKey(
+        'Customer', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='transactions',
     )
     customer_name = models.CharField(max_length=120, blank=True)
     customer_phone = models.CharField(max_length=40, blank=True)
