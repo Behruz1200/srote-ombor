@@ -17,6 +17,25 @@ def som(value):
     return sign + f'{abs(n):,}'.replace(',', ' ')
 
 
+@register.simple_tag(takes_context=True)
+def querystring(context, **kwargs):
+    """Joriy GET parametrlarini saqlab, ba'zilarini almashtiradi.
+
+    Foydalanish: <a href="?{% querystring sort=name page=2 %}">...
+    None qiymat berilsa, o'sha parametr olib tashlanadi.
+    """
+    request = context.get('request')
+    if not request:
+        return ''
+    qd = request.GET.copy()
+    for k, v in kwargs.items():
+        if v is None or v == '':
+            qd.pop(k, None)
+        else:
+            qd[k] = v
+    return qd.urlencode()
+
+
 @register.filter
 def som_with_decimals(value, places=2):
     """Decimal joylar bilan formatlash, masalan 1234.5 → '1 234.50'"""

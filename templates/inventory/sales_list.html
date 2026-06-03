@@ -4,67 +4,187 @@
 {% block title %}Sotuvlar — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3><i class="bi bi-receipt"></i> Sotuvlar tarixi</h3>
-        <div class="text-end">
-            <div class="text-muted small">Ko'rsatilganlar jami</div>
-            <h4 class="text-success mb-0">{{ total|som }} so'm</h4>
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-receipt"></i> Sotuvlar tarixi</h3>
+        <div class="d-flex gap-2 align-items-center">
+            <a href="?{{ request.GET.urlencode }}&export=csv"
+               class="btn btn-sm btn-outline-success">
+                <i class="bi bi-file-earmark-spreadsheet"></i> CSV export
+            </a>
         </div>
     </div>
 
-    <div class="alert alert-light">
-        Batafsil hisobot va eksport uchun: <a href="{% url 'reports' %}">Hisobotlar</a>
+    <!-- Filterlar -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Sana (dan)</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Sana (gacha)</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Filial</label>
+                <select name="branch" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for b in branches %}
+                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>
+                            {{ b.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Sotuvchi</label>
+                <select name="seller" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for u in sellers %}
+                        <option value="{{ u.id }}" {% if seller_id == u.id|stringformat:"s" %}selected{% endif %}>
+                            {{ u.username }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">To'lov</label>
+                <select name="payment_method" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for v, l in payment_methods %}
+                        <option value="{{ v }}" {% if payment_method == v %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-8">
+                <label class="form-label small text-muted mb-1">Qidirish</label>
+                <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+                       placeholder="Mahsulot kodi/nomi, mijoz ismi/telefoni...">
+            </div>
+            <div class="col-md-4 d-flex align-items-end gap-2">
+                <button class="btn btn-primary btn-sm flex-fill" type="submit">
+                    <i class="bi bi-funnel"></i> Filterlash
+                </button>
+                <a href="{% url 'sales_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Jami pannel -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Topilgan qatorlar</div>
+                <div class="h3 mb-0">{{ sales|length }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Jami dona</div>
+                <div class="h3 mb-0">{{ qty_total }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Jami tushum</div>
+                <div class="h3 mb-0 text-success">{{ total|som }} so'm</div>
+            </div>
+        </div>
     </div>
 
-    <div class="card">
-        <div class="table-responsive"><table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Sana</th><th>Filial</th><th>Kod</th><th>Mahsulot</th>
-                    <th>O'lcham/Rang</th><th>Soni</th><th>Narx</th><th>Jami</th>
-                    <th>Sotuvchi</th><th>Izoh</th><th></th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for s in sales %}
-                <tr>
-                    <td><small>{{ s.sold_at|date:"d.m.Y H:i" }}</small></td>
-                    <td>{{ s.branch.name }}</td>
-                    <td><span class="code-pill">{{ s.variant.product.code }}</span></td>
-                    <td>{{ s.variant.product.name|truncatechars:30 }}</td>
-                    <td>{{ s.variant.size }} / {{ s.variant.color }}</td>
-                    <td>{{ s.quantity }}</td>
-                    <td>{{ s.sale_price|som }}</td>
-                    <td><strong>{{ s.total|som }}</strong> so'm</td>
-                    <td><small>{{ s.sold_by.username }}</small></td>
-                    <td><small class="text-muted">{{ s.note|default:"" }}</small></td>
-                    <td>
-                        {% if s.transaction_id %}
-                            <a href="{% url 'transaction_detail' s.transaction_id %}"
-                               class="btn btn-sm btn-outline-secondary" title="Chek">
-                                <i class="bi bi-receipt"></i>
-                            </a>
-                        {% endif %}
-                        {% if s.returned_qty < s.quantity %}
-                            <a href="{% url 'return_create' s.id %}"
-                               class="btn btn-sm btn-outline-warning" title="Qaytarish">
-                                <i class="bi bi-arrow-counterclockwise"></i>
-                            </a>
-                        {% else %}
-                            <span class="badge bg-secondary" title="To'liq qaytarilgan">
-                                <i class="bi bi-check"></i>
-                            </span>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="11" class="text-center text-muted py-4">
-                    Hozircha sotuvlar yo'q.
-                </td></tr>
+    <!-- Kunlik jami (filter natijasidan) -->
+    {% if daily_list and daily_list|length > 1 %}
+    <div class="card p-2 mb-3">
+        <div class="small text-muted text-uppercase mb-1">Kunlik jami</div>
+        <div class="d-flex flex-wrap gap-2">
+            {% for d in daily_list %}
+                <span class="badge bg-light text-dark border">
+                    {{ d.date|date:"d.m" }}:
+                    <strong>{{ d.total|som }}</strong>
+                    <span class="text-muted">· {{ d.count }} chek · {{ d.qty }} dona</span>
+                </span>
             {% endfor %}
-            </tbody>
-        </table></div>
+        </div>
     </div>
+    {% endif %}
+
+    <!-- Jadval -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Sana / Vaqt</th>
+                        <th>Filial</th>
+                        <th>Mahsulot</th>
+                        <th>Variant</th>
+                        <th class="text-end">Dona</th>
+                        <th class="text-end">Narx</th>
+                        <th class="text-end">Jami</th>
+                        <th>To'lov</th>
+                        <th>Mijoz</th>
+                        <th>Sotuvchi</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for s in sales %}
+                    <tr {% if s.returned_qty >= s.quantity %}class="text-muted text-decoration-line-through"{% endif %}>
+                        <td><small>{{ s.sold_at|date:"d.m H:i" }}</small></td>
+                        <td><small>{{ s.branch.name }}</small></td>
+                        <td>
+                            <strong>{{ s.variant.product.name|truncatechars:28 }}</strong>
+                            <div class="small text-muted"><code>{{ s.variant.product.code }}</code></div>
+                        </td>
+                        <td><small>{{ s.variant.size }}/{{ s.variant.color }}</small></td>
+                        <td class="text-end">{{ s.quantity }}</td>
+                        <td class="text-end">{{ s.sale_price|som }}</td>
+                        <td class="text-end"><strong>{{ s.total|som }}</strong></td>
+                        <td>
+                            {% if s.transaction %}
+                                <span class="badge bg-light text-dark">
+                                    {{ s.transaction.get_payment_method_display }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ s.transaction.customer_name|default:""|truncatechars:18 }}</small></td>
+                        <td><small>{{ s.sold_by.username }}</small></td>
+                        <td>
+                            {% if s.transaction_id %}
+                                <a href="{% url 'transaction_detail' s.transaction_id %}"
+                                   class="btn btn-sm btn-outline-secondary" title="Chek">
+                                    <i class="bi bi-receipt"></i>
+                                </a>
+                            {% endif %}
+                            {% if s.returned_qty < s.quantity %}
+                                <a href="{% url 'return_create' s.id %}"
+                                   class="btn btn-sm btn-outline-warning" title="Qaytarish">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </a>
+                            {% else %}
+                                <span class="badge bg-secondary" title="To'liq qaytarilgan">
+                                    <i class="bi bi-check2"></i>
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="11" class="text-center text-muted py-4">
+                        Hozircha sotuvlar yo'q yoki filterga mos kelmadi.
+                    </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if sales|length >= 300 %}
+    <div class="alert alert-info small mt-2">
+        <i class="bi bi-info-circle"></i> Eng so'nggi 300 ta qator ko'rsatildi.
+        To'liq ma'lumot uchun filterni toraytiring yoki CSV export'dan foydalaning.
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

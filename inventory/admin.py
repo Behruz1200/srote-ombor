@@ -4,7 +4,24 @@ from .models import (
     User, Branch, Category, Product, ProductVariant,
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
+    Supplier, IntakeSession,
 )
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ('name', 'phone', 'contact_person', 'inn', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'phone', 'inn', 'contact_person')
+
+
+@admin.register(IntakeSession)
+class IntakeSessionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'branch', 'supplier_display', 'received_by',
+                    'invoice_number', 'received_at')
+    list_filter = ('branch', 'supplier')
+    search_fields = ('invoice_number', 'supplier_text', 'note')
+    readonly_fields = ('received_at',)
 
 
 @admin.register(PaymentIntent)

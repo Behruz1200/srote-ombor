@@ -1,56 +1,179 @@
 {% extends 'inventory/base.html' %}
+{% load srote_extras %}
 
-{% block title %}Qabul qilish — Srote{% endblock %}
+{% block title %}Qabul — Srote{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h3 class="mb-4"><i class="bi bi-box-arrow-in-down"></i> Qabul qilish</h3>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0">
+            <i class="bi bi-box-arrow-in-down"></i> Qabul
+        </h3>
+        <a href="{% url 'supplier_list' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-people"></i> Yetkazib beruvchilar
+        </a>
+    </div>
 
-    <div class="row g-4">
-        <div class="col-md-5">
-            <div class="card p-4 h-100">
-                <h5><i class="bi bi-plus-circle text-primary"></i> Yangi mahsulot</h5>
-                <p class="text-muted">Omborda umuman bo'lmagan, yangi turdagi mahsulot uchun.</p>
-                <a href="{% url 'product_create' %}" class="btn btn-primary mt-auto">
-                    Yangi mahsulot yaratish
-                </a>
+    <!-- 3 ta kirish nuqtasi -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <a href="{% url 'intake_quick' %}" class="card text-decoration-none h-100 p-4 border-success
+                                                      hover-shadow">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-success bg-opacity-10 rounded p-2 me-3">
+                        <i class="bi bi-lightning-charge text-success" style="font-size: 1.8rem;"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0 text-dark">Tezkor qabul</h5>
+                        <small class="text-muted">eng tezkor — tavsiya etiladi</small>
+                    </div>
+                </div>
+                <p class="small text-muted mb-0">
+                    Scanner orqali bir sessiyada ko'p mahsulot. Yetkazib
+                    beruvchi avtomatik biriktiriladi.
+                </p>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 p-4">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
+                        <i class="bi bi-grid-3x3 text-primary" style="font-size: 1.8rem;"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0">Matritsa qabul</h5>
+                        <small class="text-muted">o'lcham × rang</small>
+                    </div>
+                </div>
+                <p class="small text-muted mb-2">
+                    Bitta mahsulot, ko'p variant: kiyim/poyabzal uchun.
+                </p>
+                <form method="get" action="{% url 'lookup' %}" class="d-flex gap-2 mb-2">
+                    <input type="text" name="code" placeholder="Kod kiriting..."
+                           class="form-control form-control-sm" style="text-transform: uppercase;">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </form>
             </div>
         </div>
-        <div class="col-md-7">
-            <div class="card p-4 h-100">
-                <h5><i class="bi bi-arrow-repeat text-success"></i> Mavjud mahsulotga qo'shish</h5>
-                <p class="text-muted">Mahsulotni tanlang yoki kod bo'yicha qidiring.</p>
+        <div class="col-md-4">
+            <a href="{% url 'product_create' %}" class="card text-decoration-none h-100 p-4 hover-shadow">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-warning bg-opacity-10 rounded p-2 me-3">
+                        <i class="bi bi-plus-circle text-warning" style="font-size: 1.8rem;"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0 text-dark">Yangi mahsulot</h5>
+                        <small class="text-muted">yangi turdagi tovar</small>
+                    </div>
+                </div>
+                <p class="small text-muted mb-0">
+                    Bazada bo'lmagan, yangi turdagi mahsulotni yaratish.
+                </p>
+            </a>
+        </div>
+    </div>
 
-                <form method="get" action="{% url 'lookup' %}" class="d-flex gap-2 mb-3">
-                    <input type="text" name="code" placeholder="Kod kiriting (masalan: A7K3X9B2)"
-                           class="form-control" style="text-transform: uppercase;">
-                    <button type="submit" class="btn btn-outline-primary">Topish</button>
-                </form>
-
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="table table-sm table-hover">
-                        <thead class="table-light sticky-top">
-                            <tr><th>Kod</th><th>Nomi</th><th></th></tr>
+    <div class="row g-3">
+        <!-- So'nggi sessiyalar -->
+        <div class="col-lg-7">
+            <div class="card p-3">
+                <h5 class="mb-2">
+                    <i class="bi bi-clock-history"></i> So'nggi qabul sessiyalari
+                </h5>
+                {% if recent_sessions %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Sana</th>
+                                <th>Filial / Yetkazib beruvchi</th>
+                                <th class="text-end">Dona</th>
+                                <th class="text-end">Jami</th>
+                                <th></th>
+                            </tr>
                         </thead>
                         <tbody>
-                        {% for p in products %}
+                        {% for s in recent_sessions %}
                             <tr>
-                                <td><span class="code-pill">{{ p.code }}</span></td>
-                                <td>{{ p.name|truncatechars:40 }}</td>
-                                <td class="text-end">
-                                    <a href="{% url 'intake_for_product' p.code %}" class="btn btn-sm btn-success">
-                                        Qabul qilish
+                                <td>#{{ s.pk }}</td>
+                                <td><small>{{ s.received_at|date:"d.m H:i" }}</small></td>
+                                <td>
+                                    <strong>{{ s.branch.name }}</strong>
+                                    <div class="small text-muted">
+                                        <i class="bi bi-truck"></i>
+                                        {{ s.supplier_display|truncatechars:30 }}
+                                    </div>
+                                </td>
+                                <td class="text-end">{{ s.total_qty }}</td>
+                                <td class="text-end"><strong>{{ s.total_cost|som }}</strong></td>
+                                <td>
+                                    <a href="{% url 'intake_session_detail' s.pk %}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
                                     </a>
                                 </td>
                             </tr>
-                        {% empty %}
-                            <tr><td colspan="3" class="text-muted text-center">Mahsulotlar yo'q.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
                 </div>
+                {% else %}
+                <div class="text-muted text-center py-3">
+                    Hali sessiya yo'q. "Tezkor qabul"dan boshlang.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Past zaxira ogohlantirishi -->
+        <div class="col-lg-5">
+            <div class="card p-3">
+                <h5 class="mb-2">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Past zaxira (≤ 3 dona)
+                </h5>
+                {% if low_stock %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                        {% for bs in low_stock %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'product_detail' bs.variant.product.code %}">
+                                        {{ bs.variant.product.name|truncatechars:25 }}
+                                    </a>
+                                    <div class="small text-muted">
+                                        {{ bs.branch.name }} · {{ bs.variant.size }}/{{ bs.variant.color }}
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <span class="badge bg-{% if bs.stock_count == 0 %}danger{% else %}warning{% endif %}">
+                                        {{ bs.stock_count }} dona
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <a href="{% url 'intake_quick' %}" class="btn btn-sm btn-outline-warning w-100 mt-2">
+                    <i class="bi bi-lightning-charge"></i> Buyurtmani boshlash
+                </a>
+                {% else %}
+                <div class="text-success text-center py-3">
+                    <i class="bi bi-check-circle"></i> Hammasi to'liq
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<style>
+.hover-shadow { transition: box-shadow 0.15s; }
+.hover-shadow:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.08); transform: translateY(-1px); }
+</style>
 {% endblock %}

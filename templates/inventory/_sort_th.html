@@ -1,0 +1,23 @@
+{% load srote_extras %}{% comment %}
+Sortable jadval header. Foydalanish:
+    {% include "inventory/_sort_th.html" with field="name" label="Nomi" %}
+
+URL'da `sort=field` yoki `sort=-field`. Bossangiz teskari yo'nalishga aylanadi.
+{% endcomment %}
+{% with cur=request.GET.sort %}
+{% if cur == field %}
+    {% with newsort="-"|add:field %}
+    <a href="?{% querystring sort=newsort %}" class="text-decoration-none text-dark">
+        {{ label }} <i class="bi bi-caret-up-fill small"></i>
+    </a>
+    {% endwith %}
+{% elif cur == "-"|add:field %}
+    <a href="?{% querystring sort=field %}" class="text-decoration-none text-dark">
+        {{ label }} <i class="bi bi-caret-down-fill small"></i>
+    </a>
+{% else %}
+    <a href="?{% querystring sort=field %}" class="text-decoration-none text-muted">
+        {{ label }} <i class="bi bi-arrow-down-up small opacity-50"></i>
+    </a>
+{% endif %}
+{% endwith %}

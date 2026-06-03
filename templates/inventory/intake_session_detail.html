@@ -1,0 +1,171 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Qabul sessiyasi #{{ session.pk }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0">
+            <i class="bi bi-box-arrow-in-down"></i>
+            Sessiya #{{ session.pk }}
+        </h3>
+        <div class="d-flex gap-2">
+            <a href="{% url 'intake_new' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Orqaga
+            </a>
+            <a href="{% url 'intake_quick' %}" class="btn btn-primary">
+                <i class="bi bi-lightning-charge"></i> Yangi sessiya
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-8">
+            <div class="card p-3 mb-3">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="small text-muted">Filial</div>
+                        <strong><i class="bi bi-building"></i> {{ session.branch.name }}</strong>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Yetkazib beruvchi</div>
+                        <strong>
+                            <i class="bi bi-truck"></i>
+                            {% if session.supplier %}
+                                <a href="{% url 'supplier_list' %}">{{ session.supplier.name }}</a>
+                                {% if session.supplier.phone %}
+                                    <small class="text-muted">· {{ session.supplier.phone }}</small>
+                                {% endif %}
+                            {% else %}
+                                {{ session.supplier_text|default:"—" }}
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small text-muted">Vaqt</div>
+                        <strong>{{ session.received_at|date:"d.m.Y H:i" }}</strong>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small text-muted">Qabul qildi</div>
+                        <strong>{{ session.received_by.username }}</strong>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small text-muted">Faktura raqami</div>
+                        <strong>{{ session.invoice_number|default:"—" }}</strong>
+                    </div>
+                    {% if session.note %}
+                        <div class="col-12">
+                            <div class="small text-muted">Izoh</div>
+                            <div>{{ session.note|linebreaks }}</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card p-3">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    Sessiya qatorlari ({{ session.variants_count }} ta variant)
+                </h6>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Mahsulot</th>
+                                <th>Variant</th>
+                                <th class="text-end">Soni</th>
+                                <th class="text-end">Tannarx</th>
+                                <th class="text-end">Jami</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for i in session.intakes.all %}
+                            <tr {% if i.is_return %}class="table-warning"{% endif %}>
+                                <td>
+                                    <a href="{% url 'product_detail' i.variant.product.code %}">
+                                        <strong>{{ i.variant.product.name }}</strong>
+                                    </a>
+                                    <div class="small text-muted">
+                                        <code>{{ i.variant.product.code }}</code>
+                                        {% if i.is_return %}
+                                            <span class="badge bg-danger ms-1">QAYTARILDI</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td><span class="badge bg-light text-dark">
+                                    {{ i.variant.size }}/{{ i.variant.color }}
+                                </span></td>
+                                <td class="text-end">{{ i.quantity }}</td>
+                                <td class="text-end">{{ i.cost_per_unit|som }}</td>
+                                <td class="text-end"><strong>{{ i.total_cost|som }}</strong></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="2">JAMI</th>
+                                <th class="text-end">{{ session.total_qty }}</th>
+                                <th></th>
+                                <th class="text-end">{{ session.total_cost|som }} so'm</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Jami -->
+            <div class="card p-3 mb-3">
+                <div class="text-muted small">Sessiya jami</div>
+                <div class="display-6 fw-bold text-success">
+                    {{ session.total_cost|som }} so'm
+                </div>
+                <div class="small text-muted">
+                    {{ session.total_qty }} dona · {{ session.variants_count }} variant
+                </div>
+            </div>
+
+            <!-- Tezkor amallar -->
+            <div class="card p-3 mb-3">
+                <h6 class="text-muted text-uppercase small mb-2">Keyingi amallar</h6>
+                <div class="d-grid gap-2">
+                    {% with codes=session.intakes.all|join:"," %}
+                    <a href="{% url 'labels' %}?codes={% for i in session.intakes.all %}{{ i.variant.product.code }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                       class="btn btn-outline-primary" target="_blank">
+                        <i class="bi bi-tag"></i> QR labellarni chop etish
+                    </a>
+                    {% endwith %}
+                    <a href="{% url 'intake_quick' %}" class="btn btn-outline-success">
+                        <i class="bi bi-plus-circle"></i> Yangi sessiya
+                    </a>
+                </div>
+            </div>
+
+            <!-- Faktura rasmi -->
+            <div class="card p-3">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-image"></i> Faktura/dostavka rasmi
+                </h6>
+                {% if session.invoice_image %}
+                    <a href="{{ session.invoice_image.url }}" target="_blank">
+                        <img src="{{ session.invoice_image.url }}" alt="Faktura"
+                             class="img-fluid rounded mb-2">
+                    </a>
+                    <div class="small text-muted">Almashtirish uchun yangi rasm yuklang:</div>
+                {% else %}
+                    <div class="text-muted small mb-2">Hali rasm yuklanmagan</div>
+                {% endif %}
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="file" name="invoice_image" class="form-control form-control-sm mb-2"
+                           accept="image/*" required>
+                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                        <i class="bi bi-upload"></i> Yuklash
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

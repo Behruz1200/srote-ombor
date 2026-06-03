@@ -208,13 +208,101 @@ class BranchStock(models.Model):
         return f'{self.branch.name}: {self.variant} = {self.stock_count}'
 
 
+class Supplier(models.Model):
+    """Yetkazib beruvchi — qabul tarixini bog'lash uchun."""
+    name = models.CharField(max_length=200, unique=True)
+    phone = models.CharField(max_length=40, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    inn = models.CharField(max_length=14, blank=True,
+                           help_text="STIR (yuridik shaxs uchun)")
+    contact_person = models.CharField(max_length=120, blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Yetkazib beruvchi'
+        verbose_name_plural = 'Yetkazib beruvchilar'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class IntakeSession(models.Model):
+    """Bitta yetkazib (delivery) — ko'p mahsulot bir kelishda qabul qilinadi.
+    Har Intake shu sessiyaga ulanadi."""
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT,
+                               related_name='intake_sessions')
+    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL,
+                                 null=True, blank=True,
+                                 related_name='intake_sessions')
+    supplier_text = models.CharField(
+        max_length=200, blank=True,
+        help_text="Supplier model'da yo'q bo'lsa, erkin matn"
+    )
+    received_by = models.ForeignKey(settings.AUTH_USER_MODEL,
+                                    on_delete=models.PROTECT,
+                                    related_name='intake_sessions')
+    invoice_number = models.CharField(max_length=80, blank=True,
+                                      help_text="Yetkazib beruvchining faktura raqami")
+    invoice_image = models.ImageField(upload_to='invoices/', blank=True, null=True,
+                                      help_text="Faktura/dostavka fotografiyasi")
+    note = models.TextField(blank=True)
+    received_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Qabul sessiyasi'
+        verbose_name_plural = 'Qabul sessiyalari'
+        ordering = ['-received_at']
+
+    def __str__(self):
+        supplier = self.supplier.name if self.supplier else (self.supplier_text or '—')
+        return f'#{self.pk} {self.branch.name} ← {supplier} ({self.received_at:%d.%m %H:%M})'
+
+    @property
+    def total_qty(self):
+        return sum(i.quantity for i in self.intakes.all())
+
+    @property
+    def total_cost(self):
+        return sum(i.total_cost for i in self.intakes.all())
+
+    @property
+    def variants_count(self):
+        return self.intakes.count()
+
+    @property
+    def supplier_display(self):
+        if self.supplier:
+            return self.supplier.name
+        return self.supplier_text or "—"
+
+
 class Intake(models.Model):
     """Mahsulot kelib tushishi (qabul) — filialga"""
+    session = models.ForeignKey(
+        IntakeSession, on_delete=models.CASCADE,
+        related_name='intakes', null=True, blank=True,
+        help_text="Bir partiyadagi bir nechta qabullarni guruhlash"
+    )
+    supplier_ref = models.ForeignKey(
+        Supplier, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='intakes',
+        help_text="Yetkazib beruvchi (model). Eski yozuvlarda supplier matn'da."
+    )
     variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='intakes')
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='intakes')
-    quantity = models.PositiveIntegerField()
+    quantity = models.IntegerField(
+        help_text="Manfiy bo'lishi mumkin — yetkazib beruvchiga qaytarish"
+    )
     cost_per_unit = models.DecimalField(max_digits=12, decimal_places=2)
     supplier = models.CharField(max_length=200, blank=True)
+    is_return = models.BooleanField(
+        default=False,
+        help_text="Yetkazib beruvchiga qaytarish (quantity manfiy)"
+    )
+    return_reason = models.CharField(max_length=200, blank=True)
     received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                     related_name='intakes')
     received_at = models.DateTimeField(default=timezone.now)

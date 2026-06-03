@@ -1,0 +1,185 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Yetkazib beruvchilar — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">
+            <i class="bi bi-people"></i> Yetkazib beruvchilar
+        </h3>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#supplierModal"
+                onclick="resetSupplierForm()">
+            <i class="bi bi-plus-circle"></i> Yangi
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nom</th>
+                        <th>Aloqa</th>
+                        <th>STIR</th>
+                        <th class="text-end">Jami qabul</th>
+                        <th>Oxirgi qabul</th>
+                        <th>Holat</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for s in suppliers %}
+                    <tr {% if not s.is_active %}class="text-muted"{% endif %}>
+                        <td>
+                            <strong>{{ s.name }}</strong>
+                            {% if s.contact_person %}
+                                <div class="small text-muted">{{ s.contact_person }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if s.phone %}<i class="bi bi-telephone"></i> {{ s.phone }}{% endif %}
+                            {% if s.address %}<div class="small text-muted">{{ s.address|truncatechars:40 }}</div>{% endif %}
+                        </td>
+                        <td><code>{{ s.inn|default:"—" }}</code></td>
+                        <td class="text-end">
+                            <strong>{{ s.total_qty_received }}</strong> dona
+                        </td>
+                        <td>
+                            {% if s.last_intake %}
+                                <div>{{ s.last_intake.received_at|date:"d.m.Y" }}</div>
+                                <div class="small text-muted">
+                                    {{ s.last_intake.branch.name }}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if s.is_active %}
+                                <span class="badge bg-success">Faol</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Nofaol</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary edit-sup-btn"
+                                    data-pk="{{ s.pk }}"
+                                    data-name="{{ s.name }}"
+                                    data-phone="{{ s.phone }}"
+                                    data-address="{{ s.address }}"
+                                    data-inn="{{ s.inn }}"
+                                    data-contact="{{ s.contact_person }}"
+                                    data-notes="{{ s.notes }}"
+                                    data-active="{% if s.is_active %}1{% else %}0{% endif %}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="post" class="d-inline"
+                                  onsubmit="return confirm('O\'chirishni tasdiqlaysizmi?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="pk" value="{{ s.pk }}">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">
+                        Hali yetkazib beruvchilar yo'q. "Yangi" tugmasini bosing.
+                    </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="supplierModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+        <input type="hidden" name="pk" id="sup_pk" value="">
+        <div class="modal-header">
+          <h5 class="modal-title" id="supModalTitle">Yangi yetkazib beruvchi</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label">Nom <span class="text-danger">*</span></label>
+              <input type="text" name="name" id="sup_name" class="form-control" required>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Telefon</label>
+              <input type="tel" name="phone" id="sup_phone" class="form-control"
+                     placeholder="+998 ...">
+            </div>
+            <div class="col-md-7">
+              <label class="form-label">Aloqa shaxsi</label>
+              <input type="text" name="contact_person" id="sup_contact" class="form-control">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">STIR / INN</label>
+              <input type="text" name="inn" id="sup_inn" class="form-control"
+                     placeholder="9 yoki 14 raqam">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Manzil</label>
+              <input type="text" name="address" id="sup_address" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Izoh</label>
+              <textarea name="notes" id="sup_notes" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input type="checkbox" name="is_active" id="sup_active" class="form-check-input" checked>
+                <label class="form-check-label" for="sup_active">Faol</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            Bekor
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save"></i> Saqlash
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function resetSupplierForm() {
+    document.getElementById('supModalTitle').textContent = 'Yangi yetkazib beruvchi';
+    document.getElementById('sup_pk').value = '';
+    ['sup_name','sup_phone','sup_contact','sup_inn','sup_address','sup_notes'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('sup_active').checked = true;
+}
+document.querySelectorAll('.edit-sup-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('supModalTitle').textContent = 'Tahrirlash';
+        document.getElementById('sup_pk').value = btn.dataset.pk;
+        document.getElementById('sup_name').value = btn.dataset.name || '';
+        document.getElementById('sup_phone').value = btn.dataset.phone || '';
+        document.getElementById('sup_address').value = btn.dataset.address || '';
+        document.getElementById('sup_inn').value = btn.dataset.inn || '';
+        document.getElementById('sup_contact').value = btn.dataset.contact || '';
+        document.getElementById('sup_notes').value = btn.dataset.notes || '';
+        document.getElementById('sup_active').checked = btn.dataset.active === '1';
+        new bootstrap.Modal(document.getElementById('supplierModal')).show();
+    });
+});
+</script>
+{% endblock %}

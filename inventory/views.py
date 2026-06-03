@@ -32,6 +32,7 @@ from .models import (
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
+    Supplier, IntakeSession,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -164,59 +165,146 @@ def lookup(request):
 
 @admin_required
 def dashboard(request):
-    total_products = Product.objects.count()
-    total_branches = Branch.objects.filter(is_active=True).count()
+    today = timezone.localdate()
+    yesterday = today - timedelta(days=1)
 
+    def _day_range(d):
+        tz = timezone.get_current_timezone()
+        start = datetime.combine(d, datetime.min.time()).replace(tzinfo=tz)
+        end = start + timedelta(days=1)
+        return start, end
+
+    today_start, today_end = _day_range(today)
+    yesterday_start, yesterday_end = _day_range(yesterday)
+
+    revenue_expr = ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+    cost_expr = ExpressionWrapper(
+        F('quantity') * F('cost_at_sale'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+
+    def _agg(qs):
+        a = qs.aggregate(
+            revenue=Sum(revenue_expr),
+            cost=Sum(cost_expr),
+            qty=Sum('quantity'),
+            txns=Count('transaction', distinct=True),
+        )
+        rev = float(a['revenue'] or 0)
+        cost = float(a['cost'] or 0)
+        return {
+            'revenue': rev,
+            'cost': cost,
+            'profit': rev - cost,
+            'margin': (rev - cost) / rev * 100 if rev else 0,
+            'qty': a['qty'] or 0,
+            'txns': a['txns'] or 0,
+        }
+
+    today_stats = _agg(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
+    yesterday_stats = _agg(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
+
+    def _delta(now, prev):
+        if not prev: return None
+        return (now - prev) / prev * 100
+
+    deltas = {
+        'revenue': _delta(today_stats['revenue'], yesterday_stats['revenue']),
+        'qty': _delta(today_stats['qty'], yesterday_stats['qty']),
+        'txns': _delta(today_stats['txns'], yesterday_stats['txns']),
+        'profit': _delta(today_stats['profit'], yesterday_stats['profit']),
+    }
+
+    # 7-day trend chart
+    trend_labels = []
+    trend_revenue = []
+    trend_qty = []
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        ds, de = _day_range(d)
+        a = Sale.objects.filter(sold_at__gte=ds, sold_at__lt=de).aggregate(
+            r=Sum(revenue_expr), q=Sum('quantity'),
+        )
+        trend_labels.append(d.strftime('%a %d'))
+        trend_revenue.append(float(a['r'] or 0))
+        trend_qty.append(a['q'] or 0)
+
+    # Inventory snapshot
     stocks = BranchStock.objects.all()
     total_stock = stocks.aggregate(s=Sum('stock_count'))['s'] or 0
     stock_value = stocks.aggregate(
         v=Sum(ExpressionWrapper(F('stock_count') * F('cost_price'),
                                 output_field=DecimalField(max_digits=14, decimal_places=2)))
     )['v'] or 0
+    total_products = Product.objects.count()
+    total_branches = Branch.objects.filter(is_active=True).count()
 
-    today = timezone.now().date()
-    week_ago = today - timedelta(days=7)
-    sales_this_week = Sale.objects.filter(sold_at__date__gte=week_ago)
-    sales_count = sales_this_week.count()
-    sales_revenue = sales_this_week.aggregate(
-        s=Sum(ExpressionWrapper(F('quantity') * F('sale_price'),
-                                output_field=DecimalField(max_digits=14, decimal_places=2)))
-    )['s'] or 0
-
-    # per-branch breakdown
-    branch_summary = []
+    # Per-branch summary for today
+    branch_today = []
     for br in Branch.objects.filter(is_active=True):
-        b_stocks = BranchStock.objects.filter(branch=br)
-        b_count = b_stocks.aggregate(s=Sum('stock_count'))['s'] or 0
-        b_value = b_stocks.aggregate(
-            v=Sum(ExpressionWrapper(F('stock_count') * F('cost_price'),
-                                    output_field=DecimalField(max_digits=14, decimal_places=2)))
-        )['v'] or 0
-        b_sales_week = Sale.objects.filter(branch=br, sold_at__date__gte=week_ago).aggregate(
-            s=Sum(ExpressionWrapper(F('quantity') * F('sale_price'),
-                                    output_field=DecimalField(max_digits=14, decimal_places=2)))
-        )['s'] or 0
-        branch_summary.append({
-            'branch': br, 'stock': b_count, 'value': b_value, 'week_sales': b_sales_week,
+        b_sales = Sale.objects.filter(branch=br, sold_at__gte=today_start, sold_at__lt=today_end)
+        a = b_sales.aggregate(
+            r=Sum(revenue_expr), q=Sum('quantity'),
+            txns=Count('transaction', distinct=True),
+        )
+        b_stock = BranchStock.objects.filter(branch=br).aggregate(s=Sum('stock_count'))['s'] or 0
+        branch_today.append({
+            'branch': br,
+            'revenue': float(a['r'] or 0),
+            'qty': a['q'] or 0,
+            'txns': a['txns'] or 0,
+            'stock': b_stock,
         })
 
-    low_stock = BranchStock.objects.filter(stock_count__lte=3) \
-        .select_related('variant__product', 'branch').order_by('stock_count')[:10]
-    recent_intakes = Intake.objects.select_related('variant__product', 'branch') \
-        .order_by('-received_at')[:10]
-    recent_sales = Sale.objects.select_related('variant__product', 'branch') \
-        .order_by('-sold_at')[:10]
+    # Top 5 selling products today
+    top_today = list(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)
+        .values('variant__product__code', 'variant__product__name')
+        .annotate(qty=Sum('quantity'), revenue=Sum(revenue_expr))
+        .order_by('-qty')[:5])
+
+    # Attention widgets
+    low_stock_count = BranchStock.objects.filter(stock_count__lte=3).count()
+    low_stock_preview = list(BranchStock.objects.filter(stock_count__lte=3)
+                             .select_related('variant__product', 'branch')
+                             .order_by('stock_count')[:5])
+    out_of_stock_count = BranchStock.objects.filter(stock_count=0).count()
+    open_shifts_count = Shift.objects.filter(status=Shift.Status.OPEN).count()
+    pending_intents_count = PaymentIntent.objects.filter(
+        status=PaymentIntent.Status.PENDING,
+        created_at__gte=timezone.now() - timedelta(hours=24),
+    ).count()
+    in_transit_count = Transfer.objects.filter(status=Transfer.Status.IN_TRANSIT).count()
+    open_parked_count = ParkedSale.objects.count()
+
+    recent_sales = (SaleTransaction.objects
+                    .select_related('branch', 'sold_by')
+                    .prefetch_related('lines')
+                    .order_by('-sold_at')[:8])
 
     return render(request, 'inventory/dashboard.html', {
+        'today': today, 'yesterday': yesterday,
+        'today_stats': today_stats,
+        'yesterday_stats': yesterday_stats,
+        'deltas': deltas,
+        'trend_labels': trend_labels,
+        'trend_revenue': trend_revenue,
+        'trend_qty': trend_qty,
         'total_products': total_products,
         'total_branches': total_branches,
         'total_stock': total_stock,
         'stock_value': stock_value,
-        'sales_count': sales_count,
-        'sales_revenue': sales_revenue,
-        'branch_summary': branch_summary,
-        'low_stock': low_stock,
-        'recent_intakes': recent_intakes,
+        'branch_today': branch_today,
+        'top_today': top_today,
+        'low_stock_count': low_stock_count,
+        'low_stock_preview': low_stock_preview,
+        'out_of_stock_count': out_of_stock_count,
+        'open_shifts_count': open_shifts_count,
+        'pending_intents_count': pending_intents_count,
+        'in_transit_count': in_transit_count,
+        'open_parked_count': open_parked_count,
         'recent_sales': recent_sales,
     })
 
@@ -225,12 +313,85 @@ def dashboard(request):
 
 @admin_required
 def product_list(request):
+    """Mahsulotlar ro'yxati: qidiruv + filtrlar + sortable + 30 kunlik sotilganlik."""
     q = (request.GET.get('q') or '').strip()
-    products = Product.objects.all()
+    category_id = request.GET.get('category') or ''
+    stock_filter = request.GET.get('stock') or ''  # zero|low|in_stock|''
+    sort = request.GET.get('sort') or '-created_at'
+
+    products = Product.objects.select_related('category')
+
     if q:
         products = products.filter(Q(code__icontains=q) | Q(name__icontains=q))
-    products = products.select_related('category').prefetch_related('variants__branch_stocks')[:200]
-    return render(request, 'inventory/product_list.html', {'products': products, 'q': q})
+    if category_id:
+        try:
+            products = products.filter(category_id=int(category_id))
+        except ValueError:
+            category_id = ''
+
+    # Annotate aggregate stock per product
+    products = products.annotate(
+        total_stock=Coalesce(Sum('variants__branch_stocks__stock_count'), 0),
+    )
+
+    if stock_filter == 'zero':
+        products = products.filter(total_stock=0)
+    elif stock_filter == 'low':
+        products = products.filter(total_stock__gt=0, total_stock__lte=3)
+    elif stock_filter == 'in_stock':
+        products = products.filter(total_stock__gt=0)
+
+    # 30 kunlik sotuvlar (velocity)
+    since_30d = timezone.now() - timedelta(days=30)
+    sold_30d = (Sale.objects.filter(sold_at__gte=since_30d)
+                .values('variant__product_id')
+                .annotate(qty=Sum('quantity')))
+    sold_map = {r['variant__product_id']: r['qty'] for r in sold_30d}
+
+    # Sort
+    allowed_sorts = {
+        'name': 'name', '-name': '-name',
+        'code': 'code', '-code': '-code',
+        'stock': 'total_stock', '-stock': '-total_stock',
+        'price': 'default_sale_price', '-price': '-default_sale_price',
+        'created': 'created_at', '-created': '-created_at',
+        '-created_at': '-created_at',
+    }
+    products = products.order_by(allowed_sorts.get(sort, '-created_at'))
+
+    products = list(products[:200])
+    # Attach velocity + days_left
+    for p in products:
+        sold = sold_map.get(p.id, 0)
+        p.sold_30d = sold
+        daily_avg = sold / 30 if sold else 0
+        p.days_left = (p.total_stock / daily_avg) if daily_avg else None
+        # Profit estimate (avg margin from default_sale_price vs implied cost)
+        # We don't have actual cost on product level; use markup_percent to back into cost.
+        try:
+            m = float(p.markup_percent or 0)
+            if m > 0:
+                cost = float(p.default_sale_price) / (1 + m/100)
+                p.unit_profit = float(p.default_sale_price) - cost
+                p.margin_percent = (p.unit_profit / float(p.default_sale_price) * 100
+                                    if p.default_sale_price else 0)
+            else:
+                p.unit_profit = 0
+                p.margin_percent = 0
+        except Exception:
+            p.unit_profit = 0
+            p.margin_percent = 0
+
+    categories = Category.objects.order_by('name')
+
+    return render(request, 'inventory/product_list.html', {
+        'products': products,
+        'q': q,
+        'category_id': category_id,
+        'stock_filter': stock_filter,
+        'sort': sort,
+        'categories': categories,
+    })
 
 
 @admin_required
@@ -395,6 +556,11 @@ def intake_for_product(request, code):
         except (ValueError, TypeError) as e:
             messages.error(request, f"Maydonlarni tekshiring: {e}")
 
+    # Cost history: last 5 intakes for this product
+    last_intakes = list(Intake.objects.filter(variant__product=product)
+                        .select_related('variant', 'branch', 'supplier_ref')
+                        .order_by('-received_at')[:5])
+
     # Pre-fill sizes/colors from existing variants if present
     variants = list(product.variants.all())
     existing_sizes = sorted({v.size for v in variants}, key=lambda s: (len(s), s))
@@ -405,13 +571,321 @@ def intake_for_product(request, code):
         'branches': Branch.objects.filter(is_active=True),
         'existing_sizes': existing_sizes,
         'existing_colors': existing_colors,
+        'last_intakes': last_intakes,
+        'suppliers': Supplier.objects.filter(is_active=True).order_by('name'),
     })
 
 
 @admin_required
 def intake_new(request):
+    """Qabul dashboard'i: 3 ta kirish nuqtasi + so'nggi sessiyalar + low-stock."""
     products = Product.objects.order_by('-created_at')[:50]
-    return render(request, 'inventory/intake_choose.html', {'products': products})
+    recent_sessions = (IntakeSession.objects
+                       .select_related('branch', 'supplier', 'received_by')
+                       .prefetch_related('intakes')
+                       .order_by('-received_at')[:10])
+    # Low-stock: o'rtacha kunlik sotuvga nisbatan kam qolgan mahsulotlar
+    low_stock = (BranchStock.objects
+                 .filter(stock_count__lte=3)
+                 .select_related('variant__product', 'branch')
+                 .order_by('stock_count')[:10])
+    return render(request, 'inventory/intake_choose.html', {
+        'products': products,
+        'recent_sessions': recent_sessions,
+        'low_stock': low_stock,
+    })
+
+
+# ---------- QUICK INTAKE (scanner-driven, multi-product session) ----------
+
+@admin_required
+def intake_quick(request):
+    """Tezkor qabul sahifasi — scanner orqali ko'p mahsulot bir sessiyada."""
+    branches = Branch.objects.filter(is_active=True).order_by('name')
+    suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+    return render(request, 'inventory/intake_quick.html', {
+        'branches': branches, 'suppliers': suppliers,
+    })
+
+
+@admin_required
+def intake_lookup(request):
+    """GET /intake/lookup/?q=... — qabul uchun mahsulot qidirish.
+    POS'dagidan farqi: stock cheklov yo'q (yangi mahsulot ham qabul qilinadi)."""
+    q = (request.GET.get('q') or '').strip()
+    if not q:
+        return JsonResponse({'found': False})
+    code = normalize_code(q.upper())
+    product = Product.objects.filter(code=code).first()
+    if not product:
+        matches = list(Product.objects.filter(
+            Q(name__icontains=q) | Q(category__name__icontains=q)
+        )[:8])
+        if len(matches) == 1:
+            product = matches[0]
+        elif matches:
+            return JsonResponse({
+                'found': False,
+                'suggestions': [{'code': p.code, 'name': p.name} for p in matches],
+            })
+        else:
+            return JsonResponse({'found': False, 'suggestions': []})
+
+    # Existing variants — for matrix products show them, allow new ones too
+    variants = list(product.variants.values_list('size', 'color').distinct())
+    # Last 5 intakes for cost-history hint
+    last_intakes = (Intake.objects.filter(variant__product=product)
+                    .select_related('variant', 'branch')
+                    .order_by('-received_at')[:5])
+    last_intakes_data = [{
+        'date': i.received_at.strftime('%d.%m.%Y'),
+        'branch': i.branch.name,
+        'qty': i.quantity,
+        'cost': float(i.cost_per_unit),
+        'supplier': i.supplier_ref.name if i.supplier_ref else (i.supplier or ''),
+    } for i in last_intakes]
+
+    return JsonResponse({
+        'found': True,
+        'product': {
+            'id': product.id,
+            'code': product.code,
+            'name': product.name,
+            'default_sale_price': float(product.default_sale_price),
+            'markup_percent': float(product.markup_percent),
+            'has_variants': bool(variants),
+        },
+        'variants': [{'size': s, 'color': c} for (s, c) in variants],
+        'last_intakes': last_intakes_data,
+    })
+
+
+@admin_required
+def intake_supplier_search(request):
+    """GET /intake/supplier-search/?q=... — autocomplete."""
+    q = (request.GET.get('q') or '').strip()
+    qs = Supplier.objects.filter(is_active=True)
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q))
+    return JsonResponse({
+        'results': [{
+            'id': s.id, 'name': s.name, 'phone': s.phone,
+            'contact': s.contact_person,
+        } for s in qs.order_by('name')[:10]],
+    })
+
+
+@admin_required
+def intake_quick_save(request):
+    """POST /intake/quick/save/ JSON:
+    {branch_id, supplier_id|supplier_text, invoice_number, note,
+     lines: [{product_id, size, color, qty, cost, sale_price, wholesale_price,
+              markup, update_product_price, is_return, return_reason}]}
+    Atomic: sessiya + barcha intakelar."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+
+    try:
+        branch_id = int(data.get('branch_id') or 0)
+    except (TypeError, ValueError):
+        branch_id = 0
+    branch = Branch.objects.filter(pk=branch_id, is_active=True).first()
+    if not branch:
+        return JsonResponse({'ok': False, 'error': "Filial tanlang"}, status=400)
+
+    supplier = None
+    try:
+        sid = int(data.get('supplier_id') or 0)
+        if sid:
+            supplier = Supplier.objects.filter(pk=sid, is_active=True).first()
+    except (TypeError, ValueError):
+        pass
+    supplier_text = (data.get('supplier_text') or '').strip()[:200]
+
+    lines = data.get('lines') or []
+    if not lines:
+        return JsonResponse({'ok': False, 'error': "Qator yo'q"}, status=400)
+
+    from decimal import Decimal
+    affected_product_codes = set()
+    with transaction.atomic():
+        session = IntakeSession.objects.create(
+            branch=branch,
+            supplier=supplier,
+            supplier_text=supplier_text,
+            received_by=request.user,
+            invoice_number=(data.get('invoice_number') or '').strip()[:80],
+            note=(data.get('note') or '').strip(),
+        )
+        for ln in lines:
+            try:
+                pid = int(ln['product_id'])
+                qty = int(ln['qty'])
+                cost = Decimal(str(ln.get('cost') or '0'))
+            except (KeyError, ValueError, TypeError):
+                return JsonResponse({'ok': False, 'error': "qator noto'g'ri"}, status=400)
+            if qty == 0:
+                continue
+            is_return = bool(ln.get('is_return'))
+            if is_return and qty > 0:
+                qty = -abs(qty)
+            elif not is_return and qty < 0:
+                qty = abs(qty)
+
+            size = (ln.get('size') or '—').strip() or '—'
+            color = (ln.get('color') or '—').strip() or '—'
+            product = Product.objects.filter(pk=pid).first()
+            if not product:
+                return JsonResponse({'ok': False,
+                                     'error': f'Mahsulot #{pid} topilmadi'}, status=400)
+            variant, _ = ProductVariant.objects.get_or_create(
+                product=product, size=size, color=color,
+            )
+            sale_price = Decimal(str(ln.get('sale_price') or '0'))
+            wholesale_price = Decimal(str(ln.get('wholesale_price') or '0'))
+            update_price = bool(ln.get('update_product_price'))
+
+            stock, _ = BranchStock.objects.get_or_create(
+                variant=variant, branch=branch,
+                defaults={'cost_price': cost, 'sale_price': sale_price,
+                          'wholesale_price': wholesale_price},
+            )
+            # For returns we decrement; never go below 0
+            new_count = stock.stock_count + qty
+            if new_count < 0:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f"{product.code} {size}/{color}: zaxira yetarli emas "
+                             f"(joriy {stock.stock_count}, qaytarish {abs(qty)})",
+                }, status=400)
+            stock.stock_count = new_count
+            if not is_return:
+                stock.cost_price = cost
+                if sale_price > 0:
+                    stock.sale_price = sale_price
+                if wholesale_price > 0:
+                    stock.wholesale_price = wholesale_price
+            stock.save()
+
+            Intake.objects.create(
+                session=session,
+                supplier_ref=supplier,
+                variant=variant, branch=branch,
+                quantity=qty, cost_per_unit=cost,
+                supplier=supplier.name if supplier else supplier_text,
+                is_return=is_return,
+                return_reason=(ln.get('return_reason') or '').strip()[:200],
+                received_by=request.user,
+                note=(ln.get('note') or '').strip(),
+            )
+
+            if update_price and sale_price > 0 and not is_return:
+                product.default_sale_price = sale_price
+                if ln.get('markup'):
+                    try:
+                        product.markup_percent = Decimal(str(ln['markup']))
+                    except (ValueError, TypeError):
+                        pass
+                product.save()
+
+            affected_product_codes.add(product.code)
+
+    return JsonResponse({
+        'ok': True,
+        'session_id': session.pk,
+        'lines_count': session.intakes.count(),
+        'total_qty': session.total_qty,
+        'product_codes': list(affected_product_codes),
+        'label_url': f"/labels/?codes={','.join(affected_product_codes)}",
+    })
+
+
+@admin_required
+def intake_quick_save_upload(request):
+    """POST /intake/quick/save-invoice/ — invoice image upload to existing session."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    try:
+        session_id = int(request.POST.get('session_id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'bad session'}, status=400)
+    session = IntakeSession.objects.filter(pk=session_id).first()
+    if not session:
+        return JsonResponse({'ok': False, 'error': 'sessiya topilmadi'}, status=404)
+    if 'invoice_image' in request.FILES:
+        session.invoice_image = request.FILES['invoice_image']
+        session.save(update_fields=['invoice_image'])
+    return JsonResponse({'ok': True})
+
+
+# ---------- SUPPLIER MANAGEMENT ----------
+
+@admin_required
+def supplier_list(request):
+    if request.method == 'POST':
+        action = request.POST.get('action') or 'create'
+        if action == 'delete':
+            try:
+                pk = int(request.POST.get('pk') or 0)
+                Supplier.objects.filter(pk=pk).delete()
+                messages.success(request, "Yetkazib beruvchi o'chirildi.")
+            except (TypeError, ValueError):
+                pass
+            return redirect('supplier_list')
+        # create or edit
+        try:
+            pk = int(request.POST.get('pk') or 0)
+        except (TypeError, ValueError):
+            pk = 0
+        instance = Supplier.objects.filter(pk=pk).first() if pk else None
+        s = instance or Supplier()
+        s.name = (request.POST.get('name') or '').strip()[:200]
+        s.phone = (request.POST.get('phone') or '').strip()[:40]
+        s.address = (request.POST.get('address') or '').strip()[:255]
+        s.inn = (request.POST.get('inn') or '').strip()[:14]
+        s.contact_person = (request.POST.get('contact_person') or '').strip()[:120]
+        s.notes = (request.POST.get('notes') or '').strip()
+        s.is_active = bool(request.POST.get('is_active'))
+        if not s.name:
+            messages.error(request, "Nom kerak.")
+            return redirect('supplier_list')
+        try:
+            s.save()
+            verb = 'Yangilandi' if instance else "Qo'shildi"
+            messages.success(request, f"{verb}: {s.name}")
+        except Exception as e:
+            messages.error(request, f"Xato: {e}")
+        return redirect('supplier_list')
+
+    suppliers = Supplier.objects.order_by('-is_active', 'name')
+    # Per-supplier aggregate: total intakes, last delivery date
+    for s in suppliers:
+        s.total_qty_received = (Intake.objects.filter(supplier_ref=s)
+                                .aggregate(s=Sum('quantity'))['s'] or 0)
+        s.last_intake = (Intake.objects.filter(supplier_ref=s)
+                         .order_by('-received_at').first())
+    return render(request, 'inventory/supplier_list.html',
+                  {'suppliers': suppliers})
+
+
+# ---------- INTAKE SESSION DETAIL ----------
+
+@admin_required
+def intake_session_detail(request, pk):
+    session = get_object_or_404(
+        IntakeSession.objects.select_related('branch', 'supplier', 'received_by')
+        .prefetch_related('intakes__variant__product'), pk=pk
+    )
+    if request.method == 'POST' and 'invoice_image' in request.FILES:
+        session.invoice_image = request.FILES['invoice_image']
+        session.save(update_fields=['invoice_image'])
+        messages.success(request, "Faktura rasmi yuklandi.")
+        return redirect('intake_session_detail', pk=session.pk)
+    return render(request, 'inventory/intake_session_detail.html', {'session': session})
 
 
 # ---------- STOCKTAKE (physical count vs system) ----------
@@ -1838,13 +2312,114 @@ def category_list(request):
 
 @admin_required
 def sales_list(request):
-    # Annotate returned_qty so the template doesn't trigger N+1
-    sales = (Sale.objects
-        .select_related('variant__product', 'branch', 'sold_by')
-        .annotate(_returned=Coalesce(Sum('returns__quantity'), 0))
-        .order_by('-sold_at')[:200])
+    """Sotuvlar ro'yxati: filterlar + kunlik jami + CSV export."""
+    # Filterlar
+    q = (request.GET.get('q') or '').strip()
+    date_from_raw = request.GET.get('date_from') or ''
+    date_to_raw = request.GET.get('date_to') or ''
+    branch_id = request.GET.get('branch') or ''
+    seller_id = request.GET.get('seller') or ''
+    payment_method = request.GET.get('payment_method') or ''
+    export = request.GET.get('export') == 'csv'
+
+    qs = Sale.objects.select_related(
+        'variant__product', 'branch', 'sold_by', 'transaction'
+    ).annotate(_returned=Coalesce(Sum('returns__quantity'), 0))
+
+    try:
+        if date_from_raw:
+            df = datetime.strptime(date_from_raw, '%Y-%m-%d').date()
+            qs = qs.filter(sold_at__date__gte=df)
+    except ValueError:
+        date_from_raw = ''
+    try:
+        if date_to_raw:
+            dt = datetime.strptime(date_to_raw, '%Y-%m-%d').date()
+            qs = qs.filter(sold_at__date__lte=dt)
+    except ValueError:
+        date_to_raw = ''
+    if branch_id:
+        try:
+            qs = qs.filter(branch_id=int(branch_id))
+        except ValueError:
+            branch_id = ''
+    if seller_id:
+        try:
+            qs = qs.filter(sold_by_id=int(seller_id))
+        except ValueError:
+            seller_id = ''
+    if payment_method:
+        qs = qs.filter(transaction__payment_method=payment_method)
+    if q:
+        qs = qs.filter(
+            Q(variant__product__name__icontains=q)
+            | Q(variant__product__code__icontains=q)
+            | Q(transaction__customer_name__icontains=q)
+            | Q(transaction__customer_phone__icontains=q)
+        )
+
+    qs = qs.order_by('-sold_at')
+
+    if export:
+        resp = HttpResponse(content_type='text/csv; charset=utf-8')
+        resp['Content-Disposition'] = 'attachment; filename="sales.csv"'
+        resp.write('﻿')  # BOM for Excel
+        w = csv.writer(resp)
+        w.writerow(['Sana', 'Vaqt', 'Kod', 'Mahsulot', 'Variant', 'Filial',
+                    'Sotuvchi', 'Soni', 'Narx', 'Chegirma', 'Jami',
+                    'To\'lov turi', 'Mijoz'])
+        for s in qs[:10000]:
+            t = s.transaction
+            w.writerow([
+                s.sold_at.strftime('%Y-%m-%d'),
+                s.sold_at.strftime('%H:%M'),
+                s.variant.product.code,
+                s.variant.product.name,
+                f'{s.variant.size}/{s.variant.color}',
+                s.branch.name,
+                s.sold_by.username,
+                s.quantity,
+                float(s.sale_price),
+                float(s.line_discount or 0),
+                float(s.total),
+                t.get_payment_method_display() if t else '',
+                t.customer_name if t else '',
+            ])
+        return resp
+
+    sales = list(qs[:300])
     total = sum(s.total for s in sales)
-    return render(request, 'inventory/sales_list.html', {'sales': sales, 'total': total})
+    qty_total = sum(s.quantity for s in sales)
+
+    # Group by date for daily subtotals (for display only)
+    from collections import OrderedDict
+    daily = OrderedDict()
+    for s in sales:
+        d = s.sold_at.date()
+        if d not in daily:
+            daily[d] = {'date': d, 'total': 0, 'qty': 0, 'count': 0}
+        daily[d]['total'] += float(s.total)
+        daily[d]['qty'] += s.quantity
+        daily[d]['count'] += 1
+    daily_list = list(daily.values())
+
+    return render(request, 'inventory/sales_list.html', {
+        'sales': sales,
+        'total': total,
+        'qty_total': qty_total,
+        'daily_list': daily_list,
+        # Filter state
+        'q': q,
+        'date_from': date_from_raw,
+        'date_to': date_to_raw,
+        'branch_id': branch_id,
+        'seller_id': seller_id,
+        'payment_method': payment_method,
+        # Choices
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'sellers': User.objects.filter(is_active=True).order_by('username'),
+        'payment_methods': SaleTransaction.PaymentMethod.choices,
+    })
 
 
 # ---------- REPORTS ----------

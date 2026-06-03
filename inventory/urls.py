@@ -56,6 +56,12 @@ urlpatterns = [
     path('products/<str:code>/intake/', views.intake_for_product, name='intake_for_product'),
 
     path('intake/', views.intake_new, name='intake_new'),
+    path('intake/quick/', views.intake_quick, name='intake_quick'),
+    path('intake/quick/save/', views.intake_quick_save, name='intake_quick_save'),
+    path('intake/lookup/', views.intake_lookup, name='intake_lookup'),
+    path('intake/supplier-search/', views.intake_supplier_search, name='intake_supplier_search'),
+    path('intake/sessions/<int:pk>/', views.intake_session_detail, name='intake_session_detail'),
+    path('intake/suppliers/', views.supplier_list, name='supplier_list'),
 
     path('sale/<int:stock_id>/', views.sale_create, name='sale_create'),
     path('sales/', views.sales_list, name='sales_list'),

@@ -4,96 +4,155 @@
 {% block title %}Mahsulotlar — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3><i class="bi bi-box"></i> Mahsulotlar</h3>
-        <a href="{% url 'product_create' %}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Yangi mahsulot
-        </a>
-    </div>
-
-    <div class="card p-3 mb-3">
-        <form method="get" class="d-flex gap-2">
-            <input type="text" name="q" value="{{ q }}" placeholder="Kod yoki nom bo'yicha qidirish..."
-                   class="form-control">
-            <button type="submit" class="btn btn-outline-primary">
-                <i class="bi bi-search"></i> Qidirish
-            </button>
-            {% if q %}<a href="{% url 'product_list' %}" class="btn btn-outline-secondary">Tozalash</a>{% endif %}
-        </form>
-    </div>
-
-    <form id="labelsForm" action="{% url 'labels' %}" method="get" target="_blank">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <div>
-            <button type="submit" class="btn btn-sm btn-outline-success" id="printBtn" disabled>
-                <i class="bi bi-printer"></i> Tanlanganlarga etiketka chop etish
-                (<span id="cnt">0</span>)
-            </button>
-            <input type="number" name="copies" value="6" min="1" max="50"
-                   class="form-control form-control-sm d-inline-block ms-1" style="width: 90px;"
-                   title="Har bittasidan nechta etiketka">
-            <small class="text-muted">har bittasidan nusxa</small>
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-box"></i> Mahsulotlar</h3>
+        <div class="d-flex gap-2">
+            <a href="{% url 'product_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Yangi mahsulot
+            </a>
+            <a href="{% url 'intake_quick' %}" class="btn btn-outline-success">
+                <i class="bi bi-lightning-charge"></i> Tezkor qabul
+            </a>
         </div>
     </div>
 
-    <div class="card">
-        <div class="table-responsive"><table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th style="width:38px;">
-                        <input type="checkbox" id="selAll" class="form-check-input">
-                    </th>
-                    <th>Kod</th>
-                    <th>Nomi</th>
-                    <th>Kategoriya</th>
-                    <th>Variantlar</th>
-                    <th>Jami soni</th>
-                    <th>Sotuv narxi</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for p in products %}
-                <tr>
-                    <td>
-                        <input type="checkbox" name="id" value="{{ p.id }}"
-                               class="form-check-input pick">
-                    </td>
-                    <td><span class="code-pill">{{ p.code }}</span></td>
-                    <td>{{ p.name }}</td>
-                    <td>{% if p.category %}{{ p.category.name }}{% else %}—{% endif %}</td>
-                    <td>{{ p.variants.count }}</td>
-                    <td>{{ p.total_stock }}</td>
-                    <td>{{ p.default_sale_price|som }} so'm</td>
-                    <td class="text-end">
-                        <div class="btn-group btn-group-sm" role="group">
-                            <a href="{% url 'product_detail' p.code %}"
-                               class="btn btn-outline-primary"
-                               title="Batafsil ko'rish">
-                                <i class="bi bi-eye"></i><span class="d-none d-sm-inline"> Ko'rish</span>
-                            </a>
-                            <a href="{% url 'intake_for_product' p.code %}"
-                               class="btn btn-outline-success"
-                               title="Yangi qabul qilish (mol kelganda)">
-                                <i class="bi bi-truck"></i><span class="d-none d-sm-inline"> Qabul</span>
-                            </a>
-                            <a href="{% url 'product_label' p.code %}" target="_blank"
-                               class="btn btn-outline-secondary"
-                               title="QR etiketka chop etish">
-                                <i class="bi bi-printer"></i><span class="d-none d-sm-inline"> Etiketka</span>
-                            </a>
-                        </div>
-                    </td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="8" class="text-center text-muted py-4">
-                    Hali mahsulotlar yo'q. <a href="{% url 'product_create' %}">Birinchisini qo'shing</a>.
-                </td></tr>
-            {% endfor %}
-            </tbody>
-        </table></div>
-    </div>
+    <!-- Filtrlar -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label small text-muted mb-1">Qidirish</label>
+                <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+                       placeholder="Kod yoki nom...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Kategoriya</label>
+                <select name="category" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    {% for c in categories %}
+                        <option value="{{ c.id }}" {% if category_id == c.id|stringformat:"s" %}selected{% endif %}>
+                            {{ c.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Zaxira</label>
+                <select name="stock" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    <option value="zero" {% if stock_filter == 'zero' %}selected{% endif %}>Yo'q (0)</option>
+                    <option value="low" {% if stock_filter == 'low' %}selected{% endif %}>Past (1–3)</option>
+                    <option value="in_stock" {% if stock_filter == 'in_stock' %}selected{% endif %}>Borlar</option>
+                </select>
+            </div>
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-sm btn-primary flex-fill">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+                <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <form id="labelsForm" action="{% url 'labels' %}" method="get" target="_blank">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <button type="submit" class="btn btn-sm btn-outline-success" id="printBtn" disabled>
+                    <i class="bi bi-printer"></i> Etiketka chop etish
+                    (<span id="cnt">0</span>)
+                </button>
+                <input type="number" name="copies" value="6" min="1" max="50"
+                       class="form-control form-control-sm" style="width: 80px;">
+                <small class="text-muted">nusxa</small>
+            </div>
+            <small class="text-muted">Topildi: <strong>{{ products|length }}</strong></small>
+        </div>
+
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:32px;"><input type="checkbox" id="selAll" class="form-check-input"></th>
+                            <th>{% include "inventory/_sort_th.html" with field="code" label="Kod" %}</th>
+                            <th>{% include "inventory/_sort_th.html" with field="name" label="Nomi" %}</th>
+                            <th>Kategoriya</th>
+                            <th class="text-end">{% include "inventory/_sort_th.html" with field="stock" label="Zaxira" %}</th>
+                            <th class="text-end">30 kun</th>
+                            <th class="text-end">Yetadi</th>
+                            <th class="text-end">{% include "inventory/_sort_th.html" with field="price" label="Narx" %}</th>
+                            <th class="text-end">Marja</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for p in products %}
+                        <tr>
+                            <td><input type="checkbox" name="id" value="{{ p.id }}" class="form-check-input pick"></td>
+                            <td><code>{{ p.code }}</code></td>
+                            <td>
+                                <a href="{% url 'product_detail' p.code %}">
+                                    <strong>{{ p.name|truncatechars:35 }}</strong>
+                                </a>
+                            </td>
+                            <td>
+                                {% if p.category %}
+                                    <span class="badge bg-light text-dark">{{ p.category.name }}</span>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if p.total_stock == 0 %}
+                                    <span class="badge bg-danger">{{ p.total_stock }}</span>
+                                {% elif p.total_stock <= 3 %}
+                                    <span class="badge bg-warning text-dark">{{ p.total_stock }}</span>
+                                {% else %}
+                                    {{ p.total_stock }}
+                                {% endif %}
+                            </td>
+                            <td class="text-end small text-muted">
+                                {% if p.sold_30d %}{{ p.sold_30d }}{% else %}—{% endif %}
+                            </td>
+                            <td class="text-end small">
+                                {% if p.days_left is not None %}
+                                    <span class="text-{% if p.days_left < 7 %}danger{% elif p.days_left < 14 %}warning{% else %}muted{% endif %}">
+                                        {{ p.days_left|floatformat:0 }} kun
+                                    </span>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="text-end">{{ p.default_sale_price|som }}</td>
+                            <td class="text-end small">
+                                {% if p.margin_percent %}
+                                    <span class="text-{% if p.margin_percent < 10 %}danger{% elif p.margin_percent < 25 %}warning{% else %}success{% endif %}">
+                                        {{ p.margin_percent|floatformat:0 }}%
+                                    </span>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'product_detail' p.code %}" class="btn btn-outline-primary" title="Batafsil">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'intake_for_product' p.code %}" class="btn btn-outline-success" title="Qabul">
+                                        <i class="bi bi-truck"></i>
+                                    </a>
+                                    <a href="{% url 'product_label' p.code %}" target="_blank" class="btn btn-outline-secondary" title="Etiketka">
+                                        <i class="bi bi-printer"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="10" class="text-center text-muted py-4">
+                            Mahsulot topilmadi. <a href="{% url 'product_create' %}">Yangi qo'shish</a>
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </form>
 </div>
 
@@ -103,10 +162,7 @@
     const picks = document.querySelectorAll('.pick');
     const cnt = document.getElementById('cnt');
     const btn = document.getElementById('printBtn');
-    if (!selAll || !cnt || !btn) {
-        console.warn('Srote: labelsForm elements missing', {selAll, cnt, btn});
-        return;
-    }
+    if (!selAll || !cnt || !btn) return;
     function refresh() {
         const n = document.querySelectorAll('.pick:checked').length;
         cnt.textContent = n;
@@ -118,7 +174,6 @@
     });
     picks.forEach(p => p.addEventListener('change', refresh));
     refresh();
-    console.log('Srote: product list ready,', picks.length, 'products');
 })();
 </script>
 {% endblock %}

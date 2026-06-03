@@ -36,6 +36,164 @@
             padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
         }
         .navbar-brand { font-weight: 700; letter-spacing: 0.3px; }
+
+        /* ====== Srote Navbar ====== */
+        .srote-nav {
+            background: linear-gradient(180deg, #1a1f2e 0%, #11151f 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            padding-top: 0.55rem;
+            padding-bottom: 0.55rem;
+        }
+        .srote-nav .navbar-toggler {
+            border-color: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+        .srote-nav .navbar-toggler-icon {
+            filter: invert(1) opacity(0.85);
+        }
+        .srote-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            font-size: 1.15rem;
+            color: #fff !important;
+            text-decoration: none;
+        }
+        .srote-brand .brand-logo {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.05rem;
+            box-shadow: 0 2px 6px rgba(25,135,84,0.35);
+        }
+        .srote-brand .brand-text {
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        /* Navlink + dropdown styling */
+        .srote-nav .nav-link {
+            color: rgba(255,255,255,0.78);
+            padding: 0.5rem 0.85rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .srote-nav .nav-link:hover,
+        .srote-nav .nav-link:focus {
+            color: #fff;
+            background: rgba(255,255,255,0.08);
+        }
+        .srote-nav .nav-link.show,
+        .srote-nav .nav-item.active .nav-link {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+        }
+        .srote-nav .dropdown-menu {
+            border: 1px solid rgba(0,0,0,0.06);
+            border-radius: 10px;
+            padding: 0.5rem;
+            margin-top: 0.35rem;
+            min-width: 220px;
+        }
+        .srote-nav .dropdown-menu .dropdown-item {
+            border-radius: 6px;
+            padding: 0.5rem 0.65rem;
+            font-size: 0.92rem;
+        }
+        .srote-nav .dropdown-menu .dropdown-item:hover {
+            background: rgba(13, 110, 253, 0.07);
+        }
+        .srote-nav .dropdown-menu .dropdown-header {
+            font-size: 0.7rem;
+            color: #6c757d;
+            letter-spacing: 0.5px;
+            padding: 0.4rem 0.65rem 0.2rem;
+        }
+
+        /* POS button — primary CTA */
+        .srote-pos-btn {
+            border-radius: 8px;
+            padding: 0.45rem 1rem;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(25,135,84,0.3);
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .srote-pos-btn:hover {
+            box-shadow: 0 3px 10px rgba(25,135,84,0.45);
+            transform: translateY(-1px);
+        }
+
+        /* Connection status badge */
+        .srote-status-badge {
+            border-radius: 999px;
+            padding: 0.35rem 0.7rem;
+            font-weight: 500;
+            font-size: 0.78rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            line-height: 1;
+        }
+
+        /* User avatar circle */
+        .srote-user-link {
+            color: rgba(255,255,255,0.85) !important;
+        }
+        .srote-user-link:hover { color: #fff !important; }
+        .srote-avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 5px rgba(13,110,253,0.35);
+            flex-shrink: 0;
+        }
+
+        /* Mobile collapse */
+        @media (max-width: 991.98px) {
+            .srote-nav .navbar-nav { padding-top: 0.5rem; }
+            .srote-nav .nav-link { padding: 0.65rem 0.85rem; }
+            .srote-nav .nav-item { margin-bottom: 2px; }
+            .srote-nav .dropdown-menu {
+                background: rgba(255,255,255,0.05);
+                border: none;
+                box-shadow: none;
+                margin: 0 0 0.5rem 0.5rem;
+            }
+            .srote-nav .dropdown-menu .dropdown-item {
+                color: rgba(255,255,255,0.82);
+            }
+            .srote-nav .dropdown-menu .dropdown-item:hover {
+                background: rgba(255,255,255,0.08);
+                color: #fff;
+            }
+            .srote-nav .dropdown-menu .dropdown-header {
+                color: rgba(255,255,255,0.5);
+            }
+            .srote-nav .dropdown-menu .dropdown-divider {
+                border-color: rgba(255,255,255,0.1);
+            }
+            .srote-user-link {
+                padding: 0.5rem 0.85rem;
+            }
+        }
+        /* ====== /Srote Navbar ====== */
         .card { border: none; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
         .stat-card { border-left: 4px solid #0d6efd; }
         .stat-card.green { border-left-color: #198754; }
@@ -105,92 +263,177 @@
 </div>
 
 {% if user.is_authenticated %}
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+<nav class="navbar navbar-expand-lg srote-nav mb-4">
     <div class="container-fluid">
-        <a class="navbar-brand" href="{% url 'home' %}">
-            <i class="bi bi-shop"></i> Srote
+        <a class="navbar-brand srote-brand" href="{% url 'home' %}">
+            <span class="brand-logo">
+                <i class="bi bi-shop"></i>
+            </span>
+            <span class="brand-text">Srote</span>
         </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+
+        <!-- POS — always visible primary CTA on mobile too -->
+        <a class="btn btn-success btn-sm srote-pos-btn d-lg-none ms-2"
+           href="{% url 'pos_terminal' %}">
+            <i class="bi bi-upc-scan"></i> POS
+        </a>
+
+        <button class="navbar-toggler ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
             <span class="navbar-toggler-icon"></span>
         </button>
+
         <div class="collapse navbar-collapse" id="nav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" href="{% url 'pos_terminal' %}">
-                    <i class="bi bi-upc-scan"></i> POS
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'lookup' %}">
-                    <i class="bi bi-search"></i> Qidirish
-                </a></li>
+            <ul class="navbar-nav me-auto align-items-lg-center">
+                <!-- POS prominent button (desktop) -->
+                <li class="nav-item d-none d-lg-block me-2">
+                    <a class="btn btn-success srote-pos-btn"
+                       href="{% url 'pos_terminal' %}">
+                        <i class="bi bi-upc-scan"></i> <strong>POS</strong>
+                    </a>
+                </li>
+
                 {% if user.is_admin %}
-                <li class="nav-item"><a class="nav-link" href="{% url 'dashboard' %}">
-                    <i class="bi bi-speedometer2"></i> Boshqaruv
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'product_list' %}">
-                    <i class="bi bi-box"></i> Mahsulotlar
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'intake_new' %}">
-                    <i class="bi bi-box-arrow-in-down"></i> Qabul
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'sales_list' %}">
-                    <i class="bi bi-receipt"></i> Sotuvlar
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'shift_list' %}">
-                    <i class="bi bi-clipboard-check"></i> Smenlar
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'transfer_list' %}">
-                    <i class="bi bi-arrow-left-right"></i> Ko'chirish
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'stocktake_list' %}">
-                    <i class="bi bi-clipboard-data"></i> Inventarizatsiya
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'insights' %}">
-                    <i class="bi bi-graph-up-arrow"></i> Tahlil
-                </a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'reports' %}">
-                    <i class="bi bi-file-earmark-bar-graph"></i> Hisobotlar
-                </a></li>
+                <!-- Boshqaruv (Dashboard) — direct link -->
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'dashboard' %}">
+                        <i class="bi bi-speedometer2"></i> Boshqaruv
+                    </a>
+                </li>
+
+                <!-- Qidirish -->
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lookup' %}">
+                        <i class="bi bi-search"></i> Qidirish
+                    </a>
+                </li>
+
+                <!-- Sotuv guruhi -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
+                        <i class="bi bi-cart-check"></i> Sotuv
+                    </a>
+                    <ul class="dropdown-menu shadow">
+                        <li><a class="dropdown-item" href="{% url 'sales_list' %}">
+                            <i class="bi bi-receipt me-1 text-success"></i> Sotuvlar tarixi</a></li>
+                        <li><a class="dropdown-item" href="{% url 'shift_list' %}">
+                            <i class="bi bi-clipboard-check me-1 text-primary"></i> Smenlar</a></li>
+                    </ul>
+                </li>
+
+                <!-- Ombor guruhi -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
+                        <i class="bi bi-box-seam"></i> Ombor
+                    </a>
+                    <ul class="dropdown-menu shadow">
+                        <li><a class="dropdown-item" href="{% url 'product_list' %}">
+                            <i class="bi bi-box me-1 text-primary"></i> Mahsulotlar</a></li>
+                        <li><a class="dropdown-item" href="{% url 'intake_new' %}">
+                            <i class="bi bi-box-arrow-in-down me-1 text-success"></i> Qabul</a></li>
+                        <li><a class="dropdown-item" href="{% url 'intake_quick' %}">
+                            <i class="bi bi-lightning-charge me-1 text-warning"></i>
+                            <small>↳ Tezkor qabul</small></a></li>
+                        <li><a class="dropdown-item" href="{% url 'transfer_list' %}">
+                            <i class="bi bi-arrow-left-right me-1 text-info"></i> Ko'chirish</a></li>
+                        <li><a class="dropdown-item" href="{% url 'stocktake_list' %}">
+                            <i class="bi bi-clipboard-data me-1 text-secondary"></i> Inventarizatsiya</a></li>
+                    </ul>
+                </li>
+
+                <!-- Hisobot guruhi -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
+                        <i class="bi bi-graph-up"></i> Hisobot
+                    </a>
+                    <ul class="dropdown-menu shadow">
+                        <li><a class="dropdown-item" href="{% url 'insights' %}">
+                            <i class="bi bi-graph-up-arrow me-1 text-primary"></i> Tahlil (Insights)</a></li>
+                        <li><a class="dropdown-item" href="{% url 'reports' %}">
+                            <i class="bi bi-file-earmark-bar-graph me-1 text-success"></i> Hisobotlar</a></li>
+                    </ul>
+                </li>
+
+                <!-- Boshqarish guruhi -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
                         <i class="bi bi-gear"></i> Boshqarish
                     </a>
-                    <ul class="dropdown-menu">
+                    <ul class="dropdown-menu shadow">
+                        <li class="dropdown-header small text-uppercase">Direktoriyalar</li>
                         <li><a class="dropdown-item" href="{% url 'branch_list' %}">
-                            <i class="bi bi-building"></i> Filiallar</a></li>
+                            <i class="bi bi-building me-1 text-primary"></i> Filiallar</a></li>
                         <li><a class="dropdown-item" href="{% url 'user_list' %}">
-                            <i class="bi bi-people"></i> Foydalanuvchilar</a></li>
+                            <i class="bi bi-people me-1 text-info"></i> Foydalanuvchilar</a></li>
                         <li><a class="dropdown-item" href="{% url 'customer_list' %}">
-                            <i class="bi bi-person-rolodex"></i> Mijozlar</a></li>
+                            <i class="bi bi-person-rolodex me-1 text-success"></i> Mijozlar</a></li>
+                        <li><a class="dropdown-item" href="{% url 'supplier_list' %}">
+                            <i class="bi bi-truck me-1 text-warning"></i> Yetkazib beruvchilar</a></li>
                         <li><a class="dropdown-item" href="{% url 'category_list' %}">
-                            <i class="bi bi-tags"></i> Kategoriyalar</a></li>
+                            <i class="bi bi-tags me-1 text-secondary"></i> Kategoriyalar</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li class="dropdown-header small text-uppercase">To'lov</li>
                         <li><a class="dropdown-item" href="{% url 'payment_qr_list' %}">
-                            <i class="bi bi-qr-code"></i> To'lov QR'lari</a></li>
+                            <i class="bi bi-qr-code me-1 text-dark"></i> To'lov QR'lari</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{% url 'audit_list' %}">
-                            <i class="bi bi-clipboard-data"></i> Audit log</a></li>
+                            <i class="bi bi-clipboard-data me-1 text-muted"></i> Audit log</a></li>
                     </ul>
+                </li>
+                {% else %}
+                <!-- Sotuvchi (non-admin) — faqat asosiy linklar -->
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'lookup' %}">
+                        <i class="bi bi-search"></i> Qidirish
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'shift_list' %}">
+                        <i class="bi bi-clipboard-check"></i> Mening smenlar
+                    </a>
                 </li>
                 {% endif %}
             </ul>
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <span id="connStatus" class="badge bg-secondary me-2"
+
+            <!-- O'ng tomon: status + user dropdown -->
+            <ul class="navbar-nav align-items-lg-center">
+                <li class="nav-item d-flex align-items-center me-2">
+                    <span id="connStatus" class="badge srote-status-badge bg-secondary"
                           title="Internet holati">
-                        <i class="bi bi-wifi"></i> <span id="connStatusText">…</span>
+                        <i class="bi bi-wifi"></i>
+                        <span id="connStatusText">…</span>
                     </span>
                 </li>
-                <li class="nav-item">
-                    <span class="navbar-text me-3">
-                        <i class="bi bi-person-circle"></i>
-                        {{ user.username }}
-                        <span class="badge bg-{% if user.is_admin %}danger{% else %}info{% endif %}">
-                            {% if user.is_admin %}Admin{% else %}Sotuvchi{% endif %}
-                        </span>
-                    </span>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{% url 'logout' %}">
-                        <i class="bi bi-box-arrow-right"></i> Chiqish
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center srote-user-link"
+                       data-bs-toggle="dropdown" href="#">
+                        <span class="srote-avatar">{{ user.username|slice:":1"|upper }}</span>
+                        <span class="d-none d-lg-inline ms-2">{{ user.username }}</span>
                     </a>
+                    <ul class="dropdown-menu dropdown-menu-end shadow">
+                        <li class="px-3 py-2">
+                            <div class="d-flex align-items-center">
+                                <span class="srote-avatar me-2">{{ user.username|slice:":1"|upper }}</span>
+                                <div>
+                                    <div class="fw-bold">{{ user.username }}</div>
+                                    <span class="badge bg-{% if user.is_admin %}danger{% else %}info{% endif %} small">
+                                        {% if user.is_admin %}Administrator{% else %}Sotuvchi{% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% if user.branch %}
+                        <li>
+                            <div class="dropdown-item-text small text-muted">
+                                <i class="bi bi-building"></i> {{ user.branch.name }}
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% endif %}
+                        <li><a class="dropdown-item" href="{% url 'logout' %}">
+                            <i class="bi bi-box-arrow-right text-danger"></i> Chiqish
+                        </a></li>
+                    </ul>
                 </li>
             </ul>
         </div>
@@ -257,13 +500,13 @@ if ('serviceWorker' in navigator) {
         if (statusBadge && statusText) {
             const icon = statusBadge.querySelector('i');
             if (online) {
-                statusBadge.className = 'badge bg-success me-2';
+                statusBadge.className = 'badge srote-status-badge bg-success';
                 if (icon) icon.className = 'bi bi-wifi';
                 statusText.textContent = pendingCount
                     ? `Online · ${pendingCount} navbatda`
                     : 'Online';
             } else {
-                statusBadge.className = 'badge bg-warning text-dark me-2';
+                statusBadge.className = 'badge srote-status-badge bg-warning text-dark';
                 if (icon) icon.className = 'bi bi-wifi-off';
                 statusText.textContent = pendingCount
                     ? `Offline · ${pendingCount} navbatda`

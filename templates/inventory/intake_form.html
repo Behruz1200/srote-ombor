@@ -5,11 +5,34 @@
 
 {% block content %}
 <div class="container">
-    <h3 class="mb-1"><i class="bi bi-box-arrow-in-down"></i> Yangi qabul (matritsa)</h3>
-    <p class="text-muted">
-        Mahsulot: <strong>{{ product.name }}</strong>
-        <span class="code-pill">{{ product.code }}</span>
-    </p>
+    <div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-grid-3x3"></i> Matritsa qabul</h3>
+            <p class="text-muted mb-0">
+                Mahsulot: <strong>{{ product.name }}</strong>
+                <span class="code-pill">{{ product.code }}</span>
+            </p>
+        </div>
+        <a href="{% url 'intake_quick' %}" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-lightning-charge"></i> Tezkor rejimga o'tish
+        </a>
+    </div>
+
+    {% if last_intakes %}
+    <div class="card p-2 mb-3 bg-light">
+        <div class="small">
+            <i class="bi bi-clock-history"></i>
+            <strong>Tannarx tarixi:</strong>
+            {% for i in last_intakes %}
+                <span class="badge bg-white text-dark border me-1"
+                      title="{{ i.received_at|date:'d.m.Y' }} · {{ i.branch.name }}{% if i.supplier_ref %} · {{ i.supplier_ref.name }}{% elif i.supplier %} · {{ i.supplier }}{% endif %}">
+                    {{ i.cost_per_unit|floatformat:0 }} so'm
+                    <small class="text-muted">({{ i.received_at|date:"d.m" }})</small>
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     <form method="post" id="intakeForm">
         {% csrf_token %}
@@ -28,7 +51,13 @@
                 <div class="col-md-6">
                     <label class="form-label">Yetkazib beruvchi</label>
                     <input type="text" name="supplier" class="form-control"
-                           placeholder="Masalan: Chorsu Bozori">
+                           list="supplierOptions"
+                           placeholder="Boshlang yozishni — avtomatik to'ldiriladi">
+                    <datalist id="supplierOptions">
+                        {% for s in suppliers %}
+                            <option value="{{ s.name }}">{% if s.phone %}{{ s.phone }}{% endif %}</option>
+                        {% endfor %}
+                    </datalist>
                 </div>
 
                 <div class="col-md-4">
