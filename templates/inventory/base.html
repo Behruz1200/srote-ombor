@@ -96,6 +96,14 @@
     </style>
 </head>
 <body>
+<!-- Offline banner: faqat internet uzilganda chiqadi -->
+<div id="offlineBanner" class="alert alert-warning rounded-0 mb-0 py-2 text-center"
+     style="display:none; position: sticky; top: 0; z-index: 1050;">
+    <i class="bi bi-wifi-off"></i>
+    <strong>Offline rejim</strong> — internet yo'q.
+    <span id="offlineQueueInfo"></span>
+</div>
+
 {% if user.is_authenticated %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
     <div class="container-fluid">
@@ -221,6 +229,30 @@ if ('serviceWorker' in navigator) {
             .catch(err => console.warn('Srote PWA: SW registration failed', err));
     });
 }
+
+// Offline banner — boshqa offline mantiq (POS queue) o'zlarini ulashadi
+// `srote:queue-changed` custom event orqali.
+(function() {
+    const banner = document.getElementById('offlineBanner');
+    if (!banner) return;
+    const info = document.getElementById('offlineQueueInfo');
+    let pendingCount = 0;
+    function render() {
+        banner.style.display = navigator.onLine ? 'none' : '';
+        if (info) {
+            info.textContent = pendingCount
+                ? `${pendingCount} ta sotuv onlayn'ga sync kutmoqda.`
+                : 'Onlayn bo\'lganda sotuvlar avtomatik yuboriladi.';
+        }
+    }
+    window.addEventListener('online', render);
+    window.addEventListener('offline', render);
+    window.addEventListener('srote:queue-changed', (e) => {
+        pendingCount = e.detail?.count || 0;
+        render();
+    });
+    render();
+})();
 
 // iOS Safari install hint (Safari doesn't support beforeinstallprompt)
 (function() {

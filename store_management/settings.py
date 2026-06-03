@@ -61,6 +61,14 @@ TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')
 # See inventory/fiscal.py for setup steps.
 FISCAL_PROVIDER = os.environ.get('FISCAL_PROVIDER', '')
 
+# ---------- SMS receipt (optional) ----------
+# Empty / 'noop' = SMS yuborilmaydi (faqat log'ga yoziladi).
+# 'eskiz' = EskizProvider (ESKIZ_EMAIL / ESKIZ_PASSWORD env kerak).
+# See inventory/sms.py.
+SMS_PROVIDER = os.environ.get('SMS_PROVIDER', '')
+ESKIZ_EMAIL = os.environ.get('ESKIZ_EMAIL', '')
+ESKIZ_PASSWORD = os.environ.get('ESKIZ_PASSWORD', '')
+
 
 # ---------- CSRF ----------
 CSRF_TRUSTED_ORIGINS = [

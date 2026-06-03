@@ -3,7 +3,16 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     User, Branch, Category, Product, ProductVariant,
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
+    ParkedSale,
 )
+
+
+@admin.register(ParkedSale)
+class ParkedSaleAdmin(admin.ModelAdmin):
+    list_display = ('id', 'label', 'branch', 'parked_by', 'created_at')
+    list_filter = ('branch',)
+    search_fields = ('label', 'customer_name', 'customer_phone')
+    readonly_fields = ('cart_json', 'created_at')
 
 
 @admin.register(Customer)

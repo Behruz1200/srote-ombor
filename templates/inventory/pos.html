@@ -73,6 +73,37 @@
                 </div>
             </div>
 
+            {% if favorites %}
+            <div class="card p-3 mb-3" id="favoritesCard">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0 text-uppercase small text-muted">
+                        <i class="bi bi-star-fill text-warning"></i>
+                        Tez sotiluvchilar
+                        <span class="text-muted ms-1">(so'nggi 30 kun)</span>
+                    </h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            id="favToggleBtn" aria-expanded="true">
+                        <i class="bi bi-chevron-up" id="favToggleIcon"></i>
+                    </button>
+                </div>
+                <div id="favoritesBody" class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2">
+                    {% for f in favorites %}
+                        <div class="col">
+                            <button type="button" class="btn btn-outline-primary w-100 h-100 fav-btn p-2 text-start"
+                                    data-code="{{ f.code }}"
+                                    title="{{ f.name }} ({{ f.sold_qty }} ta sotilgan)">
+                                <div class="fw-bold text-truncate" style="font-size: 0.85rem;">{{ f.name }}</div>
+                                <div class="small text-muted">
+                                    <code>{{ f.code }}</code>
+                                </div>
+                                <div class="small fw-bold text-primary">{{ f.price|floatformat:0 }} so'm</div>
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="card p-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h5 class="mb-0">Savat</h5>
@@ -104,6 +135,23 @@
 
         <!-- RIGHT: total + payment + checkout -->
         <div class="col-lg-4">
+            <div class="card p-3 mb-3">
+                <label class="form-label small text-uppercase">Narx turi</label>
+                <div class="btn-group w-100" role="group" id="priceModeToggle">
+                    <input type="radio" class="btn-check" name="priceMode" id="priceModeRetail" value="retail" checked>
+                    <label class="btn btn-outline-primary" for="priceModeRetail">
+                        <i class="bi bi-shop"></i> Chakana
+                    </label>
+                    <input type="radio" class="btn-check" name="priceMode" id="priceModeWholesale" value="wholesale">
+                    <label class="btn btn-outline-warning" for="priceModeWholesale">
+                        <i class="bi bi-boxes"></i> Ulgurji
+                    </label>
+                </div>
+                <div class="small text-muted mt-1" id="priceModeHint" style="display:none;">
+                    Ulgurji rejim: yangi qatorlar ulgurji narxda qo'shiladi
+                </div>
+            </div>
+
             <div class="card p-3 mb-3" id="totalCard">
                 <div class="d-flex justify-content-between small text-muted">
                     <span>Oraliq summa:</span>
@@ -157,15 +205,49 @@
                 <label class="form-label small text-uppercase">Mijoz (ixtiyoriy)</label>
                 <input type="text" id="customerName" class="form-control form-control-sm mb-2"
                        placeholder="Ism">
-                <input type="tel" id="customerPhone" class="form-control form-control-sm"
+                <input type="tel" id="customerPhone" class="form-control form-control-sm mb-2"
                        placeholder="+998 ...">
+                <div class="form-check">
+                    <input type="checkbox" id="sendSmsCheckbox" class="form-check-input">
+                    <label class="form-check-label small" for="sendSmsCheckbox">
+                        <i class="bi bi-chat-dots"></i> Chek SMS yuborish
+                    </label>
+                </div>
             </div>
 
             <button type="button" class="btn btn-success btn-lg w-100" id="checkoutBtn" disabled>
                 <i class="bi bi-check2-circle"></i> SOTUVNI YAKUNLASH
             </button>
 
+            <button type="button" class="btn btn-outline-warning w-100 mt-2" id="parkBtn" disabled>
+                <i class="bi bi-pause-circle"></i> Savatni saqlab qo'yish
+            </button>
+
             <div id="checkoutStatus" class="small text-center mt-2"></div>
+        </div>
+    </div>
+
+    <!-- Parked sales -->
+    <div class="card p-3 mt-3 {% if not parked_sales %}d-none{% endif %}" id="parkedCard">
+        <h6 class="text-muted text-uppercase small mb-2">
+            <i class="bi bi-pause-circle"></i> Saqlangan savatlar
+            <span class="text-muted ms-1">(boshqa kassirlar ham ko'radi)</span>
+        </h6>
+        <div id="parkedList" class="d-flex flex-wrap gap-2">
+            {% for p in parked_sales %}
+                <div class="btn-group btn-group-sm parked-item" data-id="{{ p.pk }}">
+                    <button type="button" class="btn btn-outline-warning parked-resume"
+                            title="{{ p.parked_by.username }} · {{ p.created_at|date:'H:i' }}">
+                        <i class="bi bi-play-fill"></i>
+                        <strong>{{ p.label }}</strong>
+                        <span class="text-muted small">· {{ p.created_at|date:'H:i' }}</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger parked-delete"
+                            title="O'chirish">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            {% endfor %}
         </div>
     </div>
 
@@ -222,6 +304,9 @@ const cartCountEl    = document.getElementById('cartItemCount');
 const checkoutBtn    = document.getElementById('checkoutBtn');
 const checkoutStatus = document.getElementById('checkoutStatus');
 const clearCartBtn   = document.getElementById('clearCartBtn');
+const parkBtn        = document.getElementById('parkBtn');
+const parkedCard     = document.getElementById('parkedCard');
+const parkedList     = document.getElementById('parkedList');
 
 // cart state: stockId -> { stock_id, product_code, product_name, size, color, qty, sale_price, max }
 let cart = {};
@@ -318,6 +403,18 @@ async function search(q) {
     refocus();
 }
 
+function currentPriceMode() {
+    const r = document.querySelector('input[name="priceMode"]:checked');
+    return r ? r.value : 'retail';
+}
+
+function priceForVariant(variant) {
+    if (currentPriceMode() === 'wholesale' && variant.wholesale_price > 0) {
+        return variant.wholesale_price;
+    }
+    return variant.sale_price;
+}
+
 function addToCart(product, variant) {
     const key = variant.stock_id;
     if (cart[key]) {
@@ -331,7 +428,7 @@ function addToCart(product, variant) {
             size: variant.size,
             color: variant.color,
             qty: 1,
-            sale_price: variant.sale_price,
+            sale_price: priceForVariant(variant),
             max: variant.stock_count,
         };
     }
@@ -345,6 +442,7 @@ function renderCart() {
         cartTotalEl.textContent = '0';
         cartCountEl.textContent = '0';
         checkoutBtn.disabled = true;
+        parkBtn.disabled = true;
         clearCartBtn.style.display = 'none';
         return;
     }
@@ -400,6 +498,7 @@ function renderCart() {
     cartTotalEl.textContent = fmt(total);
     cartCountEl.textContent = count;
     checkoutBtn.disabled = false;
+    parkBtn.disabled = false;
     clearCartBtn.style.display = 'inline-block';
 }
 
@@ -460,26 +559,136 @@ scanInput.addEventListener('input', () => {
     }, 350);
 });
 
+// ---- Offline checkout queue (IndexedDB) ----
+// When the browser is offline (or the network call throws), we stash the
+// checkout payload locally and replay it as soon as we're online again.
+const QUEUE_DB = 'srote-pos';
+const QUEUE_STORE = 'checkout-queue';
+
+function openQueueDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(QUEUE_DB, 1);
+        req.onupgradeneeded = () => {
+            req.result.createObjectStore(QUEUE_STORE, {keyPath: 'id', autoIncrement: true});
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function queuePut(payload) {
+    const db = await openQueueDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(QUEUE_STORE, 'readwrite');
+        const req = tx.objectStore(QUEUE_STORE).add({payload, queued_at: Date.now()});
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function queueList() {
+    const db = await openQueueDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(QUEUE_STORE, 'readonly');
+        const req = tx.objectStore(QUEUE_STORE).getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function queueDelete(id) {
+    const db = await openQueueDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(QUEUE_STORE, 'readwrite');
+        const req = tx.objectStore(QUEUE_STORE).delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+async function broadcastQueueCount() {
+    const items = await queueList().catch(() => []);
+    window.dispatchEvent(new CustomEvent('srote:queue-changed',
+        {detail: {count: items.length}}));
+    return items.length;
+}
+async function flushQueue() {
+    if (!navigator.onLine) return;
+    const items = await queueList().catch(() => []);
+    for (const item of items) {
+        try {
+            const resp = await fetch('/pos/checkout/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+                body: JSON.stringify(item.payload),
+            });
+            const data = await resp.json();
+            if (data && data.ok) {
+                await queueDelete(item.id);
+            } else if (data && data.error) {
+                // Server rejected (e.g. stock conflict) — drop from queue
+                // so we don't get stuck retrying. Tell the user.
+                await queueDelete(item.id);
+                checkoutStatus.innerHTML = `<span class="text-warning">
+                    ⚠ Saqlangan sotuv rad etildi: ${data.error}</span>`;
+            }
+        } catch (e) {
+            break; // still offline / server unreachable, stop trying
+        }
+    }
+    broadcastQueueCount();
+}
+window.addEventListener('online', flushQueue);
+broadcastQueueCount();
+if (navigator.onLine) flushQueue();
+
 // Checkout
 checkoutBtn.addEventListener('click', async () => {
     const lines = Object.values(cart).map(it => ({
         stock_id: it.stock_id, qty: it.qty, sale_price: it.sale_price,
     }));
     if (lines.length === 0) return;
+    const payload = {
+        lines,
+        payment_method: document.getElementById('paymentMethod').value,
+        customer_name: document.getElementById('customerName').value,
+        customer_phone: document.getElementById('customerPhone').value,
+        order_discount: parseFloat(orderDiscountInput.value || '0'),
+        discount_reason: discountReasonInput.value,
+        send_sms: document.getElementById('sendSmsCheckbox').checked,
+    };
     checkoutBtn.disabled = true;
     checkoutStatus.textContent = 'Saqlanmoqda...';
+
+    async function queueOffline(reason) {
+        try {
+            await queuePut(payload);
+            await broadcastQueueCount();
+            checkoutStatus.innerHTML = `<span class="text-warning">
+                📥 Offline: sotuv navbatga olindi, onlayn'da yuboriladi (${reason})</span>`;
+            cart = {};
+            renderCart();
+            document.getElementById('customerName').value = '';
+            document.getElementById('customerPhone').value = '';
+            orderDiscountInput.value = '';
+            discountReasonInput.value = '';
+            scanInput.value = '';
+            setStatus('', '');
+            hideExtras();
+        } catch (e) {
+            checkoutStatus.innerHTML = `<span class="text-danger">
+                Navbatga saqlab bo'lmadi: ${e.message}</span>`;
+            checkoutBtn.disabled = false;
+        }
+    }
+
+    if (!navigator.onLine) {
+        await queueOffline('internet yo\'q');
+        refocus();
+        return;
+    }
+
     try {
         const resp = await fetch('/pos/checkout/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-            body: JSON.stringify({
-                lines,
-                payment_method: document.getElementById('paymentMethod').value,
-                customer_name: document.getElementById('customerName').value,
-                customer_phone: document.getElementById('customerPhone').value,
-                order_discount: parseFloat(orderDiscountInput.value || '0'),
-                discount_reason: discountReasonInput.value,
-            }),
+            body: JSON.stringify(payload),
         });
         const data = await resp.json();
         if (!data.ok) {
@@ -502,11 +711,164 @@ checkoutBtn.addEventListener('click', async () => {
         // Reload after short delay to refresh recent_txns list
         setTimeout(() => location.reload(), 1500);
     } catch (e) {
-        checkoutStatus.innerHTML = `<span class="text-danger">Tarmoq xatosi: ${e.message}</span>`;
-        checkoutBtn.disabled = false;
+        // Network error — queue instead of failing the cashier
+        await queueOffline('tarmoq xatosi');
     }
     refocus();
 });
+
+// ---- Price mode (retail/wholesale) ----
+document.querySelectorAll('input[name="priceMode"]').forEach(r => {
+    r.addEventListener('change', () => {
+        const isWholesale = currentPriceMode() === 'wholesale';
+        document.getElementById('priceModeHint').style.display = isWholesale ? 'block' : 'none';
+    });
+});
+
+// ---- Park / hold sale ----
+// Park snapshot includes the full cart object so resume can restore size/color/max
+// without re-querying the server.
+parkBtn.addEventListener('click', async () => {
+    const items = Object.values(cart);
+    if (!items.length) return;
+    const defaultLabel = document.getElementById('customerName').value.trim()
+        || `Savat ${new Date().toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'})}`;
+    const label = prompt('Saqlash yorlig\'i (mijoz ismi yoki belgi):', defaultLabel);
+    if (label === null) return;
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    parkBtn.disabled = true;
+    try {
+        const resp = await fetch('/pos/park/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({
+                label: trimmed,
+                lines: items,
+                customer_name: document.getElementById('customerName').value,
+                customer_phone: document.getElementById('customerPhone').value,
+                order_discount: parseFloat(orderDiscountInput.value || '0'),
+                discount_reason: discountReasonInput.value,
+            }),
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+            setStatus(data.error || 'Saqlanmadi', 'error');
+            parkBtn.disabled = false;
+            return;
+        }
+        addParkedChip(data.id, trimmed);
+        cart = {};
+        renderCart();
+        document.getElementById('customerName').value = '';
+        document.getElementById('customerPhone').value = '';
+        orderDiscountInput.value = '';
+        discountReasonInput.value = '';
+        setStatus(`✓ Saqlandi: ${trimmed}`, 'success');
+    } catch (e) {
+        setStatus('Tarmoq xatosi: ' + e.message, 'error');
+        parkBtn.disabled = false;
+    }
+    refocus();
+});
+
+function addParkedChip(id, label) {
+    parkedCard.classList.remove('d-none');
+    const now = new Date();
+    const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'btn-group btn-group-sm parked-item';
+    wrap.dataset.id = id;
+    wrap.innerHTML = `
+        <button type="button" class="btn btn-outline-warning parked-resume">
+            <i class="bi bi-play-fill"></i>
+            <strong></strong>
+            <span class="text-muted small"></span>
+        </button>
+        <button type="button" class="btn btn-outline-danger parked-delete"
+                title="O'chirish"><i class="bi bi-x"></i></button>
+    `;
+    wrap.querySelector('strong').textContent = label;
+    wrap.querySelector('span').textContent = `· ${hhmm}`;
+    wireParkedChip(wrap);
+    parkedList.prepend(wrap);
+}
+
+function wireParkedChip(chip) {
+    const id = chip.dataset.id;
+    chip.querySelector('.parked-resume').addEventListener('click', async () => {
+        if (Object.keys(cart).length > 0 &&
+            !confirm('Joriy savat almashtiriladi. Davom etamizmi?')) return;
+        try {
+            const resp = await fetch(`/pos/parked/${id}/resume/`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': CSRF},
+            });
+            const data = await resp.json();
+            if (!data.ok) { setStatus(data.error || 'Topilmadi', 'error'); return; }
+            cart = {};
+            for (const it of (data.lines || [])) {
+                cart[it.stock_id] = it;
+            }
+            document.getElementById('customerName').value = data.customer_name || '';
+            document.getElementById('customerPhone').value = data.customer_phone || '';
+            orderDiscountInput.value = data.order_discount || '';
+            discountReasonInput.value = data.discount_reason || '';
+            renderCart();
+            chip.remove();
+            if (!parkedList.children.length) parkedCard.classList.add('d-none');
+            setStatus('✓ Savat qaytarildi', 'success');
+        } catch (e) {
+            setStatus('Tarmoq xatosi: ' + e.message, 'error');
+        }
+        refocus();
+    });
+    chip.querySelector('.parked-delete').addEventListener('click', async () => {
+        if (!confirm('Saqlangan savatni o\'chirish?')) return;
+        try {
+            await fetch(`/pos/parked/${id}/delete/`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': CSRF},
+            });
+            chip.remove();
+            if (!parkedList.children.length) parkedCard.classList.add('d-none');
+        } catch (e) {
+            setStatus('Tarmoq xatosi: ' + e.message, 'error');
+        }
+    });
+}
+document.querySelectorAll('.parked-item').forEach(wireParkedChip);
+
+// Favorites grid: clicking a tile reuses the search flow so variant-picker
+// behavior (single-variant auto-add, multi-variant picker) stays consistent.
+document.querySelectorAll('.fav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const code = btn.dataset.code;
+        if (!code) return;
+        scanInput.value = code;
+        search(code);
+    });
+});
+
+// Collapse toggle for the favorites grid — remembered per browser.
+const favBody = document.getElementById('favoritesBody');
+const favToggleBtn = document.getElementById('favToggleBtn');
+const favToggleIcon = document.getElementById('favToggleIcon');
+const FAV_KEY = 'pos_favorites_collapsed';
+function applyFavState(collapsed) {
+    if (!favBody) return;
+    favBody.style.display = collapsed ? 'none' : '';
+    favToggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    favToggleIcon.className = collapsed ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+}
+if (favToggleBtn) {
+    applyFavState(localStorage.getItem(FAV_KEY) === '1');
+    favToggleBtn.addEventListener('click', () => {
+        const collapsed = favBody.style.display !== 'none';
+        applyFavState(collapsed);
+        localStorage.setItem(FAV_KEY, collapsed ? '1' : '0');
+    });
+}
 
 // Refocus scanner input after clicks anywhere except other inputs
 document.addEventListener('click', (e) => {

@@ -43,10 +43,21 @@
                            value="{{ product.markup_percent|default:40 }}">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Sotuv narxi (so'm)</label>
+                    <label class="form-label">Chakana narx (so'm)</label>
                     <input type="number" name="sale_price" id="salePriceInput"
                            class="form-control" min="0" step="1"
                            placeholder="auto: tannarx × markup">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">
+                        Ulgurji narx (so'm)
+                        <i class="bi bi-info-circle text-muted"
+                           title="POS'da ulgurji rejimi tanlanganda ishlatiladi. Bo'sh qoldirsangiz chakana narx ishlatiladi."></i>
+                    </label>
+                    <input type="number" name="wholesale_price"
+                           class="form-control" min="0" step="1"
+                           placeholder="ixtiyoriy">
                 </div>
 
                 <div class="col-12">

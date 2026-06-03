@@ -25,7 +25,7 @@ from reportlab.platypus import (
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
-    Transfer, TransferLine, Stocktake, StocktakeCount,
+    Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale,
 )
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
@@ -320,6 +320,7 @@ def intake_for_product(request, code):
                 sale_price = Decimal(sale_price_raw)
             else:
                 sale_price = (cost * (1 + markup / 100)).quantize(Decimal('1'))
+            wholesale_price = Decimal(request.POST.get('wholesale_price') or '0')
 
             supplier = (request.POST.get('supplier') or '').strip()
             note = (request.POST.get('note') or '').strip()
@@ -351,11 +352,14 @@ def intake_for_product(request, code):
                     )
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
-                        defaults={'cost_price': cost, 'sale_price': sale_price},
+                        defaults={'cost_price': cost, 'sale_price': sale_price,
+                                  'wholesale_price': wholesale_price},
                     )
                     stock.stock_count = F('stock_count') + qty
                     stock.cost_price = cost
                     stock.sale_price = sale_price
+                    if wholesale_price > 0:
+                        stock.wholesale_price = wholesale_price
                     stock.save()
                     Intake.objects.create(
                         variant=variant, branch=branch,
@@ -792,14 +796,45 @@ def pos_terminal(request):
                    .prefetch_related('lines')
                    .order_by('-sold_at')[:5])
 
+    # Top 12 most-sold products in this branch over the last 30 days.
+    # Used to populate the "Tez sotiluvchilar" quick-tap grid on the POS.
+    since = timezone.now() - timedelta(days=30)
+    top_rows = (Sale.objects
+                .filter(branch=branch, sold_at__gte=since)
+                .values('variant__product')
+                .annotate(sold_qty=Sum('quantity'))
+                .order_by('-sold_qty')[:12])
+    top_ids = [r['variant__product'] for r in top_rows]
+    qty_by_id = {r['variant__product']: r['sold_qty'] for r in top_rows}
+    products_by_id = {p.id: p for p in Product.objects.filter(id__in=top_ids)}
+    favorites = []
+    for pid in top_ids:
+        p = products_by_id.get(pid)
+        if not p:
+            continue
+        favorites.append({
+            'code': p.code,
+            'name': p.name,
+            'price': float(p.default_sale_price),
+            'image': p.image.url if p.image else '',
+            'sold_qty': qty_by_id.get(pid, 0),
+        })
+
     branches_list = []
     if request.user.is_admin():
         branches_list = list(Branch.objects.filter(is_active=True).order_by('name'))
+
+    parked_sales = list(ParkedSale.objects
+                        .filter(branch=branch)
+                        .select_related('parked_by')
+                        .order_by('-created_at')[:20])
 
     return render(request, 'inventory/pos.html', {
         'branch': branch,
         'shift': open_shift,
         'recent_txns': recent_txns,
+        'favorites': favorites,
+        'parked_sales': parked_sales,
         'payment_methods': SaleTransaction.PaymentMethod.choices,
         'branches_list': branches_list,
     })
@@ -861,6 +896,7 @@ def pos_lookup(request):
         'color': s.variant.color,
         'stock_count': s.stock_count,
         'sale_price': float(s.sale_price or product.default_sale_price),
+        'wholesale_price': float(s.wholesale_price or 0),
         'cost_price': float(s.cost_price),
     } for s in stocks]
 
@@ -992,13 +1028,101 @@ def pos_checkout(request):
     from .fiscal import submit_for_transaction
     submit_for_transaction(txn)
 
+    # Best-effort SMS receipt (noop unless provider + opt-in)
+    sms_result = None
+    if data.get('send_sms') and customer_phone:
+        from .sms import send_receipt
+        sms_result = send_receipt(txn, customer_phone)
+
     return JsonResponse({
         'ok': True,
         'txn_id': txn.pk,
         'receipt_url': f'/transaction/{txn.pk}/?autoprint=1',
         'total': float(txn.total),
         'item_count': txn.item_count,
+        'sms': sms_result,
     })
+
+
+# ---------- POS PARK / HOLD ----------
+
+@login_required
+def pos_park(request):
+    """POST /pos/park/ — savatni vaqtincha saqlash.
+    Body JSON: {label, lines, customer_name, customer_phone, order_discount, discount_reason}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+
+    label = (data.get('label') or '').strip()[:80]
+    if not label:
+        return JsonResponse({'ok': False, 'error': 'yorliq kerak'}, status=400)
+    lines = data.get('lines') or []
+    if not lines:
+        return JsonResponse({'ok': False, 'error': 'savat bo\'sh'}, status=400)
+
+    try:
+        order_discount = max(0, float(data.get('order_discount') or 0))
+    except (ValueError, TypeError):
+        order_discount = 0
+
+    parked = ParkedSale.objects.create(
+        branch=branch,
+        parked_by=request.user,
+        label=label,
+        cart_json=_json.dumps(lines),
+        customer_name=(data.get('customer_name') or '').strip()[:120],
+        customer_phone=(data.get('customer_phone') or '').strip()[:30],
+        order_discount=order_discount,
+        discount_reason=(data.get('discount_reason') or '').strip()[:200],
+    )
+    return JsonResponse({'ok': True, 'id': parked.pk, 'label': parked.label})
+
+
+@login_required
+def pos_parked_resume(request, pk):
+    """POST /pos/parked/<pk>/resume/ — saqlangan savatni qaytarish va o'chirish."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    parked = ParkedSale.objects.filter(pk=pk, branch=branch).first()
+    if not parked:
+        return JsonResponse({'ok': False, 'error': 'topilmadi'}, status=404)
+    try:
+        lines = _json.loads(parked.cart_json)
+    except ValueError:
+        lines = []
+    payload = {
+        'ok': True,
+        'lines': lines,
+        'customer_name': parked.customer_name,
+        'customer_phone': parked.customer_phone,
+        'order_discount': float(parked.order_discount),
+        'discount_reason': parked.discount_reason,
+    }
+    parked.delete()
+    return JsonResponse(payload)
+
+
+@login_required
+def pos_parked_delete(request, pk):
+    """POST /pos/parked/<pk>/delete/ — saqlangan savatni o'chirish."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    deleted, _ = ParkedSale.objects.filter(pk=pk, branch=branch).delete()
+    return JsonResponse({'ok': bool(deleted)})
 
 
 # ---------- SALE ----------
@@ -1995,6 +2119,50 @@ def _insights_context(request):
         .select_related('variant__product', 'branch')[:20]
     )
 
+    # Qaytarilishlar: davr ichida eng ko'p qaytarilgan mahsulotlar.
+    # Sifat muammosi indikatori — agar % returned high bo'lsa, mahsulot
+    # tekshirilishi kerak (nuqson, o'lcham xato, va h.k.).
+    returns_qs = Return.objects.filter(
+        refunded_at__gte=dt_start, refunded_at__lt=dt_end,
+    )
+    if branch_id and selected_branch:
+        returns_qs = returns_qs.filter(sale__branch=selected_branch)
+    returns_total_qty = returns_qs.aggregate(s=Sum('quantity'))['s'] or 0
+    returns_total_amount = returns_qs.aggregate(
+        s=Sum(ExpressionWrapper(
+            F('quantity') * F('sale__sale_price'),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ))
+    )['s'] or 0
+    return_rate = (returns_total_qty / qty * 100) if qty else 0
+
+    top_returns_qs = (returns_qs
+        .values('sale__variant__product_id',
+                'sale__variant__product__code',
+                'sale__variant__product__name')
+        .annotate(qty_returned=Sum('quantity'))
+        .order_by('-qty_returned')[:10])
+    top_returns = []
+    for row in top_returns_qs:
+        pid = row['sale__variant__product_id']
+        sold = profit_by_product.get(pid, {}).get('qty', 0)
+        returned = row['qty_returned']
+        rate = (returned / sold * 100) if sold else 0
+        # Top reasons for this product
+        reasons = (returns_qs.filter(sale__variant__product_id=pid)
+                   .exclude(reason='')
+                   .values('reason')
+                   .annotate(n=Count('id'))
+                   .order_by('-n')[:3])
+        top_returns.append({
+            'code': row['sale__variant__product__code'],
+            'name': row['sale__variant__product__name'],
+            'returned': returned,
+            'sold': sold,
+            'rate': rate,
+            'reasons': [r['reason'] for r in reasons],
+        })
+
     # Foyda yuqori mahsulotlar (markup bo'yicha eng yuqori)
     high_margin = list(
         Product.objects.order_by('-markup_percent')[:8]
@@ -2038,6 +2206,10 @@ def _insights_context(request):
         'weekday_buckets': weekday_buckets,
         'out_of_stock': out_of_stock,
         'high_margin': high_margin,
+        'returns_total_qty': returns_total_qty,
+        'returns_total_amount': returns_total_amount,
+        'return_rate': return_rate,
+        'top_returns': top_returns,
     }
     return context
 

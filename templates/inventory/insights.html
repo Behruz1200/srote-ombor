@@ -354,6 +354,76 @@
     </div>
 
     <div class="card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="bi bi-arrow-counterclockwise text-warning"></i>
+                Qaytarilishlar tahlili
+                <small class="text-muted">— sifat muammosi indikator</small>
+            </h5>
+            <div class="text-end">
+                <div class="small text-muted">Jami qaytarilgan</div>
+                <div>
+                    <strong>{{ returns_total_qty }}</strong> dona
+                    {% if returns_total_amount %}
+                        · <strong>{{ returns_total_amount|som }}</strong> so'm
+                    {% endif %}
+                    {% if return_rate %}
+                        · <span class="badge bg-{% if return_rate > 5 %}danger{% elif return_rate > 2 %}warning{% else %}success{% endif %}">
+                            {{ return_rate|floatformat:1 }}% sotuvlardan
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Kod</th>
+                        <th>Mahsulot</th>
+                        <th class="text-end">Qaytarilgan</th>
+                        <th class="text-end">Sotilgan</th>
+                        <th class="text-end">Foiz</th>
+                        <th>Asosiy sabablar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in top_returns %}
+                    <tr>
+                        <td><a href="{% url 'product_detail' r.code %}"><code>{{ r.code }}</code></a></td>
+                        <td>{{ r.name|truncatechars:32 }}</td>
+                        <td class="text-end"><strong>{{ r.returned }}</strong></td>
+                        <td class="text-end text-muted">{{ r.sold }}</td>
+                        <td class="text-end">
+                            {% if r.sold %}
+                                <span class="badge bg-{% if r.rate > 20 %}danger{% elif r.rate > 10 %}warning{% else %}secondary{% endif %}">
+                                    {{ r.rate|floatformat:1 }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for reason in r.reasons %}
+                                <span class="badge bg-light text-dark border">{{ reason|truncatechars:30 }}</span>
+                            {% empty %}
+                                <span class="text-muted small">sabab kiritilmagan</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-success text-center py-3">
+                            <i class="bi bi-check-circle"></i> Bu davrda qaytarilishlar yo'q
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card p-3 mb-4">
         <h5><i class="bi bi-percent text-success"></i> Eng yuqori foiz markup'li mahsulotlar</h5>
         <div class="row g-2">
         {% for p in high_margin %}

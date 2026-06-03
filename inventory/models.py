@@ -173,7 +173,11 @@ class BranchStock(models.Model):
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0,
                                      help_text="Tannarx (1 dona, so'm)")
     sale_price = models.DecimalField(max_digits=12, decimal_places=2, default=0,
-                                     help_text="Sotuv narxi (1 dona, so'm)")
+                                     help_text="Chakana narx (1 dona, so'm)")
+    wholesale_price = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Ulgurji narx (1 dona, so'm). 0 bo'lsa chakana narx qo'llaniladi."
+    )
 
     @property
     def margin(self):
@@ -619,6 +623,28 @@ class Sale(models.Model):
         if hasattr(self, '_returned'):
             return self._returned
         return self.returns.aggregate(s=models.Sum('quantity'))['s'] or 0
+
+
+class ParkedSale(models.Model):
+    """Vaqtincha saqlangan (park qilingan) savat — kassir keyinroq davom ettiradi."""
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='parked_sales')
+    parked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                  related_name='parked_sales')
+    label = models.CharField(max_length=80, help_text="Mijoz ismi yoki belgi")
+    cart_json = models.TextField(help_text="Savat snapshoti (JSON)")
+    customer_name = models.CharField(max_length=120, blank=True)
+    customer_phone = models.CharField(max_length=30, blank=True)
+    order_discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_reason = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Park qilingan savat'
+        verbose_name_plural = 'Park qilingan savatlar'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'#{self.pk} {self.label} ({self.branch.name})'
 
 
 class Return(models.Model):

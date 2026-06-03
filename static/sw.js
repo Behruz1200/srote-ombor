@@ -4,7 +4,7 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'srote-v3';
+const CACHE_NAME = 'srote-v4';
 const STATIC_ASSETS = [
   '/static/img/icon-192.png',
   '/static/img/icon-512.png',
@@ -69,6 +69,24 @@ self.addEventListener('fetch', (event) => {
           }
           return resp;
         });
+      })
+    );
+    return;
+  }
+
+  // POS lookup: stale-while-revalidate — repeat searches work offline,
+  // online searches always refresh in background. Only the JSON GET endpoints.
+  if (url.pathname === '/pos/lookup/') {
+    event.respondWith(
+      caches.match(req).then((cached) => {
+        const network = fetch(req).then((resp) => {
+          if (resp && resp.ok) {
+            const respClone = resp.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, respClone));
+          }
+          return resp;
+        }).catch(() => cached);
+        return cached || network;
       })
     );
     return;
