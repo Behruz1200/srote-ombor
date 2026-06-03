@@ -1,0 +1,98 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Inv #{{ session.pk }} — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <a href="{% url 'stocktake_list' %}" class="btn btn-link p-0 mb-2">← Ro'yxat</a>
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Inventarizatsiya #{{ session.pk }}</h3>
+        <span class="badge fs-6 bg-{% if session.status == 'applied' %}success{% elif session.status == 'open' %}warning text-dark{% else %}secondary{% endif %}">
+            {{ session.get_status_display }}
+        </span>
+    </div>
+
+    <div class="card p-3 mb-3">
+        <div class="row small">
+            <div class="col-md-3">
+                <small class="text-muted">Filial</small><br>
+                <strong>{{ session.branch.name }}</strong>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted">Boshladi</small><br>
+                <strong>{{ session.started_by.username }}</strong> <br>
+                <small>{{ session.started_at|date:"d.m.Y H:i" }}</small>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted">Variantlar</small><br>
+                <strong>{{ counts|length }}</strong>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted">Farqlar</small><br>
+                <strong class="{% if diff_count > 0 %}text-danger{% endif %}">{{ diff_count }}</strong>
+            </div>
+        </div>
+        {% if session.note %}<p class="mt-2 mb-0"><strong>Izoh:</strong> {{ session.note }}</p>{% endif %}
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="card">
+            <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Kod</th><th>Mahsulot</th><th>O'lcham/Rang</th>
+                        <th class="text-end">Tizim</th>
+                        <th style="width:120px;">Sanalgan</th>
+                        <th class="text-end">Farq</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for c in counts %}
+                    <tr {% if c.diff != 0 %}class="table-warning"{% endif %}>
+                        <td><code>{{ c.variant.product.code }}</code></td>
+                        <td>{{ c.variant.product.name|truncatechars:30 }}</td>
+                        <td>{{ c.variant.size }} / {{ c.variant.color }}</td>
+                        <td class="text-end">{{ c.system_qty }}</td>
+                        <td>
+                            {% if session.status == 'open' %}
+                                <input type="number" name="count[{{ c.pk }}]"
+                                       value="{{ c.counted_qty }}" min="0"
+                                       class="form-control form-control-sm text-end">
+                            {% else %}
+                                <span>{{ c.counted_qty }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if c.diff > 0 %}
+                                <span class="text-success">+{{ c.diff }}</span>
+                            {% elif c.diff < 0 %}
+                                <span class="text-danger">{{ c.diff }}</span>
+                            {% else %}
+                                <span class="text-muted">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        {% if session.status == 'open' %}
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" name="action" value="save" class="btn btn-primary">
+                <i class="bi bi-save"></i> Hisoblanganlarni saqlash
+            </button>
+            <button type="submit" name="action" value="apply" class="btn btn-success"
+                    onclick="return confirm('Inventarizatsiyani tasdiqlash? Ombor yangilanadi.')">
+                <i class="bi bi-check2-circle"></i> Tasdiqlash (ombor yangilash)
+            </button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

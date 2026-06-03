@@ -12,6 +12,11 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('lookup/', views.lookup, name='lookup'),
 
+    # Stocktake (physical inventory count)
+    path('stocktake/', views.stocktake_list, name='stocktake_list'),
+    path('stocktake/new/', views.stocktake_create, name='stocktake_create'),
+    path('stocktake/<int:pk>/', views.stocktake_detail, name='stocktake_detail'),
+
     # Inter-branch stock transfers
     path('transfers/', views.transfer_list, name='transfer_list'),
     path('transfers/new/', views.transfer_create, name='transfer_create'),

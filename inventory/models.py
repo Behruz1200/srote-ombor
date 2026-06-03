@@ -391,6 +391,56 @@ class SaleTransaction(models.Model):
         return sum(s.quantity for s in self.lines.all())
 
 
+class Stocktake(models.Model):
+    """Inventarizatsiya sessiyasi — filialdagi tovarni jismonan sanab chiqish."""
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Sanalmoqda'
+        APPLIED = 'applied', 'Tasdiqlangan'
+        CANCELLED = 'cancelled', 'Bekor qilingan'
+
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='stocktakes')
+    started_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name='stocktakes_started')
+    started_at = models.DateTimeField(default=timezone.now)
+    applied_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='stocktakes_applied')
+    applied_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = 'Inventarizatsiya'
+        verbose_name_plural = 'Inventarizatsiyalar'
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f'Inv #{self.pk} — {self.branch.name} ({self.started_at:%d.%m %H:%M})'
+
+    def total_diff_qty(self):
+        return sum((c.counted_qty - c.system_qty) for c in self.counts.all())
+
+
+class StocktakeCount(models.Model):
+    """Bitta variant uchun sanab chiqilgan miqdor."""
+    session = models.ForeignKey(Stocktake, on_delete=models.CASCADE, related_name='counts')
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
+    system_qty = models.IntegerField(
+        help_text='Inventarizatsiya boshlangandagi tizim miqdori (snapshot)'
+    )
+    counted_qty = models.IntegerField(
+        help_text='Jismonan sanab chiqilgan miqdor'
+    )
+
+    class Meta:
+        unique_together = ('session', 'variant')
+        ordering = ['variant__product__code', 'variant__size']
+
+    @property
+    def diff(self):
+        return self.counted_qty - self.system_qty
+
+
 class Transfer(models.Model):
     """Filiallar orasi tovar ko'chirish."""
     class Status(models.TextChoices):
