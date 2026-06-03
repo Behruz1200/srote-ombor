@@ -55,6 +55,12 @@ if _render_host:
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')
 
+# ---------- Soliq.uz / OFD fiscal integration (optional) ----------
+# Empty / 'noop' = development mode, sales are NOT submitted to any OFD.
+# 'didox' = use DidoxProvider (configure DIDOX_API_KEY etc.)
+# See inventory/fiscal.py for setup steps.
+FISCAL_PROVIDER = os.environ.get('FISCAL_PROVIDER', '')
+
 
 # ---------- CSRF ----------
 CSRF_TRUSTED_ORIGINS = [
