@@ -1,0 +1,71 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}{{ customer.display_name }} — Mijoz{% endblock %}
+
+{% block content %}
+<div class="container">
+    <a href="{% url 'customer_list' %}" class="btn btn-link p-0 mb-2">← Mijozlar</a>
+    <div class="card p-4 mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <h3 class="mb-1">{{ customer.name|default:"(ism kiritilmagan)" }}</h3>
+                <div class="text-muted">
+                    <i class="bi bi-telephone"></i> {{ customer.phone|default:"—" }}
+                    {% if customer.inn %} · STIR: <code>{{ customer.inn }}</code>{% endif %}
+                </div>
+                {% if customer.tags %}
+                    <div class="mt-1">
+                        <span class="badge bg-secondary">{{ customer.tags }}</span>
+                    </div>
+                {% endif %}
+                {% if customer.note %}
+                    <p class="mt-2 mb-0 text-muted">{{ customer.note }}</p>
+                {% endif %}
+            </div>
+            <div class="text-end">
+                <div class="text-muted small">Jami sarflagan</div>
+                <h3 class="text-success mb-0">{{ stats.total|som }} so'm</h3>
+                <small class="text-muted">{{ stats.n }} ta sotuvda</small>
+            </div>
+        </div>
+    </div>
+
+    <h5 class="mb-2">Sotuvlar tarixi</h5>
+    <div class="card">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Sana</th>
+                    <th>Filial</th>
+                    <th>Sotuvchi</th>
+                    <th>Soni</th>
+                    <th class="text-end">Summa</th>
+                    <th>To'lov</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in txns %}
+                <tr>
+                    <td><small>{{ t.sold_at|date:"d.m.Y H:i" }}</small></td>
+                    <td>{{ t.branch.name }}</td>
+                    <td><small>{{ t.sold_by.username }}</small></td>
+                    <td>{{ t.item_count }}</td>
+                    <td class="text-end"><strong>{{ t.total|som }}</strong></td>
+                    <td><small>{{ t.get_payment_method_display }}</small></td>
+                    <td><a href="{% url 'transaction_detail' t.pk %}" target="_blank"
+                           class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-receipt"></i>
+                    </a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7" class="text-muted text-center py-3">Sotuvlar yo'q.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

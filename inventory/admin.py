@@ -2,8 +2,14 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
     User, Branch, Category, Product, ProductVariant,
-    BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return,
+    BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
 )
+
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ('name', 'phone', 'tags', 'inn', 'created_at')
+    search_fields = ('name', 'phone', 'inn')
 
 
 class SaleInline(admin.TabularInline):
