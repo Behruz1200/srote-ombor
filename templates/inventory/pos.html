@@ -82,11 +82,34 @@
         <!-- RIGHT: total + payment + checkout -->
         <div class="col-lg-4">
             <div class="card p-3 mb-3" id="totalCard">
-                <div class="text-muted small">Jami summa</div>
+                <div class="d-flex justify-content-between small text-muted">
+                    <span>Oraliq summa:</span>
+                    <span><span id="cartSubtotal">0</span> so'm</span>
+                </div>
+                <div class="d-flex justify-content-between small text-muted" id="discountRow" style="display:none !important;">
+                    <span>Chegirma:</span>
+                    <span class="text-danger">−<span id="cartDiscount">0</span> so'm</span>
+                </div>
+                <hr class="my-2">
+                <div class="text-muted small">Mijoz to'laydi</div>
                 <div class="display-5 fw-bold text-primary" id="cartTotal">0</div>
                 <div class="small text-muted">
                     <span id="cartItemCount">0</span> ta mahsulot
                 </div>
+            </div>
+
+            <div class="card p-3 mb-3">
+                <label class="form-label small text-uppercase">Chegirma (butun chek)</label>
+                <div class="d-flex gap-2 mb-2 flex-wrap">
+                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct" data-pct="5">−5%</button>
+                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct" data-pct="10">−10%</button>
+                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct" data-pct="20">−20%</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="discClear">×</button>
+                </div>
+                <input type="number" id="orderDiscount" class="form-control form-control-sm mb-2"
+                       min="0" step="1000" placeholder="so'mda kiriting">
+                <input type="text" id="discountReason" class="form-control form-control-sm"
+                       placeholder="Sabab: doimiy mijoz, aksiya...">
             </div>
 
             <div class="card p-3 mb-3">
@@ -167,6 +190,11 @@ const suggestionList = document.getElementById('suggestionList');
 const cartBody       = document.getElementById('cartBody');
 const emptyRow       = document.getElementById('emptyRow');
 const cartTotalEl    = document.getElementById('cartTotal');
+const cartSubtotalEl = document.getElementById('cartSubtotal');
+const cartDiscountEl = document.getElementById('cartDiscount');
+const discountRowEl  = document.getElementById('discountRow');
+const orderDiscountInput = document.getElementById('orderDiscount');
+const discountReasonInput = document.getElementById('discountReason');
 const cartCountEl    = document.getElementById('cartItemCount');
 const checkoutBtn    = document.getElementById('checkoutBtn');
 const checkoutStatus = document.getElementById('checkoutStatus');
@@ -285,12 +313,12 @@ function renderCart() {
         clearCartBtn.style.display = 'none';
         return;
     }
-    let total = 0, count = 0;
+    let subtotal = 0, count = 0;
     cartBody.innerHTML = '';
     for (const k of keys) {
         const it = cart[k];
         const sub = it.qty * it.sale_price;
-        total += sub; count += it.qty;
+        subtotal += sub; count += it.qty;
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
@@ -329,11 +357,31 @@ function renderCart() {
         });
         cartBody.appendChild(tr);
     }
+    const disc = Math.max(0, parseFloat(orderDiscountInput.value || '0'));
+    const total = Math.max(0, subtotal - disc);
+    cartSubtotalEl.textContent = fmt(subtotal);
+    cartDiscountEl.textContent = fmt(disc);
+    discountRowEl.style.display = disc > 0 ? 'flex' : 'none';
     cartTotalEl.textContent = fmt(total);
     cartCountEl.textContent = count;
     checkoutBtn.disabled = false;
     clearCartBtn.style.display = 'inline-block';
 }
+
+// Discount controls
+document.querySelectorAll('.disc-pct').forEach(b => {
+    b.addEventListener('click', () => {
+        const sub = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
+        orderDiscountInput.value = Math.round(sub * parseFloat(b.dataset.pct) / 100);
+        renderCart();
+    });
+});
+document.getElementById('discClear').addEventListener('click', () => {
+    orderDiscountInput.value = '';
+    discountReasonInput.value = '';
+    renderCart();
+});
+orderDiscountInput.addEventListener('input', renderCart);
 
 clearCartBtn.addEventListener('click', () => {
     if (confirm('Savatni tozalashni tasdiqlaysizmi?')) {
@@ -382,6 +430,8 @@ checkoutBtn.addEventListener('click', async () => {
                 payment_method: document.getElementById('paymentMethod').value,
                 customer_name: document.getElementById('customerName').value,
                 customer_phone: document.getElementById('customerPhone').value,
+                order_discount: parseFloat(orderDiscountInput.value || '0'),
+                discount_reason: discountReasonInput.value,
             }),
         });
         const data = await resp.json();

@@ -525,6 +525,11 @@ def pos_checkout(request):
     customer_name = (data.get('customer_name') or '').strip()[:120]
     customer_phone = (data.get('customer_phone') or '').strip()[:40]
     note = (data.get('note') or '').strip()[:200]
+    try:
+        order_discount = max(0, float(data.get('order_discount') or 0))
+    except (ValueError, TypeError):
+        order_discount = 0
+    discount_reason = (data.get('discount_reason') or '').strip()[:200]
 
     # Validate stock + collect resolved BranchStock objects
     resolved = []
@@ -532,6 +537,7 @@ def pos_checkout(request):
         try:
             sid = int(ln['stock_id'])
             qty = int(ln['qty'])
+            line_discount = max(0, float(ln.get('line_discount') or 0))
             price = float(ln['sale_price'])
         except (KeyError, ValueError, TypeError):
             return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
@@ -547,7 +553,7 @@ def pos_checkout(request):
                 'error': f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
                          f"omborda faqat {stock.stock_count} ta bor, soʻrov {qty}",
             }, status=400)
-        resolved.append((stock, qty, price))
+        resolved.append((stock, qty, price, line_discount))
 
     # Resolve / auto-create Customer by phone (most reliable key)
     customer = None
@@ -572,8 +578,10 @@ def pos_checkout(request):
             customer_name=customer_name,
             customer_phone=customer_phone,
             note=note,
+            order_discount=order_discount,
+            discount_reason=discount_reason,
         )
-        for stock, qty, price in resolved:
+        for stock, qty, price, ld in resolved:
             stock.stock_count = F('stock_count') - qty
             stock.save()
             Sale.objects.create(
@@ -582,6 +590,7 @@ def pos_checkout(request):
                 quantity=qty,
                 sale_price=price,
                 cost_at_sale=stock.cost_price,
+                line_discount=ld,
                 sold_by=request.user,
             )
 
@@ -1379,20 +1388,31 @@ def _insights_context(request):
         except (Branch.DoesNotExist, ValueError):
             pass
 
+    # Net revenue = qty*price - line_discount. Whole-order discount is
+    # attached to SaleTransaction so we subtract it at the txn-id aggregate.
     revenue_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price'),
+        F('quantity') * F('sale_price') - F('line_discount'),
         output_field=DecimalField(max_digits=14, decimal_places=2)
     )
 
-    # Umumiy KPI
     totals = sales.aggregate(
         revenue=Sum(revenue_expr),
         qty=Sum('quantity'),
         sales_count=Count('id'),
     )
-    revenue = totals['revenue'] or 0
+
+    # Subtract whole-order discounts (stored on SaleTransaction)
+    txn_qs = SaleTransaction.objects.filter(
+        sold_at__gte=dt_start, sold_at__lt=dt_end
+    )
+    if branch_id and selected_branch:
+        txn_qs = txn_qs.filter(branch=selected_branch)
+    order_disc = txn_qs.aggregate(s=Sum('order_discount'))['s'] or 0
+
+    revenue = (totals['revenue'] or 0) - order_disc
     qty = totals['qty'] or 0
     sales_count = totals['sales_count'] or 0
+    discount_total = order_disc + (sales.aggregate(s=Sum('line_discount'))['s'] or 0)
 
     # Foyda hisoblash: revenue - cost. cost = sum(quantity * variant.branch_stock.cost_price)
     # Sale modelida cost_price yo'q, lekin oxirgi BranchStock dan oladi (taxmin).
@@ -1591,6 +1611,7 @@ def _insights_context(request):
         'd_start': d_start,
         'd_end': today,
         'days': days,
+        'discount_total': discount_total,
         'selected_branch': selected_branch,
         'branches_all': branches_all,
         'revenue': revenue,

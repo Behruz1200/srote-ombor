@@ -319,6 +319,15 @@ class SaleTransaction(models.Model):
         help_text="B2B sotuvlar uchun mijozning STIRi (e-faktura beriladi)"
     )
     note = models.CharField(max_length=200, blank=True)
+    # ----- Discount (whole-order) -----
+    order_discount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Butun chek bo'yicha chegirma (so'm)"
+    )
+    discount_reason = models.CharField(
+        max_length=200, blank=True,
+        help_text="Chegirma sababi (audit uchun)"
+    )
     # ----- Soliq / fiscal -----
     fiscal_receipt_number = models.CharField(
         max_length=80, blank=True,
@@ -348,12 +357,29 @@ class SaleTransaction(models.Model):
         return f'#{self.pk} — {self.branch.name} ({self.sold_at:%d.%m.%Y %H:%M})'
 
     @property
+    def gross(self):
+        """Hech qanday chegirmasiz."""
+        return sum(s.gross for s in self.lines.all())
+
+    @property
+    def line_discount_total(self):
+        return sum(s.line_discount for s in self.lines.all())
+
+    @property
+    def discount_total(self):
+        """Qator + chek bo'yicha jami chegirma."""
+        return self.line_discount_total + self.order_discount
+
+    @property
     def total(self):
-        return sum(s.total for s in self.lines.all())
+        """Mijoz to'lagan yakuniy summa."""
+        return self.gross - self.discount_total
 
     @property
     def profit(self):
-        return sum(s.profit for s in self.lines.all())
+        # Line-level profit already accounts for line_discount via Sale.profit.
+        # Subtract whole-order discount on top.
+        return sum(s.profit for s in self.lines.all()) - self.order_discount
 
     @property
     def item_count(self):
@@ -375,6 +401,10 @@ class Sale(models.Model):
         max_digits=12, decimal_places=2, default=0,
         help_text="Sotuv paytidagi tannarx (keyinroq narx o'zgarsa ham aniq foyda hisobi uchun)"
     )
+    line_discount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Bu qatorga berilgan chegirma (so'm)"
+    )
     sold_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                 related_name='sales')
     sold_at = models.DateTimeField(default=timezone.now)
@@ -386,12 +416,18 @@ class Sale(models.Model):
         ordering = ['-sold_at']
 
     @property
-    def total(self):
+    def gross(self):
+        """Chegirmasiz summa."""
         return self.quantity * self.sale_price
 
     @property
+    def total(self):
+        """Chegirmadan keyingi summa."""
+        return self.gross - self.line_discount
+
+    @property
     def profit(self):
-        return self.quantity * (self.sale_price - self.cost_at_sale)
+        return self.total - (self.quantity * self.cost_at_sale)
 
     @property
     def margin(self):
