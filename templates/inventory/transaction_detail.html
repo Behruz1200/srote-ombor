@@ -88,6 +88,12 @@
     </div>
 </div>
 
+<script>
+// POS: auto-trigger print dialog when called via ?autoprint=1
+if (new URLSearchParams(location.search).get('autoprint') === '1') {
+    window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+}
+</script>
 <style>
 @media print {
     /* hide screen UI */

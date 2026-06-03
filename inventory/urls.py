@@ -11,6 +11,11 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('lookup/', views.lookup, name='lookup'),
+
+    # POS terminal (BILLZ-style single-page scanner workflow)
+    path('pos/', views.pos_terminal, name='pos_terminal'),
+    path('pos/lookup/', views.pos_lookup, name='pos_lookup'),
+    path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
     path('dashboard/', views.dashboard, name='dashboard'),
 
     path('products/', views.product_list, name='product_list'),

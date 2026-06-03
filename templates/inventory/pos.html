@@ -1,0 +1,428 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}POS — Srote{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0">
+            <i class="bi bi-upc-scan"></i> POS terminal
+            <small class="text-muted fs-6 ms-2">
+                <i class="bi bi-building"></i> {{ branch.name }}
+                · <i class="bi bi-person"></i> {{ user.username }}
+            </small>
+        </h3>
+        <div class="text-muted small">
+            <i class="bi bi-clock"></i>
+            <span id="posClock"></span>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- LEFT: search + cart -->
+        <div class="col-lg-8">
+            <div class="card p-3 mb-3">
+                <label class="form-label small text-uppercase">
+                    <i class="bi bi-upc-scan"></i> Kodni skanerlang yoki yozing
+                </label>
+                <div class="d-flex gap-2">
+                    <input type="text" id="scanInput" class="form-control form-control-lg"
+                           placeholder="OYO-0001, nike, ko'ylak..."
+                           autofocus autocomplete="off"
+                           style="font-size: 1.35rem;">
+                    <button type="button" class="btn btn-primary btn-lg" id="searchBtn">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+                <div id="searchStatus" class="small text-muted mt-1"></div>
+
+                <!-- Variant picker (shown when product has multiple variants) -->
+                <div id="variantPicker" class="mt-2" style="display:none;">
+                    <div class="small text-muted mb-1">O'lcham/rang tanlang:</div>
+                    <div id="variantList" class="d-flex flex-wrap gap-1"></div>
+                </div>
+
+                <!-- Suggestions list -->
+                <div id="suggestions" class="mt-2" style="display:none;">
+                    <div class="small text-muted mb-1">Mos topildi:</div>
+                    <div id="suggestionList" class="d-flex flex-wrap gap-1"></div>
+                </div>
+            </div>
+
+            <div class="card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="mb-0">Savat</h5>
+                    <button type="button" class="btn btn-sm btn-outline-danger"
+                            id="clearCartBtn" style="display:none;">
+                        <i class="bi bi-x"></i> Tozalash
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0" id="cartTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Mahsulot</th>
+                                <th style="width:60px;">Soni</th>
+                                <th class="text-end">Narx</th>
+                                <th class="text-end">Jami</th>
+                                <th style="width:40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cartBody">
+                            <tr id="emptyRow"><td colspan="5" class="text-center text-muted py-4">
+                                Savat bo'sh. Kodni skanerlang yoki qidiring.
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: total + payment + checkout -->
+        <div class="col-lg-4">
+            <div class="card p-3 mb-3" id="totalCard">
+                <div class="text-muted small">Jami summa</div>
+                <div class="display-5 fw-bold text-primary" id="cartTotal">0</div>
+                <div class="small text-muted">
+                    <span id="cartItemCount">0</span> ta mahsulot
+                </div>
+            </div>
+
+            <div class="card p-3 mb-3">
+                <label class="form-label small text-uppercase">To'lov turi</label>
+                <div class="d-grid gap-2" id="paymentButtons">
+                    {% for value, label in payment_methods %}
+                        <button type="button"
+                                class="btn btn-outline-secondary payment-btn{% if value == 'cash' %} active{% endif %}"
+                                data-value="{{ value }}">
+                            {% if value == 'cash' %}<i class="bi bi-cash"></i>
+                            {% elif value == 'card' %}<i class="bi bi-credit-card"></i>
+                            {% elif value == 'transfer' %}<i class="bi bi-arrow-left-right"></i>
+                            {% else %}<i class="bi bi-three-dots"></i>{% endif %}
+                            {{ label }}
+                        </button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="paymentMethod" value="cash">
+            </div>
+
+            <div class="card p-3 mb-3">
+                <label class="form-label small text-uppercase">Mijoz (ixtiyoriy)</label>
+                <input type="text" id="customerName" class="form-control form-control-sm mb-2"
+                       placeholder="Ism">
+                <input type="tel" id="customerPhone" class="form-control form-control-sm"
+                       placeholder="+998 ...">
+            </div>
+
+            <button type="button" class="btn btn-success btn-lg w-100" id="checkoutBtn" disabled>
+                <i class="bi bi-check2-circle"></i> SOTUVNI YAKUNLASH
+            </button>
+
+            <div id="checkoutStatus" class="small text-center mt-2"></div>
+        </div>
+    </div>
+
+    <!-- Recent transactions -->
+    {% if recent_txns %}
+    <div class="card p-3 mt-3">
+        <h6 class="text-muted text-uppercase small mb-2">So'nggi sotuvlar</h6>
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light"><tr>
+                <th>Vaqt</th><th>Kim</th><th>Dona</th><th>Summa</th><th>To'lov</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for t in recent_txns %}
+                <tr>
+                    <td><small>{{ t.sold_at|date:"H:i" }}</small></td>
+                    <td><small>{{ t.sold_by.username }}</small></td>
+                    <td>{{ t.item_count }}</td>
+                    <td><strong>{{ t.total|som }}</strong></td>
+                    <td><small>{{ t.get_payment_method_display }}</small></td>
+                    <td><a href="{% url 'transaction_detail' t.pk %}" target="_blank"
+                           class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-receipt"></i>
+                    </a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+{% csrf_token %}
+const CSRF = document.querySelector('input[name=csrfmiddlewaretoken]').value;
+
+const scanInput      = document.getElementById('scanInput');
+const searchBtn      = document.getElementById('searchBtn');
+const searchStatus   = document.getElementById('searchStatus');
+const variantPicker  = document.getElementById('variantPicker');
+const variantList    = document.getElementById('variantList');
+const suggestions    = document.getElementById('suggestions');
+const suggestionList = document.getElementById('suggestionList');
+const cartBody       = document.getElementById('cartBody');
+const emptyRow       = document.getElementById('emptyRow');
+const cartTotalEl    = document.getElementById('cartTotal');
+const cartCountEl    = document.getElementById('cartItemCount');
+const checkoutBtn    = document.getElementById('checkoutBtn');
+const checkoutStatus = document.getElementById('checkoutStatus');
+const clearCartBtn   = document.getElementById('clearCartBtn');
+
+// cart state: stockId -> { stock_id, product_code, product_name, size, color, qty, sale_price, max }
+let cart = {};
+
+function fmt(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' '); }
+
+function refocus() { setTimeout(() => scanInput.focus(), 50); }
+
+function setStatus(msg, type) {
+    searchStatus.className = 'small mt-1 ' +
+        (type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-muted');
+    searchStatus.textContent = msg || '';
+}
+
+function hideExtras() {
+    variantPicker.style.display = 'none';
+    suggestions.style.display = 'none';
+    variantList.innerHTML = '';
+    suggestionList.innerHTML = '';
+}
+
+async function search(q) {
+    setStatus('Qidirilmoqda...', '');
+    hideExtras();
+    try {
+        const resp = await fetch(`/pos/lookup/?q=${encodeURIComponent(q)}`);
+        const data = await resp.json();
+        if (!data.found) {
+            if (data.suggestions && data.suggestions.length) {
+                setStatus(`${data.suggestions.length} ta mos topildi — birini tanlang:`, '');
+                suggestions.style.display = 'block';
+                for (const s of data.suggestions) {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'btn btn-sm btn-outline-primary';
+                    b.textContent = `${s.code} — ${s.name}`;
+                    b.addEventListener('click', () => {
+                        scanInput.value = s.code;
+                        search(s.code);
+                    });
+                    suggestionList.appendChild(b);
+                }
+            } else {
+                setStatus(`"${q}" topilmadi.`, 'error');
+            }
+            return;
+        }
+
+        const product = data.product;
+        const inStock = data.variants.filter(v => v.stock_count > 0);
+        if (inStock.length === 0) {
+            setStatus(`${product.code} ${product.name} — omborda yo'q.`, 'error');
+            return;
+        }
+        if (inStock.length === 1) {
+            // Single variant -> add directly
+            addToCart(product, inStock[0]);
+            setStatus(`✓ Qo'shildi: ${product.name} ${inStock[0].size}/${inStock[0].color}`, 'success');
+            scanInput.value = '';
+        } else {
+            // Show variant picker
+            setStatus(`${product.code} — ${product.name}: variant tanlang`, '');
+            variantPicker.style.display = 'block';
+            for (const v of inStock) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn btn-success btn-sm';
+                b.innerHTML = `${v.size} / ${v.color} <span class="badge bg-light text-dark">${v.stock_count}</span>`;
+                b.addEventListener('click', () => {
+                    addToCart(product, v);
+                    setStatus(`✓ Qo'shildi: ${product.name} ${v.size}/${v.color}`, 'success');
+                    hideExtras();
+                    scanInput.value = '';
+                    refocus();
+                });
+                variantList.appendChild(b);
+            }
+        }
+    } catch (e) {
+        setStatus('Xatolik: ' + e.message, 'error');
+    }
+    refocus();
+}
+
+function addToCart(product, variant) {
+    const key = variant.stock_id;
+    if (cart[key]) {
+        if (cart[key].qty < variant.stock_count) cart[key].qty += 1;
+        else { setStatus(`Omborda faqat ${variant.stock_count} ta bor.`, 'error'); return; }
+    } else {
+        cart[key] = {
+            stock_id: variant.stock_id,
+            product_code: product.code,
+            product_name: product.name,
+            size: variant.size,
+            color: variant.color,
+            qty: 1,
+            sale_price: variant.sale_price,
+            max: variant.stock_count,
+        };
+    }
+    renderCart();
+}
+
+function renderCart() {
+    const keys = Object.keys(cart);
+    if (keys.length === 0) {
+        cartBody.innerHTML = '<tr id="emptyRow"><td colspan="5" class="text-center text-muted py-4">Savat bo\'sh. Kodni skanerlang yoki qidiring.</td></tr>';
+        cartTotalEl.textContent = '0';
+        cartCountEl.textContent = '0';
+        checkoutBtn.disabled = true;
+        clearCartBtn.style.display = 'none';
+        return;
+    }
+    let total = 0, count = 0;
+    cartBody.innerHTML = '';
+    for (const k of keys) {
+        const it = cart[k];
+        const sub = it.qty * it.sale_price;
+        total += sub; count += it.qty;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <strong>${it.product_name}</strong>
+                <div class="small text-muted">
+                    <code>${it.product_code}</code> · ${it.size} / ${it.color}
+                </div>
+            </td>
+            <td>
+                <div class="input-group input-group-sm" style="width:90px;">
+                    <button class="btn btn-outline-secondary qty-dec" type="button">−</button>
+                    <input class="form-control text-center qty-input" type="number"
+                           value="${it.qty}" min="1" max="${it.max}">
+                    <button class="btn btn-outline-secondary qty-inc" type="button">+</button>
+                </div>
+            </td>
+            <td class="text-end">${fmt(it.sale_price)}</td>
+            <td class="text-end"><strong>${fmt(sub)}</strong></td>
+            <td><button class="btn btn-sm btn-outline-danger remove-btn" type="button">
+                <i class="bi bi-trash"></i></button></td>
+        `;
+        tr.querySelector('.qty-inc').addEventListener('click', () => {
+            if (it.qty < it.max) { it.qty += 1; renderCart(); }
+        });
+        tr.querySelector('.qty-dec').addEventListener('click', () => {
+            if (it.qty > 1) { it.qty -= 1; renderCart(); } else { delete cart[k]; renderCart(); }
+        });
+        tr.querySelector('.qty-input').addEventListener('change', (e) => {
+            let v = parseInt(e.target.value);
+            if (!v || v < 1) v = 1;
+            if (v > it.max) v = it.max;
+            it.qty = v; renderCart();
+        });
+        tr.querySelector('.remove-btn').addEventListener('click', () => {
+            delete cart[k]; renderCart();
+        });
+        cartBody.appendChild(tr);
+    }
+    cartTotalEl.textContent = fmt(total);
+    cartCountEl.textContent = count;
+    checkoutBtn.disabled = false;
+    clearCartBtn.style.display = 'inline-block';
+}
+
+clearCartBtn.addEventListener('click', () => {
+    if (confirm('Savatni tozalashni tasdiqlaysizmi?')) {
+        cart = {}; renderCart(); refocus();
+    }
+});
+
+// Payment buttons
+document.querySelectorAll('.payment-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.payment-btn').forEach(b =>
+            b.classList.remove('active', 'btn-primary'));
+        document.querySelectorAll('.payment-btn').forEach(b =>
+            b.classList.add('btn-outline-secondary'));
+        btn.classList.add('active', 'btn-primary');
+        btn.classList.remove('btn-outline-secondary');
+        document.getElementById('paymentMethod').value = btn.dataset.value;
+    });
+});
+
+// Search trigger (Enter or button)
+function doSearch() {
+    const q = scanInput.value.trim();
+    if (!q) return;
+    search(q);
+}
+scanInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+});
+searchBtn.addEventListener('click', doSearch);
+
+// Checkout
+checkoutBtn.addEventListener('click', async () => {
+    const lines = Object.values(cart).map(it => ({
+        stock_id: it.stock_id, qty: it.qty, sale_price: it.sale_price,
+    }));
+    if (lines.length === 0) return;
+    checkoutBtn.disabled = true;
+    checkoutStatus.textContent = 'Saqlanmoqda...';
+    try {
+        const resp = await fetch('/pos/checkout/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({
+                lines,
+                payment_method: document.getElementById('paymentMethod').value,
+                customer_name: document.getElementById('customerName').value,
+                customer_phone: document.getElementById('customerPhone').value,
+            }),
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+            checkoutStatus.innerHTML = `<span class="text-danger">${data.error || 'Xatolik'}</span>`;
+            checkoutBtn.disabled = false;
+            return;
+        }
+        checkoutStatus.innerHTML = `<span class="text-success">
+            ✓ Sotuv #${data.txn_id} saqlandi (${fmt(data.total)} so'm)</span>`;
+        // Open receipt in new tab → auto-prints
+        window.open(data.receipt_url, '_blank');
+        // Reset for next customer
+        cart = {};
+        renderCart();
+        document.getElementById('customerName').value = '';
+        document.getElementById('customerPhone').value = '';
+        scanInput.value = '';
+        setStatus('', '');
+        hideExtras();
+        // Reload after short delay to refresh recent_txns list
+        setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+        checkoutStatus.innerHTML = `<span class="text-danger">Tarmoq xatosi: ${e.message}</span>`;
+        checkoutBtn.disabled = false;
+    }
+    refocus();
+});
+
+// Refocus scanner input after clicks anywhere except other inputs
+document.addEventListener('click', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+    refocus();
+});
+
+// Clock
+function tickClock() {
+    const d = new Date();
+    document.getElementById('posClock').textContent =
+        `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+setInterval(tickClock, 30000); tickClock();
+</script>
+{% endblock %}

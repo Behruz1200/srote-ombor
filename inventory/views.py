@@ -5,7 +5,8 @@ from django.contrib import messages
 from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count
 from django.db.models.functions import Coalesce
 from django.db import transaction
-from django.http import HttpResponseForbidden, HttpResponse
+from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
+import json as _json
 from django.utils import timezone
 from datetime import timedelta, datetime, date
 import csv
@@ -400,6 +401,186 @@ def intake_for_product(request, code):
 def intake_new(request):
     products = Product.objects.order_by('-created_at')[:50]
     return render(request, 'inventory/intake_choose.html', {'products': products})
+
+
+# ---------- POS TERMINAL ----------
+
+def _user_branch_or_403(request):
+    """Sellers must have a branch. Admins can use any (POS picks the first)."""
+    if request.user.is_admin():
+        if request.user.branch_id:
+            return request.user.branch
+        first = Branch.objects.filter(is_active=True).first()
+        if first:
+            return first
+        return None
+    return request.user.branch
+
+
+@login_required
+def pos_terminal(request):
+    """Single-page POS UI. Browser maintains the cart, posts via AJAX."""
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        messages.error(request, "Filial biriktirilmagan. Administrator bilan bog'laning.")
+        return redirect('lookup')
+
+    recent_txns = (SaleTransaction.objects.filter(branch=branch)
+                   .select_related('sold_by')
+                   .prefetch_related('lines')
+                   .order_by('-sold_at')[:5])
+
+    return render(request, 'inventory/pos.html', {
+        'branch': branch,
+        'recent_txns': recent_txns,
+        'payment_methods': SaleTransaction.PaymentMethod.choices,
+    })
+
+
+@login_required
+def pos_lookup(request):
+    """GET /pos/lookup/?q=OYO-0001 or ?q=nike
+    Returns JSON:
+      { found: bool,
+        product: {code, name, default_sale_price},
+        variants: [{stock_id, size, color, stock_count, sale_price, cost_price}],
+        suggestions: [{code, name}] }
+    """
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'error': 'no branch'}, status=403)
+
+    q = (request.GET.get('q') or '').strip()
+    if not q:
+        return JsonResponse({'found': False})
+
+    # Exact code first
+    code = normalize_code(q.upper())
+    product = Product.objects.filter(code=code).first()
+
+    if not product:
+        # Name search
+        matches = list(Product.objects.filter(
+            Q(name__icontains=q) | Q(category__name__icontains=q)
+        )[:8])
+        if len(matches) == 1:
+            product = matches[0]
+        elif matches:
+            return JsonResponse({
+                'found': False,
+                'suggestions': [{'code': p.code, 'name': p.name} for p in matches],
+            })
+        else:
+            return JsonResponse({'found': False, 'suggestions': []})
+
+    stocks = (BranchStock.objects.filter(variant__product=product, branch=branch)
+              .select_related('variant')
+              .order_by('variant__size', 'variant__color'))
+
+    variants = [{
+        'stock_id': s.id,
+        'size': s.variant.size,
+        'color': s.variant.color,
+        'stock_count': s.stock_count,
+        'sale_price': float(s.sale_price or product.default_sale_price),
+        'cost_price': float(s.cost_price),
+    } for s in stocks]
+
+    return JsonResponse({
+        'found': True,
+        'product': {
+            'code': product.code,
+            'name': product.name,
+            'default_sale_price': float(product.default_sale_price),
+        },
+        'variants': variants,
+    })
+
+
+@login_required
+def pos_checkout(request):
+    """POST /pos/checkout/ with JSON body:
+      { lines: [{stock_id, qty, sale_price}],
+        payment_method: 'cash'|'card'|'transfer'|'mixed',
+        customer_name, customer_phone, note }
+    Creates SaleTransaction + Sales atomically. Returns {ok, txn_id, receipt_url}.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+
+    lines = data.get('lines') or []
+    if not lines:
+        return JsonResponse({'ok': False, 'error': 'savat boʻsh'}, status=400)
+
+    payment_method = (data.get('payment_method') or 'cash').strip()
+    customer_name = (data.get('customer_name') or '').strip()[:120]
+    customer_phone = (data.get('customer_phone') or '').strip()[:40]
+    note = (data.get('note') or '').strip()[:200]
+
+    # Validate stock + collect resolved BranchStock objects
+    resolved = []
+    for ln in lines:
+        try:
+            sid = int(ln['stock_id'])
+            qty = int(ln['qty'])
+            price = float(ln['sale_price'])
+        except (KeyError, ValueError, TypeError):
+            return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
+        if qty <= 0 or price < 0:
+            return JsonResponse({'ok': False, 'error': 'qty/narx noto\'g\'ri'}, status=400)
+        stock = BranchStock.objects.select_related('variant__product', 'branch') \
+            .filter(pk=sid, branch=branch).first()
+        if not stock:
+            return JsonResponse({'ok': False, 'error': f'stock {sid} topilmadi'}, status=400)
+        if qty > stock.stock_count:
+            return JsonResponse({
+                'ok': False,
+                'error': f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
+                         f"omborda faqat {stock.stock_count} ta bor, soʻrov {qty}",
+            }, status=400)
+        resolved.append((stock, qty, price))
+
+    with transaction.atomic():
+        txn = SaleTransaction.objects.create(
+            branch=branch,
+            sold_by=request.user,
+            payment_method=payment_method,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            note=note,
+        )
+        for stock, qty, price in resolved:
+            stock.stock_count = F('stock_count') - qty
+            stock.save()
+            Sale.objects.create(
+                transaction=txn,
+                variant=stock.variant, branch=stock.branch,
+                quantity=qty,
+                sale_price=price,
+                cost_at_sale=stock.cost_price,
+                sold_by=request.user,
+            )
+
+    # Best-effort fiscal (noop unless provider configured)
+    from .fiscal import submit_for_transaction
+    submit_for_transaction(txn)
+
+    return JsonResponse({
+        'ok': True,
+        'txn_id': txn.pk,
+        'receipt_url': f'/transaction/{txn.pk}/?autoprint=1',
+        'total': float(txn.total),
+        'item_count': txn.item_count,
+    })
 
 
 # ---------- SALE ----------
