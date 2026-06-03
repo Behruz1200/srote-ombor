@@ -1,0 +1,41 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Smen ochish — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <h3 class="mb-3"><i class="bi bi-door-open"></i> Smen ochish</h3>
+            <div class="card p-4">
+                <div class="alert alert-info py-2 mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Filial: <strong>{{ branch.name }}</strong>.
+                    POS sotuvini boshlash uchun avval smen oching.
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Boshlang'ich naqd (kassada hozir qancha pul bor?)</label>
+                        <input type="number" name="opening_cash" min="0" step="1000"
+                               class="form-control form-control-lg" value="0" required autofocus>
+                        <small class="text-muted">
+                            Smen yopilganda tizim shu summaga sotuvlarni qo'shib,
+                            kassa farqini ko'rsatadi.
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Izoh (ixtiyoriy)</label>
+                        <input type="text" name="note" class="form-control"
+                               placeholder="Masalan: ertalabki smen">
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg w-100">
+                        <i class="bi bi-check-circle"></i> Smen ochish va POS'ga o'tish
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

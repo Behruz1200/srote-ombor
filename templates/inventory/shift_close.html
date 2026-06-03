@@ -1,0 +1,62 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Smen yopish — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <h3 class="mb-3"><i class="bi bi-door-closed"></i> Smen yopish</h3>
+
+            <div class="card p-3 mb-3">
+                <div class="row text-center">
+                    <div class="col">
+                        <div class="text-muted small">Boshlang'ich</div>
+                        <h4>{{ shift.opening_cash|som }} <small class="text-muted">so'm</small></h4>
+                    </div>
+                    <div class="col">
+                        <div class="text-muted small">Naqd sotuvlar</div>
+                        <h4 class="text-success">+{{ cash_sales|som }}</h4>
+                    </div>
+                    <div class="col">
+                        <div class="text-muted small">Kutilgan naqd</div>
+                        <h4 class="text-primary">{{ expected|som }}</h4>
+                    </div>
+                </div>
+                <small class="text-muted text-center d-block mt-2">
+                    Smen ochildi: {{ shift.opened_at|date:"d.m.Y H:i" }} · {{ shift.opened_by.username }}
+                </small>
+            </div>
+
+            <div class="card p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Kassadan sanab chiqilgan naqd</label>
+                        <input type="number" name="counted_cash" min="0" step="1000"
+                               class="form-control form-control-lg" required autofocus
+                               placeholder="masalan: {{ expected|floatformat:0 }}">
+                        <small class="text-muted">
+                            Tizim shu summani kutilgan naqd bilan taqqoslab, kassa farqini ko'rsatadi.
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Izoh (ixtiyoriy)</label>
+                        <input type="text" name="note" class="form-control"
+                               placeholder="Tushuntirish bo'lsa yozing">
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger btn-lg flex-grow-1">
+                            <i class="bi bi-check2-circle"></i> Smen yopish
+                        </button>
+                        <a href="{% url 'pos_terminal' %}" class="btn btn-outline-secondary btn-lg">
+                            Bekor qilish
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

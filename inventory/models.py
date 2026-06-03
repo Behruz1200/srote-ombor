@@ -305,6 +305,11 @@ class SaleTransaction(models.Model):
     sold_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                 related_name='transactions')
     sold_at = models.DateTimeField(default=timezone.now)
+    shift = models.ForeignKey(
+        'Shift', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='transactions',
+        help_text='Sotuv qaysi smen davomida amalga oshirilgan'
+    )
     payment_method = models.CharField(
         max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH
     )
@@ -384,6 +389,80 @@ class SaleTransaction(models.Model):
     @property
     def item_count(self):
         return sum(s.quantity for s in self.lines.all())
+
+
+class Shift(models.Model):
+    """Sotuvchining ish smen'i — kassa pulini hisoblash uchun."""
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Ochiq'
+        CLOSED = 'closed', 'Yopilgan'
+
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='shifts')
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='shifts_opened'
+    )
+    opened_at = models.DateTimeField(default=timezone.now)
+    opening_cash = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Smen boshida kassada bo'lgan pul (so'm)"
+    )
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='shifts_closed'
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+    counted_cash = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Smen oxirida sanab chiqilgan naqd"
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = 'Smen'
+        verbose_name_plural = 'Smenlar'
+        ordering = ['-opened_at']
+        constraints = [
+            # Bitta filialda bir vaqtda faqat bitta ochiq smen bo'lishi mumkin
+            models.UniqueConstraint(
+                fields=['branch'], condition=models.Q(status='open'),
+                name='one_open_shift_per_branch'
+            ),
+        ]
+
+    def __str__(self):
+        return f'Smen #{self.pk} — {self.branch.name} ({self.opened_at:%d.%m %H:%M})'
+
+    def cash_sales(self):
+        """Smen davomida naqd to'lov qilingan sotuvlar summasi."""
+        end = self.closed_at or timezone.now()
+        rev_expr = models.ExpressionWrapper(
+            models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
+            output_field=models.DecimalField(max_digits=14, decimal_places=2)
+        )
+        cash_txn_ids = SaleTransaction.objects.filter(
+            branch=self.branch, sold_at__gte=self.opened_at, sold_at__lt=end,
+            payment_method='cash',
+        ).values_list('id', flat=True)
+        line_rev = Sale.objects.filter(
+            transaction_id__in=cash_txn_ids
+        ).aggregate(s=models.Sum(rev_expr))['s'] or 0
+        order_disc = SaleTransaction.objects.filter(
+            id__in=cash_txn_ids
+        ).aggregate(s=models.Sum('order_discount'))['s'] or 0
+        return line_rev - order_disc
+
+    def expected_cash(self):
+        """Kutilgan naqd = ochilish + smen davomidagi naqd sotuvlar."""
+        return self.opening_cash + self.cash_sales()
+
+    def variance(self):
+        """Kassa farqi = sanalgan − kutilgan. Manfiy bo'lsa kam, ortiq bo'lsa ko'p."""
+        if self.counted_cash is None:
+            return None
+        return self.counted_cash - self.expected_cash()
 
 
 class Sale(models.Model):
