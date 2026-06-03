@@ -8,6 +8,15 @@ class Branch(models.Model):
     name = models.CharField(max_length=120, unique=True)
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=40, blank=True)
+    inn = models.CharField(
+        max_length=14, blank=True,
+        help_text="STIR / INN (Soliq fiskalizatsiyasi uchun). "
+                  "Yuridik shaxs uchun 9 raqam, jismoniy shaxs uchun 14."
+    )
+    fiscal_module_id = models.CharField(
+        max_length=80, blank=True,
+        help_text="Filialning kassa apparati ID (OFD beradi)"
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -82,6 +91,23 @@ class Product(models.Model):
     markup_percent = models.DecimalField(
         max_digits=6, decimal_places=2, default=40,
         help_text="Foiz: sotuv narxi = tannarx × (1 + foiz/100)"
+    )
+    # ----- Soliq / fiscal fields (used when OFD provider is connected) -----
+    mxik_code = models.CharField(
+        max_length=20, blank=True,
+        help_text="Mahsulot xizmat international klassifikator kodi (soliq.uz)"
+    )
+    unit_code = models.CharField(
+        max_length=20, blank=True, default='796',  # 796 = "штука / dona"
+        help_text="Birlik kodi (OKEI). 796 = dona, 166 = kg, 778 = juft."
+    )
+    vat_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=12,
+        help_text="QQS foizi. UZ standart: 12%, ba'zi tovarlar uchun 0% yoki 15%."
+    )
+    package_code = models.CharField(
+        max_length=20, blank=True,
+        help_text="Markirovka kodi (zarur tovarlar uchun; aks holda bo'sh)"
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -252,7 +278,30 @@ class SaleTransaction(models.Model):
     )
     customer_name = models.CharField(max_length=120, blank=True)
     customer_phone = models.CharField(max_length=40, blank=True)
+    customer_inn = models.CharField(
+        max_length=14, blank=True,
+        help_text="B2B sotuvlar uchun mijozning STIRi (e-faktura beriladi)"
+    )
     note = models.CharField(max_length=200, blank=True)
+    # ----- Soliq / fiscal -----
+    fiscal_receipt_number = models.CharField(
+        max_length=80, blank=True,
+        help_text="OFD bergan fiskal chek raqami (provider qaytaradi)"
+    )
+    fiscal_qr_url = models.URLField(
+        blank=True,
+        help_text="OFD bergan QR kod URL'i — chekka chiqaramiz, mijoz tekshirishi uchun"
+    )
+    fiscal_status = models.CharField(
+        max_length=20, blank=True,
+        choices=[('pending', 'Kutilmoqda'), ('sent', 'Yuborilgan'),
+                 ('failed', 'Xatolik'), ('skipped', "O'tkazib yuborildi")],
+        help_text="OFD'ga yuborish holati"
+    )
+    fiscal_error = models.TextField(
+        blank=True,
+        help_text="Yuborish muvaffaqiyatsiz bo'lgan bo'lsa, xatolik matni"
+    )
 
     class Meta:
         verbose_name = 'Sotuv chek'

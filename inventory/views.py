@@ -427,12 +427,26 @@ def sale_create(request, stock_id):
             with transaction.atomic():
                 stock.stock_count = F('stock_count') - qty
                 stock.save()
+                # Wrap every sale in a SaleTransaction so the OFD/fiscal
+                # submission flow is the same for single-item and cart sales.
+                txn = SaleTransaction.objects.create(
+                    branch=stock.branch,
+                    sold_by=request.user,
+                    payment_method=SaleTransaction.PaymentMethod.CASH,
+                    note=cd.get('note') or '',
+                )
                 Sale.objects.create(
+                    transaction=txn,
                     variant=stock.variant, branch=stock.branch,
                     quantity=qty, sale_price=cd['sale_price'],
-                    cost_at_sale=stock.cost_price,  # snapshot for accurate historical profit
+                    cost_at_sale=stock.cost_price,
                     note=cd.get('note') or '', sold_by=request.user,
                 )
+
+            # Best-effort fiscal submission (no-op when no OFD configured).
+            from .fiscal import submit_for_transaction
+            submit_for_transaction(txn)
+
             messages.success(request,
                 f"Sotildi: {qty} dona × {cd['sale_price']} so'm ({stock.branch.name}).")
             return redirect('lookup')
@@ -883,6 +897,10 @@ def checkout(request):
                 )
             request.session[CART_KEY] = {}
             request.session.modified = True
+
+        from .fiscal import submit_for_transaction
+        submit_for_transaction(txn)
+
         messages.success(request,
             f"Sotuv yakunlandi: {len(lines)} ta mahsulot.")
         return redirect('transaction_detail', pk=txn.pk)

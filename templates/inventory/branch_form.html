@@ -23,6 +23,19 @@
                         <label class="form-label">{{ form.phone.label }}</label>
                         {{ form.phone }}
                     </div>
+                    <hr>
+                    <h6 class="text-muted text-uppercase small">Soliq / fiskalizatsiya</h6>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.inn.label }}</label>
+                        {{ form.inn }}
+                        <small class="text-muted">{{ form.inn.help_text }}</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.fiscal_module_id.label }}</label>
+                        {{ form.fiscal_module_id }}
+                        <small class="text-muted">{{ form.fiscal_module_id.help_text }}</small>
+                    </div>
+                    <hr>
                     <div class="form-check mb-3">
                         {{ form.is_active }}
                         <label class="form-check-label">{{ form.is_active.label }}</label>

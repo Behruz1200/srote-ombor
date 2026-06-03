@@ -24,17 +24,22 @@ class LoginForm(AuthenticationForm):
 class BranchForm(forms.ModelForm):
     class Meta:
         model = Branch
-        fields = ['name', 'address', 'phone', 'is_active']
+        fields = ['name', 'address', 'phone', 'inn', 'fiscal_module_id', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'address': forms.TextInput(attrs={'class': 'form-control'}),
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'inn': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '9 yoki 14 raqam'}),
+            'fiscal_module_id': forms.TextInput(attrs={'class': 'form-control',
+                                                       'placeholder': 'OFD beradi'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'name': 'Filial nomi',
             'address': 'Manzil',
             'phone': 'Telefon',
+            'inn': 'STIR (INN)',
+            'fiscal_module_id': "Kassa apparati ID",
             'is_active': 'Faol',
         }
 
@@ -43,7 +48,8 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = ['name', 'category', 'description', 'image',
-                  'default_sale_price', 'markup_percent']
+                  'default_sale_price', 'markup_percent',
+                  'mxik_code', 'unit_code', 'vat_percent', 'package_code']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
@@ -51,10 +57,17 @@ class ProductForm(forms.ModelForm):
             'image': forms.ClearableFileInput(attrs={
                 'class': 'form-control',
                 'accept': 'image/*',
-                'capture': 'environment',  # Phone: open rear camera directly
+                'capture': 'environment',
             }),
             'default_sale_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '1'}),
             'markup_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
+            'mxik_code': forms.TextInput(attrs={'class': 'form-control',
+                                                'placeholder': 'soliq.uz/mxik dan toping'}),
+            'unit_code': forms.TextInput(attrs={'class': 'form-control',
+                                                'placeholder': '796 = dona'}),
+            'vat_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
+            'package_code': forms.TextInput(attrs={'class': 'form-control',
+                                                   'placeholder': 'faqat markirovkali tovarlar uchun'}),
         }
         labels = {
             'name': 'Nomi',
@@ -63,6 +76,10 @@ class ProductForm(forms.ModelForm):
             'image': 'Rasm',
             'default_sale_price': "Sotuv narxi (so'm)",
             'markup_percent': "Standart foiz markup (%)",
+            'mxik_code': 'MXIK kodi',
+            'unit_code': 'Birlik kodi',
+            'vat_percent': 'QQS foizi',
+            'package_code': 'Markirovka kodi',
         }
 
 
