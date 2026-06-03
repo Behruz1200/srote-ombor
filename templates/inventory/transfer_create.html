@@ -1,0 +1,174 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Yangi ko'chirish — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h3 class="mb-3"><i class="bi bi-arrow-left-right"></i> Yangi tovar ko'chirish</h3>
+
+    <form method="post" id="transferForm">
+        {% csrf_token %}
+        <div class="card p-3 mb-3">
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">Qayerdan (ombor manbasi)</label>
+                    <select name="from_branch" id="fromBranch" class="form-select" required>
+                        <option value="">— tanlang —</option>
+                        {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 text-center align-self-end pb-2">
+                    <i class="bi bi-arrow-right fs-3 text-muted"></i>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Qayerga (qabul qiluvchi)</label>
+                    <select name="to_branch" class="form-select" required>
+                        <option value="">— tanlang —</option>
+                        {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Izoh (ixtiyoriy)</label>
+                    <input type="text" name="note" class="form-control" placeholder="Masalan: kichkina o'lchamlar yetishmovchiligi">
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-3 mb-3">
+            <div class="d-flex gap-2 align-items-end mb-2">
+                <div class="flex-grow-1">
+                    <label class="form-label small">Mahsulot kodi yoki nom</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="OYO-0001 yoki nike">
+                </div>
+                <button type="button" id="searchBtn" class="btn btn-outline-primary">
+                    <i class="bi bi-search"></i> Qidirish
+                </button>
+            </div>
+            <div id="searchResults" class="small text-muted"></div>
+        </div>
+
+        <div class="card p-3 mb-3">
+            <h6 class="text-muted text-uppercase small mb-2">Ko'chirilayotgan tovarlar</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" id="linesTable">
+                    <thead class="table-light">
+                        <tr><th>Mahsulot</th><th>O'lcham/Rang</th>
+                            <th>Mavjud (manba)</th><th style="width:120px;">Soni</th>
+                            <th></th></tr>
+                    </thead>
+                    <tbody id="linesBody">
+                        <tr id="emptyLines"><td colspan="5" class="text-muted text-center py-3">
+                            Yuqorida mahsulot qidiring va variantni tanlang.
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-5">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-truck"></i> Yo'lga chiqarish
+            </button>
+            <a href="{% url 'transfer_list' %}" class="btn btn-outline-secondary btn-lg">Bekor qilish</a>
+        </div>
+    </form>
+</div>
+
+<script>
+const fromBranchEl = document.getElementById('fromBranch');
+const searchInput  = document.getElementById('searchInput');
+const searchBtn    = document.getElementById('searchBtn');
+const searchResults = document.getElementById('searchResults');
+const linesBody    = document.getElementById('linesBody');
+const emptyLines   = document.getElementById('emptyLines');
+const added = new Set();
+
+async function doSearch() {
+    const fromId = fromBranchEl.value;
+    if (!fromId) { searchResults.innerHTML = '<span class="text-danger">Avval manba filialni tanlang.</span>'; return; }
+    const q = searchInput.value.trim();
+    if (!q) return;
+    searchResults.textContent = 'Qidirilmoqda...';
+    // Reuse POS lookup but client-side filter by branch context.
+    // Since the user is admin and pos_lookup uses request.user.branch,
+    // we hit a small custom endpoint via fetch with from_branch query param.
+    // Simpler: load product variants page via JSON (re-uses /pos/lookup with admin's branch context).
+    // For now: use the lookup search box of the regular Lookup view via JSON pos endpoint
+    try {
+        const resp = await fetch(`/pos/lookup/?q=${encodeURIComponent(q)}`);
+        const data = await resp.json();
+        if (!data.found && (!data.suggestions || data.suggestions.length === 0)) {
+            searchResults.innerHTML = `<span class="text-danger">"${q}" topilmadi.</span>`; return;
+        }
+        if (!data.found) {
+            searchResults.innerHTML = 'Mos topildi: ' + data.suggestions.map(
+                s => `<a href="#" data-code="${s.code}" class="sugg">${s.code} — ${s.name}</a>`
+            ).join(' · ');
+            searchResults.querySelectorAll('.sugg').forEach(a => {
+                a.addEventListener('click', e => {
+                    e.preventDefault(); searchInput.value = a.dataset.code; doSearch();
+                });
+            });
+            return;
+        }
+        // For transfer we need stock at FROM branch, not the user's branch.
+        // Fetch a branch-scoped variant list via a fresh GET on a transfer-specific helper.
+        // To keep this small, re-query with explicit branch via URL parameter our endpoint accepts.
+        const resp2 = await fetch(`/pos/lookup/?q=${encodeURIComponent(data.product.code)}&branch=${fromId}`);
+        const d2 = await resp2.json();
+        const product = d2.product || data.product;
+        const variants = d2.variants || data.variants || [];
+        renderVariants(product, variants);
+    } catch (e) {
+        searchResults.innerHTML = '<span class="text-danger">Tarmoq xatosi.</span>';
+    }
+}
+
+function renderVariants(product, variants) {
+    if (!variants.length) {
+        searchResults.innerHTML = '<span class="text-warning">Bu filialda variantlar yo\'q.</span>';
+        return;
+    }
+    searchResults.innerHTML = `<strong>${product.code}</strong> — ${product.name} — variant tanlang:<br>` +
+        variants.map(v => {
+            const disabled = v.stock_count <= 0 ? 'disabled' : '';
+            return `<button type="button" class="btn btn-sm btn-outline-success mt-1 me-1 add-var" ${disabled}
+                    data-variant="${v.variant_id}" data-size="${v.size}" data-color="${v.color}"
+                    data-max="${v.stock_count}" data-pname="${product.name}" data-pcode="${product.code}">
+                    ${v.size} / ${v.color} <span class="badge bg-light text-dark">${v.stock_count}</span></button>`;
+        }).join('');
+    searchResults.querySelectorAll('.add-var').forEach(b => {
+        b.addEventListener('click', () => addLine(b.dataset));
+    });
+}
+
+function addLine(d) {
+    const variantId = d.variant;
+    if (added.has(variantId)) { searchResults.innerHTML = '<span class="text-warning">Bu variant allaqachon qo\'shilgan.</span>'; return; }
+    added.add(variantId);
+    emptyLines.style.display = 'none';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><strong>${d.pname}</strong><br><small class="text-muted"><code>${d.pcode}</code></small></td>
+        <td>${d.size} / ${d.color}</td>
+        <td>${d.max}</td>
+        <td><input type="number" name="qty[${variantId}]" min="1" max="${d.max}" value="1"
+                   class="form-control form-control-sm" required></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger remove-line">
+            <i class="bi bi-trash"></i></button></td>
+    `;
+    tr.querySelector('.remove-line').addEventListener('click', () => {
+        added.delete(variantId);
+        tr.remove();
+        if (!added.size) emptyLines.style.display = '';
+    });
+    linesBody.appendChild(tr);
+    searchInput.value = '';
+    searchResults.innerHTML = '<span class="text-success">✓ Qo\'shildi</span>';
+}
+
+searchBtn.addEventListener('click', doSearch);
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+</script>
+{% endblock %}

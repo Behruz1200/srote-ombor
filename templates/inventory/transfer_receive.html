@@ -1,0 +1,61 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}Qabul qilish — Ko'chirish #{{ transfer.pk }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <h3 class="mb-3">
+                <i class="bi bi-box-arrow-in-down"></i> Qabul qilish — #{{ transfer.pk }}
+            </h3>
+
+            <div class="card p-3 mb-3 bg-light">
+                <div>
+                    <strong>{{ transfer.from_branch.name }}</strong> →
+                    <strong>{{ transfer.to_branch.name }}</strong>
+                </div>
+                <small class="text-muted">
+                    Yo'lga chiqarildi: {{ transfer.dispatched_at|date:"d.m.Y H:i" }}
+                    · Jami: {{ transfer.total_qty }} dona
+                </small>
+            </div>
+
+            <div class="card p-3 mb-3">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Mahsulot</th><th>Variant</th><th class="text-end">Dona</th></tr></thead>
+                    <tbody>
+                    {% for line in transfer.lines.all %}
+                        <tr>
+                            <td>{{ line.variant.product.code }} — {{ line.variant.product.name|truncatechars:25 }}</td>
+                            <td>{{ line.variant.size }} / {{ line.variant.color }}</td>
+                            <td class="text-end">{{ line.quantity }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="alert alert-info py-2">
+                        <i class="bi bi-info-circle"></i>
+                        Tasdiqlasangiz, barcha tovarlar <strong>{{ transfer.to_branch.name }}</strong> omboriga
+                        qo'shiladi. Mahsulotlar manba filialdan oldindan kamaytirilgan.
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                            <i class="bi bi-check2-circle"></i> Hammasini qabul qilish
+                        </button>
+                        <a href="{% url 'transfer_detail' transfer.pk %}" class="btn btn-outline-secondary btn-lg">
+                            Bekor
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -12,6 +12,12 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('lookup/', views.lookup, name='lookup'),
 
+    # Inter-branch stock transfers
+    path('transfers/', views.transfer_list, name='transfer_list'),
+    path('transfers/new/', views.transfer_create, name='transfer_create'),
+    path('transfers/<int:pk>/', views.transfer_detail, name='transfer_detail'),
+    path('transfers/<int:pk>/receive/', views.transfer_receive, name='transfer_receive'),
+
     # Shifts (open/close, cash reconciliation)
     path('shift/open/', views.shift_open, name='shift_open'),
     path('shift/close/', views.shift_close, name='shift_close'),
