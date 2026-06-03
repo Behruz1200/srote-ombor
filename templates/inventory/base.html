@@ -171,6 +171,12 @@
             </ul>
             <ul class="navbar-nav">
                 <li class="nav-item">
+                    <span id="connStatus" class="badge bg-secondary me-2"
+                          title="Internet holati">
+                        <i class="bi bi-wifi"></i> <span id="connStatusText">…</span>
+                    </span>
+                </li>
+                <li class="nav-item">
                     <span class="navbar-text me-3">
                         <i class="bi bi-person-circle"></i>
                         {{ user.username }}
@@ -230,19 +236,37 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// Offline banner — boshqa offline mantiq (POS queue) o'zlarini ulashadi
+// Offline banner + navbar indicator. POS queue ulanishi
 // `srote:queue-changed` custom event orqali.
 (function() {
     const banner = document.getElementById('offlineBanner');
-    if (!banner) return;
     const info = document.getElementById('offlineQueueInfo');
+    const statusBadge = document.getElementById('connStatus');
+    const statusText = document.getElementById('connStatusText');
     let pendingCount = 0;
     function render() {
-        banner.style.display = navigator.onLine ? 'none' : '';
+        const online = navigator.onLine;
+        if (banner) banner.style.display = online ? 'none' : '';
         if (info) {
             info.textContent = pendingCount
                 ? `${pendingCount} ta sotuv onlayn'ga sync kutmoqda.`
                 : 'Onlayn bo\'lganda sotuvlar avtomatik yuboriladi.';
+        }
+        if (statusBadge && statusText) {
+            const icon = statusBadge.querySelector('i');
+            if (online) {
+                statusBadge.className = 'badge bg-success me-2';
+                if (icon) icon.className = 'bi bi-wifi';
+                statusText.textContent = pendingCount
+                    ? `Online · ${pendingCount} navbatda`
+                    : 'Online';
+            } else {
+                statusBadge.className = 'badge bg-warning text-dark me-2';
+                if (icon) icon.className = 'bi bi-wifi-off';
+                statusText.textContent = pendingCount
+                    ? `Offline · ${pendingCount} navbatda`
+                    : 'Offline';
+            }
         }
     }
     window.addEventListener('online', render);
