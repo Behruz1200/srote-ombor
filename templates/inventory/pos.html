@@ -9,7 +9,20 @@
         <h3 class="mb-0">
             <i class="bi bi-upc-scan"></i> POS terminal
             <small class="text-muted fs-6 ms-2">
-                <i class="bi bi-building"></i> {{ branch.name }}
+                {% if branches_list %}
+                    <form method="get" class="d-inline">
+                        <select name="branch_id" class="form-select form-select-sm d-inline-block"
+                                style="width:auto;" onchange="this.form.submit()">
+                            {% for b in branches_list %}
+                                <option value="{{ b.pk }}" {% if b.pk == branch.pk %}selected{% endif %}>
+                                    🏢 {{ b.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                {% else %}
+                    <i class="bi bi-building"></i> {{ branch.name }}
+                {% endif %}
                 · <i class="bi bi-person"></i> {{ user.username }}
                 {% if shift %}
                 · <span class="badge bg-success">Smen #{{ shift.pk }}</span>
