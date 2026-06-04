@@ -52,6 +52,11 @@
                             <i class="bi bi-lock"></i> Ekranni hozir qulflash
                         </button>
                     </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'pos_customer_display' %}" target="_blank">
+                            <i class="bi bi-display"></i> Mijoz ekranini ochish
+                        </a>
+                    </li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <button class="dropdown-item" type="button" id="printHelpBtn">
@@ -613,6 +618,30 @@ const parkBtn        = document.getElementById('parkBtn');
 const parkedCard     = document.getElementById('parkedCard');
 const parkedList     = document.getElementById('parkedList');
 
+// ---- Customer display broadcaster ----
+// Send cart/qr/paid events to /pos/display/ via BroadcastChannel.
+let _displayChannel = null;
+try { _displayChannel = new BroadcastChannel('srote-pos'); } catch (e) {}
+function broadcastDisplay(payload) {
+    if (_displayChannel) {
+        try { _displayChannel.postMessage(payload); } catch (e) {}
+    }
+}
+// On display ready, push current cart state
+if (_displayChannel) {
+    _displayChannel.onmessage = (e) => {
+        if (e.data && e.data.action === 'display-ready') {
+            broadcastCart();
+        }
+    };
+}
+function broadcastCart() {
+    broadcastDisplay({
+        action: 'cart',
+        items: Object.values(cart),
+    });
+}
+
 // cart state: stockId -> { stock_id, product_code, product_name, size, color, qty, sale_price, max }
 let cart = {};
 let promoDiscount = 0;
@@ -783,6 +812,7 @@ function renderCart() {
         promoDiscount = 0;
         appliedPromos = [];
         renderAppliedPromos();
+        if (typeof broadcastDisplay === 'function') broadcastDisplay({action: 'idle'});
         return;
     }
     let subtotal = 0, count = 0;
@@ -843,6 +873,7 @@ function renderCart() {
     clearCartBtn.style.display = 'inline-block';
     if (typeof renderMixedSplit === 'function') renderMixedSplit();
     if (typeof schedulePromoEval === 'function') schedulePromoEval();
+    if (typeof broadcastCart === 'function') broadcastCart();
 }
 
 // ---- Promotion evaluation ----
@@ -1154,6 +1185,16 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
             loadingEl.style.display = 'none';
             contentEl.style.display = '';
 
+            // Broadcast QR to customer display
+            if (typeof broadcastDisplay === 'function') {
+                broadcastDisplay({
+                    action: 'qr',
+                    image: qrImageUrl,
+                    amount: amount,
+                    provider: providerDisplay,
+                });
+            }
+
             // 3) Holatni har 2 soniyada tekshiramiz
             pollTimer = setInterval(pollStatus, 2000);
         } catch (e) {
@@ -1174,6 +1215,9 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
                 showPaid();
                 beepOk();
                 finalized = true;
+                if (typeof broadcastDisplay === 'function') {
+                    broadcastDisplay({action: 'paid'});
+                }
                 // Sotuvni 1.2 soniyadan keyin yakunlaymiz (mijoz status'ni ko'rib qolsin)
                 setTimeout(() => {
                     getModal().hide();

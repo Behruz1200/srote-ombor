@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ shop_name }} — Mijoz ekrani</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0c1230 100%);
+            --accent: #20c997;
+            --text-primary: #f1f5f9;
+            --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            user-select: none;
+        }
+        .display-wrap {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* Header */
+        .display-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 40px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .brand-logo {
+            width: 56px; height: 56px;
+            background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.6rem;
+            box-shadow: 0 4px 16px rgba(32,201,151,0.4);
+        }
+        .branch-name {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+        }
+        .clock {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        /* Idle screen */
+        .idle-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+        }
+        .idle-screen .welcome {
+            font-size: 4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #20c997, #6ee7b7);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 16px;
+        }
+        .idle-screen .subtitle {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            max-width: 800px;
+            line-height: 1.6;
+        }
+        .idle-screen .icon {
+            font-size: 6rem;
+            color: rgba(32,201,151,0.4);
+            margin-bottom: 24px;
+        }
+
+        /* Cart screen */
+        .cart-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 40px;
+            overflow: hidden;
+        }
+        .cart-screen .cart-title {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 16px;
+        }
+        .cart-screen .items {
+            flex: 1;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.04);
+            border-radius: 16px;
+            padding: 16px 24px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .cart-screen .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 1.4rem;
+        }
+        .cart-screen .item:last-child { border-bottom: none; }
+        .cart-screen .item-name {
+            flex: 1;
+            margin-right: 16px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cart-screen .item-meta {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-top: 4px;
+        }
+        .cart-screen .item-total {
+            font-weight: 600;
+            color: #20c997;
+            font-size: 1.4rem;
+            min-width: 180px;
+            text-align: right;
+        }
+        .cart-summary {
+            margin-top: 16px;
+            padding: 24px 32px;
+            background: linear-gradient(135deg, rgba(32,201,151,0.15), rgba(13,110,253,0.15));
+            border-radius: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .cart-summary .total-label {
+            font-size: 1.4rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .cart-summary .total-amount {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        /* QR screen */
+        .qr-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .qr-screen .provider-name {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+        .qr-screen .amount {
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 32px;
+        }
+        .qr-screen .qr-box {
+            background: #fff;
+            padding: 24px;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            margin-bottom: 24px;
+        }
+        .qr-screen .qr-box img {
+            display: block;
+            width: 360px; height: 360px;
+            object-fit: contain;
+        }
+        .qr-screen .hint {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+        .qr-screen .pulse {
+            display: inline-block;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: #20c997;
+            margin-right: 12px;
+            animation: pulse 1.4s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.4); }
+        }
+
+        /* Paid screen */
+        .paid-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+        .paid-screen .check { font-size: 8rem; color: #20c997; }
+        .paid-screen .message {
+            font-size: 4rem;
+            font-weight: 700;
+            color: #20c997;
+            margin-top: 16px;
+        }
+        .paid-screen .thanks {
+            font-size: 1.8rem;
+            color: var(--text-muted);
+            margin-top: 16px;
+        }
+
+        /* Footer */
+        .display-footer {
+            padding: 16px 40px;
+            background: rgba(0,0,0,0.2);
+            color: var(--text-muted);
+            text-align: center;
+            font-size: 0.95rem;
+        }
+
+        .fmt-uzs::after { content: ' so\'m'; }
+    </style>
+</head>
+<body>
+<div class="display-wrap">
+    <div class="display-header">
+        <div class="brand">
+            <span class="brand-logo"><i class="bi bi-shop"></i></span>
+            <span>{{ shop_name }}</span>
+        </div>
+        {% if branch %}
+            <span class="branch-name"><i class="bi bi-building"></i> {{ branch.name }}</span>
+        {% endif %}
+        <span class="clock" id="clock">—:—</span>
+    </div>
+
+    <!-- Idle screen (default) -->
+    <div class="idle-screen" id="screenIdle">
+        <div class="icon"><i class="bi bi-shop-window"></i></div>
+        <div class="welcome">Xush kelibsiz!</div>
+        <div class="subtitle">
+            Xaridingiz uchun rahmat. Kassirimiz mahsulotlarni
+            skanerlab boshlaydi va siz bu ekranda ko'rib turasiz.
+        </div>
+    </div>
+
+    <!-- Cart screen (hidden initially) -->
+    <div class="cart-screen d-none" id="screenCart">
+        <div class="cart-title"><i class="bi bi-basket"></i> Sizning savatingiz</div>
+        <div class="items" id="cartItems"></div>
+        <div class="cart-summary">
+            <div>
+                <div class="total-label">Jami to'lov</div>
+                <div class="small text-muted mt-1">
+                    <span id="cartCount">0</span> ta mahsulot
+                </div>
+            </div>
+            <div class="total-amount"><span id="cartTotal">0</span> so'm</div>
+        </div>
+    </div>
+
+    <!-- QR screen -->
+    <div class="qr-screen d-none" id="screenQR">
+        <div class="provider-name" id="qrProviderName">Payme</div>
+        <div class="amount"><span id="qrAmount">0</span> so'm</div>
+        <div class="qr-box">
+            <img id="qrImage" src="" alt="QR">
+        </div>
+        <div class="hint">
+            <span class="pulse"></span>
+            Telefoningizda ilovani oching va scan qiling
+        </div>
+    </div>
+
+    <!-- Paid -->
+    <div class="paid-screen d-none" id="screenPaid">
+        <div class="check"><i class="bi bi-check-circle-fill"></i></div>
+        <div class="message">To'lov qabul qilindi!</div>
+        <div class="thanks">Xaridingiz uchun rahmat. Yaxshi kun!</div>
+    </div>
+
+    <div class="display-footer">
+        Aloqada bo'lganingiz uchun rahmat · Powered by Srote POS
+    </div>
+</div>
+
+<script>
+const screens = {
+    idle: document.getElementById('screenIdle'),
+    cart: document.getElementById('screenCart'),
+    qr: document.getElementById('screenQR'),
+    paid: document.getElementById('screenPaid'),
+};
+const cartItemsEl = document.getElementById('cartItems');
+const cartTotalEl = document.getElementById('cartTotal');
+const cartCountEl = document.getElementById('cartCount');
+const qrImage = document.getElementById('qrImage');
+const qrAmount = document.getElementById('qrAmount');
+const qrProviderName = document.getElementById('qrProviderName');
+
+function fmt(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' '); }
+
+function showScreen(name) {
+    Object.entries(screens).forEach(([k, el]) => {
+        el.classList.toggle('d-none', k !== name);
+    });
+}
+
+function renderCart(items) {
+    cartItemsEl.innerHTML = '';
+    let total = 0, qty = 0;
+    items.forEach(it => {
+        const sub = it.qty * it.sale_price;
+        total += sub;
+        qty += it.qty;
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `
+            <div>
+                <div class="item-name">${it.product_name}</div>
+                <div class="item-meta">${it.qty} × ${fmt(it.sale_price)} so'm
+                    ${it.size && it.size !== '—' ? '· ' + it.size : ''}
+                    ${it.color && it.color !== '—' ? '/ ' + it.color : ''}
+                </div>
+            </div>
+            <div class="item-total">${fmt(sub)}</div>
+        `;
+        cartItemsEl.appendChild(row);
+    });
+    cartTotalEl.textContent = fmt(total);
+    cartCountEl.textContent = qty;
+}
+
+// BroadcastChannel for same-browser sync (POS + display tabs)
+let bc = null;
+try {
+    bc = new BroadcastChannel('srote-pos');
+} catch (e) {}
+
+if (bc) {
+    bc.onmessage = (e) => {
+        const msg = e.data;
+        if (!msg || !msg.action) return;
+        if (msg.action === 'cart') {
+            if (msg.items && msg.items.length > 0) {
+                renderCart(msg.items);
+                showScreen('cart');
+            } else {
+                showScreen('idle');
+            }
+        } else if (msg.action === 'qr') {
+            qrImage.src = msg.image || '';
+            qrAmount.textContent = fmt(msg.amount || 0);
+            qrProviderName.textContent = msg.provider || 'QR to\'lov';
+            showScreen('qr');
+        } else if (msg.action === 'paid') {
+            showScreen('paid');
+            // Reset to idle after a moment
+            setTimeout(() => showScreen('idle'), 3500);
+        } else if (msg.action === 'idle') {
+            showScreen('idle');
+        }
+    };
+}
+
+// Heartbeat ping back so POS knows display is alive
+if (bc) {
+    setInterval(() => bc.postMessage({action: 'display-alive'}), 5000);
+    // Request initial state on load
+    bc.postMessage({action: 'display-ready'});
+}
+
+// Clock
+function tickClock() {
+    const d = new Date();
+    document.getElementById('clock').textContent =
+        `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+setInterval(tickClock, 1000); tickClock();
+
+// Fullscreen on click (so cashier can put it on second screen and click)
+document.addEventListener('click', () => {
+    if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+    }
+});
+</script>
+</body>
+</html>

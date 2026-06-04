@@ -1765,6 +1765,17 @@ def _user_branch_or_403(request):
 
 
 @login_required
+def pos_customer_display(request):
+    """Mijoz tomonidagi ekran — POS bilan BroadcastChannel orqali sinxron.
+    Faqat o'qish (interaktiv emas). Iste'mol uchun: 2-monitor yoki ikkinchi tab."""
+    branch = _user_branch_or_403(request)
+    return render(request, 'inventory/pos_display.html', {
+        'branch': branch,
+        'shop_name': 'Srote',  # TODO: shop name from settings/branding
+    })
+
+
+@login_required
 def pos_terminal(request):
     """Single-page POS UI. Browser maintains the cart, posts via AJAX."""
     # If admin clicked the branch dropdown, persist the choice

@@ -26,6 +26,7 @@
             if (m === 'dark') document.documentElement.setAttribute('data-bs-theme', 'dark');
         })();
     </script>
+    <script src="/static/js/i18n.js" defer></script>
     <style>
         /* Dark mode color variables (Bootstrap 5.3 native) */
         [data-bs-theme="dark"] body { background: #15171c; color: #d4d6db; }
@@ -347,7 +348,7 @@
             <span class="brand-logo">
                 <i class="bi bi-shop"></i>
             </span>
-            <span class="brand-text">Srote</span>
+            <span class="brand-text no-i18n">Srote</span>
         </a>
 
         <!-- POS — always visible primary CTA on mobile too -->
@@ -518,6 +519,26 @@
                             </button>
                         </li>
                         <li><hr class="dropdown-divider"></li>
+                        <li class="dropdown-header small text-uppercase no-i18n">Til / Язык</li>
+                        <li>
+                            <button class="dropdown-item lang-btn" type="button" data-lang="lat">
+                                <span class="no-i18n">🇺🇿 O'zbekcha (Lotin)</span>
+                                <i class="bi bi-check2 ms-auto lang-check" data-lang-check="lat" style="display:none;"></i>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item lang-btn" type="button" data-lang="cyr">
+                                <span class="no-i18n">🇺🇿 Ўзбекча (Кирилл)</span>
+                                <i class="bi bi-check2 ms-auto lang-check" data-lang-check="cyr" style="display:none;"></i>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item lang-btn" type="button" data-lang="ru">
+                                <span class="no-i18n">🇷🇺 Русский</span>
+                                <small class="text-muted ms-auto no-i18n">(soon)</small>
+                            </button>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{% url 'logout' %}">
                             <i class="bi bi-box-arrow-right text-danger"></i> Chiqish
                         </a></li>
@@ -560,6 +581,24 @@
 </div>
 
 <script>
+// Language switcher
+(function() {
+    function markCurrent() {
+        const cur = localStorage.getItem('srote_lang') || 'lat';
+        document.querySelectorAll('.lang-check').forEach(el => {
+            el.style.display = (el.dataset.langCheck === cur) ? '' : 'none';
+        });
+    }
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const lang = btn.dataset.lang;
+            if (window.SroteI18n) window.SroteI18n.setLang(lang);
+            markCurrent();
+        });
+    });
+    markCurrent();
+})();
+
 // Dark mode toggle
 (function() {
     const btn = document.getElementById('themeToggle');

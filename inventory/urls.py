@@ -33,6 +33,7 @@ urlpatterns = [
     path('pos/', views.pos_terminal, name='pos_terminal'),
     path('pos/lookup/', views.pos_lookup, name='pos_lookup'),
     path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
+    path('pos/display/', views.pos_customer_display, name='pos_customer_display'),
     path('pos/park/', views.pos_park, name='pos_park'),
     path('pos/parked/<int:pk>/resume/', views.pos_parked_resume, name='pos_parked_resume'),
     path('pos/parked/<int:pk>/delete/', views.pos_parked_delete, name='pos_parked_delete'),
