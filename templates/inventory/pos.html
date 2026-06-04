@@ -1778,9 +1778,24 @@ if (favToggleBtn) {
     });
 }
 
-// Refocus scanner input after clicks anywhere except other inputs
+// Refocus scanner input after clicks anywhere except other inputs.
+// Exclude SELECT/TEXTAREA/LABEL and any element inside a form/dropdown/modal
+// so click-to-open native dropdowns and form controls don't immediately
+// steal focus back to the scanner (which closes the dropdown).
 document.addEventListener('click', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+    const t = e.target;
+    if (!t) return;
+    const tag = t.tagName;
+    if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'SELECT' ||
+        tag === 'TEXTAREA' || tag === 'OPTION' || tag === 'LABEL' ||
+        tag === 'A') return;
+    if (t.closest && (
+        t.closest('button') || t.closest('select') ||
+        t.closest('a') || t.closest('label') ||
+        t.closest('form') || t.closest('.modal') ||
+        t.closest('.dropdown-menu') || t.closest('.dropdown') ||
+        t.closest('[data-bs-toggle]')
+    )) return;
     refocus();
 });
 
