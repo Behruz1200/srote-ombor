@@ -9,7 +9,15 @@
 .pos-side .card { border-radius: 8px; }
 .pos-side .form-label { margin-bottom: 0.2rem; font-size: 0.72rem; }
 .pos-side .payment-btn { padding: 0.3rem 0.4rem; font-size: 0.85rem; }
-.pos-side .qr-provider-btn { font-size: 0.78rem; }
+/* QR provider buttons — touch-friendly (min 44×44px Apple HIG) */
+.pos-side .qr-provider-btn {
+    font-size: 0.92rem;
+    padding: 0.6rem 0.85rem !important;
+    min-height: 48px;
+    font-weight: 500;
+}
+.pos-side .qr-provider-btn i { font-size: 1.1rem; margin-right: 0.25rem; }
+#qrProviders { gap: 0.4rem !important; }
 .pos-side .display-6 { font-size: 1.85rem; line-height: 1; }
 .pos-side hr { margin-top: 0.4rem; margin-bottom: 0.4rem; }
 
@@ -30,29 +38,34 @@
 
 <div class="container-fluid px-3">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0">
-            <i class="bi bi-upc-scan"></i> POS terminal
-            <small class="text-muted fs-6 ms-2">
-                {% if branches_list %}
-                    <form method="get" class="d-inline">
-                        <select name="branch_id" class="form-select form-select-sm d-inline-block"
-                                style="width:auto;" onchange="this.form.submit()">
-                            {% for b in branches_list %}
-                                <option value="{{ b.pk }}" {% if b.pk == branch.pk %}selected{% endif %}>
-                                    🏢 {{ b.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </form>
-                {% else %}
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <h3 class="mb-0">
+                <i class="bi bi-upc-scan"></i> POS terminal
+            </h3>
+            {% if branches_list %}
+                <form method="get" action="{% url 'pos_terminal' %}" class="d-inline-block mb-0">
+                    <select name="branch_id" class="form-select form-select-sm"
+                            style="width: auto; min-width: 180px;"
+                            onchange="this.form.submit()" id="branchSwitcher">
+                        {% for b in branches_list %}
+                            <option value="{{ b.pk }}" {% if b.pk == branch.pk %}selected{% endif %}>
+                                🏢 {{ b.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </form>
+            {% else %}
+                <span class="text-muted small">
                     <i class="bi bi-building"></i> {{ branch.name }}
-                {% endif %}
+                </span>
+            {% endif %}
+            <span class="text-muted small">
                 · <i class="bi bi-person"></i> {{ user.username }}
                 {% if shift %}
-                · <span class="badge bg-success">Smen #{{ shift.pk }}</span>
+                    · <span class="badge bg-success">Smen #{{ shift.pk }}</span>
                 {% endif %}
-            </small>
-        </h3>
+            </span>
+        </div>
         <div class="d-flex gap-2 align-items-center">
             <div class="text-muted small">
                 <i class="bi bi-clock"></i>
@@ -292,14 +305,14 @@
                 <div class="d-flex flex-wrap gap-1" id="qrProviders">
                     {% for p in payment_providers %}
                         <button type="button"
-                                class="btn btn-sm btn-outline-{% if p.is_installment %}info{% else %}primary{% endif %} qr-provider-btn py-0 px-2"
+                                class="btn btn-outline-{% if p.is_installment %}info{% else %}primary{% endif %} qr-provider-btn"
                                 data-provider="{{ p.name }}"
                                 data-display="{{ p.display_name }}"
                                 data-installment="{% if p.is_installment %}1{% else %}0{% endif %}"
                                 data-static-qr-id="{{ p.static_qr_id|default:'' }}"
                                 {% if p.has_static_qr %}title="QR ulangan"{% endif %}>
                             <i class="bi {{ p.icon }}"></i> {{ p.display_name }}
-                            {% if p.has_static_qr %}<i class="bi bi-check2-circle text-success small"></i>{% endif %}
+                            {% if p.has_static_qr %}<i class="bi bi-check2-circle text-success ms-1"></i>{% endif %}
                         </button>
                     {% endfor %}
                 </div>
