@@ -1,0 +1,113 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}CSV import — Srote{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h3 class="mb-3"><i class="bi bi-file-earmark-spreadsheet"></i> CSV import</h3>
+
+    <div class="card p-3 mb-3">
+        <div class="btn-group" role="group">
+            <a href="?entity=products"
+               class="btn btn-{% if entity == 'products' %}primary{% else %}outline-primary{% endif %}">
+                <i class="bi bi-box"></i> Mahsulotlar
+            </a>
+            <a href="?entity=customers"
+               class="btn btn-{% if entity == 'customers' %}primary{% else %}outline-primary{% endif %}">
+                <i class="bi bi-person-rolodex"></i> Mijozlar
+            </a>
+            <a href="?entity=stock"
+               class="btn btn-{% if entity == 'stock' %}primary{% else %}outline-primary{% endif %}">
+                <i class="bi bi-boxes"></i> Zaxira (qabul)
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-5">
+            <div class="card p-3">
+                <h5 class="mb-2">CSV faylni yuklash</h5>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="entity" value="{{ entity }}">
+                    <div class="mb-3">
+                        <label class="form-label">Fayl (.csv, UTF-8)</label>
+                        <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-upload"></i> Import qilish
+                    </button>
+                </form>
+                <small class="text-muted mt-2 d-block">
+                    <i class="bi bi-info-circle"></i> Birinchi qator — sarlavhalar.
+                    Vergul (,) yoki nuqtali vergul (;) ishlatishi mumkin.
+                </small>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <div class="card p-3">
+                <h5 class="mb-2">Format va misol</h5>
+
+                {% if entity == 'products' %}
+                <p class="small text-muted">
+                    Mahsulotlar (Product) jadval ustunlari. Kod (code) ixtiyoriy —
+                    bo'sh bo'lsa avtomatik beriladi. Kod bor bo'lsa — yangilanadi.
+                </p>
+                <pre class="bg-light p-2 rounded small mb-2">code,name,category,default_sale_price,markup_percent,description
+OYO-0001,Nike Air Sneaker,Oyoq kiyim,850000,40,Yangi 2026 kolleksiya
+,Adidas Forum,Oyoq kiyim,720000,35,
+,Parfum Dior,Parfyumeriya,450000,50,</pre>
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="data:text/csv;charset=utf-8,code,name,category,default_sale_price,markup_percent,description%0A,Mahsulot%20nomi,Kategoriya,100000,40,Izoh"
+                   download="products-template.csv">
+                    <i class="bi bi-download"></i> Bo'sh shablon yuklab olish
+                </a>
+
+                {% elif entity == 'customers' %}
+                <p class="small text-muted">
+                    Mijozlar bazasi. Telefon kalit (unique). Mavjud telefon
+                    bo'lsa yozuv yangilanadi.
+                </p>
+                <pre class="bg-light p-2 rounded small mb-2">name,phone,tags,inn,note
+Aziz Karimov,+998901234567,VIP,,Doimiy mijoz
+Malika Saidova,+998939876543,,,
+,+998771122334,,123456789,B2B</pre>
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="data:text/csv;charset=utf-8,name,phone,tags,inn,note%0AIsm,+998901234567,VIP,,Izoh"
+                   download="customers-template.csv">
+                    <i class="bi bi-download"></i> Bo'sh shablon yuklab olish
+                </a>
+
+                {% else %}
+                <p class="small text-muted">
+                    Zaxira qo'shish. <strong>product_code</strong> va <strong>branch</strong>
+                    majburiy. Variant ko'rsatilsa (size/color), o'sha variant uchun.
+                    Bo'sh qoldirilsa "—/—" variant yaratiladi.
+                </p>
+                <pre class="bg-light p-2 rounded small mb-2">product_code,branch,size,color,quantity,cost_price,sale_price
+OYO-0001,Chilonzor Filiali,42,Qora,10,600000,850000
+OYO-0001,Chilonzor Filiali,43,Qora,8,600000,850000
+KOY-0005,Sergeli Filiali,—,—,50,15000,25000</pre>
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="data:text/csv;charset=utf-8,product_code,branch,size,color,quantity,cost_price,sale_price%0AOYO-0001,Chilonzor%20Filiali,42,Qora,10,600000,850000"
+                   download="stock-template.csv">
+                    <i class="bi bi-download"></i> Bo'sh shablon yuklab olish
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+        <h6 class="text-muted text-uppercase small mb-2">Maslahatlar</h6>
+        <ul class="small mb-0">
+            <li>Excel'dan CSV'ga eksport qilganda <strong>UTF-8</strong>'ni tanlang (BOM bilan ham ishlaydi).</li>
+            <li>Sonlarda <strong>vergul (,) o'rniga nuqta (.)</strong> ishlatiladi: <code>10.5</code>, <code>850000</code>.</li>
+            <li>Kategoriya nomi mavjud bo'lmasa avtomatik yaratiladi.</li>
+            <li>Sotuv shablon: <a href="{% url 'sales_list' %}?export=csv">/sales/?export=csv</a> dan tushirish va format namunasini ko'rish.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

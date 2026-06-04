@@ -57,6 +57,11 @@
                             <i class="bi bi-display"></i> Mijoz ekranini ochish
                         </a>
                     </li>
+                    <li>
+                        <button class="dropdown-item" type="button" id="drawerBtn">
+                            <i class="bi bi-cash-stack"></i> Kassa qutisini ochish
+                        </button>
+                    </li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <button class="dropdown-item" type="button" id="printHelpBtn">
@@ -452,6 +457,61 @@
         <span id="qrPayRefCodeFooter" class="d-none"></span>
         <button type="button" class="btn btn-outline-secondary"
                 id="qrPayCancelBtn">Bekor qilish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cash drawer setup help modal -->
+<div class="modal fade" id="drawerHelpModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cash-stack"></i> Kassa qutisini sozlash</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small">
+            <strong>2 ta usuli bor — sizning apparatga qarab tanlang:</strong>
+        </div>
+
+        <h6 class="mt-3"><i class="bi bi-1-circle"></i> Avtomatik (eng tavsiya etiladi)</h6>
+        <p class="small mb-1">
+            Kassa qutisi <strong>thermal printer'ga RJ-11 kabel orqali ulanadi</strong>.
+            Printer chek bosib chiqarganda quti avtomatik ochiladi (mexanik signal yuboriladi).
+        </p>
+        <p class="small text-muted">
+            Hech qanday qo'shimcha sozlash kerak emas. Bizning chek bosib chiqarish jarayoni
+            (POS → printer) o'zi qutini ochadi.
+        </p>
+
+        <h6 class="mt-3"><i class="bi bi-2-circle"></i> WebUSB orqali (chekisiz)</h6>
+        <p class="small mb-1">
+            Brauzerdan to'g'ridan-to'g'ri USB printer'ga ESC/POS komandasi yuboriladi
+            (chek bosmasdan quti ochiladi).
+        </p>
+        <ul class="small">
+            <li>Faqat <strong>Chrome / Edge / Opera</strong>'da ishlaydi (Safari'da yo'q).</li>
+            <li>HTTPS bo'lishi shart.</li>
+            <li>Tugma bosilganda brauzer USB qurilmasini tanlashni so'raydi —
+                printer'ni tanlang va "Connect" bosing.</li>
+            <li>Birinchi marta bog'langach, keyingisida ham eslab qoladi.</li>
+        </ul>
+
+        <h6 class="mt-3"><i class="bi bi-3-circle"></i> Native driver (eng kuchli)</h6>
+        <p class="small">
+            POS kompyuteriga lokal printer driver o'rnatib (CUPS / Windows), uni
+            tizimning default printeri qiling. Kassir <code>Cmd+P</code> bilan chek bosadi.
+        </p>
+
+        <div class="alert alert-warning small mt-3 mb-0">
+            <i class="bi bi-tools"></i>
+            Mashhur modellar: Xprinter XP-58 / 80mm, Star TSP100, Epson TM-T20,
+            POS-58 — barchasi ESC/POS qo'llab-quvvatlaydi.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Tushundim</button>
       </div>
     </div>
   </div>
@@ -1809,6 +1869,35 @@ if (printHelpBtn) {
     printHelpBtn.addEventListener('click', () => {
         const helpModal = new bootstrap.Modal(document.getElementById('printHelpModal'));
         helpModal.show();
+    });
+}
+
+// Cash drawer open via WebUSB (ESC/POS) or fallback
+const drawerBtn = document.getElementById('drawerBtn');
+if (drawerBtn) {
+    drawerBtn.addEventListener('click', async () => {
+        // ESC/POS DLE DC4 1 0 4 = open drawer pin 2 (or ESC p 0 25 250)
+        const DRAWER_CMD = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]);
+        if (!navigator.usb) {
+            new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
+            return;
+        }
+        try {
+            const device = await navigator.usb.requestDevice({filters: []});
+            await device.open();
+            if (device.configuration === null) await device.selectConfiguration(1);
+            await device.claimInterface(0);
+            // Find output endpoint
+            const iface = device.configuration.interfaces[0];
+            const ep = iface.alternate.endpoints.find(e => e.direction === 'out');
+            if (!ep) throw new Error("Out endpoint topilmadi");
+            await device.transferOut(ep.endpointNumber, DRAWER_CMD);
+            setStatus('✓ Kassa qutisi ochildi', 'success');
+            beepOk();
+        } catch (e) {
+            setStatus('Kassa qutisi: ' + e.message, 'error');
+            new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
+        }
     });
 }
 

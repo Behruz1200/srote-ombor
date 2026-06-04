@@ -376,6 +376,56 @@ def dashboard(request):
 # ---------- PRODUCTS ----------
 
 @admin_required
+@admin_required
+def product_bulk_update(request):
+    """POST: tanlangan mahsulotlarga bulk amal qo'llash."""
+    if request.method != 'POST':
+        return redirect('product_list')
+    ids = request.POST.getlist('id')
+    if not ids:
+        messages.warning(request, "Bironta ham mahsulot tanlanmagan.")
+        return redirect('product_list')
+    op = request.POST.get('op') or ''
+    from decimal import Decimal
+    try:
+        value = Decimal(request.POST.get('value') or '0')
+    except Exception:
+        messages.error(request, "Noto'g'ri qiymat.")
+        return redirect('product_list')
+
+    products = Product.objects.filter(id__in=[int(i) for i in ids if str(i).isdigit()])
+    n = 0
+    for p in products:
+        if op == 'set_price':
+            p.default_sale_price = value
+            p.save(update_fields=['default_sale_price'])
+            n += 1
+        elif op == 'set_markup':
+            p.markup_percent = value
+            p.save(update_fields=['markup_percent'])
+            n += 1
+        elif op == 'multiply_price':
+            new_price = (p.default_sale_price * (value / 100)).quantize(Decimal('1'))
+            p.default_sale_price = new_price
+            p.save(update_fields=['default_sale_price'])
+            n += 1
+        elif op == 'change_category':
+            try:
+                cat_id = int(value)
+                cat = Category.objects.filter(pk=cat_id).first()
+                if cat:
+                    p.category = cat
+                    p.save(update_fields=['category'])
+                    n += 1
+            except (ValueError, TypeError):
+                pass
+        elif op == 'delete':
+            p.delete()
+            n += 1
+    messages.success(request, f"{n} ta mahsulot yangilandi/o'chirildi.")
+    return redirect('product_list')
+
+
 def product_list(request):
     """Mahsulotlar ro'yxati: qidiruv + filtrlar + sortable + 30 kunlik sotilganlik."""
     q = (request.GET.get('q') or '').strip()
@@ -979,6 +1029,194 @@ def intake_quick_save_upload(request):
 
 
 # ---------- SUPPLIER MANAGEMENT ----------
+
+@admin_required
+def send_daily_summary_now(request):
+    """POST /dashboard/send-daily/ — Telegram'ga kunlik xulosa yuborish."""
+    if request.method != 'POST':
+        return redirect('dashboard')
+    from .notifications import daily_summary_text, send_telegram, _enabled
+    if not _enabled():
+        messages.error(request,
+            "Telegram sozlanmagan: TELEGRAM_BOT_TOKEN va TELEGRAM_CHAT_IDS env'ni belgilang.")
+        return redirect('dashboard')
+    try:
+        text = daily_summary_text()
+        ok = send_telegram(text)
+        if ok:
+            messages.success(request, "✓ Kunlik xulosa Telegram'ga yuborildi.")
+        else:
+            messages.error(request, "Yuborilmadi — Telegram API javob bermadi.")
+    except Exception as e:
+        messages.error(request, f"Xatolik: {e}")
+    return redirect('dashboard')
+
+
+@admin_required
+def csv_import(request):
+    """CSV import: mahsulot, mijoz yoki zaxira.
+
+    Format va template'lar pastda. Birinchi qatordagi headerlar bizning
+    columns'larga mos kelishi kerak.
+    """
+    entity = request.GET.get('entity') or request.POST.get('entity') or 'products'
+    if entity not in ('products', 'customers', 'stock'):
+        entity = 'products'
+
+    if request.method == 'POST' and 'csv_file' in request.FILES:
+        f = request.FILES['csv_file']
+        try:
+            data = f.read().decode('utf-8-sig')  # handle BOM
+        except UnicodeDecodeError:
+            data = f.read().decode('cp1251', errors='ignore')
+        reader = csv.DictReader(io.StringIO(data))
+        rows = list(reader)
+        if not rows:
+            messages.error(request, "Bo'sh fayl yoki noto'g'ri format.")
+            return redirect(f'/import/?entity={entity}')
+
+        created = 0
+        updated = 0
+        failed = []
+
+        try:
+            with transaction.atomic():
+                if entity == 'products':
+                    for i, row in enumerate(rows, 2):  # row 2 = first data row
+                        try:
+                            name = (row.get('name') or '').strip()
+                            if not name:
+                                raise ValueError("nom (name) bo'sh")
+                            code = (row.get('code') or '').strip().upper()
+                            cat_name = (row.get('category') or '').strip()
+                            category = None
+                            if cat_name:
+                                category, _ = Category.objects.get_or_create(name=cat_name)
+                            from decimal import Decimal
+                            price = Decimal(row.get('default_sale_price') or '0')
+                            markup = Decimal(row.get('markup_percent') or '40')
+                            desc = (row.get('description') or '').strip()
+                            if code:
+                                p, was_created = Product.objects.update_or_create(
+                                    code=code,
+                                    defaults={
+                                        'name': name, 'category': category,
+                                        'default_sale_price': price,
+                                        'markup_percent': markup,
+                                        'description': desc,
+                                    }
+                                )
+                            else:
+                                p = Product.objects.create(
+                                    name=name, category=category,
+                                    default_sale_price=price,
+                                    markup_percent=markup,
+                                    description=desc,
+                                )
+                                was_created = True
+                            if was_created:
+                                created += 1
+                            else:
+                                updated += 1
+                        except Exception as e:
+                            failed.append({'row': i, 'reason': str(e)})
+
+                elif entity == 'customers':
+                    for i, row in enumerate(rows, 2):
+                        try:
+                            phone = (row.get('phone') or '').strip()
+                            name = (row.get('name') or '').strip()
+                            if not phone and not name:
+                                raise ValueError("phone va name ikkalasi bo'sh")
+                            tags = (row.get('tags') or '').strip()
+                            inn = (row.get('inn') or '').strip()
+                            note = (row.get('note') or '').strip()
+                            if phone:
+                                c, was_created = Customer.objects.update_or_create(
+                                    phone=phone,
+                                    defaults={'name': name, 'tags': tags,
+                                              'inn': inn, 'note': note},
+                                )
+                            else:
+                                c = Customer.objects.create(
+                                    name=name, tags=tags, inn=inn, note=note,
+                                )
+                                was_created = True
+                            if was_created:
+                                created += 1
+                            else:
+                                updated += 1
+                        except Exception as e:
+                            failed.append({'row': i, 'reason': str(e)})
+
+                elif entity == 'stock':
+                    for i, row in enumerate(rows, 2):
+                        try:
+                            code = (row.get('product_code') or '').strip().upper()
+                            branch_name = (row.get('branch') or '').strip()
+                            size = (row.get('size') or '—').strip() or '—'
+                            color = (row.get('color') or '—').strip() or '—'
+                            qty = int(row.get('quantity') or 0)
+                            from decimal import Decimal
+                            cost = Decimal(row.get('cost_price') or '0')
+                            sale = Decimal(row.get('sale_price') or '0')
+
+                            if not code or not branch_name or qty <= 0:
+                                raise ValueError("code, branch, va quantity>0 kerak")
+                            product = Product.objects.filter(code=code).first()
+                            if not product:
+                                raise ValueError(f"mahsulot {code} topilmadi")
+                            branch = Branch.objects.filter(name=branch_name).first()
+                            if not branch:
+                                raise ValueError(f"filial '{branch_name}' topilmadi")
+
+                            variant, _ = ProductVariant.objects.get_or_create(
+                                product=product, size=size, color=color,
+                            )
+                            stock, was_created = BranchStock.objects.get_or_create(
+                                variant=variant, branch=branch,
+                                defaults={'cost_price': cost, 'sale_price': sale,
+                                          'stock_count': qty},
+                            )
+                            if not was_created:
+                                stock.stock_count = F('stock_count') + qty
+                                if cost > 0: stock.cost_price = cost
+                                if sale > 0: stock.sale_price = sale
+                                stock.save()
+                            # Create intake record
+                            Intake.objects.create(
+                                variant=variant, branch=branch,
+                                quantity=qty, cost_per_unit=cost,
+                                supplier='CSV import',
+                                received_by=request.user,
+                            )
+                            if was_created:
+                                created += 1
+                            else:
+                                updated += 1
+                        except Exception as e:
+                            failed.append({'row': i, 'reason': str(e)})
+
+                if failed and len(failed) == len(rows):
+                    # Hammasi xato — rollback
+                    raise ValueError(f"Hammasi xato: birinchi sabab — {failed[0]['reason']}")
+        except Exception as e:
+            messages.error(request, f"Import to'xtatildi: {e}")
+            return redirect(f'/import/?entity={entity}')
+
+        if created or updated:
+            messages.success(request,
+                f"Qo'shildi: {created}, yangilandi: {updated}, xato: {len(failed)}")
+        if failed:
+            preview = '; '.join(f"qator {f['row']}: {f['reason']}" for f in failed[:5])
+            messages.warning(request, f"Xato qatorlar: {preview}"
+                             + (f" (jami {len(failed)} ta)" if len(failed) > 5 else ''))
+        return redirect(f'/import/?entity={entity}')
+
+    return render(request, 'inventory/csv_import.html', {
+        'entity': entity,
+    })
+
 
 @admin_required
 def cashier_stats(request, user_id):

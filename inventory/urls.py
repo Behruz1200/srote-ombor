@@ -49,8 +49,10 @@ urlpatterns = [
     path('payments/webhook/<str:provider>/', views.payments_webhook, name='payments_webhook'),
     path('payment-qrs/', views.payment_qr_list, name='payment_qr_list'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('dashboard/send-daily/', views.send_daily_summary_now, name='send_daily_summary_now'),
 
     path('products/', views.product_list, name='product_list'),
+    path('products/bulk/', views.product_bulk_update, name='product_bulk_update'),
     path('products/new/', views.product_create, name='product_create'),
     path('products/<str:code>/', views.product_detail, name='product_detail'),
     path('products/<str:code>/edit/', views.product_edit, name='product_edit'),
@@ -65,6 +67,7 @@ urlpatterns = [
     path('intake/suppliers/', views.supplier_list, name='supplier_list'),
     path('reorder/', views.reorder_page, name='reorder_page'),
     path('cashier/<int:user_id>/', views.cashier_stats, name='cashier_stats'),
+    path('import/', views.csv_import, name='csv_import'),
 
     path('sale/<int:stock_id>/', views.sale_create, name='sale_create'),
     path('sales/', views.sales_list, name='sales_list'),

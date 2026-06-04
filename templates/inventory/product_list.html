@@ -59,14 +59,17 @@
 
     <form id="labelsForm" action="{% url 'labels' %}" method="get" target="_blank">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
                 <button type="submit" class="btn btn-sm btn-outline-success" id="printBtn" disabled>
-                    <i class="bi bi-printer"></i> Etiketka chop etish
+                    <i class="bi bi-printer"></i> Etiketka
                     (<span id="cnt">0</span>)
                 </button>
                 <input type="number" name="copies" value="6" min="1" max="50"
-                       class="form-control form-control-sm" style="width: 80px;">
-                <small class="text-muted">nusxa</small>
+                       class="form-control form-control-sm" style="width: 70px;">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="bulkBtn" disabled
+                        data-bs-toggle="modal" data-bs-target="#bulkModal">
+                    <i class="bi bi-pencil-square"></i> Bulk amal
+                </button>
             </div>
             <small class="text-muted">Topildi: <strong>{{ products|length }}</strong></small>
         </div>
@@ -165,17 +168,73 @@
     </form>
 </div>
 
+<!-- Bulk update modal -->
+<div class="modal fade" id="bulkModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{% url 'product_bulk_update' %}" id="bulkForm">
+        {% csrf_token %}
+        <div id="bulkIdsContainer"></div>
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-pencil-square"></i> Bulk amal
+            (<span id="bulkCount">0</span> ta mahsulot)
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Amal turi</label>
+            <select name="op" id="bulkOp" class="form-select" required>
+              <option value="set_price">Sotuv narxini X so'mga belgilash</option>
+              <option value="multiply_price">Joriy narxni X% ga ko'paytirish (masalan 110 = +10%)</option>
+              <option value="set_markup">Markup foizini X% ga belgilash</option>
+              <option value="change_category">Kategoriyani o'zgartirish</option>
+              <option value="delete">O'chirish (extreme!)</option>
+            </select>
+          </div>
+          <div class="mb-3" id="bulkValueWrap">
+            <label class="form-label" id="bulkValueLabel">Qiymat</label>
+            <input type="number" name="value" id="bulkValue" class="form-control" step="0.01">
+            <small id="bulkValueHint" class="text-muted"></small>
+          </div>
+          <div class="mb-3 d-none" id="bulkCatWrap">
+            <label class="form-label">Yangi kategoriya</label>
+            <select id="bulkCatSelect" class="form-select">
+              {% for c in categories %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="alert alert-warning small mb-0" id="bulkDeleteWarn" style="display:none;">
+            <i class="bi bi-exclamation-triangle"></i>
+            Tanlangan mahsulotlar butunlay o'chiriladi. Davom etish?
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Bekor</button>
+          <button type="submit" class="btn btn-primary" id="bulkSubmit">
+            <i class="bi bi-check2"></i> Qo'llash
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
 (function() {
     const selAll = document.getElementById('selAll');
     const picks = document.querySelectorAll('.pick');
     const cnt = document.getElementById('cnt');
     const btn = document.getElementById('printBtn');
+    const bulkBtn = document.getElementById('bulkBtn');
     if (!selAll || !cnt || !btn) return;
     function refresh() {
         const n = document.querySelectorAll('.pick:checked').length;
         cnt.textContent = n;
         btn.disabled = (n === 0);
+        if (bulkBtn) bulkBtn.disabled = (n === 0);
     }
     selAll.addEventListener('change', () => {
         picks.forEach(p => p.checked = selAll.checked);
@@ -183,6 +242,73 @@
     });
     picks.forEach(p => p.addEventListener('change', refresh));
     refresh();
+
+    // ---- Bulk modal ----
+    const bulkModal = document.getElementById('bulkModal');
+    const bulkOp = document.getElementById('bulkOp');
+    const bulkValueWrap = document.getElementById('bulkValueWrap');
+    const bulkValueLabel = document.getElementById('bulkValueLabel');
+    const bulkValue = document.getElementById('bulkValue');
+    const bulkValueHint = document.getElementById('bulkValueHint');
+    const bulkCatWrap = document.getElementById('bulkCatWrap');
+    const bulkCatSelect = document.getElementById('bulkCatSelect');
+    const bulkDeleteWarn = document.getElementById('bulkDeleteWarn');
+    const bulkSubmit = document.getElementById('bulkSubmit');
+    const bulkCount = document.getElementById('bulkCount');
+    const bulkIds = document.getElementById('bulkIdsContainer');
+    const bulkForm = document.getElementById('bulkForm');
+    if (!bulkModal) return;
+
+    function syncOp() {
+        const op = bulkOp.value;
+        bulkValueWrap.classList.remove('d-none');
+        bulkCatWrap.classList.add('d-none');
+        bulkDeleteWarn.style.display = 'none';
+        bulkSubmit.className = 'btn btn-primary';
+        if (op === 'set_price') {
+            bulkValueLabel.textContent = "Yangi sotuv narxi (so'm)";
+            bulkValueHint.textContent = "Hammasi shu narxda bo'ladi.";
+            bulkValue.step = '1';
+            bulkValue.placeholder = '850000';
+        } else if (op === 'multiply_price') {
+            bulkValueLabel.textContent = "Foiz (joriydan)";
+            bulkValueHint.textContent = "Masalan 110 = joriy × 1.10 (10% qimmatroq). 90 = arzonroq.";
+            bulkValue.step = '0.1';
+            bulkValue.placeholder = '110';
+        } else if (op === 'set_markup') {
+            bulkValueLabel.textContent = "Yangi markup foizi";
+            bulkValueHint.textContent = "Tannarx × (1 + foiz/100) — keyingi qabullarda sotuv narxi shunday hisoblanadi.";
+            bulkValue.step = '0.1';
+            bulkValue.placeholder = '40';
+        } else if (op === 'change_category') {
+            bulkValueWrap.classList.add('d-none');
+            bulkCatWrap.classList.remove('d-none');
+        } else if (op === 'delete') {
+            bulkValueWrap.classList.add('d-none');
+            bulkDeleteWarn.style.display = '';
+            bulkSubmit.className = 'btn btn-danger';
+        }
+    }
+    bulkOp.addEventListener('change', syncOp);
+    syncOp();
+
+    bulkModal.addEventListener('show.bs.modal', () => {
+        const ids = Array.from(document.querySelectorAll('.pick:checked')).map(p => p.value);
+        bulkCount.textContent = ids.length;
+        bulkIds.innerHTML = ids.map(id => `<input type="hidden" name="id" value="${id}">`).join('');
+    });
+
+    bulkForm.addEventListener('submit', (e) => {
+        // If category mode, copy cat select value into value input
+        if (bulkOp.value === 'change_category') {
+            bulkValue.value = bulkCatSelect.value;
+        }
+        if (bulkOp.value === 'delete') {
+            if (!confirm("HAQIQATAN ham tanlangan mahsulotlarni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.")) {
+                e.preventDefault();
+            }
+        }
+    });
 })();
 </script>
 {% endblock %}

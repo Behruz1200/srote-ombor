@@ -20,6 +20,13 @@
             <a href="{% url 'insights' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-graph-up-arrow"></i> Tahlil
             </a>
+            <form method="post" action="{% url 'send_daily_summary_now' %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-info"
+                        title="Hozir Telegram'ga kunlik xulosa yuborish">
+                    <i class="bi bi-telegram"></i>
+                </button>
+            </form>
         </div>
     </div>
 
