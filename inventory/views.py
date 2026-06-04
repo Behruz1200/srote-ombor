@@ -245,6 +245,7 @@ def lookup(request):
         'product_stats': product_stats,
         'popular_products': popular_products,
         'categories_quick': categories_quick,
+        'query_looks_like_barcode': bool(raw_query) and raw_query.isdigit() and len(raw_query) >= 6,
     })
 
 
@@ -588,6 +589,67 @@ def product_create(request):
         form = ProductForm(initial=initial)
     return render(request, 'inventory/product_form.html', {
         'form': form, 'title': "Yangi mahsulot qo'shish",
+    })
+
+
+@admin_required
+def product_search_for_attach(request):
+    """GET /products/search-for-attach/?q=&exclude_with_barcode=1
+    Lightweight JSON product search for the "attach EAN to existing
+    product" picker. Returns up to 12 matches by name or code."""
+    q = (request.GET.get('q') or '').strip()
+    if len(q) < 2:
+        return JsonResponse({'results': []})
+    qs = Product.objects.filter(
+        Q(name__icontains=q) | Q(code__icontains=q.upper())
+    )
+    if request.GET.get('exclude_with_barcode') == '1':
+        qs = qs.filter(external_barcode__isnull=True)
+    qs = qs.order_by('name')[:12]
+    return JsonResponse({'results': [
+        {
+            'code': p.code,
+            'name': p.name,
+            'external_barcode': p.external_barcode or '',
+            'category': p.category.name if p.category else '',
+        } for p in qs
+    ]})
+
+
+@admin_required
+def product_attach_barcode(request):
+    """POST /products/attach-barcode/  body: code, barcode
+    Attach an external_barcode to an existing product. Refuses if the
+    barcode is already attached elsewhere (the unique constraint would
+    raise IntegrityError; we want a clean JSON error)."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    code = normalize_code((request.POST.get('code') or '').upper())
+    barcode = (request.POST.get('barcode') or '').strip()
+    if not code or not barcode:
+        return JsonResponse({'ok': False, 'error': 'code va barcode kerak'},
+                            status=400)
+    try:
+        product = Product.objects.get(code=code)
+    except Product.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Mahsulot topilmadi'},
+                            status=404)
+    clash = (Product.objects
+             .filter(external_barcode=barcode)
+             .exclude(pk=product.pk)
+             .first())
+    if clash:
+        return JsonResponse({
+            'ok': False,
+            'error': f"Bu barcode '{clash.name}' ({clash.code}) ga "
+                     f"allaqachon biriktirilgan.",
+        }, status=409)
+    product.external_barcode = barcode
+    product.save(update_fields=['external_barcode'])
+    return JsonResponse({
+        'ok': True,
+        'product': {'code': product.code, 'name': product.name,
+                    'external_barcode': product.external_barcode},
     })
 
 
@@ -1209,7 +1271,17 @@ def csv_import(request):
                             price = Decimal(row.get('default_sale_price') or '0')
                             markup = Decimal(row.get('markup_percent') or '40')
                             desc = _clean_text(row.get('description'), 1000)
-                            ext_barcode = (row.get('external_barcode') or '').strip()
+                            ext_barcode = (row.get('external_barcode') or '').strip() or None
+                            if ext_barcode:
+                                clash = Product.objects.filter(
+                                    external_barcode=ext_barcode
+                                )
+                                if code:
+                                    clash = clash.exclude(code=code)
+                                if clash.exists():
+                                    raise ValueError(
+                                        f"barcode {ext_barcode} boshqa mahsulotda mavjud"
+                                    )
                             if code:
                                 p, was_created = Product.objects.update_or_create(
                                     code=code,

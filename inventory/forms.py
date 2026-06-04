@@ -94,6 +94,25 @@ class ProductForm(forms.ModelForm):
             'package_code': 'Markirovka kodi',
         }
 
+    def clean_external_barcode(self):
+        # Empty input → NULL so the unique constraint doesn't block multiple
+        # blank rows. Reject duplicates explicitly with a useful message
+        # pointing at the existing owner.
+        raw = (self.cleaned_data.get('external_barcode') or '').strip()
+        if not raw:
+            return None
+        qs = Product.objects.filter(external_barcode=raw)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        other = qs.first()
+        if other:
+            raise forms.ValidationError(
+                f"Bu barcode '{other.name}' (kod: {other.code}) mahsulotiga "
+                f"allaqachon biriktirilgan. Boshqa kiriting yoki o'sha "
+                f"mahsulotni tahrirlang."
+            )
+        return raw
+
 
 class CategoryForm(forms.ModelForm):
     class Meta:

@@ -94,7 +94,7 @@ class Product(models.Model):
     code = models.CharField(max_length=20, unique=True, db_index=True,
                             blank=True, editable=False)
     external_barcode = models.CharField(
-        max_length=64, blank=True, db_index=True,
+        max_length=64, blank=True, null=True, unique=True, db_index=True,
         help_text="Ishlab chiqaruvchi tomonidan chop etilgan barcode "
                   "(EAN-13, UPC va h.k.). Skanerlash uchun ishlatiladi."
     )

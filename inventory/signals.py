@@ -11,6 +11,7 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out, user_lo
 from django.dispatch import receiver
 from decimal import Decimal
 from datetime import datetime, date
+from django.db.models.fields.files import FieldFile
 
 from .models import (
     AuditLog, Product, ProductVariant, BranchStock, Intake, Sale,
@@ -35,6 +36,8 @@ def _serialize(value):
         return None
     if isinstance(value, (Decimal, datetime, date)):
         return str(value)
+    if isinstance(value, FieldFile):
+        return value.name or ''
     if hasattr(value, 'pk'):
         return f'{value.__class__.__name__}:{value.pk}'
     return value

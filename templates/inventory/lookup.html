@@ -281,12 +281,18 @@
             <i class="bi bi-exclamation-circle" style="font-size: 3rem;"></i>
             <p class="mt-2">"{{ code }}" bo'yicha mahsulot topilmadi.</p>
             {% if user.is_admin %}
-                {% if code|length >= 6 %}
+                {% if query_looks_like_barcode %}
                     <a href="{% url 'product_create' %}?barcode={{ code|urlencode }}"
                        class="btn btn-warning mt-2">
                         <i class="bi bi-plus-circle"></i>
                         Yangi mahsulot — barcode <strong>{{ code }}</strong> bilan
                     </a>
+                    <button type="button" class="btn btn-outline-secondary mt-2 ms-2"
+                            data-bs-toggle="modal" data-bs-target="#attachBarcodeModal"
+                            data-barcode="{{ code }}">
+                        <i class="bi bi-link-45deg"></i>
+                        Mavjud mahsulotga ulash
+                    </button>
                 {% else %}
                     <a href="{% url 'product_create' %}?name={{ code|urlencode }}"
                        class="btn btn-warning mt-2">
@@ -297,6 +303,136 @@
         </div>
     {% endif %}
 </div>
+
+<!-- Attach EAN to existing product modal -->
+<div class="modal fade" id="attachBarcodeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-link-45deg"></i>
+                    Barcode'ni mavjud mahsulotga ulash
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 mb-3 small">
+                    Barcode: <strong id="attachBarcodeValue"></strong>
+                    — qaysi mahsulotga ulashni xohlaysiz?
+                </div>
+                <input type="text" id="attachSearchInput" class="form-control mb-3"
+                       placeholder="Mahsulot nomi yoki kod (2+ harf)" autocomplete="off">
+                <div class="form-check form-switch mb-2 small">
+                    <input class="form-check-input" type="checkbox"
+                           id="attachOnlyEmpty" checked>
+                    <label class="form-check-label" for="attachOnlyEmpty">
+                        Faqat barcode'siz mahsulotlar
+                    </label>
+                </div>
+                <div id="attachResults" class="list-group" style="max-height: 360px; overflow-y: auto;"></div>
+                <div id="attachStatus" class="small text-muted mt-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Bekor qilish
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const modal = document.getElementById('attachBarcodeModal');
+    if (!modal) return;
+    const valueEl = document.getElementById('attachBarcodeValue');
+    const searchInput = document.getElementById('attachSearchInput');
+    const onlyEmptyEl = document.getElementById('attachOnlyEmpty');
+    const resultsEl = document.getElementById('attachResults');
+    const statusEl = document.getElementById('attachStatus');
+    let currentBarcode = '';
+    let debounceTimer = null;
+
+    modal.addEventListener('show.bs.modal', function(ev) {
+        const trigger = ev.relatedTarget;
+        currentBarcode = trigger ? (trigger.dataset.barcode || '') : '';
+        valueEl.textContent = currentBarcode;
+        searchInput.value = '';
+        resultsEl.innerHTML = '';
+        statusEl.textContent = '';
+        setTimeout(() => searchInput.focus(), 200);
+    });
+
+    function runSearch() {
+        const q = searchInput.value.trim();
+        if (q.length < 2) {
+            resultsEl.innerHTML = '';
+            statusEl.textContent = 'Kamida 2 ta harf kiriting.';
+            return;
+        }
+        statusEl.textContent = 'Qidirilmoqda...';
+        const url = "{% url 'product_search_for_attach' %}" +
+            "?q=" + encodeURIComponent(q) +
+            (onlyEmptyEl.checked ? "&exclude_with_barcode=1" : "");
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(r => r.json())
+            .then(data => {
+                const items = data.results || [];
+                if (!items.length) {
+                    resultsEl.innerHTML = '';
+                    statusEl.textContent = 'Hech narsa topilmadi.';
+                    return;
+                }
+                statusEl.textContent = items.length + ' ta natija';
+                resultsEl.innerHTML = items.map(p => {
+                    const has = p.external_barcode
+                        ? `<span class="badge bg-warning text-dark ms-1" title="EAN: ${p.external_barcode}"><i class="bi bi-upc"></i> mavjud</span>`
+                        : '';
+                    return `<button type="button" class="list-group-item list-group-item-action"
+                              data-code="${p.code}">
+                              <div class="d-flex justify-content-between">
+                                <span>${p.name} ${has}</span>
+                                <small class="text-muted">${p.code}${p.category ? ' · ' + p.category : ''}</small>
+                              </div>
+                            </button>`;
+                }).join('');
+            })
+            .catch(() => { statusEl.textContent = 'Xato yuz berdi.'; });
+    }
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(runSearch, 200);
+    });
+    onlyEmptyEl.addEventListener('change', runSearch);
+
+    resultsEl.addEventListener('click', function(ev) {
+        const btn = ev.target.closest('[data-code]');
+        if (!btn) return;
+        const code = btn.dataset.code;
+        const name = btn.querySelector('span').textContent.trim();
+        if (!confirm(`Barcode "${currentBarcode}" ni "${name}" (${code}) ga ulaymizmi?`)) return;
+        statusEl.textContent = 'Saqlanmoqda...';
+        const fd = new FormData();
+        fd.append('code', code);
+        fd.append('barcode', currentBarcode);
+        fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        fetch("{% url 'product_attach_barcode' %}", {
+            method: 'POST', body: fd,
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+        }).then(r => r.json().then(d => ({ok: r.ok, data: d})))
+          .then(({ok, data}) => {
+              if (ok && data.ok) {
+                  statusEl.innerHTML = '<span class="text-success">Saqlandi. Sahifa yangilanmoqda...</span>';
+                  setTimeout(() => window.location.href = "{% url 'lookup' %}?code=" + encodeURIComponent(currentBarcode), 600);
+              } else {
+                  statusEl.innerHTML = '<span class="text-danger">' + (data.error || 'Xato') + '</span>';
+              }
+          })
+          .catch(() => { statusEl.innerHTML = '<span class="text-danger">Tarmoq xatosi</span>'; });
+    });
+})();
+</script>
 
 <!-- QR/Barcode Scanner Modal -->
 <div class="modal fade" id="scanModal" tabindex="-1">
