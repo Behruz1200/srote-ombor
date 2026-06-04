@@ -1,43 +1,236 @@
 {% extends 'inventory/base.html' %}
+{% load srote_extras %}
 
 {% block title %}Kategoriyalar — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h3 class="mb-4"><i class="bi bi-tags"></i> Kategoriyalar</h3>
+<div class="container-fluid px-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-tags"></i> Kategoriyalar</h3>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newCatModal">
+            <i class="bi bi-plus-circle"></i> Yangi kategoriya
+        </button>
+    </div>
 
-    <div class="row g-3">
-        <div class="col-md-5">
+    <!-- Top stats -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
             <div class="card p-3">
-                <h6>Yangi kategoriya qo'shish</h6>
-                <form method="post" class="d-flex gap-2">
-                    {% csrf_token %}
-                    {{ form.name }}
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-plus"></i> Qo'shish
-                    </button>
-                </form>
+                <div class="small text-muted">Jami kategoriya</div>
+                <div class="h3 mb-0">{{ total_categories }}</div>
             </div>
         </div>
-        <div class="col-md-7">
-            <div class="card">
-                <div class="table-responsive"><table class="table mb-0">
-                    <thead class="table-light"><tr><th>Nomi</th><th>Mahsulot soni</th></tr></thead>
-                    <tbody>
-                    {% for c in categories %}
-                        <tr>
-                            <td>{{ c.name }}</td>
-                            <td>{{ c.products.count }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="2" class="text-muted text-center py-3">
-                            Kategoriyalar yo'q.
-                        </td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table></div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Kategoriyasiz mahsulot</div>
+                <div class="h3 mb-0 {% if no_category_count %}text-warning{% endif %}">
+                    {{ no_category_count }}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3">
+                <div class="small text-muted">Top kategoriya (30 kun)</div>
+                {% if top_cat and top_cat.s_rev %}
+                    <div class="h5 mb-0 text-success">{{ top_cat.name }}</div>
+                    <small class="text-muted">{{ top_cat.s_rev|som }} so'm</small>
+                {% else %}
+                    <div class="h5 mb-0 text-muted">—</div>
+                {% endif %}
             </div>
         </div>
     </div>
+
+    <!-- Search -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2">
+            <div class="col-md-9">
+                <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+                       placeholder="Kategoriya nomi bo'yicha qidirish...">
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+                <a href="{% url 'category_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Categories table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nomi</th>
+                        <th>Prefiks</th>
+                        <th class="text-end">Mahsulotlar</th>
+                        <th class="text-end">Zaxira</th>
+                        <th class="text-end">Zaxira qiymati</th>
+                        <th class="text-end">30 kun sotilgan</th>
+                        <th class="text-end">30 kun tushum</th>
+                        <th class="text-end">Marja</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for c in categories %}
+                    <tr>
+                        <td>
+                            <strong>{{ c.name }}</strong>
+                        </td>
+                        <td><code>{{ c.prefix }}</code></td>
+                        <td class="text-end">
+                            {% if c.product_count %}
+                                <a href="{% url 'product_list' %}?category={{ c.id }}"
+                                   class="badge bg-primary text-decoration-none">
+                                    {{ c.product_count }}
+                                </a>
+                            {% else %}
+                                <span class="text-muted small">0</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ c.s_stock }}</td>
+                        <td class="text-end text-muted">{{ c.s_value|som }}</td>
+                        <td class="text-end">
+                            {% if c.s_qty %}<strong>{{ c.s_qty }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if c.s_rev %}<strong class="text-success">{{ c.s_rev|som }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-end small">
+                            {% if c.s_margin %}
+                                <span class="text-{% if c.s_margin < 10 %}danger{% elif c.s_margin < 25 %}warning{% else %}success{% endif %}">
+                                    {{ c.s_margin|floatformat:0 }}%
+                                </span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'product_list' %}?category={{ c.id }}"
+                                   class="btn btn-outline-primary" title="Mahsulotlarni ko'rish">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-secondary edit-cat-btn"
+                                        data-pk="{{ c.pk }}"
+                                        data-name="{{ c.name }}"
+                                        data-prefix="{{ c.prefix }}"
+                                        title="Tahrirlash">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                {% if not c.product_count %}
+                                <form method="post" class="d-inline"
+                                      onsubmit="return confirm('O\'chirishni tasdiqlaysizmi?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="pk" value="{{ c.pk }}">
+                                    <button type="submit" class="btn btn-outline-danger" title="O'chirish">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <button class="btn btn-outline-danger" disabled
+                                        title="O'chirish uchun avval mahsulotlarni boshqa kategoriyaga o'tkazing">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">
+                        {% if q %}"{{ q }}" bo'yicha kategoriya topilmadi.
+                        {% else %}Kategoriyalar yo'q. Yuqorida "Yangi kategoriya" tugmasini bosing.{% endif %}
+                    </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <small class="text-muted mt-2 d-block">
+        <i class="bi bi-info-circle"></i> Sotuv statistikasi so'nggi 30 kun bo'yicha.
+        Prefiks mahsulot kodi avtomatik yaratilishida ishlatiladi (masalan, OYO-0001).
+    </small>
 </div>
+
+<!-- New category modal -->
+<div class="modal fade" id="newCatModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create">
+                <div class="modal-header">
+                    <h5 class="modal-title">Yangi kategoriya</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Nom <span class="text-danger">*</span></label>
+                    {{ form.name }}
+                    {% if form.name.errors %}
+                        <div class="text-danger small">{{ form.name.errors|join:', ' }}</div>
+                    {% endif %}
+                    <small class="text-muted mt-1 d-block">
+                        Prefiks avtomatik tanlanadi (masalan, "Oyoq kiyim" → OYO).
+                    </small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Bekor</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Saqlash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit category modal -->
+<div class="modal fade" id="editCatModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="pk" id="edit_pk">
+                <div class="modal-header">
+                    <h5 class="modal-title">Kategoriyani tahrirlash</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Nom <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="edit_name" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Prefiks</label>
+                        <input type="text" name="prefix" id="edit_prefix" class="form-control"
+                               maxlength="6" style="text-transform:uppercase;">
+                        <small class="text-muted">Yangi mahsulot kodi shu prefiksdan boshlanadi.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Bekor</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Saqlash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.edit-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('edit_pk').value = btn.dataset.pk;
+        document.getElementById('edit_name').value = btn.dataset.name;
+        document.getElementById('edit_prefix').value = btn.dataset.prefix || '';
+        new bootstrap.Modal(document.getElementById('editCatModal')).show();
+    });
+});
+</script>
 {% endblock %}

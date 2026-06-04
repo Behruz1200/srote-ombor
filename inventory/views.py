@@ -2538,15 +2538,116 @@ def user_edit(request, pk):
 @admin_required
 def category_list(request):
     if request.method == 'POST':
+        action = request.POST.get('action') or 'create'
+        if action == 'delete':
+            try:
+                pk = int(request.POST.get('pk') or 0)
+            except (TypeError, ValueError):
+                pk = 0
+            cat = Category.objects.filter(pk=pk).first()
+            if cat:
+                # Don't allow deleting categories with products
+                n_products = cat.products.count()
+                if n_products > 0:
+                    messages.error(request,
+                        f"\"{cat.name}\" o'chirilmadi: unda {n_products} ta "
+                        "mahsulot bor. Avval mahsulotlarni boshqa kategoriyaga o'tkazing.")
+                else:
+                    name = cat.name
+                    cat.delete()
+                    messages.success(request, f"\"{name}\" o'chirildi.")
+            return redirect('category_list')
+        if action == 'edit':
+            try:
+                pk = int(request.POST.get('pk') or 0)
+            except (TypeError, ValueError):
+                pk = 0
+            cat = Category.objects.filter(pk=pk).first()
+            if cat:
+                new_name = (request.POST.get('name') or '').strip()[:120]
+                new_prefix = (request.POST.get('prefix') or '').strip()[:6]
+                if not new_name:
+                    messages.error(request, "Nom kerak.")
+                else:
+                    cat.name = new_name
+                    if new_prefix:
+                        cat.prefix = new_prefix.upper()
+                    cat.save()
+                    messages.success(request, f"\"{cat.name}\" yangilandi.")
+            return redirect('category_list')
+        # create
         form = CategoryForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Kategoriya qo'shildi.")
+            cat = form.save()
+            messages.success(request, f"\"{cat.name}\" qo'shildi (prefiks: {cat.prefix}).")
             return redirect('category_list')
     else:
         form = CategoryForm()
+
+    # Filter + search
+    q = (request.GET.get('q') or '').strip()
+    categories = Category.objects.all()
+    if q:
+        categories = categories.filter(name__icontains=q)
+
+    # 30-kunlik sotuvlar va revenue agregati
+    since_30d = timezone.now() - timedelta(days=30)
+    rev_expr = ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+    cost_expr = ExpressionWrapper(
+        F('quantity') * F('cost_at_sale'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+
+    cat_stats = {}
+    for row in (Sale.objects.filter(sold_at__gte=since_30d)
+                .values('variant__product__category_id')
+                .annotate(rev=Sum(rev_expr), cost=Sum(cost_expr),
+                          qty=Sum('quantity'))):
+        cat_stats[row['variant__product__category_id']] = {
+            'rev': float(row['rev'] or 0),
+            'cost': float(row['cost'] or 0),
+            'qty': row['qty'] or 0,
+        }
+
+    # Per-category stock + value
+    stock_stats = {}
+    for row in (BranchStock.objects
+                .values('variant__product__category_id')
+                .annotate(stock=Sum('stock_count'),
+                          value=Sum(ExpressionWrapper(
+                              F('stock_count') * F('cost_price'),
+                              output_field=DecimalField(max_digits=14, decimal_places=2))))):
+        stock_stats[row['variant__product__category_id']] = {
+            'stock': row['stock'] or 0,
+            'value': float(row['value'] or 0),
+        }
+
+    categories = list(categories.annotate(product_count=Count('products')).order_by('name'))
+    for c in categories:
+        s = cat_stats.get(c.id, {})
+        st = stock_stats.get(c.id, {})
+        c.s_rev = s.get('rev', 0)
+        c.s_cost = s.get('cost', 0)
+        c.s_qty = s.get('qty', 0)
+        c.s_profit = c.s_rev - c.s_cost
+        c.s_margin = (c.s_profit / c.s_rev * 100) if c.s_rev else 0
+        c.s_stock = st.get('stock', 0)
+        c.s_value = st.get('value', 0)
+
+    # Top-level stats
+    total_categories = len(categories)
+    no_category_count = Product.objects.filter(category__isnull=True).count()
+    top_cat = max(categories, key=lambda c: c.s_rev, default=None)
+
     return render(request, 'inventory/category_list.html', {
-        'categories': Category.objects.all(), 'form': form,
+        'categories': categories, 'form': form,
+        'q': q,
+        'total_categories': total_categories,
+        'no_category_count': no_category_count,
+        'top_cat': top_cat,
     })
 
 
