@@ -112,6 +112,9 @@ def lookup(request):
     product = None
     branches_data = []
     suggestions = []
+    product_stats = None
+    popular_products = []
+    categories_quick = []
 
     if raw_query:
         # Try exact code first
@@ -144,20 +147,81 @@ def lookup(request):
                 branches = Branch.objects.filter(pk=request.user.branch_id) \
                     if request.user.branch_id else Branch.objects.none()
 
+            # Aggregate stats across all branches (admin) or single branch
+            total_stock = 0
+            total_value = 0
+            zero_count = 0
+            low_count = 0
             for br in branches:
                 stocks = BranchStock.objects.filter(
                     variant__product=product, branch=br
                 ).select_related('variant')
                 matrix = {(s.variant.size, s.variant.color): s for s in stocks}
-                total = sum(s.stock_count for s in stocks)
+                br_total = sum(s.stock_count for s in stocks)
+                br_value = sum(s.stock_count * float(s.cost_price) for s in stocks)
+                total_stock += br_total
+                total_value += br_value
+                for s in stocks:
+                    if s.stock_count == 0:
+                        zero_count += 1
+                    elif s.stock_count <= 3:
+                        low_count += 1
                 branches_data.append({
                     'branch': br, 'matrix': matrix,
-                    'sizes': sizes, 'colors': colors, 'total': total,
+                    'sizes': sizes, 'colors': colors,
+                    'total': br_total, 'value': br_value,
                 })
+
+            # 30-day sales velocity
+            since_30d = timezone.now() - timedelta(days=30)
+            velocity_agg = Sale.objects.filter(
+                variant__product=product,
+                sold_at__gte=since_30d,
+            ).aggregate(
+                qty=Sum('quantity'),
+                txns=Count('transaction', distinct=True),
+            )
+            sold_30d = velocity_agg['qty'] or 0
+            txns_30d = velocity_agg['txns'] or 0
+            daily_avg = sold_30d / 30 if sold_30d else 0
+            days_left = (total_stock / daily_avg) if daily_avg else None
+
+            product_stats = {
+                'total_stock': total_stock,
+                'total_value': total_value,
+                'variants_count': len(variants),
+                'branches_count': len(branches_data),
+                'zero_count': zero_count,
+                'low_count': low_count,
+                'sold_30d': sold_30d,
+                'txns_30d': txns_30d,
+                'days_left': days_left,
+            }
+    else:
+        # No search — show popular products and category quick-jumps
+        since_30d = timezone.now() - timedelta(days=30)
+        top_rows = (Sale.objects
+                    .filter(sold_at__gte=since_30d)
+                    .values('variant__product')
+                    .annotate(qty=Sum('quantity'))
+                    .order_by('-qty')[:8])
+        top_ids = [r['variant__product'] for r in top_rows]
+        prods_map = {p.id: p for p in Product.objects
+                     .filter(id__in=top_ids).select_related('category')}
+        for r in top_rows:
+            p = prods_map.get(r['variant__product'])
+            if p:
+                popular_products.append({'p': p, 'qty': r['qty']})
+        categories_quick = list(Category.objects.annotate(
+            n=Count('products')
+        ).filter(n__gt=0).order_by('-n')[:8])
 
     return render(request, 'inventory/lookup.html', {
         'code': raw_query, 'product': product,
         'branches_data': branches_data, 'suggestions': suggestions,
+        'product_stats': product_stats,
+        'popular_products': popular_products,
+        'categories_quick': categories_quick,
     })
 
 
