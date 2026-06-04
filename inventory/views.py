@@ -395,7 +395,9 @@ def product_bulk_update(request):
 
     products = Product.objects.filter(id__in=[int(i) for i in ids if str(i).isdigit()])
     n = 0
+    affected_codes = []
     for p in products:
+        affected_codes.append(p.code)
         if op == 'set_price':
             p.default_sale_price = value
             p.save(update_fields=['default_sale_price'])
@@ -422,6 +424,29 @@ def product_bulk_update(request):
         elif op == 'delete':
             p.delete()
             n += 1
+
+    # M9: audit the bulk operation as a single summary row
+    if n > 0:
+        OP_LABELS = {
+            'set_price': f"narx={value}",
+            'set_markup': f"markup={value}%",
+            'multiply_price': f"narx×{value}%",
+            'change_category': f"category={value}",
+            'delete': "DELETE",
+        }
+        op_label = OP_LABELS.get(op, op)
+        codes_preview = ', '.join(affected_codes[:10])
+        if len(affected_codes) > 10:
+            codes_preview += f", ... (+{len(affected_codes)-10})"
+        AuditLog.objects.create(
+            user=request.user,
+            username_snapshot=request.user.username,
+            action=(AuditLog.Action.DELETE if op == 'delete'
+                    else AuditLog.Action.UPDATE),
+            model_name='ProductBulk',
+            object_repr=f"{n}×{op_label}: {codes_preview}"[:200],
+        )
+
     messages.success(request, f"{n} ta mahsulot yangilandi/o'chirildi.")
     return redirect('product_list')
 
@@ -1395,13 +1420,46 @@ def reorder_page(request):
     suppliers_grouped = sorted(by_supplier.items(),
                                key=lambda kv: -sum(x['estimated_cost'] for x in kv[1]))
 
+    # M5: aggregate per product (across branches) — single row per product
+    # showing total stock across all branches, total suggested qty, etc.
+    by_product = {}
+    for it in items:
+        pid = it['product'].id
+        if pid not in by_product:
+            by_product[pid] = {
+                'product': it['product'],
+                'last_supplier': it['last_supplier'],
+                'stock_total': 0,
+                'sold_30d_total': 0,
+                'suggested_total': 0,
+                'estimated_cost_total': 0.0,
+                'branches': set(),
+            }
+        agg = by_product[pid]
+        agg['stock_total'] += it['stock'].stock_count
+        agg['sold_30d_total'] += it['sold_30d']
+        agg['suggested_total'] += it['suggested']
+        agg['estimated_cost_total'] += it['estimated_cost']
+        agg['branches'].add(it['branch'].name)
+    products_grouped = sorted(by_product.values(),
+                              key=lambda x: -x['estimated_cost_total'])
+    # Convert branches set to sorted list for template
+    for p in products_grouped:
+        p['branches'] = sorted(p['branches'])
+
     total_suggested_value = sum(it['estimated_cost'] for it in items)
     total_items = len(items)
+    total_unique_products = len(by_product)
+
+    view_mode = request.GET.get('view') or 'supplier'  # supplier | product
 
     return render(request, 'inventory/reorder.html', {
         'items': items,
         'by_supplier': suppliers_grouped,
+        'products_grouped': products_grouped,
+        'view_mode': view_mode,
         'total_items': total_items,
+        'total_unique_products': total_unique_products,
         'total_suggested_value': total_suggested_value,
         'buffer_days': BUFFER_DAYS,
         'low_threshold': LOW_THRESHOLD,
@@ -4076,14 +4134,22 @@ def customer_detail(request, pk):
     else:
         segment = ('Yangi', 'bg-secondary')
 
-    # Top 5 favorite products
+    # Top 5 favorite products (with image)
     fav_qs = (Sale.objects
               .filter(transaction__customer=customer)
-              .values('variant__product__code', 'variant__product__name')
+              .values('variant__product_id',
+                      'variant__product__code',
+                      'variant__product__name')
               .annotate(qty=Sum('quantity'), revenue=Sum(F('quantity') * F('sale_price'),
                                                         output_field=DecimalField(max_digits=14, decimal_places=2)))
               .order_by('-qty')[:5])
     favorites = list(fav_qs)
+    # Attach product image URL where available
+    fav_ids = [f['variant__product_id'] for f in favorites]
+    prod_imgs = {p.id: (p.image.url if p.image else '')
+                 for p in Product.objects.filter(id__in=fav_ids)}
+    for f in favorites:
+        f['image_url'] = prod_imgs.get(f['variant__product_id'], '')
 
     # 6-month spend chart (by month)
     from collections import OrderedDict

@@ -92,18 +92,27 @@
                     <i class="bi bi-heart-fill text-danger"></i> Sevimli mahsulotlar
                 </h6>
                 {% if favorites %}
-                <ol class="ps-3 mb-0">
+                <div class="d-flex flex-column gap-2">
                     {% for f in favorites %}
-                    <li class="mb-1">
-                        <a href="{% url 'product_detail' f.variant__product__code %}">
-                            {{ f.variant__product__name|truncatechars:24 }}
-                        </a>
-                        <div class="small text-muted">
-                            {{ f.qty }} dona · {{ f.revenue|som }} so'm
+                    <a href="{% url 'product_detail' f.variant__product__code %}"
+                       class="d-flex align-items-center gap-2 text-decoration-none border-bottom pb-1">
+                        {% if f.image_url %}
+                            <img src="{{ f.image_url }}" alt=""
+                                 style="width:36px;height:36px;object-fit:cover;border-radius:6px;">
+                        {% else %}
+                            <div style="width:36px;height:36px;border-radius:6px;
+                                        background:#e9ecef;display:flex;align-items:center;
+                                        justify-content:center;color:#adb5bd;">
+                                <i class="bi bi-box"></i>
+                            </div>
+                        {% endif %}
+                        <div class="flex-grow-1">
+                            <div class="fw-bold small">{{ f.variant__product__name|truncatechars:22 }}</div>
+                            <div class="small text-muted">{{ f.qty }} dona · {{ f.revenue|som }} so'm</div>
                         </div>
-                    </li>
+                    </a>
                     {% endfor %}
-                </ol>
+                </div>
                 {% else %}
                     <div class="text-muted small">Hali sotuv yo'q</div>
                 {% endif %}

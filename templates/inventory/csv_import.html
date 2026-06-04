@@ -28,17 +28,55 @@
         <div class="col-md-5">
             <div class="card p-3">
                 <h5 class="mb-2">CSV faylni yuklash</h5>
-                <form method="post" enctype="multipart/form-data">
+                <form method="post" enctype="multipart/form-data" id="importForm">
                     {% csrf_token %}
                     <input type="hidden" name="entity" value="{{ entity }}">
                     <div class="mb-3">
                         <label class="form-label">Fayl (.csv, UTF-8)</label>
-                        <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+                        <input type="file" name="csv_file" id="csvFile"
+                               class="form-control" accept=".csv" required>
+                        <small class="text-muted" id="fileMeta"></small>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">
+                    <button type="submit" class="btn btn-primary w-100" id="submitBtn">
                         <i class="bi bi-upload"></i> Import qilish
                     </button>
                 </form>
+                <div id="importProgress" class="alert alert-info mt-3 d-none">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="spinner-border spinner-border-sm"></div>
+                        <div>
+                            <strong>Import jarayonida...</strong>
+                            <div class="small text-muted" id="importHint">
+                                Iltimos, sahifani yopmang.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                (function() {
+                    const form = document.getElementById('importForm');
+                    const fileInput = document.getElementById('csvFile');
+                    const submitBtn = document.getElementById('submitBtn');
+                    const progress = document.getElementById('importProgress');
+                    const meta = document.getElementById('fileMeta');
+                    const hint = document.getElementById('importHint');
+                    fileInput.addEventListener('change', () => {
+                        const f = fileInput.files[0];
+                        if (!f) { meta.textContent = ''; return; }
+                        const lines = Math.round(f.size / 80);  // rough estimate
+                        meta.textContent = `${(f.size/1024).toFixed(1)} KB · taxminan ${lines} qator`;
+                    });
+                    form.addEventListener('submit', () => {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Yuklanmoqda...';
+                        progress.classList.remove('d-none');
+                        const f = fileInput.files[0];
+                        if (f && f.size > 100000) {
+                            hint.textContent = "Katta fayl — ~30 soniyagacha kutilishi mumkin.";
+                        }
+                    });
+                })();
+                </script>
                 <small class="text-muted mt-2 d-block">
                     <i class="bi bi-info-circle"></i> Birinchi qator — sarlavhalar.
                     Vergul (,) yoki nuqtali vergul (;) ishlatishi mumkin.

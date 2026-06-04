@@ -84,6 +84,65 @@
             </p>
         </div>
     {% else %}
+        <!-- View mode toggle -->
+        <div class="btn-group mb-3" role="group">
+            <a href="?{% if branch_id %}branch={{ branch_id }}&{% endif %}view=supplier"
+               class="btn btn-sm btn-{% if view_mode == 'supplier' %}primary{% else %}outline-primary{% endif %}">
+                <i class="bi bi-truck"></i> Yetkazib beruvchi bo'yicha
+            </a>
+            <a href="?{% if branch_id %}branch={{ branch_id }}&{% endif %}view=product"
+               class="btn btn-sm btn-{% if view_mode == 'product' %}primary{% else %}outline-primary{% endif %}">
+                <i class="bi bi-box"></i> Mahsulot bo'yicha ({{ total_unique_products }})
+            </a>
+        </div>
+
+        {% if view_mode == 'product' %}
+        <!-- Aggregated per product -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">Mahsulot bo'yicha jami ({{ products_grouped|length }} ta)</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mahsulot</th>
+                            <th>Filiallar</th>
+                            <th class="text-end">Jami zaxira</th>
+                            <th class="text-end">30 kun sotilgan</th>
+                            <th class="text-end">Taklif (jami)</th>
+                            <th class="text-end">Taxminiy qiymat</th>
+                            <th>Yetkazib beruvchi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for p in products_grouped %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'product_detail' p.product.code %}">
+                                    <strong>{{ p.product.name|truncatechars:28 }}</strong>
+                                </a>
+                                <div class="small text-muted"><code>{{ p.product.code }}</code></div>
+                            </td>
+                            <td><small class="text-muted">
+                                {{ p.branches|length }} ta: {{ p.branches|join:", "|truncatechars:30 }}
+                            </small></td>
+                            <td class="text-end">
+                                <span class="badge bg-warning text-dark">{{ p.stock_total }}</span>
+                            </td>
+                            <td class="text-end">{{ p.sold_30d_total }}</td>
+                            <td class="text-end">
+                                <strong class="text-primary">+{{ p.suggested_total }}</strong>
+                            </td>
+                            <td class="text-end"><strong>{{ p.estimated_cost_total|som }}</strong></td>
+                            <td><small>{{ p.last_supplier|default:"—" }}</small></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
         <!-- Suppliers grouped -->
         {% for supplier_name, supplier_items in by_supplier %}
         <div class="card mb-3">
@@ -155,6 +214,7 @@
             </div>
         </div>
         {% endfor %}
+        {% endif %}
     {% endif %}
 
     <small class="text-muted">

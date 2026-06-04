@@ -101,11 +101,23 @@
     <!-- Chart + Top branch + Cross-sell -->
     <div class="row g-3 mb-3">
         <div class="col-lg-7">
-            <div class="card p-3 h-100">
+            <div class="card p-3 h-100 position-relative">
                 <h6 class="text-muted text-uppercase small mb-2">
                     <i class="bi bi-graph-up"></i> So'nggi 30 kun sotuvi (dona)
                 </h6>
                 <canvas id="trendChart" style="max-height: 200px;"></canvas>
+                {% if product_kpis.sold_30d == 0 %}
+                <div class="position-absolute top-50 start-50 translate-middle text-center text-muted">
+                    <i class="bi bi-info-circle" style="font-size: 1.5rem;"></i>
+                    <div class="small mt-1">Oxirgi 30 kunda sotuv yo'q</div>
+                    {% if product_kpis.total_stock > 0 %}
+                        <div class="small text-warning">
+                            Bu mahsulot dead-stock holatiga yaqin —
+                            <a href="{% url 'insights' %}">Tahlilda ko'ring</a>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
         </div>
         <div class="col-lg-2">

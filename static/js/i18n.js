@@ -121,10 +121,10 @@
 
     function transliterateNode(root, mode) {
         const fn = mode === 'cyr' ? latToCyr : cyrToLat;
+        // 1. Text nodes (visible content)
         const walker = document.createTreeWalker(
             root, NodeFilter.SHOW_TEXT, {
                 acceptNode(node) {
-                    // Walk up to check parent skip rules
                     let p = node.parentNode;
                     while (p && p !== root.parentNode) {
                         if (shouldSkip(p)) return NodeFilter.FILTER_REJECT;
@@ -141,6 +141,33 @@
             const before = node.nodeValue;
             const after = fn(before);
             if (after !== before) node.nodeValue = after;
+        }
+
+        // 2. Element attributes that contain translatable text (M7 fix):
+        // placeholder, title, aria-label. Apply only when parent isn't skipped.
+        // input/textarea ARE in skip list for content, but their placeholder
+        // attribute is presentational text — translate it.
+        const ATTRS = ['placeholder', 'title', 'aria-label'];
+        const els = (root.nodeType === 1 && root.matches('input,textarea,select,button,a,*'))
+            ? [root]
+            : [];
+        const all = (root.querySelectorAll
+                     ? Array.from(root.querySelectorAll('[placeholder],[title],[aria-label]'))
+                     : []);
+        for (const el of [...els, ...all]) {
+            if (!el || el.nodeType !== 1) continue;
+            // Respect no-i18n on the element itself
+            if (el.classList && el.classList.contains('no-i18n')) continue;
+            if (el.hasAttribute && el.hasAttribute('data-no-i18n')) continue;
+            for (const attr of ATTRS) {
+                if (el.hasAttribute && el.hasAttribute(attr)) {
+                    const before = el.getAttribute(attr);
+                    if (before && before.trim()) {
+                        const after = fn(before);
+                        if (after !== before) el.setAttribute(attr, after);
+                    }
+                }
+            }
         }
     }
 
