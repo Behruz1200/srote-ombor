@@ -1052,6 +1052,22 @@ def send_daily_summary_now(request):
     return redirect('dashboard')
 
 
+def _clean_text(s, max_len=None):
+    """Strip HTML tags and normalize whitespace. Prevents stored XSS from CSV."""
+    if not s:
+        return ''
+    import re
+    # Remove anything that looks like an HTML tag
+    s = re.sub(r'<[^>]*>', '', str(s))
+    # Decode HTML entities
+    import html
+    s = html.unescape(s)
+    s = s.strip()
+    if max_len:
+        s = s[:max_len]
+    return s
+
+
 @admin_required
 def csv_import(request):
     """CSV import: mahsulot, mijoz yoki zaxira.
@@ -1084,18 +1100,18 @@ def csv_import(request):
                 if entity == 'products':
                     for i, row in enumerate(rows, 2):  # row 2 = first data row
                         try:
-                            name = (row.get('name') or '').strip()
+                            name = _clean_text(row.get('name'), 200)
                             if not name:
                                 raise ValueError("nom (name) bo'sh")
-                            code = (row.get('code') or '').strip().upper()
-                            cat_name = (row.get('category') or '').strip()
+                            code = _clean_text(row.get('code'), 20).upper()
+                            cat_name = _clean_text(row.get('category'), 120)
                             category = None
                             if cat_name:
                                 category, _ = Category.objects.get_or_create(name=cat_name)
                             from decimal import Decimal
                             price = Decimal(row.get('default_sale_price') or '0')
                             markup = Decimal(row.get('markup_percent') or '40')
-                            desc = (row.get('description') or '').strip()
+                            desc = _clean_text(row.get('description'), 1000)
                             if code:
                                 p, was_created = Product.objects.update_or_create(
                                     code=code,
@@ -1124,13 +1140,13 @@ def csv_import(request):
                 elif entity == 'customers':
                     for i, row in enumerate(rows, 2):
                         try:
-                            phone = (row.get('phone') or '').strip()
-                            name = (row.get('name') or '').strip()
+                            phone = _clean_text(row.get('phone'), 40)
+                            name = _clean_text(row.get('name'), 120)
                             if not phone and not name:
                                 raise ValueError("phone va name ikkalasi bo'sh")
-                            tags = (row.get('tags') or '').strip()
-                            inn = (row.get('inn') or '').strip()
-                            note = (row.get('note') or '').strip()
+                            tags = _clean_text(row.get('tags'), 200)
+                            inn = _clean_text(row.get('inn'), 14)
+                            note = _clean_text(row.get('note'), 500)
                             if phone:
                                 c, was_created = Customer.objects.update_or_create(
                                     phone=phone,
@@ -2267,11 +2283,32 @@ def pos_checkout(request):
         if not stock:
             return JsonResponse({'ok': False, 'error': f'stock {sid} topilmadi'}, status=400)
         if qty > stock.stock_count:
-            return JsonResponse({
-                'ok': False,
-                'error': f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
-                         f"omborda faqat {stock.stock_count} ta bor, soʻrov {qty}",
-            }, status=400)
+            err = (f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
+                   f"omborda faqat {stock.stock_count} ta bor, soʻrov {qty}")
+            # C2 fix: if this is an offline-queue replay, alert admin via Telegram
+            # and log to AuditLog — kassir's offline sale was rejected at sync time.
+            if data.get('is_offline_replay'):
+                try:
+                    from .notifications import send_telegram
+                    send_telegram(
+                        f"⚠️ <b>Offline sotuv konflikti</b>\n"
+                        f"Filial: {branch.name}\n"
+                        f"Kassir: {request.user.username}\n"
+                        f"Mahsulot: {stock.variant.product.code} "
+                        f"{stock.variant.size}/{stock.variant.color}\n"
+                        f"Soʻrov: {qty} dona · Omborda: {stock.stock_count}\n"
+                        f"Pul allaqachon kassada bo'lishi mumkin — manual reconcile kerak."
+                    )
+                    AuditLog.objects.create(
+                        user=request.user,
+                        username_snapshot=request.user.username,
+                        action=AuditLog.Action.UPDATE,
+                        model_name='OfflineConflict',
+                        object_repr=err[:200],
+                    )
+                except Exception:
+                    pass  # don't fail the response because of alert error
+            return JsonResponse({'ok': False, 'error': err}, status=400)
         resolved.append((stock, qty, price, line_discount))
 
     # Resolve / auto-create Customer by phone (most reliable key)
@@ -2848,12 +2885,24 @@ def pos_txn_refundable(request, pk):
 @login_required
 def pos_refund(request):
     """POST /pos/refund/ JSON body: {lines: [{sale_id, qty, reason}]}.
-    Processes refunds atomically; restores stock; returns total refunded."""
+    Processes refunds atomically; restores stock; returns total refunded.
+
+    Requires an OPEN shift: refund returns cash from the drawer, so it must
+    be attributed to the current shift for cash reconciliation."""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
     branch = _user_branch_or_403(request)
     if branch is None:
         return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+
+    # C1 fix: require open shift
+    open_shift = _open_shift_for(branch)
+    if not open_shift:
+        return JsonResponse({
+            'ok': False,
+            'error': "Smen ochilmagan. Qaytarish faqat ochiq smen davomida amalga oshiriladi.",
+        }, status=400)
+
     try:
         data = _json.loads(request.body.decode('utf-8'))
     except ValueError:
@@ -2893,11 +2942,17 @@ def pos_refund(request):
                 stock.stock_count = F('stock_count') + qty
                 stock.save()
             Return.objects.create(
-                sale=sale, quantity=qty, reason=reason,
+                sale=sale, shift=open_shift,
+                quantity=qty, reason=reason,
                 refunded_by=request.user,
             )
             refunded_qty += qty
-            refunded_total += float(qty * sale.sale_price)
+            # M8 fix: use sale.total (after line_discount) for accurate refund amount
+            if sale.quantity > 0:
+                per_unit = float(sale.total) / sale.quantity
+            else:
+                per_unit = float(sale.sale_price)
+            refunded_total += qty * per_unit
     return JsonResponse({
         'ok': True,
         'refunded_qty': refunded_qty,
@@ -3754,6 +3809,13 @@ def return_create(request, sale_id):
         messages.warning(request, "Bu sotuv allaqachon to'liq qaytarilgan.")
         return redirect('sales_list')
 
+    # Require open shift for cash reconciliation
+    open_shift = _open_shift_for(sale.branch)
+    if request.method == 'POST' and not open_shift:
+        messages.error(request,
+            "Smen ochilmagan. Qaytarish faqat ochiq smen davomida amalga oshiriladi.")
+        return redirect('return_create', sale_id=sale.id)
+
     if request.method == 'POST':
         try:
             qty = int(request.POST.get('quantity') or 0)
@@ -3772,6 +3834,7 @@ def return_create(request, sale_id):
                 stock.stock_count = F('stock_count') + qty
                 stock.save()
             Return.objects.create(
+                shift=open_shift,
                 sale=sale, quantity=qty, reason=reason,
                 refunded_by=request.user,
             )

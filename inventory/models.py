@@ -912,6 +912,11 @@ class ParkedSale(models.Model):
 class Return(models.Model):
     """Qaytarilgan mahsulot — sotuv qatorini qisman yoki to'liq qaytarish."""
     sale = models.ForeignKey(Sale, on_delete=models.PROTECT, related_name='returns')
+    shift = models.ForeignKey(
+        'Shift', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='returns',
+        help_text="Refund qaysi smen davomida amalga oshgan — kassa farqiga ta'sir"
+    )
     quantity = models.PositiveIntegerField()
     reason = models.CharField(max_length=200, blank=True,
                               help_text='Sabab: nuqson, kichik o\'lcham, mijoz fikri o\'zgardi...')
@@ -929,4 +934,8 @@ class Return(models.Model):
 
     @property
     def refund_amount(self):
+        # Use line total (after line_discount) so refunds match actual cash returned
+        if self.sale.quantity > 0:
+            per_unit_total = self.sale.total / self.sale.quantity
+            return self.quantity * per_unit_total
         return self.quantity * self.sale.sale_price

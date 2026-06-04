@@ -90,11 +90,16 @@ ZOODPAY_API_KEY = os.environ.get('ZOODPAY_API_KEY', '')
 
 # Demo: real merchant API ulanmagan paytda PaymentIntent'lar shu soniyalar
 # o'tib ketganidan keyin avtomatik 'paid' deb belgilanadi (status polling
-# orqali POS shunday ko'radi). Production'da 0 qiling — webhook keladi.
+# orqali POS shunday ko'radi).
+#
+# IMPORTANT: production'da bu MUST be 0 — aks holda real to'lovsiz ham
+# sotuv yakunlanadi. Default xavfsizlik: DEBUG=True bo'lganda 8 (sinov uchun
+# qulaylik), DEBUG=False bo'lganda 0 (real webhook'siz hech narsa paid emas).
+_default_demo_seconds = '8' if DEBUG else '0'
 try:
-    DEMO_AUTO_PAY_SECONDS = int(os.environ.get('DEMO_AUTO_PAY_SECONDS', '8'))
+    DEMO_AUTO_PAY_SECONDS = int(os.environ.get('DEMO_AUTO_PAY_SECONDS', _default_demo_seconds))
 except ValueError:
-    DEMO_AUTO_PAY_SECONDS = 8
+    DEMO_AUTO_PAY_SECONDS = 0 if not DEBUG else 8
 
 
 # ---------- CSRF ----------

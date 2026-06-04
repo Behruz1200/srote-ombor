@@ -1433,10 +1433,12 @@ async function flushQueue() {
     const items = await queueList().catch(() => []);
     for (const item of items) {
         try {
+            // Tag as offline replay so the server can alert admin on conflict
+            const payload = Object.assign({}, item.payload, {is_offline_replay: true});
             const resp = await fetch('/pos/checkout/', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-                body: JSON.stringify(item.payload),
+                body: JSON.stringify(payload),
             });
             const data = await resp.json();
             if (data && data.ok) {
@@ -1920,7 +1922,17 @@ if (printHelpBtn) {
 //      to pick the device first time, then remembered.
 //   2) Auto: after a successful cash (or mixed-with-cash) checkout, fire
 //      silently if the device was previously authorized for this origin.
+// All commands are serialized via _drawerChain so back-to-back fires don't
+// collide on the USB transfer (C5 fix).
 const DRAWER_CMD = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]);  // ESC p 0 25 250
+
+let _drawerChain = Promise.resolve();
+function _enqueueDrawer(task) {
+    // Chain the next task after the current one finishes (success or fail)
+    const next = _drawerChain.catch(() => {}).then(() => task());
+    _drawerChain = next.catch(() => {});  // keep the chain alive after errors
+    return next;
+}
 
 async function sendDrawerCmd(device) {
     if (!device.opened) await device.open();
@@ -1935,14 +1947,18 @@ async function sendDrawerCmd(device) {
 }
 
 async function openCashDrawerAuto() {
-    // Silent attempt — only if already-authorized device exists
+    // Silent attempt — only if already-authorized device exists.
+    // Serialized via _enqueueDrawer to avoid USB transfer collisions on
+    // back-to-back checkouts.
     if (!navigator.usb) return false;
-    try {
-        const devices = await navigator.usb.getDevices();
-        if (!devices.length) return false;  // not authorized yet
-        await sendDrawerCmd(devices[0]);
-        return true;
-    } catch (e) { return false; }
+    return _enqueueDrawer(async () => {
+        try {
+            const devices = await navigator.usb.getDevices();
+            if (!devices.length) return false;
+            await sendDrawerCmd(devices[0]);
+            return true;
+        } catch (e) { return false; }
+    });
 }
 
 const drawerBtn = document.getElementById('drawerBtn');
@@ -1952,19 +1968,21 @@ if (drawerBtn) {
             new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
             return;
         }
-        try {
-            // Reuse already-authorized device if available, else ask
-            let device = (await navigator.usb.getDevices())[0];
-            if (!device) {
-                device = await navigator.usb.requestDevice({filters: []});
+        _enqueueDrawer(async () => {
+            try {
+                // Reuse already-authorized device if available, else ask
+                let device = (await navigator.usb.getDevices())[0];
+                if (!device) {
+                    device = await navigator.usb.requestDevice({filters: []});
+                }
+                await sendDrawerCmd(device);
+                setStatus('✓ Kassa qutisi ochildi', 'success');
+                beepOk();
+            } catch (e) {
+                setStatus('Kassa qutisi: ' + e.message, 'error');
+                new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
             }
-            await sendDrawerCmd(device);
-            setStatus('✓ Kassa qutisi ochildi', 'success');
-            beepOk();
-        } catch (e) {
-            setStatus('Kassa qutisi: ' + e.message, 'error');
-            new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
-        }
+        });
     });
 }
 
