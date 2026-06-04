@@ -14,16 +14,17 @@
         </span>
     </div>
 
+    <!-- Meta + variance summary -->
     <div class="card p-3 mb-3">
-        <div class="row small">
+        <div class="row g-3 align-items-center">
             <div class="col-md-3">
                 <small class="text-muted">Filial</small><br>
                 <strong>{{ session.branch.name }}</strong>
             </div>
             <div class="col-md-3">
                 <small class="text-muted">Boshladi</small><br>
-                <strong>{{ session.started_by.username }}</strong> <br>
-                <small>{{ session.started_at|date:"d.m.Y H:i" }}</small>
+                <strong>{{ session.started_by.username }}</strong><br>
+                <small class="text-muted">{{ session.started_at|date:"d.m.Y H:i" }}</small>
             </div>
             <div class="col-md-3">
                 <small class="text-muted">Variantlar</small><br>
@@ -34,65 +35,241 @@
                 <strong class="{% if diff_count > 0 %}text-danger{% endif %}">{{ diff_count }}</strong>
             </div>
         </div>
-        {% if session.note %}<p class="mt-2 mb-0"><strong>Izoh:</strong> {{ session.note }}</p>{% endif %}
+        {% if session.note %}
+            <hr class="my-2">
+            <small class="text-muted">Izoh:</small> {{ session.note }}
+        {% endif %}
     </div>
 
-    <form method="post">
+    <!-- Toolbar: search, diff filter, scanner, progress -->
+    {% if session.status == 'open' %}
+    <div class="card p-2 mb-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-4">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" id="rowSearch" class="form-control"
+                           placeholder="Kod yoki nom bo'yicha filterlash...">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-check form-switch">
+                    <input type="checkbox" id="diffOnly" class="form-check-input">
+                    <label class="form-check-label" for="diffOnly">Faqat farqlilar</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <button type="button" class="btn btn-sm btn-outline-success w-100" id="scannerBtn">
+                    <i class="bi bi-qr-code-scan"></i> Skaner orqali sanab chiqish
+                </button>
+            </div>
+            <div class="col-md-2 text-end small">
+                <span id="progressText">0/{{ counts|length }}</span>
+            </div>
+            <div class="col-12">
+                <div class="progress" style="height:6px;">
+                    <div class="progress-bar bg-success" id="progressBar" style="width:0%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" id="stocktakeForm">
         {% csrf_token %}
         <div class="card">
             <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Kod</th><th>Mahsulot</th><th>O'lcham/Rang</th>
-                        <th class="text-end">Tizim</th>
-                        <th style="width:120px;">Sanalgan</th>
-                        <th class="text-end">Farq</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for c in counts %}
-                    <tr {% if c.diff != 0 %}class="table-warning"{% endif %}>
-                        <td><code>{{ c.variant.product.code }}</code></td>
-                        <td>{{ c.variant.product.name|truncatechars:30 }}</td>
-                        <td>{{ c.variant.size }} / {{ c.variant.color }}</td>
-                        <td class="text-end">{{ c.system_qty }}</td>
-                        <td>
-                            {% if session.status == 'open' %}
-                                <input type="number" name="count[{{ c.pk }}]"
-                                       value="{{ c.counted_qty }}" min="0"
-                                       class="form-control form-control-sm text-end">
-                            {% else %}
-                                <span>{{ c.counted_qty }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if c.diff > 0 %}
-                                <span class="text-success">+{{ c.diff }}</span>
-                            {% elif c.diff < 0 %}
-                                <span class="text-danger">{{ c.diff }}</span>
-                            {% else %}
-                                <span class="text-muted">0</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+                <table class="table table-sm align-middle mb-0" id="countsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Kod</th>
+                            <th>Mahsulot</th>
+                            <th>Variant</th>
+                            <th class="text-end">Tizim</th>
+                            <th style="width:140px;">Sanalgan</th>
+                            <th class="text-end">Farq</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in counts %}
+                        <tr {% if c.diff != 0 %}class="table-warning"{% endif %}
+                            data-code="{{ c.variant.product.code }}"
+                            data-name="{{ c.variant.product.name }}"
+                            data-diff="{{ c.diff }}"
+                            data-variant-id="{{ c.variant.id }}">
+                            <td><code>{{ c.variant.product.code }}</code></td>
+                            <td>{{ c.variant.product.name|truncatechars:32 }}</td>
+                            <td><small>{{ c.variant.size }} / {{ c.variant.color }}</small></td>
+                            <td class="text-end">{{ c.system_qty }}</td>
+                            <td>
+                                {% if session.status == 'open' %}
+                                    <input type="number" name="count[{{ c.pk }}]"
+                                           value="{{ c.counted_qty }}" min="0"
+                                           class="form-control form-control-sm text-end count-input"
+                                           data-system="{{ c.system_qty }}">
+                                {% else %}
+                                    <span>{{ c.counted_qty }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end diff-cell">
+                                {% if c.diff > 0 %}
+                                    <span class="text-success">+{{ c.diff }}</span>
+                                {% elif c.diff < 0 %}
+                                    <span class="text-danger">{{ c.diff }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 
         {% if session.status == 'open' %}
         <div class="d-flex gap-2 mt-3">
             <button type="submit" name="action" value="save" class="btn btn-primary">
-                <i class="bi bi-save"></i> Hisoblanganlarni saqlash
+                <i class="bi bi-save"></i> Sanalganlarni saqlash
             </button>
             <button type="submit" name="action" value="apply" class="btn btn-success"
-                    onclick="return confirm('Inventarizatsiyani tasdiqlash? Ombor yangilanadi.')">
+                    onclick="return confirm('Inventarizatsiyani tasdiqlash? Ombor zaxirasi yangilanadi va orqaga qaytarib bo\'lmaydi.')">
                 <i class="bi bi-check2-circle"></i> Tasdiqlash (ombor yangilash)
             </button>
         </div>
         {% endif %}
     </form>
 </div>
+
+<!-- Scanner modal -->
+<div class="modal fade" id="scannerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-qr-code-scan"></i> Skaner</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scannerStatus" class="alert alert-info py-2 mb-2">
+                    Kamerani yuklayapti...
+                </div>
+                <div id="scannerReader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+                <div class="text-center small text-muted mt-2">
+                    Kodni o'qigach, mos qator avtomatik focus qilinadi va +1 ga oshiriladi.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Yopish</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const rowSearch = document.getElementById('rowSearch');
+    const diffOnly = document.getElementById('diffOnly');
+    const table = document.getElementById('countsTable');
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    if (!table) return;
+
+    const rows = table.querySelectorAll('tbody tr');
+
+    function applyFilters() {
+        const q = (rowSearch.value || '').toLowerCase().trim();
+        const onlyDiff = diffOnly.checked;
+        rows.forEach(r => {
+            const code = (r.dataset.code || '').toLowerCase();
+            const name = (r.dataset.name || '').toLowerCase();
+            const matches = !q || code.includes(q) || name.includes(q);
+            const diff = parseInt(r.dataset.diff || '0');
+            const passDiff = !onlyDiff || diff !== 0;
+            r.style.display = (matches && passDiff) ? '' : 'none';
+        });
+    }
+    if (rowSearch) rowSearch.addEventListener('input', applyFilters);
+    if (diffOnly) diffOnly.addEventListener('change', applyFilters);
+
+    function updateProgress() {
+        let counted = 0;
+        rows.forEach(r => {
+            const inp = r.querySelector('.count-input');
+            if (inp && parseInt(inp.value || '0') > 0) counted++;
+        });
+        const total = rows.length;
+        if (progressText) progressText.textContent = `${counted}/${total}`;
+        if (progressBar) progressBar.style.width = (total ? (counted/total*100) : 0) + '%';
+    }
+    function updateRowDiff(row) {
+        const inp = row.querySelector('.count-input');
+        const diff = parseInt(inp.value || '0') - parseInt(inp.dataset.system || '0');
+        row.dataset.diff = diff;
+        const cell = row.querySelector('.diff-cell');
+        if (cell) {
+            if (diff > 0) cell.innerHTML = `<span class="text-success">+${diff}</span>`;
+            else if (diff < 0) cell.innerHTML = `<span class="text-danger">${diff}</span>`;
+            else cell.innerHTML = `<span class="text-muted">0</span>`;
+        }
+        row.classList.toggle('table-warning', diff !== 0);
+    }
+    table.querySelectorAll('.count-input').forEach(inp => {
+        inp.addEventListener('input', () => {
+            updateRowDiff(inp.closest('tr'));
+            updateProgress();
+        });
+    });
+    updateProgress();
+
+    // Scanner integration
+    const scannerBtn = document.getElementById('scannerBtn');
+    const modalEl = document.getElementById('scannerModal');
+    const status = document.getElementById('scannerStatus');
+    let html5Qr = null;
+
+    function setStatus(text, type) {
+        status.className = 'alert py-2 mb-2 alert-' + (type || 'info');
+        status.innerHTML = text;
+    }
+
+    if (scannerBtn) {
+        scannerBtn.addEventListener('click', () => new bootstrap.Modal(modalEl).show());
+    }
+    if (modalEl) {
+        modalEl.addEventListener('shown.bs.modal', () => {
+            setStatus('Kamerani yuklayapti...', 'info');
+            html5Qr = new Html5Qrcode('scannerReader');
+            html5Qr.start({facingMode: 'environment'}, {fps: 10, qrbox: 250},
+                (decoded) => {
+                    setStatus(`Aniqlandi: <strong>${decoded}</strong>`, 'success');
+                    // Find row by code
+                    const target = Array.from(rows).find(r =>
+                        (r.dataset.code || '').toLowerCase() === decoded.toLowerCase()
+                    );
+                    if (target) {
+                        target.scrollIntoView({block: 'center', behavior: 'smooth'});
+                        target.classList.add('table-success');
+                        setTimeout(() => target.classList.remove('table-success'), 1500);
+                        const inp = target.querySelector('.count-input');
+                        if (inp) {
+                            inp.value = (parseInt(inp.value || '0') + 1).toString();
+                            updateRowDiff(target);
+                            updateProgress();
+                            inp.focus();
+                        }
+                    } else {
+                        setStatus(`"${decoded}" qatorda topilmadi`, 'warning');
+                    }
+                }, () => {}
+            );
+        });
+        modalEl.addEventListener('hide.bs.modal', () => {
+            if (html5Qr && html5Qr.isScanning) {
+                html5Qr.stop().catch(() => {}).finally(() => { html5Qr.clear(); html5Qr = null; });
+            }
+        });
+    }
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 {% endblock %}

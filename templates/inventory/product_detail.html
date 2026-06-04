@@ -5,58 +5,129 @@
 
 {% block content %}
 <div class="container">
-    <div class="card p-4 mb-4">
-        <div class="d-flex justify-content-between align-items-start mb-3">
-            <div>
-                <h3 class="mb-1">{{ product.name }}</h3>
-                <span class="code-pill">{{ product.code }}</span>
-                {% if product.category %}
-                    <span class="badge bg-secondary ms-2">{{ product.category.name }}</span>
-                {% endif %}
-                <div class="mt-2 text-muted">{{ product.description }}</div>
+    <a href="{% url 'product_list' %}" class="btn btn-link p-0 mb-2">← Mahsulotlar</a>
+
+    <!-- Header -->
+    <div class="card p-3 mb-3">
+        <div class="row g-3 align-items-start">
+            {% if product.image %}
+            <div class="col-md-3">
+                <a href="{{ product.image.url }}" target="_blank">
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                         class="img-fluid rounded" style="max-height: 200px; object-fit: cover;">
+                </a>
             </div>
-            <div class="text-end">
-                <div class="text-muted small">Sotuv narxi</div>
-                <h4 class="text-primary mb-0">{{ product.default_sale_price|som }} so'm</h4>
-                <div class="mt-2">
+            {% endif %}
+            <div class="col-md{% if product.image %}-6{% else %}-9{% endif %}">
+                <h3 class="mb-1">{{ product.name }}</h3>
+                <div>
+                    <code>{{ product.code }}</code>
+                    {% if product.category %}
+                        <span class="badge bg-light text-dark ms-1">{{ product.category.name }}</span>
+                    {% endif %}
+                </div>
+                {% if product.description %}
+                    <p class="text-muted mt-2 mb-0">{{ product.description }}</p>
+                {% endif %}
+                <div class="d-flex gap-2 mt-3 flex-wrap">
                     <a href="{% url 'product_edit' product.code %}" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-pencil"></i> Tahrirlash
                     </a>
+                    <a href="{% url 'intake_for_product' product.code %}" class="btn btn-sm btn-success">
+                        <i class="bi bi-box-arrow-in-down"></i> Qabul
+                    </a>
+                    <a href="{% url 'product_label' product.code %}" target="_blank" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-printer"></i> QR etiketka
+                    </a>
+                    <a href="{% url 'qr_image' product.code %}" download="{{ product.code }}.png"
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-qr-code"></i> QR rasm
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-3 text-md-end">
+                <div class="text-muted small">Sotuv narxi</div>
+                <h3 class="text-primary mb-0">{{ product.default_sale_price|som }}</h3>
+                <small class="text-muted">so'm · Markup: {{ product.markup_percent }}%</small>
+                <div class="mt-2">
+                    <img src="{% url 'qr_image' product.code %}" alt="QR"
+                         style="width: 100px; height: 100px;">
                 </div>
             </div>
         </div>
+    </div>
 
-        {% if product.image %}
-            <img src="{{ product.image.url }}" alt="{{ product.name }}"
-                 class="img-fluid rounded mb-3" style="max-height: 250px; width: auto;">
-        {% endif %}
-
-        <div class="d-flex gap-3 text-muted">
-            <div><strong>Variantlar:</strong> {{ product.variants.count }}</div>
-            <div><strong>Jami soni:</strong> {{ product.total_stock }}</div>
-            <div><strong>Ombor qiymati:</strong> {{ product.total_value|som }} so'm</div>
+    <!-- KPI strip -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Jami zaxira</div>
+                <div class="h4 mb-0 {% if product_kpis.total_stock == 0 %}text-danger{% endif %}">
+                    {{ product_kpis.total_stock }}
+                </div>
+                <small class="text-muted">{{ product_kpis.variants_in_stock }}/{{ product_kpis.total_variants }} variant</small>
+            </div>
         </div>
-
-        <div class="mt-3 d-flex gap-2 flex-wrap align-items-center">
-            <a href="{% url 'intake_for_product' product.code %}" class="btn btn-success">
-                <i class="bi bi-box-arrow-in-down"></i> Yangi qabul / variant qo'shish
-            </a>
-            <a href="{% url 'product_label' product.code %}" class="btn btn-outline-primary">
-                <i class="bi bi-printer"></i> Etiketka chop etish
-            </a>
-            <a href="{% url 'qr_image' product.code %}" download="{{ product.code }}.png"
-               class="btn btn-outline-secondary">
-                <i class="bi bi-qr-code"></i> QR yuklab olish
-            </a>
-            <img src="{% url 'qr_image' product.code %}" alt="QR"
-                 style="width: 80px; height: 80px; margin-left: auto;"
-                 title="{{ product.code }}">
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Zaxira qiymati</div>
+                <div class="h4 mb-0">{{ product_kpis.total_value|som }}</div>
+                <small class="text-muted">so'm</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">30 kun sotilgan</div>
+                <div class="h4 mb-0 text-success">{{ product_kpis.sold_30d }}</div>
+                <small class="text-muted">{{ product_kpis.txns_30d }} chek · {{ product_kpis.rev_30d|som }}</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Yetadigan kun</div>
+                {% if product_kpis.days_left is not None %}
+                    <div class="h4 mb-0 text-{% if product_kpis.days_left < 7 %}danger{% elif product_kpis.days_left < 14 %}warning{% else %}success{% endif %}">
+                        {{ product_kpis.days_left|floatformat:0 }}
+                    </div>
+                    <small class="text-muted">kun</small>
+                {% else %}
+                    <div class="h4 mb-0 text-muted">—</div>
+                    <small class="text-muted">sotilmagan</small>
+                {% endif %}
+            </div>
         </div>
     </div>
 
+    <!-- Chart + Top branch -->
+    <div class="row g-3 mb-3">
+        <div class="col-lg-9">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-graph-up"></i> So'nggi 30 kun sotuvi (dona)
+                </h6>
+                <canvas id="trendChart" style="max-height: 200px;"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-3">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-trophy"></i> Top filial
+                </h6>
+                {% if product_kpis.top_branch_name %}
+                    <div class="h5 mb-0">{{ product_kpis.top_branch_name }}</div>
+                    <div class="text-success">{{ product_kpis.top_branch_rev|som }} so'm</div>
+                    <small class="text-muted">30 kun tushum</small>
+                {% else %}
+                    <div class="text-muted">Hali sotuv yo'q</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Per-branch breakdown -->
     {% for bd in branches_data %}
-    <div class="card p-4 mb-3">
-        <div class="d-flex justify-content-between mb-2">
+    <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between mb-2 align-items-center flex-wrap gap-2">
             <h5 class="mb-0">
                 <i class="bi bi-building text-primary"></i>
                 {{ bd.branch.name }}
@@ -66,10 +137,11 @@
             </span>
         </div>
         {% if bd.matrix %}
-        <div class="table-responsive"><table class="table table-bordered matrix-table">
+        <div class="table-responsive">
+            <table class="table table-bordered matrix-table mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th style="min-width:100px;">O'lcham \ Rang</th>
+                        <th style="min-width:80px;">O'lcham \ Rang</th>
                         {% for color in bd.colors %}<th>{{ color }}</th>{% endfor %}
                     </tr>
                 </thead>
@@ -88,13 +160,9 @@
                                         {% else %}
                                             <span class="stock-ok">{{ s.stock_count }}</span>
                                         {% endif %}
-                                        <div class="small text-muted">
-                                            Tan: {{ s.cost_price|som }}
-                                        </div>
+                                        <div class="small text-muted">Tan: {{ s.cost_price|som }}</div>
                                         {% if s.sale_price > 0 %}
-                                        <div class="small text-primary">
-                                            Sot: {{ s.sale_price|som }}
-                                        </div>
+                                        <div class="small text-primary">Sot: {{ s.sale_price|som }}</div>
                                         {% endif %}
                                         {% if s.stock_count > 0 %}
                                             <a href="{% url 'sale_create' s.id %}"
@@ -107,38 +175,73 @@
                     </tr>
                     {% endfor %}
                 </tbody>
-            </table></div>
+            </table>
+        </div>
         {% else %}
-            <p class="text-muted mb-0">Bu filialda hech narsa yo'q.</p>
+            <p class="text-muted mb-0">Bu filialda mahsulot yo'q.</p>
         {% endif %}
     </div>
     {% endfor %}
 
-    <div class="card p-4">
-        <h5>So'nggi qabullar</h5>
+    <!-- Recent intakes -->
+    <div class="card p-3">
+        <h6 class="text-muted text-uppercase small mb-2">So'nggi qabullar</h6>
         {% if recent_intakes %}
-        <div class="table-responsive"><table class="table table-sm">
-            <thead><tr>
-                <th>Sana</th><th>Filial</th><th>O'lcham/Rang</th><th>Soni</th>
-                <th>Tannarx</th><th>Yetkazib beruvchi</th><th>Qabul qildi</th>
-            </tr></thead>
-            <tbody>
-            {% for i in recent_intakes %}
-                <tr>
-                    <td><small>{{ i.received_at|date:"d.m.Y H:i" }}</small></td>
-                    <td>{{ i.branch.name }}</td>
-                    <td>{{ i.variant.size }} / {{ i.variant.color }}</td>
-                    <td>+{{ i.quantity }}</td>
-                    <td>{{ i.cost_per_unit|som }} so'm</td>
-                    <td>{{ i.supplier|default:"—" }}</td>
-                    <td><small>{{ i.received_by.username }}</small></td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table></div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr>
+                    <th>Sana</th><th>Filial</th><th>Variant</th>
+                    <th class="text-end">Soni</th><th class="text-end">Tannarx</th>
+                    <th>Yetkazib beruvchi</th>
+                </tr></thead>
+                <tbody>
+                {% for i in recent_intakes %}
+                    <tr>
+                        <td><small>{{ i.received_at|date:"d.m.Y H:i" }}</small></td>
+                        <td><small>{{ i.branch.name }}</small></td>
+                        <td><small>{{ i.variant.size }} / {{ i.variant.color }}</small></td>
+                        <td class="text-end {% if i.is_return %}text-danger{% else %}text-success{% endif %}">
+                            {% if i.quantity > 0 %}+{% endif %}{{ i.quantity }}
+                        </td>
+                        <td class="text-end">{{ i.cost_per_unit|som }}</td>
+                        <td><small>
+                            {% if i.supplier_ref %}{{ i.supplier_ref.name }}
+                            {% else %}{{ i.supplier|default:"—" }}{% endif %}
+                        </small></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
             <p class="text-muted mb-0">Hali qabullar yo'q.</p>
         {% endif %}
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{{ chart_labels|json_script:"chart-labels" }}
+{{ chart_qty|json_script:"chart-qty" }}
+<script>
+new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+        labels: JSON.parse(document.getElementById('chart-labels').textContent),
+        datasets: [{
+            label: "Sotilgan (dona)",
+            data: JSON.parse(document.getElementById('chart-qty').textContent),
+            backgroundColor: 'rgba(13, 110, 253, 0.6)',
+            borderRadius: 3,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 } }
+        }
+    }
+});
+</script>
 {% endblock %}

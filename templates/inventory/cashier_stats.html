@@ -1,0 +1,209 @@
+{% extends 'inventory/base.html' %}
+{% load srote_extras %}
+
+{% block title %}{{ seller.username }} — Performans{% endblock %}
+
+{% block content %}
+<div class="container">
+    <a href="{% url 'user_list' %}" class="btn btn-link p-0 mb-2">← Foydalanuvchilar</a>
+
+    <!-- Header -->
+    <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div class="d-flex gap-2 align-items-center">
+                <div class="srote-avatar" style="width:48px; height:48px; font-size:1.4rem;">
+                    {{ seller.username|slice:":1"|upper }}
+                </div>
+                <div>
+                    <h3 class="mb-0">
+                        {{ seller.username }}
+                        <span class="badge bg-{% if seller.role == 'admin' %}danger{% else %}info{% endif %} fs-6">
+                            {{ seller.get_role_display }}
+                        </span>
+                    </h3>
+                    {% if seller.first_name or seller.last_name %}
+                        <div class="text-muted">{{ seller.first_name }} {{ seller.last_name }}</div>
+                    {% endif %}
+                    {% if seller.branch %}
+                        <div class="small text-muted">
+                            <i class="bi bi-building"></i> {{ seller.branch.name }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="text-end">
+                {% if commission_pct %}
+                    <span class="badge bg-success fs-6">Komissiya: {{ commission_pct }}%</span>
+                {% endif %}
+                <div class="small text-muted mt-1">
+                    Faol kunlar: <strong>{{ active_days }}</strong> / 30
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">30 kunlik tushum</div>
+                <div class="h4 mb-0 text-success">{{ revenue|som }}</div>
+                <small class="text-muted">{{ txns }} chek</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Sof foyda</div>
+                <div class="h4 mb-0 text-primary">{{ profit|som }}</div>
+                <small class="text-muted">tannarx ayirilgan</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">O'rtacha chek</div>
+                <div class="h4 mb-0">{{ avg_ticket|som }}</div>
+                <small class="text-muted">so'm</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Komissiya</div>
+                {% if commission_pct %}
+                    <div class="h4 mb-0 text-success">{{ commission|som }}</div>
+                    <small class="text-muted">so'm topgan</small>
+                {% else %}
+                    <div class="h4 mb-0 text-muted">—</div>
+                    <small class="text-muted">qo'shilmagan</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Secondary KPIs -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Sotilgan dona</div>
+                <div class="h5 mb-0">{{ qty }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Kuniga sotuv</div>
+                <div class="h5 mb-0">{{ sales_per_day|floatformat:1 }}</div>
+                <small class="text-muted">chek/kun</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center h-100 {% if refund_rate > 5 %}bg-danger bg-opacity-10{% else %}bg-light{% endif %}">
+                <div class="small text-muted">Qaytarish foizi</div>
+                <div class="h5 mb-0 {% if refund_rate > 5 %}text-danger{% endif %}">
+                    {{ refund_rate|floatformat:1 }}%
+                </div>
+                <small class="text-muted">{{ refund_qty }} dona / {{ qty }}</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Qaytarish soni</div>
+                <div class="h5 mb-0">{{ refund_count }}</div>
+                <small class="text-muted">marta</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trend chart -->
+    <div class="card p-3 mb-3">
+        <h6 class="text-muted text-uppercase small mb-2">
+            <i class="bi bi-graph-up"></i> Kunlik tushum tarixi
+        </h6>
+        <canvas id="dailyChart" style="max-height: 220px;"></canvas>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-7">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-clock"></i> Soat bo'yicha aktivlik
+                </h6>
+                <canvas id="hourlyChart" style="max-height: 180px;"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-trophy text-warning"></i> Top mahsulotlar
+                </h6>
+                {% if top_products %}
+                <ol class="ps-3 mb-0">
+                    {% for p in top_products %}
+                    <li class="mb-1">
+                        <a href="{% url 'product_detail' p.variant__product__code %}">
+                            {{ p.variant__product__name|truncatechars:28 }}
+                        </a>
+                        <div class="small text-muted">
+                            {{ p.qty }} dona · {{ p.revenue|som }} so'm
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ol>
+                {% else %}
+                    <div class="text-muted">Hali sotuv yo'q</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <small class="text-muted">
+        <i class="bi bi-info-circle"></i>
+        Statistika so'nggi 30 kun bo'yicha. Komissiya tushumdan foiz sifatida hisoblanadi.
+    </small>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{{ daily_labels|json_script:"daily-labels" }}
+{{ daily_values|json_script:"daily-values" }}
+{{ hour_labels|json_script:"hour-labels" }}
+{{ hour_qty|json_script:"hour-qty" }}
+<script>
+new Chart(document.getElementById('dailyChart'), {
+    type: 'line',
+    data: {
+        labels: JSON.parse(document.getElementById('daily-labels').textContent),
+        datasets: [{
+            label: "Tushum (so'm)",
+            data: JSON.parse(document.getElementById('daily-values').textContent),
+            borderColor: '#198754',
+            backgroundColor: 'rgba(25, 135, 84, 0.1)',
+            tension: 0.3,
+            fill: true,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { ticks: { callback: v => (v/1000).toFixed(0) + 'k' } }
+        }
+    }
+});
+
+new Chart(document.getElementById('hourlyChart'), {
+    type: 'bar',
+    data: {
+        labels: JSON.parse(document.getElementById('hour-labels').textContent),
+        datasets: [{
+            label: "Cheklar",
+            data: JSON.parse(document.getElementById('hour-qty').textContent),
+            backgroundColor: 'rgba(13, 110, 253, 0.6)',
+            borderRadius: 3,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+});
+</script>
+{% endblock %}

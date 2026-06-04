@@ -3,20 +3,35 @@
 {% block content %}
 <div class="container">
     <div class="row justify-content-center">
-        <div class="col-lg-7">
-            <h3 class="mb-4">{{ title }}</h3>
+        <div class="col-lg-8">
+            <h3 class="mb-3">{{ title }}</h3>
             <div class="card p-4">
                 <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
+
+                    {# Existing image preview #}
+                    {% if product.image %}
+                        <div class="mb-3 text-center">
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                                 class="img-fluid rounded border" style="max-height: 180px;">
+                        </div>
+                    {% endif %}
+
                     {% for field in form %}
                         <div class="mb-3">
                             <label class="form-label">{{ field.label }}</label>
                             {{ field }}
                             {% if field.help_text %}
-                                <small class="form-text text-muted">{{ field.help_text }}</small>
+                                <small class="form-text text-muted d-block">{{ field.help_text }}</small>
                             {% endif %}
                             {% if field.errors %}
                                 <div class="text-danger small">{{ field.errors|join:', ' }}</div>
+                            {% endif %}
+                            {% if field.name == 'image' %}
+                                <div id="imagePreview" class="mt-2" style="display:none;">
+                                    <img id="imgEl" src="" alt="Preview"
+                                         class="img-fluid rounded border" style="max-height: 180px;">
+                                </div>
                             {% endif %}
                         </div>
                     {% endfor %}
@@ -40,4 +55,25 @@
         </div>
     </div>
 </div>
+
+<script>
+(function() {
+    const imgInput = document.querySelector('input[type="file"][name="image"]');
+    const preview = document.getElementById('imagePreview');
+    const img = document.getElementById('imgEl');
+    if (!imgInput || !preview || !img) return;
+    imgInput.addEventListener('change', () => {
+        const file = imgInput.files[0];
+        if (!file) { preview.style.display = 'none'; return; }
+        const url = URL.createObjectURL(file);
+        img.src = url;
+        preview.style.display = '';
+    });
+
+    // Markup auto-calc: cost × (1 + markup%) → sale_price
+    const cost = document.querySelector('input[name="markup_percent"]');
+    const sale = document.querySelector('input[name="default_sale_price"]');
+    // We don't have cost on product level; this just hints if user typed markup
+})();
+</script>
 {% endblock %}

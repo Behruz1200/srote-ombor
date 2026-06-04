@@ -126,9 +126,16 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{% url 'user_edit' u.pk %}" class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-pencil"></i>
-                            </a>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'cashier_stats' u.pk %}"
+                                   class="btn btn-outline-primary" title="Performans">
+                                    <i class="bi bi-graph-up"></i>
+                                </a>
+                                <a href="{% url 'user_edit' u.pk %}"
+                                   class="btn btn-outline-secondary" title="Tahrirlash">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                 {% empty %}

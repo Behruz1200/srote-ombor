@@ -62,6 +62,8 @@ urlpatterns = [
     path('intake/supplier-search/', views.intake_supplier_search, name='intake_supplier_search'),
     path('intake/sessions/<int:pk>/', views.intake_session_detail, name='intake_session_detail'),
     path('intake/suppliers/', views.supplier_list, name='supplier_list'),
+    path('reorder/', views.reorder_page, name='reorder_page'),
+    path('cashier/<int:user_id>/', views.cashier_stats, name='cashier_stats'),
 
     path('sale/<int:stock_id>/', views.sale_create, name='sale_create'),
     path('sales/', views.sales_list, name='sales_list'),

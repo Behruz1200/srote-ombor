@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count, Max
+from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count, Max, Min
 from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
@@ -494,9 +494,75 @@ def product_detail(request, code):
 
     recent_intakes = Intake.objects.filter(variant__product=product) \
         .select_related('variant', 'branch', 'received_by').order_by('-received_at')[:20]
+
+    # 30-day sales chart + KPIs
+    since_30d = timezone.now() - timedelta(days=30)
+    rev_expr = ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+    sales_30d = Sale.objects.filter(variant__product=product, sold_at__gte=since_30d)
+    agg = sales_30d.aggregate(
+        qty=Sum('quantity'),
+        rev=Sum(rev_expr),
+        txns=Count('transaction', distinct=True),
+    )
+    sold_30d = agg['qty'] or 0
+    rev_30d = float(agg['rev'] or 0)
+    txns_30d = agg['txns'] or 0
+    daily_avg = sold_30d / 30 if sold_30d else 0
+    total_stock = product.total_stock() if callable(getattr(product, 'total_stock', None)) else 0
+    days_left = (total_stock / daily_avg) if daily_avg else None
+
+    # Daily chart data
+    from collections import OrderedDict
+    chart = OrderedDict()
+    today = timezone.localdate()
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        chart[d.isoformat()] = 0
+    daily_rows = (sales_30d.values_list('sold_at', 'quantity'))
+    for sold_at, qty in daily_rows:
+        d = sold_at.astimezone(timezone.get_current_timezone()).date()
+        key = d.isoformat()
+        if key in chart:
+            chart[key] += qty
+    chart_labels = [d[5:] for d in chart.keys()]  # MM-DD
+    chart_qty = list(chart.values())
+
+    # Top branch for this product (by 30-day revenue)
+    top_branch_row = (sales_30d.values('branch__name')
+                      .annotate(r=Sum(rev_expr))
+                      .order_by('-r').first())
+    top_branch_name = top_branch_row['branch__name'] if top_branch_row else None
+    top_branch_rev = float(top_branch_row['r'] or 0) if top_branch_row else 0
+
+    # Variants summary
+    variants_qs = product.variants.all()
+    total_variants = variants_qs.count()
+    variants_in_stock = (BranchStock.objects
+                         .filter(variant__product=product, stock_count__gt=0)
+                         .values('variant').distinct().count())
+
+    product_kpis = {
+        'total_stock': total_stock,
+        'total_value': float(product.total_value()) if callable(getattr(product, 'total_value', None)) else 0,
+        'sold_30d': sold_30d,
+        'rev_30d': rev_30d,
+        'txns_30d': txns_30d,
+        'days_left': days_left,
+        'top_branch_name': top_branch_name,
+        'top_branch_rev': top_branch_rev,
+        'total_variants': total_variants,
+        'variants_in_stock': variants_in_stock,
+    }
+
     return render(request, 'inventory/product_detail.html', {
         'product': product, 'branches_data': branches_data,
         'recent_intakes': recent_intakes,
+        'product_kpis': product_kpis,
+        'chart_labels': chart_labels,
+        'chart_qty': chart_qty,
     })
 
 
@@ -889,6 +955,182 @@ def intake_quick_save_upload(request):
 # ---------- SUPPLIER MANAGEMENT ----------
 
 @admin_required
+def cashier_stats(request, user_id):
+    """Sotuvchi performans dashboard'i: 30-kun kpi, kunlik trend,
+    soatlar bo'yicha aktivlik, top mahsulotlar, komissiya."""
+    seller = get_object_or_404(User, pk=user_id)
+
+    since_30d = timezone.now() - timedelta(days=30)
+    rev_expr = ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+    cost_expr = ExpressionWrapper(
+        F('quantity') * F('cost_at_sale'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+
+    sales_30d = Sale.objects.filter(sold_by=seller, sold_at__gte=since_30d)
+    agg = sales_30d.aggregate(
+        revenue=Sum(rev_expr),
+        cost=Sum(cost_expr),
+        qty=Sum('quantity'),
+        txns=Count('transaction', distinct=True),
+    )
+    revenue = float(agg['revenue'] or 0)
+    cost = float(agg['cost'] or 0)
+    qty = agg['qty'] or 0
+    txns = agg['txns'] or 0
+    avg_ticket = revenue / txns if txns else 0
+    profit = revenue - cost
+    commission_pct = float(seller.commission_percent or 0)
+    commission = revenue * commission_pct / 100 if commission_pct else 0
+
+    # Refunds initiated by this user
+    refunds_30d = Return.objects.filter(refunded_by=seller, refunded_at__gte=since_30d)
+    refund_count = refunds_30d.count()
+    refund_qty = refunds_30d.aggregate(s=Sum('quantity'))['s'] or 0
+    refund_rate = (refund_qty / qty * 100) if qty else 0
+
+    # Daily trend (last 30 days)
+    from collections import OrderedDict
+    daily = OrderedDict()
+    today = timezone.localdate()
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        daily[d.isoformat()] = 0
+    for row in (sales_30d.annotate(d=F('sold_at__date')).values('d')
+                .annotate(r=Sum(rev_expr))):
+        key = row['d'].isoformat() if row['d'] else None
+        if key and key in daily:
+            daily[key] = float(row['r'] or 0)
+    daily_labels = [k[5:] for k in daily.keys()]
+    daily_values = list(daily.values())
+
+    # Hourly heatmap
+    hour_qty = [0] * 24
+    for sold_at, in sales_30d.values_list('sold_at'):
+        h = sold_at.astimezone(timezone.get_current_timezone()).hour
+        hour_qty[h] += 1
+    hour_labels = [f'{h:02d}' for h in range(24)]
+
+    # Top products
+    top_products = list(sales_30d.values('variant__product__code', 'variant__product__name')
+                        .annotate(qty=Sum('quantity'), revenue=Sum(rev_expr))
+                        .order_by('-revenue')[:5])
+
+    # Sales per active day
+    active_days = sales_30d.values('sold_at__date').distinct().count() or 1
+    sales_per_day = txns / active_days
+
+    return render(request, 'inventory/cashier_stats.html', {
+        'seller': seller,
+        'revenue': revenue, 'cost': cost, 'profit': profit,
+        'qty': qty, 'txns': txns,
+        'avg_ticket': avg_ticket,
+        'commission_pct': commission_pct,
+        'commission': commission,
+        'refund_count': refund_count,
+        'refund_qty': refund_qty,
+        'refund_rate': refund_rate,
+        'daily_labels': daily_labels,
+        'daily_values': daily_values,
+        'hour_labels': hour_labels,
+        'hour_qty': hour_qty,
+        'top_products': top_products,
+        'active_days': active_days,
+        'sales_per_day': sales_per_day,
+    })
+
+
+@admin_required
+def reorder_page(request):
+    """Smart reorder: past zaxiradagi mahsulotlar + tavsiya etilgan miqdor.
+
+    Formula: 30-kunlik sotuvni 30 ga bo'lib kunlik o'rtacha velocity, undan
+    keyin (BUFFER_DAYS = 14) ga ko'paytirib taklif miqdorini chiqaramiz.
+    """
+    BUFFER_DAYS = int(request.GET.get('buffer') or 14)
+    LOW_THRESHOLD = int(request.GET.get('threshold') or 5)
+    branch_id = request.GET.get('branch') or ''
+
+    since_30d = timezone.now() - timedelta(days=30)
+
+    stocks_qs = (BranchStock.objects
+                 .filter(stock_count__lte=LOW_THRESHOLD)
+                 .select_related('variant__product__category', 'branch'))
+    if branch_id:
+        try:
+            stocks_qs = stocks_qs.filter(branch_id=int(branch_id))
+        except ValueError:
+            branch_id = ''
+
+    # 30-day sales per (variant, branch) pair
+    sales_map = {}
+    for row in (Sale.objects.filter(sold_at__gte=since_30d)
+                .values('variant_id', 'branch_id')
+                .annotate(qty=Sum('quantity'))):
+        sales_map[(row['variant_id'], row['branch_id'])] = row['qty'] or 0
+
+    # Most recent supplier per product (from last intake)
+    supplier_map = {}
+    for row in (Intake.objects.filter(quantity__gt=0)
+                .order_by('-received_at')
+                .values('variant__product_id', 'supplier_ref__name', 'supplier')[:1000]):
+        pid = row['variant__product_id']
+        if pid not in supplier_map:
+            name = row['supplier_ref__name'] or row['supplier'] or ''
+            if name:
+                supplier_map[pid] = name
+
+    items = []
+    for s in stocks_qs:
+        sold30 = sales_map.get((s.variant_id, s.branch_id), 0)
+        daily = sold30 / 30 if sold30 else 0
+        # Target = buffer-days of stock; subtract what's already there
+        target = daily * BUFFER_DAYS
+        suggested = max(0, int(round(target - s.stock_count)))
+        if suggested == 0 and sold30 == 0 and s.stock_count > 0:
+            # Not moving, has some stock — skip
+            continue
+        items.append({
+            'stock': s,
+            'product': s.variant.product,
+            'variant': s.variant,
+            'branch': s.branch,
+            'sold_30d': sold30,
+            'daily_avg': daily,
+            'days_left': (s.stock_count / daily) if daily else None,
+            'suggested': suggested,
+            'cost': float(s.cost_price),
+            'estimated_cost': suggested * float(s.cost_price),
+            'last_supplier': supplier_map.get(s.variant.product_id, ''),
+        })
+
+    # Group by supplier
+    by_supplier = {}
+    for it in items:
+        key = it['last_supplier'] or '(noma\'lum)'
+        by_supplier.setdefault(key, []).append(it)
+    suppliers_grouped = sorted(by_supplier.items(),
+                               key=lambda kv: -sum(x['estimated_cost'] for x in kv[1]))
+
+    total_suggested_value = sum(it['estimated_cost'] for it in items)
+    total_items = len(items)
+
+    return render(request, 'inventory/reorder.html', {
+        'items': items,
+        'by_supplier': suppliers_grouped,
+        'total_items': total_items,
+        'total_suggested_value': total_suggested_value,
+        'buffer_days': BUFFER_DAYS,
+        'low_threshold': LOW_THRESHOLD,
+        'branch_id': branch_id,
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+    })
+
+
+@admin_required
 def supplier_list(request):
     if request.method == 'POST':
         action = request.POST.get('action') or 'create'
@@ -1257,7 +1499,13 @@ def shift_open(request):
         messages.success(request, f"Smen ochildi (boshlang'ich naqd: {opening_cash:,.0f} so'm).")
         return redirect('pos_terminal')
 
-    return render(request, 'inventory/shift_open.html', {'branch': branch})
+    # Hint: oxirgi yopilgan smen kassasi
+    last_closed = (Shift.objects.filter(branch=branch, status=Shift.Status.CLOSED)
+                   .order_by('-closed_at').first())
+    return render(request, 'inventory/shift_open.html', {
+        'branch': branch,
+        'last_closed': last_closed,
+    })
 
 
 @login_required
@@ -1307,14 +1555,60 @@ def shift_detail(request, pk):
     shift = get_object_or_404(Shift, pk=pk)
     if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
         return HttpResponseForbidden()
-    txns = (shift.transactions.select_related('sold_by')
-            .prefetch_related('lines')
-            .order_by('-sold_at')[:200])
+    txns = list(shift.transactions.select_related('sold_by')
+                .prefetch_related('lines')
+                .order_by('-sold_at')[:200])
+
+    # Payment method breakdown
+    pm_breakdown = {}
+    for t in txns:
+        pm = t.get_payment_method_display()
+        if pm not in pm_breakdown:
+            pm_breakdown[pm] = {'count': 0, 'total': 0}
+        pm_breakdown[pm]['count'] += 1
+        pm_breakdown[pm]['total'] += float(t.total)
+    pm_list = sorted(pm_breakdown.items(), key=lambda kv: -kv[1]['total'])
+
+    # Hourly activity (24-hour)
+    hour_qty = [0] * 24
+    hour_revenue = [0] * 24
+    for t in txns:
+        h = t.sold_at.astimezone(timezone.get_current_timezone()).hour
+        hour_qty[h] += 1
+        hour_revenue[h] += float(t.total)
+    # Trim to active range
+    active_hours = [(h, q, r) for h, (q, r) in enumerate(zip(hour_qty, hour_revenue)) if q]
+
+    # Top products in this shift
+    top_prod = {}
+    for t in txns:
+        for ln in t.lines.all():
+            key = ln.variant.product.code
+            if key not in top_prod:
+                top_prod[key] = {
+                    'code': key,
+                    'name': ln.variant.product.name,
+                    'qty': 0,
+                    'revenue': 0,
+                }
+            top_prod[key]['qty'] += ln.quantity
+            top_prod[key]['revenue'] += float(ln.total)
+    top_products = sorted(top_prod.values(), key=lambda x: -x['qty'])[:5]
+
+    # Variance value
+    variance_value = shift.variance() if callable(getattr(shift, 'variance', None)) else None
+
     return render(request, 'inventory/shift_detail.html', {
         'shift': shift,
         'txns': txns,
         'cash_sales': shift.cash_sales(),
         'expected': shift.expected_cash(),
+        'pm_list': pm_list,
+        'hour_labels': [f'{h:02d}:00' for h, _, _ in active_hours],
+        'hour_qty': [q for _, q, _ in active_hours],
+        'hour_revenue': [r for _, _, r in active_hours],
+        'top_products': top_products,
+        'variance_value': variance_value,
     })
 
 
@@ -2409,11 +2703,62 @@ def sale_create(request, stock_id):
 
 @admin_required
 def branch_list(request):
-    branches = Branch.objects.annotate(
-        stock_total=Sum('stocks__stock_count'),
-        staff_count=Count('staff', distinct=True),
+    """Filiallar ro'yxati: 30 kunlik tushum + P&L + xodimlar."""
+    since_30d = timezone.now() - timedelta(days=30)
+    rev_expr = ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
     )
-    return render(request, 'inventory/branch_list.html', {'branches': branches})
+    cost_expr = ExpressionWrapper(
+        F('quantity') * F('cost_at_sale'),
+        output_field=DecimalField(max_digits=14, decimal_places=2)
+    )
+
+    branches = list(Branch.objects.annotate(
+        stock_total=Coalesce(Sum('stocks__stock_count'), 0),
+        staff_count=Count('staff', distinct=True),
+        stock_value=Coalesce(Sum(
+            ExpressionWrapper(F('stocks__stock_count') * F('stocks__cost_price'),
+                              output_field=DecimalField(max_digits=14, decimal_places=2))
+        ), 0, output_field=DecimalField(max_digits=14, decimal_places=2)),
+    ).order_by('-is_active', 'name'))
+
+    # 30-day stats per branch
+    stats_map = {}
+    for row in (Sale.objects.filter(sold_at__gte=since_30d)
+                .values('branch_id')
+                .annotate(rev=Sum(rev_expr), cost=Sum(cost_expr),
+                          txns=Count('transaction', distinct=True),
+                          qty=Sum('quantity'))):
+        stats_map[row['branch_id']] = row
+
+    for br in branches:
+        s = stats_map.get(br.id, {})
+        rev = float(s.get('rev') or 0)
+        cost = float(s.get('cost') or 0)
+        period_fraction = 30 / 30.0  # whole 30-day window
+        fixed = float((br.monthly_rent or 0) + (br.monthly_other_costs or 0)) * period_fraction
+        gross = rev - cost
+        net = gross - fixed
+        br.m_revenue = rev
+        br.m_cost = cost
+        br.m_gross = gross
+        br.m_fixed = fixed
+        br.m_net = net
+        br.m_margin = (net / rev * 100) if rev else 0
+        br.m_txns = s.get('txns') or 0
+        br.m_qty = s.get('qty') or 0
+
+    total_branches = sum(1 for b in branches if b.is_active)
+    total_revenue = sum(float(b.m_revenue) for b in branches)
+    total_stock_value = sum(float(b.stock_value or 0) for b in branches)
+
+    return render(request, 'inventory/branch_list.html', {
+        'branches': branches,
+        'total_branches': total_branches,
+        'total_revenue': total_revenue,
+        'total_stock_value': total_stock_value,
+    })
 
 
 @admin_required
@@ -3345,10 +3690,69 @@ def customer_detail(request, pk):
         n=Count('id', distinct=True),
         total=Coalesce(Sum(revenue_expr), 0,
                        output_field=DecimalField(max_digits=14, decimal_places=2)),
+        first_visit=Min('sold_at'),
+        last_visit=Max('sold_at'),
     )
+    total = float(stats['total'] or 0)
+    n_txns = stats['n'] or 0
+    avg_ticket = total / n_txns if n_txns else 0
+
+    # Segment
+    if total >= 5_000_000:
+        segment = ('VIP', 'bg-warning text-dark')
+    elif total >= 500_000:
+        segment = ('Doimiy', 'bg-success')
+    else:
+        segment = ('Yangi', 'bg-secondary')
+
+    # Top 5 favorite products
+    fav_qs = (Sale.objects
+              .filter(transaction__customer=customer)
+              .values('variant__product__code', 'variant__product__name')
+              .annotate(qty=Sum('quantity'), revenue=Sum(F('quantity') * F('sale_price'),
+                                                        output_field=DecimalField(max_digits=14, decimal_places=2)))
+              .order_by('-qty')[:5])
+    favorites = list(fav_qs)
+
+    # 6-month spend chart (by month)
+    from collections import OrderedDict
+    from datetime import date as _date
+    chart = OrderedDict()
+    today = timezone.localdate()
+    # Last 6 months
+    cur = today.replace(day=1)
+    months = []
+    for _ in range(6):
+        months.append(cur)
+        # Previous month
+        if cur.month == 1:
+            cur = cur.replace(year=cur.year - 1, month=12)
+        else:
+            cur = cur.replace(month=cur.month - 1)
+    months.reverse()
+    for m in months:
+        chart[m.strftime('%Y-%m')] = 0
+    # Sum per month
+    for t in customer.transactions.all():
+        key = t.sold_at.astimezone(timezone.get_current_timezone()).strftime('%Y-%m')
+        if key in chart:
+            chart[key] += float(t.total)
+    chart_labels = [m.strftime('%b %Y') for m in months]
+    chart_data = list(chart.values())
+
     return render(request, 'inventory/customer_detail.html', {
         'customer': customer, 'txns': txns,
         'stats': stats,
+        'total_spent': total,
+        'avg_ticket': avg_ticket,
+        'n_txns': n_txns,
+        'first_visit': stats.get('first_visit'),
+        'last_visit': stats.get('last_visit'),
+        'segment_label': segment[0],
+        'segment_class': segment[1],
+        'favorites': favorites,
+        'chart_labels': chart_labels,
+        'chart_data': chart_data,
     })
 
 

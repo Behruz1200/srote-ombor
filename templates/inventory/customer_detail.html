@@ -1,71 +1,185 @@
 {% extends 'inventory/base.html' %}
 {% load srote_extras %}
 
-{% block title %}{{ customer.display_name }} — Mijoz{% endblock %}
+{% block title %}{{ customer.name|default:"Mijoz" }} — Srote{% endblock %}
 
 {% block content %}
 <div class="container">
     <a href="{% url 'customer_list' %}" class="btn btn-link p-0 mb-2">← Mijozlar</a>
-    <div class="card p-4 mb-3">
+
+    <!-- Header -->
+    <div class="card p-3 mb-3">
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
             <div>
-                <h3 class="mb-1">{{ customer.name|default:"(ism kiritilmagan)" }}</h3>
+                <h3 class="mb-1">
+                    {{ customer.name|default:"(ism kiritilmagan)" }}
+                    <span class="badge {{ segment_class }} ms-2">{{ segment_label }}</span>
+                </h3>
                 <div class="text-muted">
-                    <i class="bi bi-telephone"></i> {{ customer.phone|default:"—" }}
-                    {% if customer.inn %} · STIR: <code>{{ customer.inn }}</code>{% endif %}
+                    {% if customer.phone %}
+                        <a href="tel:{{ customer.phone }}" class="text-decoration-none">
+                            <i class="bi bi-telephone"></i> {{ customer.phone }}
+                        </a>
+                        <a href="sms:{{ customer.phone }}" class="text-decoration-none ms-2">
+                            <i class="bi bi-chat-dots"></i> SMS
+                        </a>
+                    {% endif %}
+                    {% if customer.inn %}
+                        <span class="ms-2">· STIR: <code>{{ customer.inn }}</code></span>
+                    {% endif %}
                 </div>
                 {% if customer.tags %}
                     <div class="mt-1">
-                        <span class="badge bg-secondary">{{ customer.tags }}</span>
+                        <span class="badge bg-light text-dark border">{{ customer.tags }}</span>
                     </div>
                 {% endif %}
                 {% if customer.note %}
-                    <p class="mt-2 mb-0 text-muted">{{ customer.note }}</p>
+                    <p class="mt-2 mb-0 text-muted small">{{ customer.note }}</p>
                 {% endif %}
-            </div>
-            <div class="text-end">
-                <div class="text-muted small">Jami sarflagan</div>
-                <h3 class="text-success mb-0">{{ stats.total|som }} so'm</h3>
-                <small class="text-muted">{{ stats.n }} ta sotuvda</small>
             </div>
         </div>
     </div>
 
-    <h5 class="mb-2">Sotuvlar tarixi</h5>
+    <!-- KPI cards -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Jami sarflagan</div>
+                <div class="h4 mb-0 text-success">{{ total_spent|som }}</div>
+                <small class="text-muted">so'm</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Sotuvlar soni</div>
+                <div class="h4 mb-0">{{ n_txns }}</div>
+                <small class="text-muted">ta chek</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">O'rtacha chek</div>
+                <div class="h4 mb-0">{{ avg_ticket|som }}</div>
+                <small class="text-muted">so'm</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Oxirgi tashrif</div>
+                {% if last_visit %}
+                    <div class="h6 mb-0">{{ last_visit|date:"d.m.Y" }}</div>
+                    <small class="text-muted">{{ last_visit|timesince }} oldin</small>
+                {% else %}
+                    <div class="h6 mb-0 text-muted">—</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart + Favorites -->
+    <div class="row g-3 mb-3">
+        <div class="col-lg-8">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-graph-up"></i> Sarf tarixi (6 oy)
+                </h6>
+                <canvas id="spendChart" style="max-height: 220px;"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-heart-fill text-danger"></i> Sevimli mahsulotlar
+                </h6>
+                {% if favorites %}
+                <ol class="ps-3 mb-0">
+                    {% for f in favorites %}
+                    <li class="mb-1">
+                        <a href="{% url 'product_detail' f.variant__product__code %}">
+                            {{ f.variant__product__name|truncatechars:24 }}
+                        </a>
+                        <div class="small text-muted">
+                            {{ f.qty }} dona · {{ f.revenue|som }} so'm
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ol>
+                {% else %}
+                    <div class="text-muted small">Hali sotuv yo'q</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales history -->
     <div class="card">
+        <div class="card-header bg-white">
+            <h6 class="mb-0">Sotuvlar tarixi ({{ txns|length }})</h6>
+        </div>
         <div class="table-responsive">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Sana</th>
-                    <th>Filial</th>
-                    <th>Sotuvchi</th>
-                    <th>Soni</th>
-                    <th class="text-end">Summa</th>
-                    <th>To'lov</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for t in txns %}
-                <tr>
-                    <td><small>{{ t.sold_at|date:"d.m.Y H:i" }}</small></td>
-                    <td>{{ t.branch.name }}</td>
-                    <td><small>{{ t.sold_by.username }}</small></td>
-                    <td>{{ t.item_count }}</td>
-                    <td class="text-end"><strong>{{ t.total|som }}</strong></td>
-                    <td><small>{{ t.get_payment_method_display }}</small></td>
-                    <td><a href="{% url 'transaction_detail' t.pk %}" target="_blank"
-                           class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-receipt"></i>
-                    </a></td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="7" class="text-muted text-center py-3">Sotuvlar yo'q.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Sana</th>
+                        <th>Filial</th>
+                        <th>Sotuvchi</th>
+                        <th class="text-end">Dona</th>
+                        <th class="text-end">Summa</th>
+                        <th>To'lov</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for t in txns %}
+                    <tr>
+                        <td><small>{{ t.sold_at|date:"d.m.Y H:i" }}</small></td>
+                        <td><small>{{ t.branch.name }}</small></td>
+                        <td><small>{{ t.sold_by.username }}</small></td>
+                        <td class="text-end">{{ t.item_count }}</td>
+                        <td class="text-end"><strong>{{ t.total|som }}</strong></td>
+                        <td><small>{{ t.get_payment_method_display }}</small></td>
+                        <td>
+                            <a href="{% url 'transaction_detail' t.pk %}" target="_blank"
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-receipt"></i>
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7" class="text-muted text-center py-3">Sotuvlar yo'q.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{{ chart_labels|json_script:"chart-labels" }}
+{{ chart_data|json_script:"chart-data" }}
+<script>
+new Chart(document.getElementById('spendChart'), {
+    type: 'bar',
+    data: {
+        labels: JSON.parse(document.getElementById('chart-labels').textContent),
+        datasets: [{
+            label: "Sarf (so'm)",
+            data: JSON.parse(document.getElementById('chart-data').textContent),
+            backgroundColor: 'rgba(25, 135, 84, 0.6)',
+            borderRadius: 3,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { callback: v => (v/1000).toFixed(0) + 'k' }
+            }
+        }
+    }
+});
+</script>
 {% endblock %}

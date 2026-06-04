@@ -5,93 +5,196 @@
 
 {% block content %}
 <div class="container">
-    <a href="{% url 'shift_list' %}" class="btn btn-link p-0 mb-2">← Smenlar ro'yxati</a>
-    <h3 class="mb-3"><i class="bi bi-clipboard-check"></i> Smen #{{ shift.pk }}</h3>
+    <a href="{% url 'shift_list' %}" class="btn btn-link p-0 mb-2">← Smenlar</a>
 
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Smen #{{ shift.pk }}</h3>
+        {% if shift.status == 'open' %}
+            <span class="badge bg-success fs-6"><i class="bi bi-circle-fill"></i> Ochiq</span>
+        {% else %}
+            <span class="badge bg-secondary fs-6">Yopilgan</span>
+        {% endif %}
+    </div>
+
+    <!-- Meta -->
     <div class="card p-3 mb-3">
         <div class="row g-2">
             <div class="col-md-4">
                 <small class="text-muted">Filial</small><br>
-                <strong>{{ shift.branch.name }}</strong>
+                <strong><i class="bi bi-building"></i> {{ shift.branch.name }}</strong>
             </div>
             <div class="col-md-4">
                 <small class="text-muted">Ochildi</small><br>
                 <strong>{{ shift.opened_at|date:"d.m.Y H:i" }}</strong>
-                <small class="d-block">{{ shift.opened_by.username }}</small>
+                <small class="text-muted d-block">{{ shift.opened_by.username }}</small>
             </div>
             <div class="col-md-4">
                 <small class="text-muted">Yopildi</small><br>
                 {% if shift.closed_at %}
-                <strong>{{ shift.closed_at|date:"d.m.Y H:i" }}</strong>
-                <small class="d-block">{{ shift.closed_by.username }}</small>
+                    <strong>{{ shift.closed_at|date:"d.m.Y H:i" }}</strong>
+                    <small class="text-muted d-block">{{ shift.closed_by.username }}</small>
                 {% else %}
-                <span class="badge bg-success">Hali ochiq</span>
+                    <span class="text-success">— Hozir ochiq —</span>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-md-3">
-            <div class="card p-3"><div class="text-muted small">Boshlang'ich naqd</div>
-                <h4 class="mb-0">{{ shift.opening_cash|som }} so'm</h4></div>
+    <!-- KPI cards -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Boshlang'ich naqd</div>
+                <div class="h5 mb-0">{{ shift.opening_cash|som }}</div>
+            </div>
         </div>
-        <div class="col-md-3">
-            <div class="card p-3"><div class="text-muted small">Naqd sotuvlar</div>
-                <h4 class="mb-0 text-success">+{{ cash_sales|som }}</h4></div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Naqd sotuvlar</div>
+                <div class="h5 mb-0 text-success">+{{ cash_sales|som }}</div>
+            </div>
         </div>
-        <div class="col-md-3">
-            <div class="card p-3"><div class="text-muted small">Kutilgan</div>
-                <h4 class="mb-0 text-primary">{{ expected|som }}</h4></div>
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center bg-light h-100">
+                <div class="small text-muted">Kutilgan kassa</div>
+                <div class="h5 mb-0 text-primary">{{ expected|som }}</div>
+            </div>
         </div>
-        <div class="col-md-3">
-            {% if shift.counted_cash is not None %}
-                <div class="card p-3"><div class="text-muted small">Sanalgan</div>
-                    <h4 class="mb-0">{{ shift.counted_cash|som }}</h4>
-                    {% with v=shift.variance %}
-                    {% if v != 0 %}
-                        <small class="{% if v > 0 %}text-success{% else %}text-danger{% endif %}">
-                            Kassa farqi: {{ v|som }} so'm
-                        </small>
-                    {% else %}
+        <div class="col-6 col-md-3">
+            <div class="card p-2 text-center h-100
+                    {% if shift.counted_cash is None %}bg-light{% elif variance_value == 0 %}bg-success bg-opacity-10{% elif variance_value > 0 %}bg-info bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+                <div class="small text-muted">Sanalgan</div>
+                {% if shift.counted_cash is not None %}
+                    <div class="h5 mb-0">{{ shift.counted_cash|som }}</div>
+                    {% if variance_value == 0 %}
                         <small class="text-success">✓ To'g'ri</small>
+                    {% elif variance_value > 0 %}
+                        <small class="text-info">+{{ variance_value|som }} ortiqcha</small>
+                    {% else %}
+                        <small class="text-danger">{{ variance_value|som }} kam</small>
                     {% endif %}
-                    {% endwith %}
-                </div>
-            {% else %}
-                <div class="card p-3 bg-light text-muted"><div class="small">Sanalmagan</div>
-                    <h4 class="mb-0">—</h4></div>
-            {% endif %}
+                {% else %}
+                    <div class="h5 mb-0 text-muted">—</div>
+                    <small class="text-muted">Sanalmagan</small>
+                {% endif %}
+            </div>
         </div>
     </div>
 
-    <h5 class="mb-2">Sotuvlar ({{ txns|length }})</h5>
+    <!-- Payment breakdown + Top products -->
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-credit-card"></i> To'lov turlari
+                </h6>
+                {% if pm_list %}
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                        {% for label, info in pm_list %}
+                            <tr>
+                                <td>{{ label }}</td>
+                                <td class="text-end text-muted small">{{ info.count }} chek</td>
+                                <td class="text-end"><strong>{{ info.total|som }}</strong></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <div class="text-muted text-center py-3">Hali sotuv yo'q</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-trophy text-warning"></i> Top mahsulotlar
+                </h6>
+                {% if top_products %}
+                <ol class="ps-3 mb-0">
+                    {% for p in top_products %}
+                    <li class="mb-1">
+                        <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:32 }}</a>
+                        <div class="small text-muted">
+                            {{ p.qty }} dona · {{ p.revenue|som }} so'm
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ol>
+                {% else %}
+                    <div class="text-muted text-center py-3">Hali sotuv yo'q</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Hourly chart -->
+    {% if hour_qty %}
+    <div class="card p-3 mb-3">
+        <h6 class="text-muted text-uppercase small mb-2">
+            <i class="bi bi-graph-up"></i> Soat bo'yicha cheklar soni
+        </h6>
+        <canvas id="hourlyChart" style="max-height: 180px;"></canvas>
+    </div>
+    {% endif %}
+
+    <!-- Transactions list -->
     <div class="card">
+        <div class="card-header bg-white">
+            <h6 class="mb-0">Cheklar ({{ txns|length }})</h6>
+        </div>
         <div class="table-responsive">
-        <table class="table table-sm mb-0">
-            <thead class="table-light">
-                <tr><th>Vaqt</th><th>Sotuvchi</th><th>To'lov</th><th>Dona</th>
-                    <th class="text-end">Summa</th><th></th></tr>
-            </thead>
-            <tbody>
-            {% for t in txns %}
-                <tr>
-                    <td><small>{{ t.sold_at|date:"H:i:s" }}</small></td>
-                    <td><small>{{ t.sold_by.username }}</small></td>
-                    <td><small>{{ t.get_payment_method_display }}</small></td>
-                    <td>{{ t.item_count }}</td>
-                    <td class="text-end"><strong>{{ t.total|som }}</strong></td>
-                    <td><a href="{% url 'transaction_detail' t.pk %}" target="_blank"
-                           class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-receipt"></i>
-                    </a></td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="6" class="text-muted text-center py-3">Sotuv yo'q.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr><th>Vaqt</th><th>Sotuvchi</th><th>To'lov</th>
+                        <th class="text-end">Dona</th><th class="text-end">Summa</th><th></th></tr>
+                </thead>
+                <tbody>
+                {% for t in txns %}
+                    <tr>
+                        <td><small>{{ t.sold_at|date:"H:i:s" }}</small></td>
+                        <td><small>{{ t.sold_by.username }}</small></td>
+                        <td><small>{{ t.get_payment_method_display }}</small></td>
+                        <td class="text-end">{{ t.item_count }}</td>
+                        <td class="text-end"><strong>{{ t.total|som }}</strong></td>
+                        <td><a href="{% url 'transaction_detail' t.pk %}" target="_blank"
+                               class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-receipt"></i>
+                        </a></td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="6" class="text-muted text-center py-3">Sotuv yo'q.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
+
+{% if hour_qty %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{{ hour_labels|json_script:"hour-labels" }}
+{{ hour_qty|json_script:"hour-qty" }}
+<script>
+new Chart(document.getElementById('hourlyChart'), {
+    type: 'bar',
+    data: {
+        labels: JSON.parse(document.getElementById('hour-labels').textContent),
+        datasets: [{
+            label: "Cheklar",
+            data: JSON.parse(document.getElementById('hour-qty').textContent),
+            backgroundColor: 'rgba(13, 110, 253, 0.6)',
+            borderRadius: 3,
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+});
+</script>
+{% endif %}
 {% endblock %}
