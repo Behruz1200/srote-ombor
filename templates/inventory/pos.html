@@ -1509,6 +1509,14 @@ checkoutBtn.addEventListener('click', async () => {
         }
         checkoutStatus.innerHTML = `<span class="text-success">
             ✓ Sotuv #${data.txn_id} saqlandi (${fmt(data.total)} so'm)</span>`;
+
+        // Auto-open cash drawer if cash was used (any portion)
+        const usedCash = (paymentMethod === 'cash')
+            || (paymentMethod === 'mixed' && breakdown.some(b => b.method === 'cash' && b.amount > 0));
+        if (usedCash) {
+            openCashDrawerAuto();  // silent — does nothing if not configured
+        }
+
         // Open receipt in new tab → auto-prints
         window.open(data.receipt_url, '_blank');
         // Reset for next customer
@@ -1872,26 +1880,51 @@ if (printHelpBtn) {
     });
 }
 
-// Cash drawer open via WebUSB (ESC/POS) or fallback
+// ---- Cash drawer (WebUSB ESC/POS) ----
+// Two trigger paths:
+//   1) Manual: ⚙️ dropdown → "Kassa qutisini ochish" — always asks the user
+//      to pick the device first time, then remembered.
+//   2) Auto: after a successful cash (or mixed-with-cash) checkout, fire
+//      silently if the device was previously authorized for this origin.
+const DRAWER_CMD = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]);  // ESC p 0 25 250
+
+async function sendDrawerCmd(device) {
+    if (!device.opened) await device.open();
+    if (device.configuration === null) await device.selectConfiguration(1);
+    if (device.configuration.interfaces[0].claimed === false) {
+        await device.claimInterface(0);
+    }
+    const iface = device.configuration.interfaces[0];
+    const ep = iface.alternate.endpoints.find(e => e.direction === 'out');
+    if (!ep) throw new Error("USB out endpoint topilmadi");
+    await device.transferOut(ep.endpointNumber, DRAWER_CMD);
+}
+
+async function openCashDrawerAuto() {
+    // Silent attempt — only if already-authorized device exists
+    if (!navigator.usb) return false;
+    try {
+        const devices = await navigator.usb.getDevices();
+        if (!devices.length) return false;  // not authorized yet
+        await sendDrawerCmd(devices[0]);
+        return true;
+    } catch (e) { return false; }
+}
+
 const drawerBtn = document.getElementById('drawerBtn');
 if (drawerBtn) {
     drawerBtn.addEventListener('click', async () => {
-        // ESC/POS DLE DC4 1 0 4 = open drawer pin 2 (or ESC p 0 25 250)
-        const DRAWER_CMD = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]);
         if (!navigator.usb) {
             new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
             return;
         }
         try {
-            const device = await navigator.usb.requestDevice({filters: []});
-            await device.open();
-            if (device.configuration === null) await device.selectConfiguration(1);
-            await device.claimInterface(0);
-            // Find output endpoint
-            const iface = device.configuration.interfaces[0];
-            const ep = iface.alternate.endpoints.find(e => e.direction === 'out');
-            if (!ep) throw new Error("Out endpoint topilmadi");
-            await device.transferOut(ep.endpointNumber, DRAWER_CMD);
+            // Reuse already-authorized device if available, else ask
+            let device = (await navigator.usb.getDevices())[0];
+            if (!device) {
+                device = await navigator.usb.requestDevice({filters: []});
+            }
+            await sendDrawerCmd(device);
             setStatus('✓ Kassa qutisi ochildi', 'success');
             beepOk();
         } catch (e) {
