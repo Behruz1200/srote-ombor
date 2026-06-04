@@ -80,12 +80,33 @@ def healthz(request):
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('home')
+
+    # S5: rate limit — max 5 failed attempts per IP in 5 minutes
+    from django.core.cache import cache
+    ip = (request.META.get('HTTP_X_FORWARDED_FOR') or
+          request.META.get('REMOTE_ADDR') or '0.0.0.0').split(',')[0].strip()
+    fail_key = f'login_fail:{ip}'
+    fail_count = cache.get(fail_key) or 0
+    if fail_count >= 5:
+        messages.error(request,
+            "Juda ko'p urinish. 5 daqiqa kutib qayta urinib ko'ring.")
+        return render(request, 'inventory/login.html',
+                      {'form': LoginForm(request), 'rate_limited': True})
+
     if request.method == 'POST':
         form = LoginForm(request, data=request.POST)
         if form.is_valid():
+            cache.delete(fail_key)  # reset counter on success
             login(request, form.get_user())
             messages.success(request, f'Xush kelibsiz, {request.user.username}!')
             return redirect('home')
+        else:
+            # Increment fail counter (5-min TTL)
+            cache.set(fail_key, fail_count + 1, timeout=300)
+            remaining = 5 - (fail_count + 1)
+            if remaining > 0:
+                messages.warning(request,
+                    f"Login muvaffaqiyatsiz. Yana {remaining} ta urinishingiz qoldi.")
     else:
         form = LoginForm(request)
     return render(request, 'inventory/login.html', {'form': form})
@@ -1106,6 +1127,14 @@ def csv_import(request):
 
     if request.method == 'POST' and 'csv_file' in request.FILES:
         f = request.FILES['csv_file']
+        # S6: 5MB hard limit on CSV uploads (DATA_UPLOAD_MAX_MEMORY_SIZE
+        # is 10MB but a CSV that big = ~50K rows which Django can't process
+        # in one request anyway — block early with a useful message)
+        if f.size > 5 * 1024 * 1024:
+            messages.error(request,
+                f"Fayl juda katta ({f.size//1024} KB). "
+                "Maksimum 5 MB. Faylni qismlarga bo'ling.")
+            return redirect(f'/import/?entity={entity}')
         try:
             data = f.read().decode('utf-8-sig')  # handle BOM
         except UnicodeDecodeError:
@@ -4685,7 +4714,16 @@ def _insights_context(request):
     context['yoy_qty_delta'] = _pct(qty, ly_qty)
     context['yoy_txns_delta'] = _pct(sales_count, ly_txns)
 
-    # ABC analysis: sort by revenue, classify by cumulative %
+    # ABC analysis: sort by revenue, classify by cumulative %.
+    # L10 fix: thresholds configurable via query string (?abc_a=80&abc_b=95)
+    try:
+        abc_a_threshold = float(request.GET.get('abc_a') or 80)
+        abc_b_threshold = float(request.GET.get('abc_b') or 95)
+    except (TypeError, ValueError):
+        abc_a_threshold, abc_b_threshold = 80, 95
+    abc_a_threshold = max(1, min(99, abc_a_threshold))
+    abc_b_threshold = max(abc_a_threshold + 1, min(99.5, abc_b_threshold))
+
     sorted_products = sorted(profit_by_product.values(),
                              key=lambda x: float(x['revenue'] or 0), reverse=True)
     total_rev = sum(float(p['revenue'] or 0) for p in sorted_products) or 1
@@ -4695,15 +4733,17 @@ def _insights_context(request):
     for p in sorted_products:
         pct = float(p['revenue'] or 0) / total_rev * 100
         cumulative += pct
-        if cumulative <= 80:
+        if cumulative <= abc_a_threshold:
             cls = 'A'
-        elif cumulative <= 95:
+        elif cumulative <= abc_b_threshold:
             cls = 'B'
         else:
             cls = 'C'
         p['abc'] = cls
         abc_summary[cls] += float(p['revenue'] or 0)
         abc_count[cls] += 1
+    context['abc_a_threshold'] = abc_a_threshold
+    context['abc_b_threshold'] = abc_b_threshold
     context['abc_top_a'] = [p for p in sorted_products if p['abc'] == 'A'][:8]
     context['abc_summary'] = abc_summary
     context['abc_count'] = abc_count

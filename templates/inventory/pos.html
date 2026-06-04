@@ -2105,6 +2105,11 @@ document.addEventListener('keydown', (e) => {
 
     if (e.key === 'F2') {
         e.preventDefault();
+        // L7 fix: blur active element first (scanner modal button etc.) so
+        // focus visibly transfers to scanner input
+        if (document.activeElement && document.activeElement.blur) {
+            document.activeElement.blur();
+        }
         scanInput.focus();
         scanInput.select();
     } else if (e.key === 'F4') {

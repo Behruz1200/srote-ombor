@@ -568,7 +568,7 @@
 <div id="iosInstallHint" class="position-fixed bottom-0 start-0 end-0 m-2 p-3 bg-dark text-light rounded shadow"
      style="display:none; z-index: 1080; max-width: 480px; margin: 0 auto !important;">
     <button type="button" class="btn-close btn-close-white float-end" aria-label="Close"
-            onclick="this.parentElement.style.display='none'; localStorage.setItem('iosInstallDismissed', '1');"></button>
+            onclick="this.parentElement.style.display='none'; localStorage.setItem('iosInstallDismissedAt', String(Date.now()));"></button>
     <i class="bi bi-phone"></i> <strong>Srote'ni telefonga o'rnatish:</strong>
     <div class="small mt-1">
         <i class="bi bi-share"></i> Share tugmasini bosing →
@@ -758,7 +758,7 @@ if ('serviceWorker' in navigator) {
     input.addEventListener('input', () => {
         clearTimeout(_searchTimer);
         const q = input.value.trim();
-        _searchTimer = setTimeout(() => doSearch(q), 200);
+        _searchTimer = setTimeout(() => doSearch(q), 120);
     });
     input.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowDown') {
@@ -831,12 +831,24 @@ if ('serviceWorker' in navigator) {
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
         || window.navigator.standalone === true;
-    const dismissed = localStorage.getItem('iosInstallDismissed') === '1';
-    if (isIOS && !isStandalone && !dismissed) {
+
+    // L1 fix: less aggressive — track dismiss timestamp (30-day cooldown)
+    // AND visit count. Show only on 3rd+ visit and not in the past 30 days.
+    let dismissAt = 0;
+    try { dismissAt = parseInt(localStorage.getItem('iosInstallDismissedAt') || '0'); }
+    catch {}
+    const recentlyDismissed = dismissAt && (Date.now() - dismissAt < 30 * 24 * 3600 * 1000);
+
+    let visits = 0;
+    try { visits = parseInt(localStorage.getItem('srote_visits') || '0'); } catch {}
+    visits += 1;
+    try { localStorage.setItem('srote_visits', String(visits)); } catch {}
+
+    if (isIOS && !isStandalone && !recentlyDismissed && visits >= 3) {
         setTimeout(() => {
             const hint = document.getElementById('iosInstallHint');
             if (hint) hint.style.display = 'block';
-        }, 3000);
+        }, 4000);
     }
 })();
 

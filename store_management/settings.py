@@ -102,6 +102,43 @@ except ValueError:
     DEMO_AUTO_PAY_SECONDS = 0 if not DEBUG else 8
 
 
+# ---------- Session / Auth security (S2-S6 hardening) ----------
+# S2: Session timeout — 8 hours default (covers typical work shift).
+# Production override via SESSION_COOKIE_AGE env if needed.
+try:
+    SESSION_COOKIE_AGE = int(os.environ.get('SESSION_COOKIE_AGE', '28800'))  # 8h
+except ValueError:
+    SESSION_COOKIE_AGE = 28800
+SESSION_SAVE_EVERY_REQUEST = True  # extends session on activity
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# S3: Password strength — Django's built-in validators
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+     'OPTIONS': {'min_length': 8}},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+]
+
+# S6: File upload limits — protect against memory-DOS via large CSV / image uploads
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024     # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024     # 10 MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
+
+# S9: Basic Content Security Policy via response headers (defensive defaults)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+# Force HTTPS redirect on Render (RENDER_EXTERNAL_HOSTNAME is set there)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = bool(os.environ.get('RENDER_EXTERNAL_HOSTNAME'))
+SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
+CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+
 # ---------- CSRF ----------
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
