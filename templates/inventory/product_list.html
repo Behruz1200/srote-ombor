@@ -96,7 +96,15 @@
                     {% for p in products %}
                         <tr>
                             <td><input type="checkbox" name="id" value="{{ p.id }}" class="form-check-input pick"></td>
-                            <td><code>{{ p.code }}</code></td>
+                            <td>
+                                <code>{{ p.code }}</code>
+                                {% if p.external_barcode %}
+                                    <div class="small text-muted"
+                                         title="Tashqi barcode (qadog'dagi)">
+                                        <i class="bi bi-upc"></i> {{ p.external_barcode }}
+                                    </div>
+                                {% endif %}
+                            </td>
                             <td>
                                 <a href="{% url 'product_detail' p.code %}">
                                     <strong>{{ p.name|truncatechars:35 }}</strong>

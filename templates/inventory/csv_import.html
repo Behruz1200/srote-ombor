@@ -93,12 +93,16 @@
                     Mahsulotlar (Product) jadval ustunlari. Kod (code) ixtiyoriy —
                     bo'sh bo'lsa avtomatik beriladi. Kod bor bo'lsa — yangilanadi.
                 </p>
-                <pre class="bg-light p-2 rounded small mb-2">code,name,category,default_sale_price,markup_percent,description
-OYO-0001,Nike Air Sneaker,Oyoq kiyim,850000,40,Yangi 2026 kolleksiya
-,Adidas Forum,Oyoq kiyim,720000,35,
-,Parfum Dior,Parfyumeriya,450000,50,</pre>
-                <a class="btn btn-sm btn-outline-secondary"
-                   href="data:text/csv;charset=utf-8,code,name,category,default_sale_price,markup_percent,description%0A,Mahsulot%20nomi,Kategoriya,100000,40,Izoh"
+                <pre class="bg-light p-2 rounded small mb-2">code,external_barcode,name,category,default_sale_price,markup_percent,description
+OYO-0001,4607034000234,Nike Air Sneaker,Oyoq kiyim,850000,40,Yangi 2026
+,4901234567890,Adidas Forum,Oyoq kiyim,720000,35,
+,,Mahalliy ko'ylak,Kiyim,200000,40,</pre>
+                <small class="text-muted">
+                    <strong>external_barcode</strong> — ishlab chiqaruvchi tomonidan
+                    chop etilgan EAN-13/UPC kod. Bo'sh qoldirilsa muammo yo'q.
+                </small>
+                <a class="btn btn-sm btn-outline-secondary mt-2"
+                   href="data:text/csv;charset=utf-8,code,external_barcode,name,category,default_sale_price,markup_percent,description%0A,4607034000234,Mahsulot,Kategoriya,100000,40,Izoh"
                    download="products-template.csv">
                     <i class="bi bi-download"></i> Bo'sh shablon yuklab olish
                 </a>

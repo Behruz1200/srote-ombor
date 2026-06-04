@@ -93,6 +93,11 @@ class Category(models.Model):
 class Product(models.Model):
     code = models.CharField(max_length=20, unique=True, db_index=True,
                             blank=True, editable=False)
+    external_barcode = models.CharField(
+        max_length=64, blank=True, db_index=True,
+        help_text="Ishlab chiqaruvchi tomonidan chop etilgan barcode "
+                  "(EAN-13, UPC va h.k.). Skanerlash uchun ishlatiladi."
+    )
     name = models.CharField(max_length=200)
     category = models.ForeignKey(Category, on_delete=models.PROTECT,
                                  related_name='products', null=True, blank=True)

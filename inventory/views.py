@@ -138,8 +138,10 @@ def lookup(request):
     categories_quick = []
 
     if raw_query:
-        # Try exact code first
-        product = Product.objects.filter(code=code).first()
+        # Try exact code first — either internal code or manufacturer barcode
+        product = Product.objects.filter(
+            Q(code=code) | Q(external_barcode=raw_query)
+        ).first()
 
         # If no code match, fall back to name / category / description search
         if not product:
@@ -900,7 +902,9 @@ def intake_lookup(request):
     if not q:
         return JsonResponse({'found': False})
     code = normalize_code(q.upper())
-    product = Product.objects.filter(code=code).first()
+    product = Product.objects.filter(
+        Q(code=code) | Q(external_barcode=q)
+    ).first()
     if not product:
         matches = list(Product.objects.filter(
             Q(name__icontains=q) | Q(category__name__icontains=q)
@@ -1198,11 +1202,13 @@ def csv_import(request):
                             price = Decimal(row.get('default_sale_price') or '0')
                             markup = Decimal(row.get('markup_percent') or '40')
                             desc = _clean_text(row.get('description'), 1000)
+                            ext_barcode = (row.get('external_barcode') or '').strip()
                             if code:
                                 p, was_created = Product.objects.update_or_create(
                                     code=code,
                                     defaults={
                                         'name': name, 'category': category,
+                                        'external_barcode': ext_barcode,
                                         'default_sale_price': price,
                                         'markup_percent': markup,
                                         'description': desc,
@@ -1211,6 +1217,7 @@ def csv_import(request):
                             else:
                                 p = Product.objects.create(
                                     name=name, category=category,
+                                    external_barcode=ext_barcode,
                                     default_sale_price=price,
                                     markup_percent=markup,
                                     description=desc,
@@ -2404,9 +2411,11 @@ def pos_lookup(request):
     if not q:
         return JsonResponse({'found': False})
 
-    # Exact code first
+    # Exact code first — match either internal code or manufacturer barcode
     code = normalize_code(q.upper())
-    product = Product.objects.filter(code=code).first()
+    product = Product.objects.filter(
+        Q(code=code) | Q(external_barcode=q.strip())
+    ).first()
 
     if not product:
         # Name search

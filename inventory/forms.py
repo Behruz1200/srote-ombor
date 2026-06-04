@@ -52,11 +52,17 @@ class BranchForm(forms.ModelForm):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ['name', 'category', 'description', 'image',
+        fields = ['name', 'external_barcode', 'category', 'description', 'image',
                   'default_sale_price', 'markup_percent',
                   'mxik_code', 'unit_code', 'vat_percent', 'package_code']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'external_barcode': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '4607034000234 — qadog\'idagi raqam (ixtiyoriy)',
+                'autocomplete': 'off',
+                'inputmode': 'numeric',
+            }),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'image': forms.ClearableFileInput(attrs={
@@ -76,6 +82,7 @@ class ProductForm(forms.ModelForm):
         }
         labels = {
             'name': 'Nomi',
+            'external_barcode': "Tashqi barcode (qadog'idagi)",
             'category': 'Kategoriya',
             'description': 'Tavsif',
             'image': 'Rasm',

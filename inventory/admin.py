@@ -149,6 +149,8 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'external_barcode', 'category', 'default_sale_price')
+    search_fields = ('code', 'name', 'external_barcode')
     list_display = ('code', 'name', 'category', 'total_stock', 'created_at')
     search_fields = ('code', 'name')
     list_filter = ('category',)
