@@ -579,7 +579,13 @@ def product_create(request):
             messages.success(request, f"Mahsulot yaratildi. Kod: {product.code}")
             return redirect('product_detail', code=product.code)
     else:
-        form = ProductForm()
+        # URL prefill: /products/new/?barcode=4607034000234&name=Nike
+        initial = {}
+        if request.GET.get('barcode'):
+            initial['external_barcode'] = request.GET.get('barcode').strip()
+        if request.GET.get('name'):
+            initial['name'] = request.GET.get('name').strip()
+        form = ProductForm(initial=initial)
     return render(request, 'inventory/product_form.html', {
         'form': form, 'title': "Yangi mahsulot qo'shish",
     })
@@ -938,6 +944,7 @@ def intake_lookup(request):
         'product': {
             'id': product.id,
             'code': product.code,
+            'external_barcode': product.external_barcode or '',
             'name': product.name,
             'default_sale_price': float(product.default_sale_price),
             'markup_percent': float(product.markup_percent),
@@ -2462,6 +2469,7 @@ def pos_lookup(request):
         'found': True,
         'product': {
             'code': product.code,
+            'external_barcode': product.external_barcode or '',
             'name': product.name,
             'default_sale_price': float(product.default_sale_price),
         },

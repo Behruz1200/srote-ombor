@@ -22,8 +22,14 @@
                 <h3 class="mb-1">{{ product.name }}</h3>
                 <div>
                     <code>{{ product.code }}</code>
+                    {% if product.external_barcode %}
+                        <span class="ms-2 small text-muted"
+                              title="Ishlab chiqaruvchi barcode (qadoqdagi)">
+                            <i class="bi bi-upc"></i> {{ product.external_barcode }}
+                        </span>
+                    {% endif %}
                     {% if product.category %}
-                        <span class="badge bg-light text-dark ms-1">{{ product.category.name }}</span>
+                        <span class="badge bg-light text-dark ms-2">{{ product.category.name }}</span>
                     {% endif %}
                 </div>
                 {% if product.description %}

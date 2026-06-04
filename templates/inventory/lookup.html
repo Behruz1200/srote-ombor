@@ -116,8 +116,13 @@
                 <h4 class="mb-1">{{ product.name }}</h4>
                 <div>
                     <code>{{ product.code }}</code>
+                    {% if product.external_barcode %}
+                        <span class="ms-2 small text-muted">
+                            <i class="bi bi-upc"></i> {{ product.external_barcode }}
+                        </span>
+                    {% endif %}
                     {% if product.category %}
-                        <span class="badge bg-light text-dark ms-1">{{ product.category.name }}</span>
+                        <span class="badge bg-light text-dark ms-2">{{ product.category.name }}</span>
                     {% endif %}
                 </div>
                 {% if product.description %}
@@ -276,9 +281,18 @@
             <i class="bi bi-exclamation-circle" style="font-size: 3rem;"></i>
             <p class="mt-2">"{{ code }}" bo'yicha mahsulot topilmadi.</p>
             {% if user.is_admin %}
-                <a href="{% url 'product_create' %}" class="btn btn-warning mt-2">
-                    <i class="bi bi-plus-circle"></i> Yangi mahsulot yaratish
-                </a>
+                {% if code|length >= 6 %}
+                    <a href="{% url 'product_create' %}?barcode={{ code|urlencode }}"
+                       class="btn btn-warning mt-2">
+                        <i class="bi bi-plus-circle"></i>
+                        Yangi mahsulot — barcode <strong>{{ code }}</strong> bilan
+                    </a>
+                {% else %}
+                    <a href="{% url 'product_create' %}?name={{ code|urlencode }}"
+                       class="btn btn-warning mt-2">
+                        <i class="bi bi-plus-circle"></i> Yangi mahsulot yaratish
+                    </a>
+                {% endif %}
             {% endif %}
         </div>
     {% endif %}

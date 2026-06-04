@@ -283,11 +283,19 @@ async function search(q) {
                 });
             } else {
                 setSearchStatus(`"${q}" topilmadi. Yangi mahsulot yarating.`, 'error');
+                // If the input looks like a barcode (mostly digits), pre-fill it
+                // in the new-product form so user doesn't have to re-scan
+                const isBarcode = /^\d{6,}$/.test(q);
+                const url = isBarcode
+                    ? `{% url 'product_create' %}?barcode=${encodeURIComponent(q)}`
+                    : `{% url 'product_create' %}?name=${encodeURIComponent(q)}`;
                 const a = document.createElement('a');
-                a.href = "{% url 'product_create' %}";
+                a.href = url;
                 a.className = 'btn btn-sm btn-warning';
                 a.target = '_blank';
-                a.innerHTML = '<i class="bi bi-plus"></i> Yangi mahsulot yaratish';
+                a.innerHTML = isBarcode
+                    ? `<i class="bi bi-plus"></i> Yangi mahsulot yaratish (barcode: ${q})`
+                    : '<i class="bi bi-plus"></i> Yangi mahsulot yaratish';
                 suggestionsEl.appendChild(a);
             }
             return;
@@ -301,7 +309,10 @@ async function search(q) {
 function showProduct(data) {
     currentProduct = data;
     setSearchStatus('', '');
-    lineProduct.innerHTML = `<code>${data.product.code}</code> ${data.product.name}`;
+    const barcodeHtml = data.product.external_barcode
+        ? `<span class="small text-muted ms-2"><i class="bi bi-upc"></i> ${data.product.external_barcode}</span>`
+        : '';
+    lineProduct.innerHTML = `<code>${data.product.code}</code> ${data.product.name}${barcodeHtml}`;
     // Cost history hint
     if (data.last_intakes && data.last_intakes.length) {
         const recent = data.last_intakes.slice(0, 3).map(i =>
