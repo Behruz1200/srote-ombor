@@ -667,16 +667,48 @@ def product_detail(request, code):
         'variants_in_stock': variants_in_stock,
     }
 
-    # Cross-sell: products often bought in the same transaction
-    txn_ids = (Sale.objects.filter(variant__product=product)
-               .values_list('transaction_id', flat=True).distinct())
-    cross_sell = (Sale.objects
-                  .filter(transaction_id__in=txn_ids)
-                  .exclude(variant__product=product)
-                  .values('variant__product__code', 'variant__product__name')
-                  .annotate(co_count=Count('transaction', distinct=True),
-                            qty=Sum('quantity'))
-                  .order_by('-co_count')[:5])
+    # D5: Cross-sell with confidence + lift (association rules)
+    # Confidence P(B|A) = co_count / |A|   — how often B appears when A buys
+    # Lift = P(B|A) / P(B)                  — strength of association (1.0 = independent)
+    # Sort by lift to surface unusually-strong pairings, not just popular pairs.
+    total_txns = SaleTransaction.objects.count() or 1
+    txn_ids = list(Sale.objects.filter(variant__product=product)
+                   .values_list('transaction_id', flat=True).distinct())
+    a_count = len(txn_ids)
+    cross_sell = []
+    if a_count > 0:
+        co_rows = (Sale.objects
+                   .filter(transaction_id__in=txn_ids)
+                   .exclude(variant__product=product)
+                   .values('variant__product_id',
+                           'variant__product__code',
+                           'variant__product__name')
+                   .annotate(co_count=Count('transaction', distinct=True))
+                   .order_by('-co_count')[:30])  # candidate pool
+        # B-only base counts (how often each candidate B appears overall)
+        b_ids = [r['variant__product_id'] for r in co_rows]
+        b_counts = {r['variant__product_id']: r['c'] for r in (
+            Sale.objects.filter(variant__product_id__in=b_ids)
+            .values('variant__product_id')
+            .annotate(c=Count('transaction', distinct=True))
+        )}
+        for r in co_rows:
+            pid = r['variant__product_id']
+            co = r['co_count']
+            b = b_counts.get(pid, 0) or 1
+            confidence = co / a_count
+            lift = confidence / (b / total_txns) if (b / total_txns) > 0 else 0
+            cross_sell.append({
+                'code': r['variant__product__code'],
+                'name': r['variant__product__name'],
+                'co_count': co,
+                'confidence': round(confidence * 100, 1),
+                'lift': round(lift, 2),
+            })
+        # Sort by lift (descending), keep min 3 co-occurrences to avoid noise
+        cross_sell = [c for c in cross_sell if c['co_count'] >= 2]
+        cross_sell.sort(key=lambda c: -c['lift'])
+        cross_sell = cross_sell[:5]
 
     return render(request, 'inventory/product_detail.html', {
         'product': product, 'branches_data': branches_data,
@@ -684,7 +716,7 @@ def product_detail(request, code):
         'product_kpis': product_kpis,
         'chart_labels': chart_labels,
         'chart_qty': chart_qty,
-        'cross_sell': list(cross_sell),
+        'cross_sell': cross_sell,
     })
 
 
@@ -1357,6 +1389,68 @@ def cashier_stats(request, user_id):
     active_days = sales_30d.values('sold_at__date').distinct().count() or 1
     sales_per_day = txns / active_days
 
+    # D3: Anomaly detection — compare this seller to peer average
+    peer_stats = (Sale.objects.filter(sold_at__gte=since_30d)
+                  .exclude(sold_by=seller)
+                  .values('sold_by_id')
+                  .annotate(rev=Sum(rev_expr), qty=Sum('quantity'),
+                            txns=Count('transaction', distinct=True)))
+    peers = list(peer_stats)
+    peer_count = len(peers)
+    anomalies = []
+    if peer_count >= 2:  # need enough peers for comparison
+        peer_avg_tickets = [float(p['rev'] or 0) / p['txns'] if p['txns'] else 0
+                            for p in peers]
+        peer_avg_ticket = sum(peer_avg_tickets) / len(peer_avg_tickets) or 1
+        peer_avg_qty_per_txn = sum((p['qty'] or 0) / p['txns'] if p['txns'] else 0
+                                   for p in peers) / len(peers) or 1
+
+        my_avg_ticket = float(avg_ticket or 0)
+        my_qty_per_txn = (qty / txns) if txns else 0
+
+        # Refund rate (peer avg)
+        peer_refund_qty = Return.objects.filter(
+            refunded_at__gte=since_30d
+        ).exclude(refunded_by=seller).aggregate(s=Sum('quantity'))['s'] or 0
+        peer_sold_qty = sum((p['qty'] or 0) for p in peers)
+        peer_refund_rate = (peer_refund_qty / peer_sold_qty * 100) if peer_sold_qty else 0
+
+        # 1) Average ticket significantly different
+        if my_avg_ticket > peer_avg_ticket * 2:
+            anomalies.append({
+                'level': 'warning',
+                'icon': 'arrow-up-circle',
+                'title': "O'rtacha chek juda yuqori",
+                'detail': f"Sizning: {my_avg_ticket:,.0f}, hamkasblar o'rtacha: {peer_avg_ticket:,.0f} so'm",
+            })
+        elif my_avg_ticket > 0 and my_avg_ticket < peer_avg_ticket * 0.4:
+            anomalies.append({
+                'level': 'warning',
+                'icon': 'arrow-down-circle',
+                'title': "O'rtacha chek juda past",
+                'detail': f"Sizning: {my_avg_ticket:,.0f}, hamkasblar o'rtacha: {peer_avg_ticket:,.0f} so'm",
+            })
+
+        # 2) Refund rate much higher than peers
+        if refund_rate > peer_refund_rate * 2 and refund_rate > 5:
+            anomalies.append({
+                'level': 'danger',
+                'icon': 'exclamation-triangle',
+                'title': "Qaytarish foizi juda yuqori",
+                'detail': f"Sizning: {refund_rate:.1f}%, hamkasblar o'rtacha: {peer_refund_rate:.1f}%",
+            })
+
+        # 3) Very high txn count (productive) or very low
+        if peers:
+            peer_txns_avg = sum(p['txns'] for p in peers) / len(peers)
+            if txns > peer_txns_avg * 3 and txns > 50:
+                anomalies.append({
+                    'level': 'info',
+                    'icon': 'star-fill',
+                    'title': "Yuqori sotuv hajmi",
+                    'detail': f"Sizning: {txns} chek, hamkasblar o'rtacha: {peer_txns_avg:.0f} — top performer!",
+                })
+
     return render(request, 'inventory/cashier_stats.html', {
         'seller': seller,
         'revenue': revenue, 'cost': cost, 'profit': profit,
@@ -1374,6 +1468,8 @@ def cashier_stats(request, user_id):
         'top_products': top_products,
         'active_days': active_days,
         'sales_per_day': sales_per_day,
+        'anomalies': anomalies,
+        'peer_count': peer_count,
     })
 
 
@@ -1406,6 +1502,21 @@ def reorder_page(request):
                 .annotate(qty=Sum('quantity'))):
         sales_map[(row['variant_id'], row['branch_id'])] = row['qty'] or 0
 
+    # D4: trend velocity — last 7 days vs previous 7 days. If accelerating,
+    # adjust suggested order qty upward.
+    last_7 = timezone.now() - timedelta(days=7)
+    prev_7_start = timezone.now() - timedelta(days=14)
+    last7_map = {}
+    for row in (Sale.objects.filter(sold_at__gte=last_7)
+                .values('variant_id', 'branch_id')
+                .annotate(qty=Sum('quantity'))):
+        last7_map[(row['variant_id'], row['branch_id'])] = row['qty'] or 0
+    prev7_map = {}
+    for row in (Sale.objects.filter(sold_at__gte=prev_7_start, sold_at__lt=last_7)
+                .values('variant_id', 'branch_id')
+                .annotate(qty=Sum('quantity'))):
+        prev7_map[(row['variant_id'], row['branch_id'])] = row['qty'] or 0
+
     # Most recent supplier per product (from last intake)
     supplier_map = {}
     for row in (Intake.objects.filter(quantity__gt=0)
@@ -1421,12 +1532,32 @@ def reorder_page(request):
     for s in stocks_qs:
         sold30 = sales_map.get((s.variant_id, s.branch_id), 0)
         daily = sold30 / 30 if sold30 else 0
+        # D4: trend factor — if last 7 days >> previous 7 days, demand is rising;
+        # multiply daily by trend factor (capped at 2.0 to avoid wild over-orders)
+        l7 = last7_map.get((s.variant_id, s.branch_id), 0)
+        p7 = prev7_map.get((s.variant_id, s.branch_id), 0)
+        if p7 > 0 and l7 > 0:
+            trend_ratio = l7 / p7
+            trend_factor = max(0.5, min(2.0, trend_ratio))
+        elif l7 > 0 and p7 == 0:
+            trend_factor = 1.5  # new product gaining traction
+        else:
+            trend_factor = 1.0
+        adjusted_daily = daily * trend_factor
+
         # Target = buffer-days of stock; subtract what's already there
-        target = daily * BUFFER_DAYS
+        target = adjusted_daily * BUFFER_DAYS
         suggested = max(0, int(round(target - s.stock_count)))
         if suggested == 0 and sold30 == 0 and s.stock_count > 0:
             # Not moving, has some stock — skip
             continue
+
+        trend_label = ''
+        if trend_factor > 1.2:
+            trend_label = 'up'
+        elif trend_factor < 0.8:
+            trend_label = 'down'
+
         items.append({
             'stock': s,
             'product': s.variant.product,
@@ -1434,7 +1565,12 @@ def reorder_page(request):
             'branch': s.branch,
             'sold_30d': sold30,
             'daily_avg': daily,
-            'days_left': (s.stock_count / daily) if daily else None,
+            'adjusted_daily': adjusted_daily,
+            'trend_factor': trend_factor,
+            'trend_label': trend_label,
+            'last_7': l7,
+            'prev_7': p7,
+            'days_left': (s.stock_count / adjusted_daily) if adjusted_daily else None,
             'suggested': suggested,
             'cost': float(s.cost_price),
             'estimated_cost': suggested * float(s.cost_price),
@@ -4671,6 +4807,124 @@ def _insights_context(request):
         'return_rate': return_rate,
         'top_returns': top_returns,
     }
+
+    # ===== TIER D — Advanced BI =====
+
+    # D1: Sales forecast — 90-day daily revenue → linear regression → next 30 days
+    fc_start = today - timedelta(days=90)
+    fc_dt_start = datetime.combine(fc_start, datetime.min.time()).replace(tzinfo=tz)
+    fc_sales = Sale.objects.filter(sold_at__gte=fc_dt_start, sold_at__lt=dt_end)
+    if branch_id and selected_branch:
+        fc_sales = fc_sales.filter(branch=selected_branch)
+    daily_rev = {}
+    for i in range(91):  # 0..90 days back
+        d = today - timedelta(days=90 - i)
+        daily_rev[d.isoformat()] = 0.0
+    for row in fc_sales.values('sold_at', 'quantity', 'sale_price', 'line_discount'):
+        d = row['sold_at'].astimezone(tz).date().isoformat()
+        if d in daily_rev:
+            daily_rev[d] += (float(row['quantity']) * float(row['sale_price'])
+                             - float(row['line_discount'] or 0))
+    # Simple linear regression: y = a + b*x where x is day index (0..90)
+    xs = list(range(len(daily_rev)))
+    ys = list(daily_rev.values())
+    n = len(xs)
+    if n > 1 and sum(ys) > 0:
+        sx = sum(xs); sy = sum(ys)
+        sxy = sum(x * y for x, y in zip(xs, ys))
+        sxx = sum(x * x for x in xs)
+        denom = (n * sxx - sx * sx)
+        if denom != 0:
+            slope = (n * sxy - sx * sy) / denom
+            intercept = (sy - slope * sx) / n
+        else:
+            slope = 0; intercept = sy / n if n else 0
+    else:
+        slope = 0; intercept = 0
+    # Build 90-actual + 30-predicted series
+    actual_labels = []
+    actual_values = []
+    forecast_labels = []
+    forecast_values = []
+    for i, (date_iso, v) in enumerate(daily_rev.items()):
+        actual_labels.append(date_iso[5:])
+        actual_values.append(round(v))
+    for j in range(1, 31):  # next 30 days
+        future_date = today + timedelta(days=j)
+        forecast_labels.append(future_date.isoformat()[5:])
+        x_future = (n - 1) + j  # extending the index
+        predicted = max(0, intercept + slope * x_future)
+        forecast_values.append(round(predicted))
+    total_forecast_30d = sum(forecast_values)
+    context['fc_actual_labels'] = actual_labels
+    context['fc_actual_values'] = actual_values
+    context['fc_forecast_labels'] = forecast_labels
+    context['fc_forecast_values'] = forecast_values
+    context['fc_slope'] = slope
+    context['fc_total_30d'] = total_forecast_30d
+    context['fc_trend_direction'] = 'up' if slope > 0 else ('down' if slope < 0 else 'flat')
+
+    # D2: Customer cohort retention (6 months)
+    from collections import defaultdict
+    cohort_first = {}  # customer_id -> first purchase month (YYYY-MM)
+    cohort_activity = defaultdict(set)  # (cohort_month, activity_month) -> customers
+    for row in (SaleTransaction.objects
+                .filter(customer__isnull=False,
+                        sold_at__gte=today - timedelta(days=180))
+                .values('customer_id', 'sold_at')):
+        cid = row['customer_id']
+        m = row['sold_at'].astimezone(tz).strftime('%Y-%m')
+        if cid not in cohort_first or m < cohort_first[cid]:
+            cohort_first[cid] = m
+        cohort_activity[(cohort_first.get(cid, m), m)].add(cid)
+    # We need to re-pass since cohort_first might have updated
+    cohort_first = {}
+    for row in (SaleTransaction.objects
+                .filter(customer__isnull=False,
+                        sold_at__gte=today - timedelta(days=180))
+                .order_by('sold_at')
+                .values('customer_id', 'sold_at')):
+        cid = row['customer_id']
+        if cid not in cohort_first:
+            cohort_first[cid] = row['sold_at'].astimezone(tz).strftime('%Y-%m')
+    # Build cohort matrix
+    cohort_activity = defaultdict(set)
+    for row in (SaleTransaction.objects
+                .filter(customer__isnull=False,
+                        sold_at__gte=today - timedelta(days=180))
+                .values('customer_id', 'sold_at')):
+        cid = row['customer_id']
+        if cid not in cohort_first:
+            continue
+        m = row['sold_at'].astimezone(tz).strftime('%Y-%m')
+        cohort_activity[(cohort_first[cid], m)].add(cid)
+    # List of 6 months back
+    cohort_months = []
+    cur_month_d = today.replace(day=1)
+    for _ in range(6):
+        cohort_months.append(cur_month_d.strftime('%Y-%m'))
+        if cur_month_d.month == 1:
+            cur_month_d = cur_month_d.replace(year=cur_month_d.year - 1, month=12)
+        else:
+            cur_month_d = cur_month_d.replace(month=cur_month_d.month - 1)
+    cohort_months.reverse()  # oldest first
+    cohort_rows = []
+    for cohort in cohort_months:
+        cohort_size = sum(1 for cid, m in cohort_first.items() if m == cohort)
+        if cohort_size == 0:
+            cohort_rows.append({'cohort': cohort, 'size': 0, 'cells': []})
+            continue
+        cells = []
+        for activity in cohort_months:
+            if activity < cohort:
+                cells.append(None)
+                continue
+            active = len(cohort_activity.get((cohort, activity), set()))
+            pct = (active / cohort_size * 100) if cohort_size else 0
+            cells.append({'count': active, 'pct': round(pct, 1)})
+        cohort_rows.append({'cohort': cohort, 'size': cohort_size, 'cells': cells})
+    context['cohort_months'] = cohort_months
+    context['cohort_rows'] = cohort_rows
 
     # ===== BI EXTENSIONS =====
 

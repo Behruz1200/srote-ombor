@@ -191,7 +191,14 @@
                                     {{ it.stock.stock_count }}
                                 </span>
                             </td>
-                            <td class="text-end">{{ it.sold_30d }}</td>
+                            <td class="text-end">
+                                {{ it.sold_30d }}
+                                {% if it.trend_label == 'up' %}
+                                    <i class="bi bi-arrow-up-right text-success small" title="So'nggi 7 kun jadalashayapti"></i>
+                                {% elif it.trend_label == 'down' %}
+                                    <i class="bi bi-arrow-down-right text-danger small" title="So'nggi 7 kun sustlashayapti"></i>
+                                {% endif %}
+                            </td>
                             <td class="text-end small">
                                 {% if it.days_left is not None %}
                                     <span class="text-{% if it.days_left < 7 %}danger{% elif it.days_left < 14 %}warning{% else %}muted{% endif %}">

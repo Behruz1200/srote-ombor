@@ -143,11 +143,14 @@
                     <ol class="ps-3 mb-0 small">
                         {% for cs in cross_sell %}
                         <li class="mb-1">
-                            <a href="{% url 'product_detail' cs.variant__product__code %}">
-                                {{ cs.variant__product__name|truncatechars:22 }}
+                            <a href="{% url 'product_detail' cs.code %}">
+                                {{ cs.name|truncatechars:20 }}
                             </a>
-                            <div class="text-muted" style="font-size:0.75rem;">
-                                {{ cs.co_count }} chekda
+                            <div class="text-muted" style="font-size:0.72rem;">
+                                {{ cs.confidence }}% mijoz · lift
+                                <strong class="{% if cs.lift > 2 %}text-success{% elif cs.lift > 1.2 %}text-info{% else %}text-muted{% endif %}">
+                                    ×{{ cs.lift }}
+                                </strong>
                             </div>
                         </li>
                         {% endfor %}

@@ -374,6 +374,80 @@
         </div>
     </div>
 
+    <!-- D1: Sales forecast -->
+    <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="bi bi-graph-up-arrow text-primary"></i>
+                Sotuv bashorati (linear regression)
+            </h5>
+            <div>
+                <span class="badge bg-{% if fc_trend_direction == 'up' %}success{% elif fc_trend_direction == 'down' %}danger{% else %}secondary{% endif %}">
+                    {% if fc_trend_direction == 'up' %}↑ O'sib bormoqda
+                    {% elif fc_trend_direction == 'down' %}↓ Pasayib bormoqda
+                    {% else %}→ Barqaror{% endif %}
+                </span>
+                <span class="ms-2 small text-muted">
+                    Kelgusi 30 kun: <strong>{{ fc_total_30d|som }}</strong>
+                </span>
+            </div>
+        </div>
+        <canvas id="forecastChart" style="max-height: 260px;"></canvas>
+        <small class="text-muted">
+            <i class="bi bi-info-circle"></i> Yashil — haqiqiy 90 kun, qizil chiziq — bashorat 30 kun.
+            Linear regression formulasi: y = a + b·x daily revenue ustida.
+        </small>
+    </div>
+
+    <!-- D2: Customer cohort retention -->
+    {% if cohort_rows|length > 0 %}
+    <div class="card p-3 mb-3">
+        <h5 class="mb-2">
+            <i class="bi bi-people-fill text-info"></i>
+            Mijoz qaytib kelish (cohort) — 6 oy
+        </h5>
+        <small class="text-muted mb-2 d-block">
+            Har qator — birinchi xarid qilgan oy. Hujayralar — keyingi oylarda
+            qaytib kelganlar foizi. Qancha to'q yashil bo'lsa, mijozlar shuncha sodiq.
+        </small>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" style="min-width: 600px;">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 100px;">Birinchi xarid</th>
+                        <th class="text-end">Mijozlar</th>
+                        {% for m in cohort_months %}<th class="text-center small">{{ m }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in cohort_rows %}
+                    <tr>
+                        <td><strong>{{ r.cohort }}</strong></td>
+                        <td class="text-end">{{ r.size }}</td>
+                        {% for cell in r.cells %}
+                            <td class="text-center p-0" style="height: 32px; width: 60px;">
+                                {% if cell %}
+                                    <div style="background: rgba(25, 135, 84, {{ cell.pct|div:100 }});
+                                                color: {% if cell.pct > 50 %}#fff{% else %}#333{% endif %};
+                                                height: 32px; display: flex;
+                                                align-items: center; justify-content: center;
+                                                border-radius: 3px;"
+                                         title="{{ cell.count }} mijoz / {{ r.size }}">
+                                        {% if cell.pct > 0 %}{{ cell.pct|floatformat:0 }}%{% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Year-over-year -->
     <div class="card p-3 mb-3">
         <h5 class="mb-3"><i class="bi bi-calendar-event"></i> O'tgan yil bilan taqqoslash</h5>
@@ -680,9 +754,48 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{{ fc_actual_labels|json_script:"fc-actual-labels" }}
+{{ fc_actual_values|json_script:"fc-actual-values" }}
+{{ fc_forecast_labels|json_script:"fc-forecast-labels" }}
+{{ fc_forecast_values|json_script:"fc-forecast-values" }}
 <script>
 const CH_COLORS = ['#0d6efd', '#198754', '#fd7e14', '#dc3545', '#6f42c1',
                    '#20c997', '#ffc107', '#0dcaf0', '#d63384', '#6610f2'];
+
+// D1: Sales forecast chart
+(function() {
+    const el = document.getElementById('forecastChart');
+    if (!el) return;
+    const actualLabels = JSON.parse(document.getElementById('fc-actual-labels').textContent);
+    const actualValues = JSON.parse(document.getElementById('fc-actual-values').textContent);
+    const forecastLabels = JSON.parse(document.getElementById('fc-forecast-labels').textContent);
+    const forecastValues = JSON.parse(document.getElementById('fc-forecast-values').textContent);
+    const labels = [...actualLabels, ...forecastLabels];
+    const actualSeries = [...actualValues, ...Array(forecastValues.length).fill(null)];
+    const forecastSeries = [...Array(actualValues.length - 1).fill(null),
+                            actualValues[actualValues.length - 1],
+                            ...forecastValues];
+    new Chart(el, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {label: 'Haqiqiy (90 kun)', data: actualSeries, borderColor: '#198754',
+                 backgroundColor: 'rgba(25,135,84,0.1)', tension: 0.3, fill: true,
+                 pointRadius: 0},
+                {label: 'Bashorat (30 kun)', data: forecastSeries, borderColor: '#dc3545',
+                 borderDash: [6, 4], tension: 0.3, fill: false, pointRadius: 0},
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                y: { ticks: { callback: v => (v/1000).toFixed(0) + 'k' } },
+                x: { ticks: { maxTicksLimit: 12 } }
+            }
+        }
+    });
+})();
 
 new Chart(document.getElementById('trendChart'), {
     type: 'line',
