@@ -126,8 +126,13 @@
 
                 <!-- Variant picker (shown when product has multiple variants) -->
                 <div id="variantPicker" class="mt-2" style="display:none;">
-                    <div class="small text-muted mb-1">O'lcham/rang tanlang:</div>
-                    <div id="variantList" class="d-flex flex-wrap gap-1"></div>
+                    <div class="small text-muted mb-1">
+                        O'lcham/rang tanlang:
+                        <span id="variantCount" class="text-muted"></span>
+                    </div>
+                    <div id="variantList" class="d-flex flex-wrap gap-1"
+                         style="max-height: 240px; overflow-y: auto;
+                                padding: 4px; border: 1px solid transparent;"></div>
                 </div>
 
                 <!-- Suggestions list -->
@@ -737,7 +742,27 @@ function broadcastCart() {
 }
 
 // cart state: stockId -> { stock_id, product_code, product_name, size, color, qty, sale_price, max }
-let cart = {};
+// Persisted to localStorage on every change so idle-lock unlock / accidental
+// refresh doesn't lose work in progress.
+const CART_LS_KEY = 'srote_pos_cart';
+function loadCart() {
+    try {
+        const raw = localStorage.getItem(CART_LS_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch { return {}; }
+}
+function saveCart() {
+    try {
+        if (Object.keys(cart).length === 0) {
+            localStorage.removeItem(CART_LS_KEY);
+        } else {
+            localStorage.setItem(CART_LS_KEY, JSON.stringify(cart));
+        }
+    } catch {}
+}
+let cart = loadCart();
 let promoDiscount = 0;
 let appliedPromos = [];
 // QR amounts paid as part of a mixed-payment cheque. Combined with the
@@ -841,6 +866,9 @@ async function search(q) {
             // Show variant picker
             setStatus(`${product.code} — ${product.name}: variant tanlang`, '');
             variantPicker.style.display = 'block';
+            // H8 fix: scrollable container; show count badge for many variants
+            const cntEl = document.getElementById('variantCount');
+            if (cntEl) cntEl.textContent = `(${inStock.length} ta)`;
             for (const v of inStock) {
                 const b = document.createElement('button');
                 b.type = 'button';
@@ -907,6 +935,7 @@ function renderCart() {
         appliedPromos = [];
         renderAppliedPromos();
         if (typeof broadcastDisplay === 'function') broadcastDisplay({action: 'idle'});
+        saveCart();
         return;
     }
     let subtotal = 0, count = 0;
@@ -968,6 +997,7 @@ function renderCart() {
     if (typeof renderMixedSplit === 'function') renderMixedSplit();
     if (typeof schedulePromoEval === 'function') schedulePromoEval();
     if (typeof broadcastCart === 'function') broadcastCart();
+    saveCart();
 }
 
 // ---- Promotion evaluation ----
@@ -1116,7 +1146,11 @@ function renderMixedSplit() {
     } else if (diff > 0) {
         hint += `<span class="text-warning">Qolgan summa: <strong>${fmt(diff)}</strong> so'm — QR provider tugmasini bossangiz shu summa to'lanadi</span>`;
     } else {
-        hint += `<span class="text-danger">Ortiqcha: ${fmt(-diff)} so'm</span>`;
+        // Customer overpaid — show as "Qaytim" (change) in big green
+        hint += `<div class="alert alert-success py-2 mb-0 mt-1">
+            <div class="small text-muted">Mijozga qaytim:</div>
+            <div class="h4 mb-0 text-success">${fmt(-diff)} so'm</div>
+        </div>`;
     }
     mixedHintEl.innerHTML = hint;
 }
@@ -1474,12 +1508,15 @@ checkoutBtn.addEventListener('click', async () => {
     if (paymentMethod === 'mixed') {
         const total = currentTotalAmount();
         const sum = breakdown.reduce((a, e) => a + e.amount, 0);
-        if (Math.abs(total - sum) >= 1) {
+        if (sum < total - 0.5) {
+            // Underpay — block
             checkoutStatus.innerHTML = `<span class="text-danger">
-                Mixed to'lov: yig'indi ${fmt(sum)} ≠ total ${fmt(total)}</span>`;
+                Mixed to'lov yetishmaydi: ${fmt(total - sum)} so'm kerak</span>`;
             checkoutBtn.disabled = false;
             return;
         }
+        // sum > total is OK — that's "change" (qaytim); we record what was
+        // actually tendered. Server stores the breakdown as-is.
     }
     const manualDisc = parseFloat(orderDiscountInput.value || '0');
     const totalDisc = manualDisc + promoDiscount;
@@ -2046,6 +2083,13 @@ function tickClock() {
         `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 setInterval(tickClock, 30000); tickClock();
+
+// Restore saved cart from localStorage (H4 fix)
+if (Object.keys(cart).length > 0) {
+    renderCart();
+    setStatus(`✓ Avval saqlangan savat tiklandi (${Object.keys(cart).length} ta qator)`, 'success');
+    setTimeout(() => setStatus('', ''), 2500);
+}
 
 // ---- POS keyboard shortcuts ----
 // F2  → scanner focus

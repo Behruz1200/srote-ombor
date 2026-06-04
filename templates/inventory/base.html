@@ -596,15 +596,30 @@
     markCurrent();
 })();
 
-// Dark mode toggle
+// Dark mode toggle + Chart.js theme sync
 (function() {
     const btn = document.getElementById('themeToggle');
     const icon = document.getElementById('themeIcon');
     const label = document.getElementById('themeLabel');
+
+    function applyChartTheme() {
+        // Chart.js may not be loaded on every page — guard via typeof
+        if (typeof Chart === 'undefined') return;
+        const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        Chart.defaults.color = dark ? '#cbd5e1' : '#495057';
+        Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)';
+        // Re-render any existing charts so the new colors take effect
+        Chart.instances && Object.values(Chart.instances).forEach(c => c.update && c.update());
+    }
+    // Apply on load when Chart.js is ready (it loads via script tags in pages)
+    window.addEventListener('load', applyChartTheme);
+    document.addEventListener('DOMContentLoaded', () => setTimeout(applyChartTheme, 500));
+
     function render() {
         const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
         if (icon) icon.className = dark ? 'bi bi-sun' : 'bi bi-moon-stars';
         if (label) label.textContent = dark ? 'Kunduzgi rejim' : 'Tungi rejim';
+        applyChartTheme();
     }
     if (btn) {
         btn.addEventListener('click', () => {
@@ -702,12 +717,19 @@ if ('serviceWorker' in navigator) {
         const pages = pageMatches(q).map(p => ({...p, sub: 'Sahifa'}));
         let products = [];
         try {
-            const r = await fetch(`/intake/lookup/?q=${encodeURIComponent(q)}`);
+            // Admin uses intake_lookup (no stock check), seller uses pos_lookup
+            // (branch-scoped). Try admin endpoint first, fall back on 403.
+            const adminUrl = `/intake/lookup/?q=${encodeURIComponent(q)}`;
+            const posUrl = `/pos/lookup/?q=${encodeURIComponent(q)}`;
+            let r = await fetch(adminUrl);
+            if (r.status === 403) r = await fetch(posUrl);
             const d = await r.json();
             if (d.found && d.product) {
+                // Admin path supports product detail; seller path may not have URL access
+                const url = `/products/${d.product.code}/`;
                 products = [{
                     label: `${d.product.name}`,
-                    url: `/products/${d.product.code}/`,
+                    url: url,
                     icon: 'box',
                     sub: d.product.code + ' · ' + (d.product.default_sale_price ? d.product.default_sale_price.toLocaleString() : '0') + ' so\'m',
                 }];

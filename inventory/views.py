@@ -1571,19 +1571,31 @@ def stocktake_detail(request, pk):
             return redirect('stocktake_detail', pk=session.pk)
 
         if action == 'apply':
-            # Apply: adjust BranchStock to match counted_qty
+            # H6 fix: lock the session row so concurrent apply attempts can't
+            # both succeed. select_for_update inside atomic() blocks the second
+            # transaction until the first commits.
             with transaction.atomic():
-                for c in counts:
+                locked = (Stocktake.objects
+                          .select_for_update()
+                          .filter(pk=session.pk, status=Stocktake.Status.OPEN)
+                          .first())
+                if not locked:
+                    messages.error(request,
+                        "Bu inventarizatsiya allaqachon tasdiqlangan yoki bekor qilingan.")
+                    return redirect('stocktake_detail', pk=session.pk)
+                # Re-fetch counts under the lock window
+                fresh_counts = list(locked.counts.select_related('variant'))
+                for c in fresh_counts:
                     bs = BranchStock.objects.filter(
-                        variant=c.variant, branch=session.branch
-                    ).first()
+                        variant=c.variant, branch=locked.branch
+                    ).select_for_update().first()
                     if bs:
                         bs.stock_count = c.counted_qty
                         bs.save(update_fields=['stock_count'])
-                session.status = Stocktake.Status.APPLIED
-                session.applied_by = request.user
-                session.applied_at = timezone.now()
-                session.save()
+                locked.status = Stocktake.Status.APPLIED
+                locked.applied_by = request.user
+                locked.applied_at = timezone.now()
+                locked.save()
             messages.success(request, "Inventarizatsiya tasdiqlandi va ombor yangilandi.")
             return redirect('stocktake_detail', pk=session.pk)
 
@@ -3182,6 +3194,15 @@ def user_create(request):
         form = UserCreateForm(request.POST)
         if form.is_valid():
             user = form.save()
+            # H7 fix: audit account creation (password set is implicit)
+            AuditLog.objects.create(
+                user=request.user,
+                username_snapshot=request.user.username,
+                action=AuditLog.Action.CREATE,
+                model_name='User',
+                object_id=str(user.pk),
+                object_repr=f'{user.username} ({user.get_role_display()})',
+            )
             messages.success(request, f"Foydalanuvchi yaratildi: {user.username}")
             return redirect('user_list')
     else:
@@ -3197,7 +3218,19 @@ def user_edit(request, pk):
     if request.method == 'POST':
         form = UserEditForm(request.POST, instance=target)
         if form.is_valid():
-            form.save()
+            new_password = (form.cleaned_data.get('new_password') or '').strip()
+            user = form.save()
+            # H7 fix: explicit audit row when password changes — never log the
+            # password itself, only the fact that it changed (and by whom)
+            if new_password:
+                AuditLog.objects.create(
+                    user=request.user,
+                    username_snapshot=request.user.username,
+                    action=AuditLog.Action.UPDATE,
+                    model_name='UserPassword',
+                    object_id=str(user.pk),
+                    object_repr=f'Parol o\'zgartirildi: {user.username}',
+                )
             messages.success(request, 'Foydalanuvchi yangilandi.')
             return redirect('user_list')
     else:
