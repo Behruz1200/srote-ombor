@@ -374,6 +374,210 @@
         </div>
     </div>
 
+    <!-- Year-over-year -->
+    <div class="card p-3 mb-3">
+        <h5 class="mb-3"><i class="bi bi-calendar-event"></i> O'tgan yil bilan taqqoslash</h5>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <div class="border rounded p-2 bg-light h-100">
+                    <div class="small text-muted">Tushum</div>
+                    <div class="h5 mb-0">{{ revenue|som }}</div>
+                    <small class="text-muted">O'tgan yil: {{ ly_revenue|som }}</small>
+                    {% if yoy_revenue_delta is not None %}
+                        <span class="badge bg-{% if yoy_revenue_delta >= 0 %}success{% else %}danger{% endif %} ms-1">
+                            {% if yoy_revenue_delta >= 0 %}↑{% else %}↓{% endif %} {{ yoy_revenue_delta|floatformat:0 }}%
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-2 bg-light h-100">
+                    <div class="small text-muted">Sotilgan dona</div>
+                    <div class="h5 mb-0">{{ qty }}</div>
+                    <small class="text-muted">O'tgan yil: {{ ly_qty }}</small>
+                    {% if yoy_qty_delta is not None %}
+                        <span class="badge bg-{% if yoy_qty_delta >= 0 %}success{% else %}danger{% endif %} ms-1">
+                            {% if yoy_qty_delta >= 0 %}↑{% else %}↓{% endif %} {{ yoy_qty_delta|floatformat:0 }}%
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-2 bg-light h-100">
+                    <div class="small text-muted">Cheklar</div>
+                    <div class="h5 mb-0">{{ sales_count }}</div>
+                    <small class="text-muted">O'tgan yil: {{ ly_txns }}</small>
+                    {% if yoy_txns_delta is not None %}
+                        <span class="badge bg-{% if yoy_txns_delta >= 0 %}success{% else %}danger{% endif %} ms-1">
+                            {% if yoy_txns_delta >= 0 %}↑{% else %}↓{% endif %} {{ yoy_txns_delta|floatformat:0 }}%
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hour × Weekday heatmap -->
+    <div class="card p-3 mb-3">
+        <h5 class="mb-3">
+            <i class="bi bi-grid-3x3-gap"></i> Soat × Hafta kuni tushum xaritasi
+        </h5>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" style="font-size:0.7rem;">
+                <thead>
+                    <tr>
+                        <th style="width:40px;"></th>
+                        {% for h in heatmap_hour_labels %}<th class="text-center p-1">{{ h }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for day in heatmap_day_labels %}
+                    <tr>
+                        <th class="align-middle">{{ day }}</th>
+                        {% for cell in heatmap|get_item:forloop.counter0 %}
+                            {% with intensity=cell|div:heatmap_max %}
+                            <td class="text-center p-0" style="height:24px;">
+                                {% if cell > 0 %}
+                                    <div style="background: rgba(13, 110, 253, {{ intensity }});
+                                                color: {% if intensity > 0.5 %}#fff{% else %}#333{% endif %};
+                                                height:24px; display:flex;
+                                                align-items:center; justify-content:center;
+                                                border-radius: 2px;"
+                                         title="{{ day }} {{ forloop.counter0 }}:00 — {{ cell|floatformat:0 }} so'm">
+                                        {% if intensity > 0.3 %}{{ cell|som }}{% endif %}
+                                    </div>
+                                {% endif %}
+                            </td>
+                            {% endwith %}
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <small class="text-muted">Hujayra rang qancha to'q bo'lsa, shu vaqtda tushum shuncha katta.</small>
+    </div>
+
+    <!-- ABC analysis -->
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h5 class="mb-2">
+                    <i class="bi bi-bar-chart-steps"></i> ABC tahlili
+                    <small class="text-muted">— mahsulot ulushi</small>
+                </h5>
+                <div class="row g-2 mb-2">
+                    <div class="col-4">
+                        <div class="text-center p-2 border border-success rounded">
+                            <span class="badge bg-success">A</span>
+                            <div class="small">{{ abc_count.A }} mahsulot</div>
+                            <div class="fw-bold">{{ abc_summary.A|som }}</div>
+                            <small class="text-muted">~80% tushum</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center p-2 border border-warning rounded">
+                            <span class="badge bg-warning text-dark">B</span>
+                            <div class="small">{{ abc_count.B }} mahsulot</div>
+                            <div class="fw-bold">{{ abc_summary.B|som }}</div>
+                            <small class="text-muted">~15% tushum</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center p-2 border border-secondary rounded">
+                            <span class="badge bg-secondary">C</span>
+                            <div class="small">{{ abc_count.C }} mahsulot</div>
+                            <div class="fw-bold">{{ abc_summary.C|som }}</div>
+                            <small class="text-muted">~5% tushum</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="small text-muted mb-1">Top A-mahsulotlar:</div>
+                {% for p in abc_top_a %}
+                    <div class="small d-flex justify-content-between border-bottom py-1">
+                        <span>
+                            <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:30 }}</a>
+                        </span>
+                        <strong>{{ p.revenue|som }}</strong>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Dead stock -->
+        <div class="col-lg-6">
+            <div class="card p-3 h-100">
+                <h5 class="mb-2">
+                    <i class="bi bi-snow text-info"></i> Dead stock
+                    <small class="text-muted">— 90+ kun sotilmagan</small>
+                </h5>
+                {% if dead_products %}
+                    <div class="small text-warning mb-2">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Jami {{ dead_count }} ta mahsulot 90 kundan beri sotilmagan
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light">
+                                <tr><th>Mahsulot</th><th class="text-end">Zaxira</th><th class="text-end">Qiymat</th></tr>
+                            </thead>
+                            <tbody>
+                            {% for p in dead_products %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:24 }}</a>
+                                        <div class="small text-muted"><code>{{ p.code }}</code></div>
+                                    </td>
+                                    <td class="text-end">{{ p.stock|default:0 }}</td>
+                                    <td class="text-end"><strong>{{ p.value|default:0|som }}</strong></td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-success text-center py-3">
+                        <i class="bi bi-check-circle"></i> Dead stock yo'q
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Margin alerts -->
+    {% if margin_alerts %}
+    <div class="card p-3 mb-3 border-danger">
+        <h5 class="mb-2 text-danger">
+            <i class="bi bi-exclamation-octagon-fill"></i> Margin ogohlantirish
+            <small class="text-muted">— tannarxdan past sotilgan</small>
+        </h5>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="table-light">
+                    <tr><th>Mahsulot</th><th>Filial</th><th>Sana</th>
+                        <th class="text-end">Sotuv</th><th class="text-end">Tannarx</th>
+                        <th class="text-end">Zarar</th></tr>
+                </thead>
+                <tbody>
+                {% for a in margin_alerts %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'product_detail' a.product.code %}">{{ a.product.name|truncatechars:24 }}</a>
+                            <div class="small text-muted"><code>{{ a.product.code }}</code></div>
+                        </td>
+                        <td><small>{{ a.branch }}</small></td>
+                        <td><small>{{ a.date|date:"d.m.Y H:i" }}</small></td>
+                        <td class="text-end">{{ a.sale_price|som }}</td>
+                        <td class="text-end">{{ a.cost|som }}</td>
+                        <td class="text-end text-danger"><strong>−{{ a.loss|som }}</strong></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card p-3 mb-4">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
             <h5 class="mb-0">

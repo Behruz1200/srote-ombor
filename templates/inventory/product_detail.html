@@ -98,9 +98,9 @@
         </div>
     </div>
 
-    <!-- Chart + Top branch -->
+    <!-- Chart + Top branch + Cross-sell -->
     <div class="row g-3 mb-3">
-        <div class="col-lg-9">
+        <div class="col-lg-7">
             <div class="card p-3 h-100">
                 <h6 class="text-muted text-uppercase small mb-2">
                     <i class="bi bi-graph-up"></i> So'nggi 30 kun sotuvi (dona)
@@ -108,17 +108,40 @@
                 <canvas id="trendChart" style="max-height: 200px;"></canvas>
             </div>
         </div>
-        <div class="col-lg-3">
+        <div class="col-lg-2">
             <div class="card p-3 h-100">
                 <h6 class="text-muted text-uppercase small mb-2">
                     <i class="bi bi-trophy"></i> Top filial
                 </h6>
                 {% if product_kpis.top_branch_name %}
-                    <div class="h5 mb-0">{{ product_kpis.top_branch_name }}</div>
-                    <div class="text-success">{{ product_kpis.top_branch_rev|som }} so'm</div>
-                    <small class="text-muted">30 kun tushum</small>
+                    <div class="h6 mb-0">{{ product_kpis.top_branch_name }}</div>
+                    <div class="text-success small">{{ product_kpis.top_branch_rev|som }}</div>
+                    <small class="text-muted">30 kun</small>
                 {% else %}
-                    <div class="text-muted">Hali sotuv yo'q</div>
+                    <div class="text-muted small">Hali sotuv yo'q</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-lg-3">
+            <div class="card p-3 h-100">
+                <h6 class="text-muted text-uppercase small mb-2">
+                    <i class="bi bi-arrow-repeat text-primary"></i> Birga olinadi
+                </h6>
+                {% if cross_sell %}
+                    <ol class="ps-3 mb-0 small">
+                        {% for cs in cross_sell %}
+                        <li class="mb-1">
+                            <a href="{% url 'product_detail' cs.variant__product__code %}">
+                                {{ cs.variant__product__name|truncatechars:22 }}
+                            </a>
+                            <div class="text-muted" style="font-size:0.75rem;">
+                                {{ cs.co_count }} chekda
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ol>
+                {% else %}
+                    <div class="text-muted small">Ma'lumot yo'q</div>
                 {% endif %}
             </div>
         </div>

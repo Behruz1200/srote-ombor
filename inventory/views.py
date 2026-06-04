@@ -405,12 +405,20 @@ def product_list(request):
     elif stock_filter == 'in_stock':
         products = products.filter(total_stock__gt=0)
 
-    # 30 kunlik sotuvlar (velocity)
+    # 30 kunlik sotuvlar (velocity) + 365 kunlik turnover
     since_30d = timezone.now() - timedelta(days=30)
     sold_30d = (Sale.objects.filter(sold_at__gte=since_30d)
                 .values('variant__product_id')
                 .annotate(qty=Sum('quantity')))
     sold_map = {r['variant__product_id']: r['qty'] for r in sold_30d}
+
+    # Annual turnover: annual_sales / avg_stock
+    # Approx: 12 × (30-day sold) / current_stock
+    since_365d = timezone.now() - timedelta(days=365)
+    sold_365d = (Sale.objects.filter(sold_at__gte=since_365d)
+                 .values('variant__product_id')
+                 .annotate(qty=Sum('quantity')))
+    sold_365_map = {r['variant__product_id']: r['qty'] for r in sold_365d}
 
     # Sort
     allowed_sorts = {
@@ -424,12 +432,18 @@ def product_list(request):
     products = products.order_by(allowed_sorts.get(sort, '-created_at'))
 
     products = list(products[:200])
-    # Attach velocity + days_left
+    # Attach velocity + days_left + turnover
     for p in products:
         sold = sold_map.get(p.id, 0)
         p.sold_30d = sold
         daily_avg = sold / 30 if sold else 0
         p.days_left = (p.total_stock / daily_avg) if daily_avg else None
+        # Annual turnover ≈ annual_sold / avg_stock. Use current stock as proxy.
+        annual_sold = sold_365_map.get(p.id, 0)
+        if p.total_stock and p.total_stock > 0:
+            p.turnover = annual_sold / p.total_stock
+        else:
+            p.turnover = None
         # Profit estimate (avg margin from default_sale_price vs implied cost)
         # We don't have actual cost on product level; use markup_percent to back into cost.
         try:
@@ -557,12 +571,24 @@ def product_detail(request, code):
         'variants_in_stock': variants_in_stock,
     }
 
+    # Cross-sell: products often bought in the same transaction
+    txn_ids = (Sale.objects.filter(variant__product=product)
+               .values_list('transaction_id', flat=True).distinct())
+    cross_sell = (Sale.objects
+                  .filter(transaction_id__in=txn_ids)
+                  .exclude(variant__product=product)
+                  .values('variant__product__code', 'variant__product__name')
+                  .annotate(co_count=Count('transaction', distinct=True),
+                            qty=Sum('quantity'))
+                  .order_by('-co_count')[:5])
+
     return render(request, 'inventory/product_detail.html', {
         'product': product, 'branches_data': branches_data,
         'recent_intakes': recent_intakes,
         'product_kpis': product_kpis,
         'chart_labels': chart_labels,
         'chart_qty': chart_qty,
+        'cross_sell': list(cross_sell),
     })
 
 
@@ -4205,6 +4231,106 @@ def _insights_context(request):
         'return_rate': return_rate,
         'top_returns': top_returns,
     }
+
+    # ===== BI EXTENSIONS =====
+
+    # Hour × Weekday heatmap (revenue grid 7×24)
+    heatmap = [[0 for _ in range(24)] for _ in range(7)]  # 0=Mon
+    for sold_at, qty, price, disc in sales.values_list('sold_at', 'quantity', 'sale_price', 'line_discount'):
+        local_dt = timezone.localtime(sold_at)
+        wd = local_dt.weekday()
+        h = local_dt.hour
+        heatmap[wd][h] += float(qty) * float(price) - float(disc or 0)
+    flat_heatmap = []
+    for wd in range(7):
+        for h in range(24):
+            flat_heatmap.append({'x': h, 'y': wd, 'v': heatmap[wd][h]})
+    max_heat = max((max(row) for row in heatmap), default=0) or 1
+    context['heatmap'] = heatmap
+    context['heatmap_max'] = max_heat
+    context['heatmap_hour_labels'] = list(range(24))
+    context['heatmap_day_labels'] = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya']
+
+    # Year-over-year: same date range last year
+    last_year_start = dt_start.replace(year=dt_start.year - 1)
+    last_year_end = dt_end.replace(year=dt_end.year - 1)
+    ly_sales = Sale.objects.filter(sold_at__gte=last_year_start, sold_at__lt=last_year_end)
+    if branch_id and selected_branch:
+        ly_sales = ly_sales.filter(branch=selected_branch)
+    ly_agg = ly_sales.aggregate(
+        revenue=Sum(revenue_expr), qty=Sum('quantity'),
+        txns=Count('transaction', distinct=True),
+    )
+    ly_revenue = float(ly_agg['revenue'] or 0)
+    ly_qty = ly_agg['qty'] or 0
+    ly_txns = ly_agg['txns'] or 0
+    def _pct(now, prev):
+        if not prev: return None
+        return (float(now) - float(prev)) / float(prev) * 100
+    context['ly_revenue'] = ly_revenue
+    context['ly_qty'] = ly_qty
+    context['ly_txns'] = ly_txns
+    context['yoy_revenue_delta'] = _pct(revenue, ly_revenue)
+    context['yoy_qty_delta'] = _pct(qty, ly_qty)
+    context['yoy_txns_delta'] = _pct(sales_count, ly_txns)
+
+    # ABC analysis: sort by revenue, classify by cumulative %
+    sorted_products = sorted(profit_by_product.values(),
+                             key=lambda x: float(x['revenue'] or 0), reverse=True)
+    total_rev = sum(float(p['revenue'] or 0) for p in sorted_products) or 1
+    abc_summary = {'A': 0, 'B': 0, 'C': 0}
+    abc_count = {'A': 0, 'B': 0, 'C': 0}
+    cumulative = 0
+    for p in sorted_products:
+        pct = float(p['revenue'] or 0) / total_rev * 100
+        cumulative += pct
+        if cumulative <= 80:
+            cls = 'A'
+        elif cumulative <= 95:
+            cls = 'B'
+        else:
+            cls = 'C'
+        p['abc'] = cls
+        abc_summary[cls] += float(p['revenue'] or 0)
+        abc_count[cls] += 1
+    context['abc_top_a'] = [p for p in sorted_products if p['abc'] == 'A'][:8]
+    context['abc_summary'] = abc_summary
+    context['abc_count'] = abc_count
+
+    # Dead stock: products with zero sales in last 90 days but stock > 0
+    cutoff_90d = timezone.now() - timedelta(days=90)
+    recently_sold_ids = set(Sale.objects.filter(sold_at__gte=cutoff_90d)
+                            .values_list('variant__product_id', flat=True).distinct())
+    has_stock = (BranchStock.objects.filter(stock_count__gt=0)
+                 .values_list('variant__product_id', flat=True).distinct())
+    dead_ids = set(has_stock) - recently_sold_ids
+    dead_products = list(Product.objects
+                         .filter(id__in=list(dead_ids))
+                         .annotate(stock=Sum('variants__branch_stocks__stock_count'),
+                                   value=Sum(ExpressionWrapper(
+                                       F('variants__branch_stocks__stock_count')
+                                       * F('variants__branch_stocks__cost_price'),
+                                       output_field=DecimalField(max_digits=14, decimal_places=2))))
+                         .order_by('-value')[:10])
+    context['dead_products'] = dead_products
+    context['dead_count'] = len(dead_ids)
+
+    # Margin alerts: products where last sale was at/below cost
+    margin_alerts = []
+    bad_sales = (sales.filter(sale_price__lte=F('cost_at_sale'))
+                 .select_related('variant__product', 'branch')
+                 .order_by('-sold_at')[:5])
+    for s in bad_sales:
+        margin_alerts.append({
+            'product': s.variant.product,
+            'branch': s.branch.name,
+            'date': s.sold_at,
+            'sale_price': float(s.sale_price),
+            'cost': float(s.cost_at_sale),
+            'loss': (float(s.cost_at_sale) - float(s.sale_price)) * s.quantity,
+        })
+    context['margin_alerts'] = margin_alerts
+
     return context
 
 

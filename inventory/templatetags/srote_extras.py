@@ -18,6 +18,18 @@ def som(value):
 
 
 @register.filter
+def div(value, divisor):
+    """Bo'lish: value / divisor. Templatda intensity hisoblash uchun."""
+    try:
+        d = float(divisor)
+        if d == 0:
+            return 0
+        return float(value) / d
+    except (ValueError, TypeError):
+        return 0
+
+
+@register.filter
 def get_item(d, key):
     """dict[key] template'da. Dict bo'lmasa None qaytaradi."""
     if hasattr(d, 'get'):

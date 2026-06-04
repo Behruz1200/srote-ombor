@@ -58,6 +58,12 @@
                             <i class="bi bi-printer"></i> Chop etishni sozlash...
                         </button>
                     </li>
+                    <li>
+                        <button class="dropdown-item" type="button"
+                                data-bs-toggle="modal" data-bs-target="#shortcutsHelp">
+                            <i class="bi bi-keyboard"></i> Klaviatura yorliqlari (F1)
+                        </button>
+                    </li>
                 </ul>
             </div>
             <a href="{% url 'shift_close' %}" class="btn btn-sm btn-outline-danger">
@@ -1822,5 +1828,66 @@ function tickClock() {
         `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 setInterval(tickClock, 30000); tickClock();
+
+// ---- POS keyboard shortcuts ----
+// F2  → scanner focus
+// F4  → checkout
+// F9  → park sale
+// F10 → mute toggle
+// F1  → show help
+// Esc → cancel current modal
+document.addEventListener('keydown', (e) => {
+    // Avoid intercepting if user is typing in an input/textarea (except scanner)
+    const tag = e.target.tagName;
+    const inField = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+
+    if (e.key === 'F2') {
+        e.preventDefault();
+        scanInput.focus();
+        scanInput.select();
+    } else if (e.key === 'F4') {
+        e.preventDefault();
+        if (!checkoutBtn.disabled) checkoutBtn.click();
+    } else if (e.key === 'F9') {
+        e.preventDefault();
+        if (!parkBtn.disabled) parkBtn.click();
+    } else if (e.key === 'F10') {
+        e.preventDefault();
+        if (muteMenuBtn) muteMenuBtn.click();
+    } else if (e.key === 'F1') {
+        e.preventDefault();
+        const helpModal = document.getElementById('shortcutsHelp');
+        if (helpModal) new bootstrap.Modal(helpModal).show();
+    }
+});
+</script>
+
+<!-- POS shortcuts help modal -->
+<div class="modal fade" id="shortcutsHelp" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-keyboard"></i> Klaviatura yorliqlari</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><td><kbd>F2</kbd></td><td>Skanerga focus qilish</td></tr>
+            <tr><td><kbd>F4</kbd></td><td>Sotuvni yakunlash</td></tr>
+            <tr><td><kbd>F9</kbd></td><td>Savatni saqlab qo'yish (park)</td></tr>
+            <tr><td><kbd>F10</kbd></td><td>Tovushni yoqish/o'chirish</td></tr>
+            <tr><td><kbd>F1</kbd></td><td>Bu oynani ko'rsatish</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Joriy modal'ni yopish</td></tr>
+            <tr><td><kbd>Cmd</kbd>+<kbd>K</kbd></td><td>Tezkor qidirish (global)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// stub continuation script (so previous script tag closes cleanly)
+console.log('Srote POS shortcuts ready');
 </script>
 {% endblock %}
