@@ -4,6 +4,30 @@
 {% block title %}POS — Srote{% endblock %}
 
 {% block content %}
+<style>
+/* Compact POS right column — fit everything in viewport */
+.pos-side .card { border-radius: 8px; }
+.pos-side .form-label { margin-bottom: 0.2rem; font-size: 0.72rem; }
+.pos-side .payment-btn { padding: 0.3rem 0.4rem; font-size: 0.85rem; }
+.pos-side .qr-provider-btn { font-size: 0.78rem; }
+.pos-side .display-6 { font-size: 1.85rem; line-height: 1; }
+.pos-side hr { margin-top: 0.4rem; margin-bottom: 0.4rem; }
+
+/* Sticky checkout button at bottom of viewport */
+.pos-checkout-sticky {
+    position: sticky;
+    bottom: 0.5rem;
+    z-index: 10;
+    background: var(--bs-body-bg, #f4f6fa);
+    padding-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+[data-bs-theme="dark"] .pos-checkout-sticky { background: #15171c; }
+
+/* Smaller payment-btn icons */
+.pos-side .payment-btn i { font-size: 0.95rem; }
+</style>
+
 <div class="container-fluid px-3">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h3 class="mb-0">
@@ -176,8 +200,8 @@
         </div>
 
         <!-- RIGHT: total + payment + checkout -->
-        <div class="col-lg-4">
-            <div class="card p-3 mb-3">
+        <div class="col-lg-4 pos-side">
+            <div class="card p-2 mb-2">
                 <label class="form-label small text-uppercase">Narx turi</label>
                 <div class="btn-group w-100" role="group" id="priceModeToggle">
                     <input type="radio" class="btn-check" name="priceMode" id="priceModeRetail" value="retail" checked>
@@ -194,67 +218,76 @@
                 </div>
             </div>
 
-            <div class="card p-3 mb-3" id="totalCard">
-                <div id="appliedPromos" class="mb-2" style="display:none;">
+            <div class="card p-2 mb-2" id="totalCard">
+                <div id="appliedPromos" class="mb-1" style="display:none;">
                     <div class="small text-uppercase text-muted mb-1">
-                        <i class="bi bi-tag-fill text-success"></i> Qo'llanilgan aksiyalar
+                        <i class="bi bi-tag-fill text-success"></i> Aksiyalar
                     </div>
                     <div id="appliedPromosList"></div>
                 </div>
                 <div class="d-flex justify-content-between small text-muted">
-                    <span>Oraliq summa:</span>
+                    <span>Oraliq:</span>
                     <span><span id="cartSubtotal">0</span> so'm</span>
                 </div>
                 <div class="d-flex justify-content-between small text-muted" id="discountRow" style="display:none !important;">
                     <span>Chegirma:</span>
                     <span class="text-danger">−<span id="cartDiscount">0</span> so'm</span>
                 </div>
-                <hr class="my-2">
-                <div class="text-muted small">Mijoz to'laydi</div>
-                <div class="display-5 fw-bold text-primary" id="cartTotal">0</div>
-                <div class="small text-muted">
-                    <span id="cartItemCount">0</span> ta mahsulot
+                <div class="d-flex justify-content-between align-items-baseline mt-1">
+                    <span class="text-muted small">Mijoz to'laydi:</span>
+                    <span class="display-6 fw-bold text-primary mb-0" id="cartTotal">0</span>
+                </div>
+                <div class="small text-muted text-end">
+                    <span id="cartItemCount">0</span> dona
                 </div>
             </div>
 
-            <div class="card p-3 mb-3">
-                <label class="form-label small text-uppercase">Chegirma (butun chek)</label>
-                <div class="d-flex gap-2 mb-2 flex-wrap">
-                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct" data-pct="5">−5%</button>
-                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct" data-pct="10">−10%</button>
-                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct" data-pct="20">−20%</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="discClear">×</button>
+            <div class="card p-2 mb-2">
+                <div class="d-flex gap-1 mb-1 flex-wrap align-items-center">
+                    <small class="text-muted text-uppercase me-1">Chegirma</small>
+                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct py-0 px-2" data-pct="5">−5%</button>
+                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct py-0 px-2" data-pct="10">−10%</button>
+                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct py-0 px-2" data-pct="20">−20%</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="discClear">×</button>
                 </div>
-                <input type="number" id="orderDiscount" class="form-control form-control-sm mb-2"
-                       min="0" step="1000" placeholder="so'mda kiriting">
-                <input type="text" id="discountReason" class="form-control form-control-sm"
-                       placeholder="Sabab: doimiy mijoz, aksiya...">
+                <div class="row g-1">
+                    <div class="col-6">
+                        <input type="number" id="orderDiscount" class="form-control form-control-sm"
+                               min="0" step="1000" placeholder="so'm">
+                    </div>
+                    <div class="col-6">
+                        <input type="text" id="discountReason" class="form-control form-control-sm"
+                               placeholder="Sabab">
+                    </div>
+                </div>
             </div>
 
-            <div class="card p-3 mb-3">
-                <label class="form-label small text-uppercase">To'lov turi</label>
-                <div class="d-grid gap-2" id="paymentButtons">
+            <div class="card p-2 mb-2">
+                <label class="form-label small text-uppercase mb-1">To'lov turi</label>
+                <div class="row g-1" id="paymentButtons">
                     {% for value, label in payment_methods %}
-                        <button type="button"
-                                class="btn btn-outline-secondary payment-btn{% if value == 'cash' %} active{% endif %}"
-                                data-value="{{ value }}">
-                            {% if value == 'cash' %}<i class="bi bi-cash"></i>
-                            {% elif value == 'card' %}<i class="bi bi-credit-card"></i>
-                            {% elif value == 'transfer' %}<i class="bi bi-arrow-left-right"></i>
-                            {% else %}<i class="bi bi-three-dots"></i>{% endif %}
-                            {{ label }}
-                        </button>
+                        <div class="col-6">
+                            <button type="button"
+                                    class="btn btn-sm w-100 btn-outline-secondary payment-btn{% if value == 'cash' %} active{% endif %}"
+                                    data-value="{{ value }}">
+                                {% if value == 'cash' %}<i class="bi bi-cash"></i>
+                                {% elif value == 'card' %}<i class="bi bi-credit-card"></i>
+                                {% elif value == 'transfer' %}<i class="bi bi-arrow-left-right"></i>
+                                {% else %}<i class="bi bi-three-dots"></i>{% endif %}
+                                {{ label }}
+                            </button>
+                        </div>
                     {% endfor %}
                 </div>
                 <input type="hidden" id="paymentMethod" value="cash">
 
                 {% if payment_providers %}
-                <hr class="my-2">
-                <label class="form-label small text-uppercase">QR / Muddatli to'lov</label>
+                <hr class="my-1">
+                <label class="form-label small text-uppercase mb-1">QR / Muddatli</label>
                 <div class="d-flex flex-wrap gap-1" id="qrProviders">
                     {% for p in payment_providers %}
                         <button type="button"
-                                class="btn btn-sm btn-outline-{% if p.is_installment %}info{% else %}primary{% endif %} qr-provider-btn"
+                                class="btn btn-sm btn-outline-{% if p.is_installment %}info{% else %}primary{% endif %} qr-provider-btn py-0 px-2"
                                 data-provider="{{ p.name }}"
                                 data-display="{{ p.display_name }}"
                                 data-installment="{% if p.is_installment %}1{% else %}0{% endif %}"
@@ -264,10 +297,6 @@
                             {% if p.has_static_qr %}<i class="bi bi-check2-circle text-success small"></i>{% endif %}
                         </button>
                     {% endfor %}
-                </div>
-                <div class="small text-muted mt-1">
-                    QR tanlanganda mijozga ko'rsatiladi. Mijoz scan qilib o'z ilovasidan
-                    summa kiritib to'laydi. Keyin "To'lov olindi" tasdiqlanadi.
                 </div>
                 {% endif %}
 
@@ -312,13 +341,17 @@
                 </div>
             </div>
 
-            <div class="card p-3 mb-3">
-                <label class="form-label small text-uppercase">Mijoz (ixtiyoriy)</label>
-                <input type="text" id="customerName" class="form-control form-control-sm mb-2"
-                       placeholder="Ism">
-                <input type="tel" id="customerPhone" class="form-control form-control-sm mb-2"
-                       placeholder="+998 ...">
-                <div class="form-check">
+            <div class="card p-2 mb-2">
+                <label class="form-label small text-uppercase mb-1">Mijoz (ixtiyoriy)</label>
+                <div class="row g-1 mb-1">
+                    <div class="col-6">
+                        <input type="text" id="customerName" class="form-control form-control-sm" placeholder="Ism">
+                    </div>
+                    <div class="col-6">
+                        <input type="tel" id="customerPhone" class="form-control form-control-sm" placeholder="+998 ...">
+                    </div>
+                </div>
+                <div class="form-check m-0">
                     <input type="checkbox" id="sendSmsCheckbox" class="form-check-input">
                     <label class="form-check-label small" for="sendSmsCheckbox">
                         <i class="bi bi-chat-dots"></i> Chek SMS yuborish
@@ -326,15 +359,16 @@
                 </div>
             </div>
 
-            <button type="button" class="btn btn-success btn-lg w-100" id="checkoutBtn" disabled>
-                <i class="bi bi-check2-circle"></i> SOTUVNI YAKUNLASH
-            </button>
-
-            <button type="button" class="btn btn-outline-warning w-100 mt-2" id="parkBtn" disabled>
-                <i class="bi bi-pause-circle"></i> Savatni saqlab qo'yish
-            </button>
-
-            <div id="checkoutStatus" class="small text-center mt-2"></div>
+            <!-- Sticky checkout panel -->
+            <div class="pos-checkout-sticky">
+                <button type="button" class="btn btn-success btn-lg w-100" id="checkoutBtn" disabled>
+                    <i class="bi bi-check2-circle"></i> SOTUVNI YAKUNLASH
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-warning w-100 mt-1" id="parkBtn" disabled>
+                    <i class="bi bi-pause-circle"></i> Savatni saqlab qo'yish
+                </button>
+                <div id="checkoutStatus" class="small text-center mt-1"></div>
+            </div>
         </div>
     </div>
 
