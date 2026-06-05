@@ -3,7 +3,9 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count, Max, Min
-from django.db.models.functions import Coalesce
+from django.db.models.functions import (
+    Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
+)
 from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -37,6 +39,7 @@ from .models import (
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
     IntakeForm, SaleForm, UserCreateForm, UserEditForm, ReportForm,
+    PIVOT_METRIC_CHOICES, PIVOT_DIM_CHOICES,
 )
 
 
@@ -3817,6 +3820,138 @@ def _resolve_period(period, date_from, date_to):
     return start, end - timedelta(days=1), start_dt, end_dt
 
 
+PIVOT_DIM_CONFIG = {
+    # Dimensions that need an annotation to project a value out of sold_at
+    'date':     {'label': 'Sana',       'expr': TruncDate('sold_at'),     'field': 'pv_date'},
+    'week':     {'label': 'Hafta',      'expr': TruncWeek('sold_at'),     'field': 'pv_week'},
+    'month':    {'label': 'Oy',         'expr': TruncMonth('sold_at'),    'field': 'pv_month'},
+    'weekday':  {'label': 'Hafta kuni', 'expr': ExtractWeekDay('sold_at'),'field': 'pv_wd'},
+    # Direct relational fields
+    'branch':   {'label': 'Filial',       'field': 'branch__name'},
+    'category': {'label': 'Kategoriya',   'field': 'variant__product__category__name'},
+    'product':  {'label': 'Mahsulot',     'field': 'variant__product__name'},
+    'seller':   {'label': 'Sotuvchi',     'field': 'sold_by__username'},
+    'payment':  {'label': "To'lov turi",  'field': 'transaction__payment_method'},
+}
+
+# Django ExtractWeekDay: Sunday=1, Monday=2, ..., Saturday=7
+PIVOT_WEEKDAY_NAMES = {1: 'Yakshanba', 2: 'Dushanba', 3: 'Seshanba',
+                       4: 'Chorshanba', 5: 'Payshanba',
+                       6: 'Juma',      7: 'Shanba'}
+
+
+def _pivot_format_key(dim, val):
+    """Render a row/column key for display in the pivot table."""
+    if val is None:
+        return '—'
+    if dim == 'weekday':
+        return PIVOT_WEEKDAY_NAMES.get(int(val), str(val))
+    if dim in ('date', 'week'):
+        return val.strftime('%Y-%m-%d') if hasattr(val, 'strftime') else str(val)
+    if dim == 'month':
+        return val.strftime('%Y-%m') if hasattr(val, 'strftime') else str(val)
+    if dim == 'payment':
+        labels = dict(SaleTransaction._meta.get_field('payment_method').choices)
+        return labels.get(val, val)
+    return str(val)
+
+
+def _build_pivot(sale_qs, rows_dim, cols_dim, metric):
+    """Aggregate sale_qs by rows_dim and (optional) cols_dim,
+    return a structure ready for the template:
+
+      mode '1d'  → items: [(row_key, value), ...]  + total
+      mode '2d'  → row_keys, col_keys, matrix [rows × cols], totals
+    """
+    rev_expr = ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2))
+    profit_expr = ExpressionWrapper(
+        (F('sale_price') - F('cost_at_sale')) * F('quantity') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2))
+    annot = {
+        'revenue': Sum(rev_expr),
+        'qty':     Sum('quantity'),
+        'count':   Count('transaction_id', distinct=True),
+        'profit':  Sum(profit_expr),
+    }
+
+    # Add date/week/month/weekday annotations only when needed
+    extra = {}
+    group_fields = []
+    for dim in (rows_dim, cols_dim):
+        if not dim or dim not in PIVOT_DIM_CONFIG:
+            continue
+        cfg = PIVOT_DIM_CONFIG[dim]
+        if 'expr' in cfg:
+            extra[cfg['field']] = cfg['expr']
+        group_fields.append(cfg['field'])
+
+    qs = sale_qs.annotate(**extra) if extra else sale_qs
+    agg = list(qs.values(*group_fields).annotate(**annot).order_by())
+
+    def m(r): return r.get(metric) or 0
+
+    if not cols_dim:
+        rows_field = PIVOT_DIM_CONFIG[rows_dim]['field']
+        items = [(_pivot_format_key(rows_dim, r[rows_field]), m(r), r[rows_field])
+                 for r in agg]
+        items.sort(key=lambda x: -x[1])
+        total = sum(v for _, v, _ in items)
+        return {
+            'mode': '1d',
+            'rows_label': PIVOT_DIM_CONFIG[rows_dim]['label'],
+            'items':      [{'key': k, 'value': v} for k, v, _ in items],
+            'total':      total,
+        }
+
+    rows_field = PIVOT_DIM_CONFIG[rows_dim]['field']
+    cols_field = PIVOT_DIM_CONFIG[cols_dim]['field']
+
+    # Distinct ordered keys
+    def _sort_key(dim, v):
+        if v is None:
+            return (1, '')
+        if dim == 'weekday':
+            return (0, int(v))
+        if dim in ('date', 'week', 'month') and hasattr(v, 'isoformat'):
+            return (0, v.isoformat())
+        return (0, str(v))
+
+    row_keys_raw = sorted({r[rows_field] for r in agg}, key=lambda v: _sort_key(rows_dim, v))
+    col_keys_raw = sorted({r[cols_field] for r in agg}, key=lambda v: _sort_key(cols_dim, v))
+
+    cells = {(r[rows_field], r[cols_field]): m(r) for r in agg}
+
+    matrix = []
+    col_totals = [0] * len(col_keys_raw)
+    grand_total = 0
+    for ri, rk in enumerate(row_keys_raw):
+        row_cells = []
+        row_total = 0
+        for ci, ck in enumerate(col_keys_raw):
+            v = cells.get((rk, ck), 0)
+            row_cells.append(v)
+            row_total += v
+            col_totals[ci] += v
+        matrix.append({
+            'key':   _pivot_format_key(rows_dim, rk),
+            'cells': row_cells,
+            'total': row_total,
+        })
+        grand_total += row_total
+
+    return {
+        'mode': '2d',
+        'rows_label': PIVOT_DIM_CONFIG[rows_dim]['label'],
+        'cols_label': PIVOT_DIM_CONFIG[cols_dim]['label'],
+        'col_keys':   [_pivot_format_key(cols_dim, v) for v in col_keys_raw],
+        'matrix':     matrix,
+        'col_totals': col_totals,
+        'grand_total': grand_total,
+    }
+
+
 @admin_required
 def reports(request):
     form = ReportForm(request.GET or None, initial={'period': 'week', 'report_type': 'sales'})
@@ -3824,6 +3959,7 @@ def reports(request):
     headers = []
     title = ''
     summary = {}
+    pivot = None
 
     if form.is_valid():
         rtype = form.cleaned_data['report_type']
@@ -3934,6 +4070,41 @@ def reports(request):
                        "Jami daromad (so'm)": total_rev,
                        'Mahsulotlar soni': len(agg)}
 
+        elif rtype == 'pivot':
+            rows_dim = form.cleaned_data.get('pivot_rows') or 'branch'
+            cols_dim = form.cleaned_data.get('pivot_cols') or ''
+            metric = form.cleaned_data.get('pivot_metric') or 'revenue'
+
+            metric_label = dict(PIVOT_METRIC_CHOICES).get(metric, metric)
+            rows_label = PIVOT_DIM_CONFIG[rows_dim]['label']
+            cols_label = PIVOT_DIM_CONFIG[cols_dim]['label'] if cols_dim else ''
+
+            title = (f"Pivot — {metric_label}: {rows_label}"
+                     + (f" × {cols_label}" if cols_label else ''))
+
+            sale_qs = Sale.objects.filter(sold_at__gte=dt_start, sold_at__lt=dt_end)
+            if branch:
+                sale_qs = sale_qs.filter(branch=branch)
+
+            pivot = _build_pivot(sale_qs, rows_dim, cols_dim, metric)
+            pivot['metric'] = metric
+            pivot['metric_label'] = metric_label
+            pivot['is_currency'] = metric in ('revenue', 'profit')
+
+            # CSV / PDF fall back to a flat representation
+            if pivot['mode'] == '1d':
+                headers = [rows_label, metric_label]
+                rows = [[it['key'], it['value']] for it in pivot['items']]
+                summary = {f"Jami {metric_label.lower()}": pivot['total']}
+            else:
+                headers = [rows_label] + list(pivot['col_keys']) + ['Jami']
+                rows = []
+                for r in pivot['matrix']:
+                    rows.append([r['key']] + list(r['cells']) + [r['total']])
+                rows.append(['Ustun jami'] + list(pivot['col_totals'])
+                            + [pivot['grand_total']])
+                summary = {f"Jami {metric_label.lower()}": pivot['grand_total']}
+
         if request.GET.get('export') == 'csv':
             return _csv_response(title, headers, rows, summary,
                                  d_start, d_end, branch)
@@ -3944,11 +4115,12 @@ def reports(request):
         return render(request, 'inventory/reports.html', {
             'form': form, 'rows': rows, 'headers': headers, 'title': title,
             'summary': summary, 'd_start': d_start, 'd_end': d_end,
-            'branch': branch,
+            'branch': branch, 'pivot': pivot,
         })
 
     return render(request, 'inventory/reports.html', {
         'form': form, 'rows': None, 'headers': [], 'title': '',
+        'pivot': None,
     })
 
 

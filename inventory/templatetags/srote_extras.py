@@ -30,6 +30,15 @@ def div(value, divisor):
 
 
 @register.filter
+def mul(value, factor):
+    """Ko'paytirish: value * factor. Foiz hisobi uchun."""
+    try:
+        return float(value) * float(factor)
+    except (ValueError, TypeError):
+        return 0
+
+
+@register.filter
 def get_item(d, key):
     """dict[key] template'da. Dict bo'lmasa None qaytaradi."""
     if hasattr(d, 'get'):

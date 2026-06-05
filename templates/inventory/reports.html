@@ -4,7 +4,7 @@
 {% block title %}Hisobotlar — Srote{% endblock %}
 
 {% block content %}
-{% with current_type=form.report_type.value|default:'sales' selected_period=form.period.value|default:'week' selected_branch_id=form.branch.value|default:'' %}
+{% with current_type=form.report_type.value|default:'sales' selected_period=form.period.value|default:'week' selected_branch_id=form.branch.value|default:'' p_rows=form.pivot_rows.value|default:'branch' p_cols=form.pivot_cols.value|default:'' p_metric=form.pivot_metric.value|default:'revenue' %}
 <div class="container-fluid px-3">
 
     <!-- ── Page header (title row + filter row) ─────────────────────── -->
@@ -71,17 +71,20 @@
 
         <!-- Row 2: filter toolbar (single GET form) -->
         <form method="get" id="reportForm" class="srt-page-filter-row">
-            <!-- Default period (used when the form is submitted by a non-period
-                 control like the branch dropdown). Period chip buttons append
-                 their own ?period=... which Django reads as the last value. -->
+            <!-- Default values; chip clicks append name=...&value=... which
+                 Django reads as the later (winning) value. -->
             <input type="hidden" name="period" value="{{ selected_period }}">
+            <input type="hidden" name="pivot_rows" value="{{ p_rows }}">
+            <input type="hidden" name="pivot_cols" value="{{ p_cols }}">
+            <input type="hidden" name="pivot_metric" value="{{ p_metric }}">
 
             <!-- Report type -->
             <div class="srt-filter-group">
                 <span class="srt-filter-label" aria-hidden="true">
                     <i class="bi bi-clipboard-data"></i> Hisobot turi
                 </span>
-                <select name="report_type" class="form-select form-select-sm srt-report-type"
+                <select name="report_type" id="reportTypeSelect"
+                        class="form-select form-select-sm srt-report-type"
                         onchange="this.form.submit()" aria-label="Hisobot turi">
                     {% for v, lbl in form.report_type.field.choices %}
                         <option value="{{ v }}" {% if current_type == v %}selected{% endif %}>{{ lbl }}</option>
@@ -138,6 +141,40 @@
                 </select>
             </div>
 
+            <!-- Pivot dimensions — shown only when "Pivot / Matritsa" is selected -->
+            <div class="srt-filter-group srt-pivot-controls {% if current_type != 'pivot' %}d-none{% endif %}"
+                 id="pivotControls">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-grid-3x3"></i> Ko'rsatish
+                </span>
+                <select name="pivot_rows" class="form-select form-select-sm"
+                        onchange="this.form.submit()" aria-label="Qatorlar"
+                        style="min-width: 130px;">
+                    {% for v, lbl in form.pivot_rows.field.choices %}
+                        <option value="{{ v }}" {% if p_rows == v %}selected{% endif %}>↕ {{ lbl }}</option>
+                    {% endfor %}
+                </select>
+                <span class="text-muted small">×</span>
+                <select name="pivot_cols" class="form-select form-select-sm"
+                        onchange="this.form.submit()" aria-label="Ustunlar"
+                        style="min-width: 150px;">
+                    {% for v, lbl in form.pivot_cols.field.choices %}
+                        <option value="{{ v }}" {% if p_cols == v %}selected{% endif %}>↔ {{ lbl }}</option>
+                    {% endfor %}
+                </select>
+                <span class="srt-filter-label ms-2" aria-hidden="true">
+                    <i class="bi bi-bar-chart"></i> O'lchov
+                </span>
+                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="O'lchov">
+                    {% for v, lbl in form.pivot_metric.field.choices %}
+                        <button type="submit" name="pivot_metric" value="{{ v }}"
+                                class="btn {% if p_metric == v %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                            {{ lbl }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+
             <!-- Custom date range — shown only when "Aniq sanalar" is active -->
             <div class="srt-filter-group srt-custom-range {% if selected_period != 'custom' %}d-none{% endif %}"
                  id="customRange">
@@ -166,9 +203,11 @@
             <h2 class="srt-h2">
                 <i class="bi bi-bar-chart-line text-primary"></i> {{ title }}
             </h2>
-            <span class="srt-tag">
-                <span class="srt-num">{{ rows|length }}</span> qator
-            </span>
+            {% if pivot %}
+                <span class="srt-tag">{{ pivot.rows_label }}{% if pivot.cols_label %} × {{ pivot.cols_label }}{% endif %}</span>
+            {% else %}
+                <span class="srt-tag"><span class="srt-num">{{ rows|length }}</span> qator</span>
+            {% endif %}
         </div>
         {% if summary %}
         <div class="srt-section-body" style="padding-bottom: 0.5rem;">
@@ -176,34 +215,141 @@
                 {% for k, v in summary.items %}
                     <div class="srt-kpi accent">
                         <div class="srt-kpi-label">{{ k }}</div>
-                        <div class="srt-kpi-value" style="font-size: 1.3rem;">{{ v|som }}</div>
+                        <div class="srt-kpi-value" style="font-size: 1.3rem;">
+                            {% if pivot and pivot.is_currency %}{{ v|som }}{% else %}{{ v }}{% endif %}
+                        </div>
                     </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
-        <div class="srt-section-body flush">
-            <div class="table-responsive">
-                <table class="srt-data-table">
-                    <thead>
-                        <tr>
-                            {% for h in headers %}<th>{{ h }}</th>{% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for r in rows %}
-                        <tr>
-                            {% for cell in r %}<td>{{ cell }}</td>{% endfor %}
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="{{ headers|length }}" class="text-center text-muted py-4">
-                            Bu davr uchun ma'lumot yo'q.
-                        </td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+
+        {% if pivot %}
+            <!-- Pivot matrix render -->
+            <div class="srt-section-body flush">
+                <div class="table-responsive">
+                    {% if pivot.mode == '1d' %}
+                        <table class="srt-data-table srt-pivot-1d">
+                            <thead>
+                                <tr>
+                                    <th>{{ pivot.rows_label }}</th>
+                                    <th class="num">{{ pivot.metric_label }}</th>
+                                    <th class="num" style="width: 90px;">% Ulush</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for it in pivot.items %}
+                                <tr>
+                                    <td><strong>{{ it.key }}</strong></td>
+                                    <td class="num">
+                                        {% if pivot.is_currency %}{{ it.value|som }}{% else %}{{ it.value }}{% endif %}
+                                    </td>
+                                    <td class="num text-muted">
+                                        {% if pivot.total %}{{ it.value|mul:100|div:pivot.total|floatformat:1 }}%{% else %}—{% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="3" class="text-center text-muted py-4">
+                                    Bu davr uchun ma'lumot yo'q.
+                                </td></tr>
+                            {% endfor %}
+                            </tbody>
+                            {% if pivot.items %}
+                            <tfoot>
+                                <tr style="border-top: 2px solid var(--srt-border-strong);">
+                                    <th>JAMI</th>
+                                    <th class="num">
+                                        {% if pivot.is_currency %}{{ pivot.total|som }}{% else %}{{ pivot.total }}{% endif %}
+                                    </th>
+                                    <th class="num text-muted">100%</th>
+                                </tr>
+                            </tfoot>
+                            {% endif %}
+                        </table>
+                    {% else %}
+                        <!-- 2D matrix -->
+                        <table class="srt-data-table srt-pivot-2d">
+                            <thead>
+                                <tr>
+                                    <th class="srt-pivot-corner">
+                                        <span class="text-muted small">{{ pivot.rows_label }} ↓ / {{ pivot.cols_label }} →</span>
+                                    </th>
+                                    {% for ck in pivot.col_keys %}
+                                        <th class="num">{{ ck }}</th>
+                                    {% endfor %}
+                                    <th class="num srt-pivot-total-col">Jami</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for r in pivot.matrix %}
+                                <tr>
+                                    <th class="srt-pivot-row-head">{{ r.key }}</th>
+                                    {% for cell in r.cells %}
+                                        <td class="num srt-pivot-cell"
+                                            data-heat="{% if pivot.grand_total %}{{ cell|mul:100|div:pivot.grand_total|floatformat:0 }}{% else %}0{% endif %}">
+                                            {% if cell %}
+                                                {% if pivot.is_currency %}{{ cell|som }}{% else %}{{ cell }}{% endif %}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                    <td class="num srt-pivot-total-col">
+                                        <strong>{% if pivot.is_currency %}{{ r.total|som }}{% else %}{{ r.total }}{% endif %}</strong>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="{{ pivot.col_keys|length|add:2 }}" class="text-center text-muted py-4">
+                                    Bu davr uchun ma'lumot yo'q.
+                                </td></tr>
+                            {% endfor %}
+                            </tbody>
+                            {% if pivot.matrix %}
+                            <tfoot>
+                                <tr class="srt-pivot-total-row">
+                                    <th>JAMI</th>
+                                    {% for ct in pivot.col_totals %}
+                                        <th class="num">{% if pivot.is_currency %}{{ ct|som }}{% else %}{{ ct }}{% endif %}</th>
+                                    {% endfor %}
+                                    <th class="num srt-pivot-grand">
+                                        {% if pivot.is_currency %}{{ pivot.grand_total|som }}{% else %}{{ pivot.grand_total }}{% endif %}
+                                    </th>
+                                </tr>
+                            </tfoot>
+                            {% endif %}
+                        </table>
+                    {% endif %}
+                </div>
+                <div class="small text-muted mt-2 px-3">
+                    <i class="bi bi-info-circle"></i>
+                    Hujayralarning yorqinligi nisbiy ulushni ko'rsatadi (qancha to'q ko'k bo'lsa, shu hujayradagi qiymat shuncha katta).
+                </div>
             </div>
-        </div>
+        {% else %}
+            <!-- Standard flat table (sales/intakes/inventory/by_product) -->
+            <div class="srt-section-body flush">
+                <div class="table-responsive">
+                    <table class="srt-data-table">
+                        <thead>
+                            <tr>
+                                {% for h in headers %}<th>{{ h }}</th>{% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for r in rows %}
+                            <tr>
+                                {% for cell in r %}<td>{{ cell }}</td>{% endfor %}
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="{{ headers|length }}" class="text-center text-muted py-4">
+                                Bu davr uchun ma'lumot yo'q.
+                            </td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
     </div>
     {% else %}
         <div class="srt-empty">
@@ -219,15 +365,73 @@
     // "Aniq sanalar" toggle reveals the date inputs.
     const btn = document.getElementById('customDateToggle');
     const range = document.getElementById('customRange');
-    if (!btn || !range) return;
-    btn.addEventListener('click', function() {
-        range.classList.toggle('d-none');
-        if (!range.classList.contains('d-none')) {
-            const first = range.querySelector('input[type="date"]');
-            if (first) first.focus();
+    if (btn && range) {
+        btn.addEventListener('click', function() {
+            range.classList.toggle('d-none');
+            if (!range.classList.contains('d-none')) {
+                const first = range.querySelector('input[type="date"]');
+                if (first) first.focus();
+            }
+        });
+    }
+
+    // Reveal/hide pivot controls when the user picks "Pivot / Matritsa".
+    const typeSel = document.getElementById('reportTypeSelect');
+    const pivotCtrl = document.getElementById('pivotControls');
+    if (typeSel && pivotCtrl) {
+        function syncPivot() {
+            pivotCtrl.classList.toggle('d-none', typeSel.value !== 'pivot');
         }
+        // Reflect immediate intent before the page reload that onchange triggers.
+        typeSel.addEventListener('change', syncPivot);
+    }
+
+    // Heatmap colouring for the 2D pivot — paint cells with a blue tint
+    // proportional to their share of the grand total.
+    document.querySelectorAll('.srt-pivot-cell[data-heat]').forEach(cell => {
+        const pct = parseFloat(cell.dataset.heat || '0');
+        if (!pct || isNaN(pct)) return;
+        // Cap intensity so even moderately-large cells stay readable.
+        const alpha = Math.min(0.55, pct / 18);
+        cell.style.background = `rgba(59, 130, 246, ${alpha.toFixed(3)})`;
     });
 })();
 </script>
+
+<style>
+.srt-pivot-2d .srt-pivot-corner {
+    background: var(--srt-surface-2);
+    white-space: nowrap;
+    border-right: 1px solid var(--srt-border);
+}
+.srt-pivot-2d .srt-pivot-row-head {
+    background: var(--srt-surface);
+    font-weight: 600;
+    border-right: 1px solid var(--srt-border);
+    white-space: nowrap;
+}
+.srt-pivot-2d .srt-pivot-total-col {
+    background: var(--srt-surface-2);
+    border-left: 1px solid var(--srt-border-strong);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.srt-pivot-2d .srt-pivot-total-row th {
+    background: var(--srt-surface-2);
+    border-top: 2px solid var(--srt-border-strong);
+}
+.srt-pivot-2d .srt-pivot-grand {
+    background: rgba(59, 130, 246, 0.18);
+    font-weight: 700;
+}
+.srt-pivot-2d tbody td.srt-pivot-cell {
+    transition: background 120ms ease;
+    cursor: default;
+}
+.srt-pivot-2d tbody td.srt-pivot-cell:hover {
+    outline: 2px solid var(--srt-primary);
+    outline-offset: -2px;
+}
+</style>
 {% endwith %}
 {% endblock %}

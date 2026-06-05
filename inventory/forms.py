@@ -281,6 +281,7 @@ REPORT_TYPES = [
     ('intakes', 'Qabullar'),
     ('inventory', 'Joriy ombor (hozirgi holat)'),
     ('by_product', 'Mahsulotlar bo\'yicha xulosa'),
+    ('pivot', 'Pivot / Matritsa'),
 ]
 
 PERIOD_CHOICES = [
@@ -290,6 +291,25 @@ PERIOD_CHOICES = [
     ('month', 'Oxirgi 30 kun'),
     ('this_month', 'Joriy oy'),
     ('custom', 'Aniq sanalar'),
+]
+
+PIVOT_DIM_CHOICES = [
+    ('date',     'Sana (kun)'),
+    ('week',     'Hafta'),
+    ('month',    'Oy'),
+    ('weekday',  'Hafta kuni'),
+    ('branch',   'Filial'),
+    ('category', 'Kategoriya'),
+    ('product',  'Mahsulot'),
+    ('seller',   'Sotuvchi'),
+    ('payment',  "To'lov turi"),
+]
+
+PIVOT_METRIC_CHOICES = [
+    ('revenue', 'Daromad'),
+    ('qty',     'Dona'),
+    ('count',   'Cheklar'),
+    ('profit',  'Foyda'),
 ]
 
 
@@ -314,4 +334,22 @@ class ReportForm(forms.Form):
         label='Filial', queryset=Branch.objects.all(),
         required=False, empty_label='— Barcha filiallar —',
         widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    # Pivot-only controls (ignored for other report types)
+    pivot_rows = forms.ChoiceField(
+        label="Qatorlar bo'yicha",
+        choices=PIVOT_DIM_CHOICES, required=False, initial='branch',
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+    pivot_cols = forms.ChoiceField(
+        label="Ustunlar bo'yicha",
+        choices=[('', "— Yo'q (oddiy ro'yxat) —")] + PIVOT_DIM_CHOICES,
+        required=False, initial='',
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+    pivot_metric = forms.ChoiceField(
+        label="O'lchov",
+        choices=PIVOT_METRIC_CHOICES, required=False, initial='revenue',
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
     )
