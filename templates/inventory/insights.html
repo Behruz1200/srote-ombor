@@ -384,7 +384,7 @@
                     <h2 class="srt-h2"><i class="bi bi-pie-chart text-primary"></i> Filial bo'yicha ulush</h2>
                 </div>
                 <div class="srt-section-body">
-                    <div class="srt-chart-box short"><canvas id="branchChart"></canvas></div>
+                    <div class="srt-chart-box" style="height: 320px;"><canvas id="branchChart"></canvas></div>
                 </div>
             </div>
         </div>
@@ -424,7 +424,7 @@
                     <h2 class="srt-h2"><i class="bi bi-tags text-primary"></i> Kategoriya bo'yicha</h2>
                 </div>
                 <div class="srt-section-body">
-                    <div class="srt-chart-box short"><canvas id="categoryChart"></canvas></div>
+                    <div class="srt-chart-box" style="height: 340px;"><canvas id="categoryChart"></canvas></div>
                 </div>
             </div>
         </div>
@@ -1138,47 +1138,60 @@
         });
     })();
 
-    /* ──────────── Category pie ────────────────────────────────────── */
+    /* ──────────── Category horizontal bars (top 10) ────────────────── */
     (function() {
         const el = document.getElementById('categoryChart');
         if (!el) return;
+        const labels = [{% for c in by_category %}"{{ c.variant__product__category__name|default:'(yo`q)'|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+        const values = [{% for c in by_category %}{{ c.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}];
+        // Pair, sort desc, keep top 10 — easier to read than a 10-slice donut.
+        const pairs = labels.map((l, i) => ({ l, v: values[i] || 0 }))
+                            .sort((a, b) => b.v - a.v)
+                            .slice(0, 10);
+        const total = pairs.reduce((s, p) => s + p.v, 0);
         new Chart(el, {
-            type: 'doughnut',
+            type: 'bar',
             data: {
-                labels: [{% for c in by_category %}"{{ c.variant__product__category__name|default:'(yo`q)'|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                labels: pairs.map(p => p.l),
                 datasets: [{
-                    data: [{% for c in by_category %}{{ c.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                    backgroundColor: PALETTE,
-                    borderColor: isDark ? '#151A26' : '#FFFFFF',
-                    borderWidth: 2,
+                    label: 'Daromad',
+                    data: pairs.map(p => p.v),
+                    backgroundColor: pairs.map((_, i) => PALETTE[i % PALETTE.length]),
+                    borderRadius: 4,
+                    maxBarThickness: 22,
                 }],
             },
-            options: { responsive: true, maintainAspectRatio: false, cutout: '55%',
-                layout: { padding: 24 },  // room for outside labels
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false,
+                layout: { padding: { right: 90 } },  // room for end labels
                 plugins: {
-                    tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: c => fmtSom(c.raw) + ' (' + (total
+                                ? Math.round(c.raw/total*100) : 0) + '%)'
+                        }
+                    },
                     datalabels: {
-                        // Outside the donut so they never overlap each other,
-                        // and only on slices ≥ 8 % (smaller go to the legend).
-                        display: ctx => {
-                            const v = ctx.dataset.data[ctx.dataIndex] || 0;
-                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            return total > 0 && (v / total) >= 0.08;
-                        },
                         anchor: 'end', align: 'end', offset: 6,
                         clip: false,
                         color: fg,
-                        backgroundColor: isDark ? 'rgba(20,25,38,0.85)' : 'rgba(255,255,255,0.9)',
-                        borderColor: gridColor, borderWidth: 1, borderRadius: 4,
-                        padding: { top: 3, bottom: 3, left: 6, right: 6 },
-                        font: { family: 'Fira Code', size: 10, weight: 600 },
-                        formatter: (v, ctx) => {
+                        font: { family: 'Fira Code', size: 11, weight: 600 },
+                        formatter: v => {
                             const val = v || 0;
-                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
                             const pct = total ? Math.round(val/total*100) : 0;
                             return shortNum(val) + ' · ' + pct + '%';
                         },
                     }
+                },
+                scales: {
+                    x: Object.assign(gridScale(), {
+                        ticks: { color: muted, callback: somTickCb }
+                    }),
+                    y: { grid: { display: false },
+                         ticks: { color: muted, autoSkip: false,
+                                  font: { family: 'Fira Sans' } } }
                 }
             }
         });
