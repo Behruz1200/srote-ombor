@@ -34,10 +34,10 @@
                     {% endfor %}
                 </select>
             </form>
-            <a href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=pdf"
-               class="btn btn-outline-danger btn-sm" aria-label="PDF eksport">
+            <button type="button" class="btn btn-outline-danger btn-sm"
+                    onclick="window.print()" aria-label="PDF'ga chop etish">
                 <i class="bi bi-filetype-pdf"></i> <span class="btn-text">PDF</span>
-            </a>
+            </button>
             <a href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=csv"
                class="btn btn-outline-success btn-sm" aria-label="CSV eksport">
                 <i class="bi bi-filetype-csv"></i> <span class="btn-text">CSV</span>

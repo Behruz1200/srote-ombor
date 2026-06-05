@@ -617,6 +617,79 @@
             .srt-heatmap-cell { transition: none; }
         }
 
+        /* ---- Print: hide nav/actions, expand layout, force light ---- */
+        @media print {
+            /* Force light palette regardless of dark-mode toggle */
+            :root {
+                --srt-bg: #FFFFFF;
+                --srt-surface: #FFFFFF;
+                --srt-surface-2: #F8FAFC;
+                --srt-fg: #0F172A;
+                --srt-fg-muted: #475569;
+                --srt-border: #CBD5E1;
+            }
+            html, body, [data-bs-theme="dark"] {
+                background: #FFFFFF !important;
+                color: #0F172A !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            /* Navbar, sticky bars, action buttons, filter forms — gone */
+            nav.navbar, .srote-nav, .srt-page-header .srt-actions,
+            .srt-section-head form, .btn-group, footer, #cmdkModal,
+            #iosInstallHint, .modal {
+                display: none !important;
+            }
+            /* Generic .no-print escape hatch */
+            .no-print, [data-no-print] { display: none !important; }
+            .container-fluid, .container { max-width: 100% !important; padding: 0 !important; }
+            .srt-page-header { border-bottom: 2px solid #0F172A; padding: 0 0 8mm; margin: 0 0 6mm; }
+            .srt-page-header .srt-h1 { font-size: 18pt; }
+            .srt-page-header .srt-sub { font-size: 9pt; color: #475569; }
+            /* KPI grid: keep on one row, lighter shadows */
+            .srt-kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 4mm;
+                margin-bottom: 6mm;
+                page-break-inside: avoid;
+            }
+            .srt-kpi {
+                box-shadow: none !important;
+                border: 1px solid #CBD5E1 !important;
+                padding: 3mm;
+                page-break-inside: avoid;
+            }
+            .srt-kpi .srt-kpi-value { font-size: 14pt; }
+            .srt-section {
+                box-shadow: none !important;
+                border: 1px solid #CBD5E1 !important;
+                margin-bottom: 5mm;
+                page-break-inside: avoid;
+            }
+            .srt-section-head {
+                background: #F1F5F9 !important;
+                padding: 2mm 3mm;
+            }
+            .srt-section-head h2, .srt-section-head .srt-h2 { font-size: 11pt; }
+            .srt-section-body { padding: 3mm; }
+            /* Tables — every row stays together, every header repeats per page */
+            .srt-data-table { font-size: 9pt; }
+            .srt-data-table thead { display: table-header-group; }
+            .srt-data-table tr { page-break-inside: avoid; }
+            /* Charts — give them a fixed print size */
+            .srt-chart-box, .srt-chart-box.short {
+                height: 70mm !important;
+                page-break-inside: avoid;
+            }
+            .srt-chart-box.tall { height: 100mm !important; }
+            /* Reduce row spacing */
+            .row.g-3 { --bs-gutter-y: 4mm; --bs-gutter-x: 4mm; }
+            /* Each big section starts on a new page */
+            .srt-section.print-break { page-break-before: always; }
+            @page { size: A4; margin: 12mm 10mm 14mm 10mm; }
+        }
+
         /* ---- Mobile tightening for the new system ---- */
         @media (max-width: 768px) {
             .srt-page-header { margin-bottom: 0.85rem; padding-bottom: 0.75rem; }
@@ -1206,6 +1279,22 @@ window.addEventListener('beforeinstallprompt', (e) => {
         });
     }
 });
+</script>
+<!-- Force Chart.js (and any responsive widget) to relayout when entering print -->
+<script>
+(function() {
+    function relayout() {
+        // Browsers throttle the resize event during print; dispatching it
+        // explicitly nudges Chart.js to redraw at the print container size.
+        window.dispatchEvent(new Event('resize'));
+    }
+    window.addEventListener('beforeprint', relayout);
+    // Modern browsers also fire matchMedia('print') changes
+    try {
+        const mql = window.matchMedia('print');
+        if (mql && mql.addEventListener) mql.addEventListener('change', relayout);
+    } catch (e) {}
+})();
 </script>
 </body>
 </html>
