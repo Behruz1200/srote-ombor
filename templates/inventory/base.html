@@ -677,21 +677,20 @@
             .srt-data-table { font-size: 9pt; }
             .srt-data-table thead { display: table-header-group; }
             .srt-data-table tr { page-break-inside: avoid; }
-            /* Charts — fixed print size + force canvas to fill width.
-               Without the !important on width Chart.js' attribute-based
-               sizing wins and the canvas gets clipped to its on-screen
-               width. */
+            /* Charts — fixed print height; Chart.js owns the rest.
+               Forcing canvas { width:100% } in CSS made Chart.js draw the
+               legend at screen-pixel font sizes inside a tiny canvas and
+               the result was unreadable; better to let Chart.js resize()
+               into the container itself (see beforeprint handler). */
             .srt-chart-box, .srt-chart-box.short {
                 height: 70mm !important;
-                width: 100% !important;
                 page-break-inside: avoid;
             }
             .srt-chart-box.tall { height: 100mm !important; }
-            .srt-chart-box canvas {
-                width: 100% !important;
-                height: 100% !important;
-                max-width: none !important;
-            }
+            /* The .srt-section card has overflow:hidden on screen so
+               rounded corners clip; in print, a wider canvas would get
+               sliced. Let it spill so Chart.js' own resize handles it. */
+            .srt-section { overflow: visible !important; }
             /* Data tables — keep numeric columns on a single line.
                The on-screen layout has enough room; in print the narrower
                columns made big sums wrap to two lines and looked broken. */
