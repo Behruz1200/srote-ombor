@@ -1294,29 +1294,64 @@ window.addEventListener('beforeinstallprompt', (e) => {
     }
 });
 </script>
-<!-- Force Chart.js to redraw at print container size before rasterization -->
+<!-- Print: snapshot every Chart.js canvas to a PNG so print rasterization
+     can't misrender it. The image takes the canvas' slot for the duration
+     of the print, then we swap the canvas back in. -->
 <script>
 (function() {
-    function resizeAllCharts() {
+    if (typeof Chart === 'undefined' && !window.Chart) {
+        // Chart not on this page — nothing to do.
+        return;
+    }
+    let snapshots = [];
+
+    function snapshotForPrint() {
+        snapshots.forEach(s => s.cleanup());
+        snapshots = [];
         if (typeof Chart === 'undefined') return;
-        document.querySelectorAll('canvas').forEach(c => {
+        document.querySelectorAll('.srt-chart-box canvas').forEach(canvas => {
+            const chart = Chart.getChart(canvas);
+            if (!chart) return;
             try {
-                const ch = Chart.getChart(c);
-                if (ch) { ch.resize(); ch.update('none'); }
-            } catch (e) {}
+                // Disable animation so the next update paints synchronously
+                // at the current pixel buffer — important for capture.
+                chart.options.animation = false;
+                chart.update('none');
+                const dataUrl = canvas.toDataURL('image/png', 1.0);
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                img.className = 'srt-chart-print';
+                img.alt = '';
+                img.style.cssText =
+                    'width:100%;height:100%;object-fit:contain;display:block;';
+                const prevCanvasDisplay = canvas.style.display;
+                canvas.style.display = 'none';
+                canvas.parentNode.insertBefore(img, canvas);
+                snapshots.push({
+                    cleanup() {
+                        if (img.parentNode) img.parentNode.removeChild(img);
+                        canvas.style.display = prevCanvasDisplay;
+                    },
+                });
+            } catch (e) {
+                // Tainted canvas or render error — give up on this chart.
+            }
         });
     }
-    function relayout() {
-        // Two passes — one before the layout settles, one after — covers
-        // Chrome (which fires beforeprint pre-layout) and Safari/Firefox.
-        resizeAllCharts();
-        window.dispatchEvent(new Event('resize'));
-        setTimeout(resizeAllCharts, 80);
+    function restoreAfterPrint() {
+        snapshots.forEach(s => s.cleanup());
+        snapshots = [];
     }
-    window.addEventListener('beforeprint', relayout);
+
+    window.addEventListener('beforeprint', snapshotForPrint);
+    window.addEventListener('afterprint', restoreAfterPrint);
     try {
         const mql = window.matchMedia('print');
-        if (mql && mql.addEventListener) mql.addEventListener('change', relayout);
+        if (mql && mql.addEventListener) {
+            mql.addEventListener('change', e => {
+                if (e.matches) snapshotForPrint(); else restoreAfterPrint();
+            });
+        }
     } catch (e) {}
 })();
 </script>

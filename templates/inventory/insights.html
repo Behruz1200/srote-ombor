@@ -1053,28 +1053,27 @@
                 }],
             },
             options: { responsive: true, maintainAspectRatio: false,
-                cutout: '60%',
-                layout: { padding: 24 },
+                cutout: '55%',
                 plugins: {
                     tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
                     datalabels: {
+                        // Inside-slice labels — only 3 branches, no overlap risk.
                         display: ctx => {
                             const v = ctx.dataset.data[ctx.dataIndex] || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
                             return total > 0 && (v / total) >= 0.08;
                         },
-                        anchor: 'end', align: 'end', offset: 6,
-                        clip: false,
-                        color: fg,
-                        backgroundColor: isDark ? 'rgba(20,25,38,0.85)' : 'rgba(255,255,255,0.9)',
-                        borderColor: gridColor, borderWidth: 1, borderRadius: 4,
-                        padding: { top: 3, bottom: 3, left: 6, right: 6 },
-                        font: { family: 'Fira Code', size: 10, weight: 600 },
+                        anchor: 'center', align: 'center',
+                        color: '#FFFFFF',
+                        textStrokeColor: 'rgba(0,0,0,0.45)',
+                        textStrokeWidth: 2,
+                        font: { family: 'Fira Code', size: 13, weight: 700 },
+                        textAlign: 'center',
                         formatter: (v, ctx) => {
                             const val = v || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
                             const pct = total ? Math.round(val/total*100) : 0;
-                            return shortNum(val) + ' · ' + pct + '%';
+                            return shortNum(val) + '\n' + pct + '%';
                         },
                     }
                 }
