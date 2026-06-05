@@ -337,10 +337,10 @@ class ReportForm(forms.Form):
     )
 
     # Pivot-only controls (ignored for other report types)
-    pivot_rows = forms.ChoiceField(
+    pivot_rows = forms.MultipleChoiceField(
         label="Qatorlar bo'yicha",
-        choices=PIVOT_DIM_CHOICES, required=False, initial='branch',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        choices=PIVOT_DIM_CHOICES, required=False,
+        widget=forms.CheckboxSelectMultiple(),
     )
     pivot_cols = forms.ChoiceField(
         label="Ustunlar bo'yicha",

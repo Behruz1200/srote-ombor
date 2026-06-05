@@ -4,7 +4,7 @@
 {% block title %}Hisobotlar — Srote{% endblock %}
 
 {% block content %}
-{% with current_type=form.report_type.value|default:'sales' selected_period=form.period.value|default:'week' selected_branch_id=form.branch.value|default:'' p_rows=form.pivot_rows.value|default:'branch' p_cols=form.pivot_cols.value|default:'' p_metric=form.pivot_metric.value|default:'revenue' %}
+{% with current_type=form.report_type.value|default:'sales' selected_period=form.period.value|default:'week' selected_branch_id=form.branch.value|default:'' p_rows_list=form.pivot_rows.value|default_if_none:'' p_cols=form.pivot_cols.value|default:'' p_metric=form.pivot_metric.value|default:'revenue' %}
 <div class="container-fluid px-3">
 
     <!-- ── Page header (title row + filter row) ─────────────────────── -->
@@ -72,9 +72,10 @@
         <!-- Row 2: filter toolbar (single GET form) -->
         <form method="get" id="reportForm" class="srt-page-filter-row">
             <!-- Default values; chip clicks append name=...&value=... which
-                 Django reads as the later (winning) value. -->
+                 Django reads as the later (winning) value. pivot_rows is
+                 multi-valued so we don't echo it here — the checkboxes are
+                 the only source of truth. -->
             <input type="hidden" name="period" value="{{ selected_period }}">
-            <input type="hidden" name="pivot_rows" value="{{ p_rows }}">
             <input type="hidden" name="pivot_cols" value="{{ p_cols }}">
             <input type="hidden" name="pivot_metric" value="{{ p_metric }}">
 
@@ -141,37 +142,51 @@
                 </select>
             </div>
 
-            <!-- Pivot dimensions — shown only when "Pivot / Matritsa" is selected -->
+            <!-- Pivot dimensions — shown only when "Pivot / Matritsa" is selected.
+                 Multi-select for rows: pick any combination, system auto-orders
+                 them parent-first (Filial > Kategoriya > Mahsulot, etc.). -->
             <div class="srt-filter-group srt-pivot-controls {% if current_type != 'pivot' %}d-none{% endif %}"
                  id="pivotControls">
-                <span class="srt-filter-label" aria-hidden="true">
-                    <i class="bi bi-grid-3x3"></i> Ko'rsatish
-                </span>
-                <select name="pivot_rows" class="form-select form-select-sm"
-                        onchange="this.form.submit()" aria-label="Qatorlar"
-                        style="min-width: 130px;">
-                    {% for v, lbl in form.pivot_rows.field.choices %}
-                        <option value="{{ v }}" {% if p_rows == v %}selected{% endif %}>↕ {{ lbl }}</option>
-                    {% endfor %}
-                </select>
+                <div class="srt-pivot-block">
+                    <span class="srt-filter-label" aria-hidden="true">
+                        <i class="bi bi-list-nested"></i> Qatorlar
+                    </span>
+                    <div class="btn-group btn-group-sm srt-period-chips srt-pivot-multi" role="group" aria-label="Qatorlar">
+                        {% for v, lbl in form.pivot_rows.field.choices %}
+                            <label class="btn {% if v in p_rows_list %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                                <input type="checkbox" name="pivot_rows" value="{{ v }}"
+                                       class="d-none" onchange="this.form.submit()"
+                                       {% if v in p_rows_list %}checked{% endif %}>
+                                {{ lbl }}
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
                 <span class="text-muted small">×</span>
-                <select name="pivot_cols" class="form-select form-select-sm"
-                        onchange="this.form.submit()" aria-label="Ustunlar"
-                        style="min-width: 150px;">
-                    {% for v, lbl in form.pivot_cols.field.choices %}
-                        <option value="{{ v }}" {% if p_cols == v %}selected{% endif %}>↔ {{ lbl }}</option>
-                    {% endfor %}
-                </select>
-                <span class="srt-filter-label ms-2" aria-hidden="true">
-                    <i class="bi bi-bar-chart"></i> O'lchov
-                </span>
-                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="O'lchov">
-                    {% for v, lbl in form.pivot_metric.field.choices %}
-                        <button type="submit" name="pivot_metric" value="{{ v }}"
-                                class="btn {% if p_metric == v %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                            {{ lbl }}
-                        </button>
-                    {% endfor %}
+                <div class="srt-pivot-block">
+                    <span class="srt-filter-label" aria-hidden="true">
+                        <i class="bi bi-arrow-left-right"></i> Ustunlar
+                    </span>
+                    <select name="pivot_cols" class="form-select form-select-sm"
+                            onchange="this.form.submit()" aria-label="Ustunlar"
+                            style="min-width: 170px;">
+                        {% for v, lbl in form.pivot_cols.field.choices %}
+                            <option value="{{ v }}" {% if p_cols == v %}selected{% endif %}>{{ lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="srt-pivot-block">
+                    <span class="srt-filter-label" aria-hidden="true">
+                        <i class="bi bi-bar-chart"></i> O'lchov
+                    </span>
+                    <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="O'lchov">
+                        {% for v, lbl in form.pivot_metric.field.choices %}
+                            <button type="submit" name="pivot_metric" value="{{ v }}"
+                                    class="btn {% if p_metric == v %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                                {{ lbl }}
+                            </button>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
 
@@ -232,7 +247,9 @@
                         <table class="srt-data-table srt-pivot-1d">
                             <thead>
                                 <tr>
-                                    <th>{{ pivot.rows_label }}</th>
+                                    {% for lbl in pivot.row_labels %}
+                                        <th>{{ lbl }}</th>
+                                    {% endfor %}
                                     <th class="num">{{ pivot.metric_label }}</th>
                                     <th class="num" style="width: 90px;">% Ulush</th>
                                 </tr>
@@ -240,16 +257,18 @@
                             <tbody>
                             {% for it in pivot.items %}
                                 <tr>
-                                    <td><strong>{{ it.key }}</strong></td>
+                                    {% for k in it.keys %}
+                                        <td class="srt-pivot-row-head">
+                                            {% if k %}<strong>{{ k }}</strong>{% endif %}
+                                        </td>
+                                    {% endfor %}
                                     <td class="num">
                                         {% if pivot.is_currency %}{{ it.value|som }}{% else %}{{ it.value }}{% endif %}
                                     </td>
-                                    <td class="num text-muted">
-                                        {% if pivot.total %}{{ it.value|mul:100|div:pivot.total|floatformat:1 }}%{% else %}—{% endif %}
-                                    </td>
+                                    <td class="num text-muted">{{ it.pct|floatformat:1 }}%</td>
                                 </tr>
                             {% empty %}
-                                <tr><td colspan="3" class="text-center text-muted py-4">
+                                <tr><td colspan="{{ pivot.row_labels|length|add:2 }}" class="text-center text-muted py-4">
                                     Bu davr uchun ma'lumot yo'q.
                                 </td></tr>
                             {% endfor %}
@@ -257,7 +276,7 @@
                             {% if pivot.items %}
                             <tfoot>
                                 <tr style="border-top: 2px solid var(--srt-border-strong);">
-                                    <th>JAMI</th>
+                                    <th colspan="{{ pivot.row_labels|length }}">JAMI</th>
                                     <th class="num">
                                         {% if pivot.is_currency %}{{ pivot.total|som }}{% else %}{{ pivot.total }}{% endif %}
                                     </th>
@@ -267,13 +286,13 @@
                             {% endif %}
                         </table>
                     {% else %}
-                        <!-- 2D matrix -->
+                        <!-- 2D matrix with N-level row headers -->
                         <table class="srt-data-table srt-pivot-2d">
                             <thead>
                                 <tr>
-                                    <th class="srt-pivot-corner">
-                                        <span class="text-muted small">{{ pivot.rows_label }} ↓ / {{ pivot.cols_label }} →</span>
-                                    </th>
+                                    {% for lbl in pivot.row_labels %}
+                                        <th class="srt-pivot-corner">{{ lbl }}</th>
+                                    {% endfor %}
                                     {% for ck in pivot.col_keys %}
                                         <th class="num">{{ ck }}</th>
                                     {% endfor %}
@@ -283,7 +302,11 @@
                             <tbody>
                             {% for r in pivot.matrix %}
                                 <tr>
-                                    <th class="srt-pivot-row-head">{{ r.key }}</th>
+                                    {% for k in r.keys %}
+                                        <th class="srt-pivot-row-head">
+                                            {% if k %}{{ k }}{% endif %}
+                                        </th>
+                                    {% endfor %}
                                     {% for cell in r.cells %}
                                         <td class="num srt-pivot-cell"
                                             data-heat="{% if pivot.grand_total %}{{ cell|mul:100|div:pivot.grand_total|floatformat:0 }}{% else %}0{% endif %}">
@@ -299,7 +322,8 @@
                                     </td>
                                 </tr>
                             {% empty %}
-                                <tr><td colspan="{{ pivot.col_keys|length|add:2 }}" class="text-center text-muted py-4">
+                                <tr><td colspan="{{ pivot.col_keys|length|add:pivot.row_labels|length|add:1 }}"
+                                       class="text-center text-muted py-4">
                                     Bu davr uchun ma'lumot yo'q.
                                 </td></tr>
                             {% endfor %}
@@ -307,7 +331,7 @@
                             {% if pivot.matrix %}
                             <tfoot>
                                 <tr class="srt-pivot-total-row">
-                                    <th>JAMI</th>
+                                    <th colspan="{{ pivot.row_labels|length }}">JAMI</th>
                                     {% for ct in pivot.col_totals %}
                                         <th class="num">{% if pivot.is_currency %}{{ ct|som }}{% else %}{{ ct }}{% endif %}</th>
                                     {% endfor %}
@@ -322,7 +346,9 @@
                 </div>
                 <div class="small text-muted mt-2 px-3">
                     <i class="bi bi-info-circle"></i>
-                    Hujayralarning yorqinligi nisbiy ulushni ko'rsatadi (qancha to'q ko'k bo'lsa, shu hujayradagi qiymat shuncha katta).
+                    Hujayralar ko'kligi ulushni ko'rsatadi.
+                    Qator iyerarxiyasi avtomatik tartiblanadi:
+                    <strong>Filial → Sotuvchi → Kategoriya → Mahsulot → To'lov → Sana</strong>.
                 </div>
             </div>
         {% else %}
@@ -431,6 +457,40 @@
 .srt-pivot-2d tbody td.srt-pivot-cell:hover {
     outline: 2px solid var(--srt-primary);
     outline-offset: -2px;
+}
+.srt-pivot-1d .srt-pivot-row-head {
+    white-space: nowrap;
+    border-right: 1px solid var(--srt-border);
+}
+/* Pivot control blocks (each label+control group) get a subtle outline */
+.srt-pivot-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    width: 100%;
+    background: var(--srt-surface-2);
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--srt-radius);
+    border: 1px dashed var(--srt-border);
+    margin-top: 0.25rem;
+}
+.srt-pivot-block {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+.srt-pivot-multi .btn {
+    padding: 0.3rem 0.7rem;
+}
+.srt-pivot-multi .btn input[type="checkbox"] {
+    margin: 0;
+}
+@media (min-width: 992px) {
+    .srt-pivot-controls {
+        flex-direction: row;
+        align-items: center;
+    }
 }
 </style>
 {% endwith %}

@@ -3834,6 +3834,20 @@ PIVOT_DIM_CONFIG = {
     'payment':  {'label': "To'lov turi",  'field': 'transaction__payment_method'},
 }
 
+# Auto-hierarchy: coarser categories first when user picks multiple row dims.
+# Lower number = closer to the root of the visual tree.
+PIVOT_DIM_ORDER = {
+    'branch':   10,
+    'seller':   20,
+    'category': 30,
+    'product':  40,
+    'payment':  50,
+    'month':    60,
+    'week':     70,
+    'date':     80,
+    'weekday':  90,
+}
+
 # Django ExtractWeekDay: Sunday=1, Monday=2, ..., Saturday=7
 PIVOT_WEEKDAY_NAMES = {1: 'Yakshanba', 2: 'Dushanba', 3: 'Seshanba',
                        4: 'Chorshanba', 5: 'Payshanba',
@@ -3856,12 +3870,25 @@ def _pivot_format_key(dim, val):
     return str(val)
 
 
-def _build_pivot(sale_qs, rows_dim, cols_dim, metric):
-    """Aggregate sale_qs by rows_dim and (optional) cols_dim,
-    return a structure ready for the template:
+def _sort_dim_value(dim, v):
+    """Sort key for distinct row/col values within a dimension."""
+    if v is None:
+        return (1, '')
+    if dim == 'weekday':
+        return (0, int(v))
+    if dim in ('date', 'week', 'month') and hasattr(v, 'isoformat'):
+        return (0, v.isoformat())
+    return (0, str(v))
 
-      mode '1d'  → items: [(row_key, value), ...]  + total
-      mode '2d'  → row_keys, col_keys, matrix [rows × cols], totals
+
+def _build_pivot(sale_qs, rows_dims, cols_dim, metric):
+    """Aggregate sale_qs by N row dimensions and (optional) 1 col dimension.
+
+    rows_dims: list[str] — already sorted by auto-hierarchy (coarsest first).
+    Returns:
+      mode '1d'  → items: [{keys, value, pct}, ...]  + total + headers
+      mode '2d'  → headers (row + col), matrix rows w/ keys+cells+total,
+                   col_totals, grand_total
     """
     rev_expr = ExpressionWrapper(
         F('quantity') * F('sale_price') - F('line_discount'),
@@ -3876,10 +3903,10 @@ def _build_pivot(sale_qs, rows_dim, cols_dim, metric):
         'profit':  Sum(profit_expr),
     }
 
-    # Add date/week/month/weekday annotations only when needed
     extra = {}
     group_fields = []
-    for dim in (rows_dim, cols_dim):
+    all_dims = list(rows_dims) + ([cols_dim] if cols_dim else [])
+    for dim in all_dims:
         if not dim or dim not in PIVOT_DIM_CONFIG:
             continue
         cfg = PIVOT_DIM_CONFIG[dim]
@@ -3892,50 +3919,83 @@ def _build_pivot(sale_qs, rows_dim, cols_dim, metric):
 
     def m(r): return r.get(metric) or 0
 
+    row_fields = [PIVOT_DIM_CONFIG[d]['field'] for d in rows_dims]
+    row_labels = [PIVOT_DIM_CONFIG[d]['label'] for d in rows_dims]
+
     if not cols_dim:
-        rows_field = PIVOT_DIM_CONFIG[rows_dim]['field']
-        items = [(_pivot_format_key(rows_dim, r[rows_field]), m(r), r[rows_field])
-                 for r in agg]
-        items.sort(key=lambda x: -x[1])
-        total = sum(v for _, v, _ in items)
+        # 1-D group (possibly N-level nested rows)
+        bucket = {}  # tuple-of-keys → metric value
+        for r in agg:
+            key = tuple(r[f] for f in row_fields)
+            bucket[key] = bucket.get(key, 0) + m(r)
+
+        # Sort by row_dims order (parent first), within each level use _sort_dim_value
+        items_keys = sorted(bucket.keys(),
+                            key=lambda k: tuple(_sort_dim_value(rows_dims[i], k[i])
+                                                for i in range(len(k))))
+        total = sum(bucket.values())
+        items = []
+        prev_keys = [None] * len(row_fields)
+        for k in items_keys:
+            display = []
+            for i, raw in enumerate(k):
+                fmt = _pivot_format_key(rows_dims[i], raw)
+                # Hide repeated parent values from adjacent rows for clarity
+                if prev_keys[i] == raw and i < len(k) - 1:
+                    display.append('')
+                else:
+                    display.append(fmt)
+            prev_keys = list(k)
+            value = bucket[k]
+            items.append({'keys': display, 'value': value,
+                          'pct': (value / total * 100) if total else 0})
         return {
             'mode': '1d',
-            'rows_label': PIVOT_DIM_CONFIG[rows_dim]['label'],
-            'items':      [{'key': k, 'value': v} for k, v, _ in items],
+            'row_labels': row_labels,
+            'items':      items,
             'total':      total,
         }
 
-    rows_field = PIVOT_DIM_CONFIG[rows_dim]['field']
+    # 2-D pivot with N-level rows
     cols_field = PIVOT_DIM_CONFIG[cols_dim]['field']
 
-    # Distinct ordered keys
-    def _sort_key(dim, v):
-        if v is None:
-            return (1, '')
-        if dim == 'weekday':
-            return (0, int(v))
-        if dim in ('date', 'week', 'month') and hasattr(v, 'isoformat'):
-            return (0, v.isoformat())
-        return (0, str(v))
+    # Aggregate: row_key_tuple → col_key → value
+    bucket = {}
+    col_set = set()
+    for r in agg:
+        rk = tuple(r[f] for f in row_fields)
+        ck = r[cols_field]
+        col_set.add(ck)
+        bucket.setdefault(rk, {})
+        bucket[rk][ck] = bucket[rk].get(ck, 0) + m(r)
 
-    row_keys_raw = sorted({r[rows_field] for r in agg}, key=lambda v: _sort_key(rows_dim, v))
-    col_keys_raw = sorted({r[cols_field] for r in agg}, key=lambda v: _sort_key(cols_dim, v))
-
-    cells = {(r[rows_field], r[cols_field]): m(r) for r in agg}
+    col_keys_raw = sorted(col_set, key=lambda v: _sort_dim_value(cols_dim, v))
+    row_keys = sorted(bucket.keys(),
+                      key=lambda k: tuple(_sort_dim_value(rows_dims[i], k[i])
+                                          for i in range(len(k))))
 
     matrix = []
     col_totals = [0] * len(col_keys_raw)
     grand_total = 0
-    for ri, rk in enumerate(row_keys_raw):
+    prev_keys = [None] * len(row_fields)
+    for rk in row_keys:
         row_cells = []
         row_total = 0
         for ci, ck in enumerate(col_keys_raw):
-            v = cells.get((rk, ck), 0)
+            v = bucket[rk].get(ck, 0)
             row_cells.append(v)
             row_total += v
             col_totals[ci] += v
+        display = []
+        for i, raw in enumerate(rk):
+            fmt = _pivot_format_key(rows_dims[i], raw)
+            if prev_keys[i] == raw and i < len(rk) - 1:
+                display.append('')
+            else:
+                display.append(fmt)
+        prev_keys = list(rk)
         matrix.append({
-            'key':   _pivot_format_key(rows_dim, rk),
+            'keys':  display,
             'cells': row_cells,
             'total': row_total,
         })
@@ -3943,7 +4003,7 @@ def _build_pivot(sale_qs, rows_dim, cols_dim, metric):
 
     return {
         'mode': '2d',
-        'rows_label': PIVOT_DIM_CONFIG[rows_dim]['label'],
+        'row_labels': row_labels,
         'cols_label': PIVOT_DIM_CONFIG[cols_dim]['label'],
         'col_keys':   [_pivot_format_key(cols_dim, v) for v in col_keys_raw],
         'matrix':     matrix,
@@ -4071,38 +4131,50 @@ def reports(request):
                        'Mahsulotlar soni': len(agg)}
 
         elif rtype == 'pivot':
-            rows_dim = form.cleaned_data.get('pivot_rows') or 'branch'
+            # Multi-select rows: pick whatever user checked, default to branch.
+            picked_rows = form.cleaned_data.get('pivot_rows') or []
+            if not picked_rows:
+                picked_rows = ['branch']
+            # Auto-hierarchy: sort by the canonical parent-first order.
+            rows_dims = sorted(
+                [d for d in picked_rows if d in PIVOT_DIM_ORDER],
+                key=lambda d: PIVOT_DIM_ORDER[d],
+            )
             cols_dim = form.cleaned_data.get('pivot_cols') or ''
-            metric = form.cleaned_data.get('pivot_metric') or 'revenue'
+            metric   = form.cleaned_data.get('pivot_metric') or 'revenue'
 
             metric_label = dict(PIVOT_METRIC_CHOICES).get(metric, metric)
-            rows_label = PIVOT_DIM_CONFIG[rows_dim]['label']
-            cols_label = PIVOT_DIM_CONFIG[cols_dim]['label'] if cols_dim else ''
+            row_labels   = [PIVOT_DIM_CONFIG[d]['label'] for d in rows_dims]
+            cols_label   = PIVOT_DIM_CONFIG[cols_dim]['label'] if cols_dim else ''
 
-            title = (f"Pivot — {metric_label}: {rows_label}"
+            title = (f"Pivot — {metric_label}: "
+                     + ' > '.join(row_labels)
                      + (f" × {cols_label}" if cols_label else ''))
 
             sale_qs = Sale.objects.filter(sold_at__gte=dt_start, sold_at__lt=dt_end)
             if branch:
                 sale_qs = sale_qs.filter(branch=branch)
 
-            pivot = _build_pivot(sale_qs, rows_dim, cols_dim, metric)
+            pivot = _build_pivot(sale_qs, rows_dims, cols_dim, metric)
             pivot['metric'] = metric
             pivot['metric_label'] = metric_label
             pivot['is_currency'] = metric in ('revenue', 'profit')
+            pivot['rows_dims']  = rows_dims  # what the picker should re-check
 
-            # CSV / PDF fall back to a flat representation
+            # CSV / PDF flat representation
             if pivot['mode'] == '1d':
-                headers = [rows_label, metric_label]
-                rows = [[it['key'], it['value']] for it in pivot['items']]
+                headers = row_labels + [metric_label, '% Ulush']
+                rows = []
+                for it in pivot['items']:
+                    rows.append(list(it['keys']) + [it['value'], f"{it['pct']:.1f}%"])
                 summary = {f"Jami {metric_label.lower()}": pivot['total']}
             else:
-                headers = [rows_label] + list(pivot['col_keys']) + ['Jami']
+                headers = row_labels + list(pivot['col_keys']) + ['Jami']
                 rows = []
                 for r in pivot['matrix']:
-                    rows.append([r['key']] + list(r['cells']) + [r['total']])
-                rows.append(['Ustun jami'] + list(pivot['col_totals'])
-                            + [pivot['grand_total']])
+                    rows.append(list(r['keys']) + list(r['cells']) + [r['total']])
+                rows.append(['Ustun jami'] + [''] * (len(row_labels) - 1)
+                            + list(pivot['col_totals']) + [pivot['grand_total']])
                 summary = {f"Jami {metric_label.lower()}": pivot['grand_total']}
 
         if request.GET.get('export') == 'csv':
