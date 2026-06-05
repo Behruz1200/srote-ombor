@@ -17,31 +17,78 @@
                 {% if selected_branch %} · Filial: <strong>{{ selected_branch.name }}</strong>{% endif %}
             </div>
         </div>
-        <div class="srt-actions">
-            <form method="get" class="d-flex gap-2 flex-wrap">
-                <select name="period" class="form-select form-select-sm" onchange="this.form.submit()"
-                        aria-label="Davr">
-                    <option value="today" {% if period == 'today' %}selected{% endif %}>Bugun</option>
-                    <option value="week" {% if period == 'week' %}selected{% endif %}>Oxirgi 7 kun</option>
-                    <option value="month" {% if period == 'month' %}selected{% endif %}>Oxirgi 30 kun</option>
-                    <option value="quarter" {% if period == 'quarter' %}selected{% endif %}>Oxirgi 90 kun</option>
-                </select>
-                <select name="branch" class="form-select form-select-sm" onchange="this.form.submit()"
-                        aria-label="Filial">
-                    <option value="">Barcha filiallar</option>
-                    {% for b in branches_all %}
-                        <option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>
-                    {% endfor %}
-                </select>
+        <div class="srt-actions srt-toolbar">
+            <!-- Period chips — one-click switching -->
+            <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="Davr tanlash">
+                <a href="?period=today{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+                   class="btn {% if period == 'today' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    Bugun
+                </a>
+                <a href="?period=week{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+                   class="btn {% if period == 'week' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    7 kun
+                </a>
+                <a href="?period=month{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+                   class="btn {% if period == 'month' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    30 kun
+                </a>
+                <a href="?period=quarter{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+                   class="btn {% if period == 'quarter' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                    90 kun
+                </a>
+            </div>
+
+            <!-- Branch filter — compact with icon -->
+            <form method="get" class="srt-branch-filter" id="branchFilter">
+                <input type="hidden" name="period" value="{{ period }}">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" aria-hidden="true">
+                        <i class="bi bi-building"></i>
+                    </span>
+                    <select name="branch" class="form-select form-select-sm"
+                            onchange="this.form.submit()" aria-label="Filial">
+                        <option value="">Barcha filiallar</option>
+                        {% for b in branches_all %}
+                            <option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>
+                                {{ b.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </form>
-            <button type="button" class="btn btn-outline-danger btn-sm"
-                    onclick="window.print()" aria-label="PDF'ga chop etish">
-                <i class="bi bi-filetype-pdf"></i> <span class="btn-text">PDF</span>
-            </button>
-            <a href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=csv"
-               class="btn btn-outline-success btn-sm" aria-label="CSV eksport">
-                <i class="bi bi-filetype-csv"></i> <span class="btn-text">CSV</span>
-            </a>
+
+            <!-- Export menu -->
+            <div class="dropdown">
+                <button type="button"
+                        class="btn btn-outline-primary btn-sm dropdown-toggle"
+                        data-bs-toggle="dropdown" aria-expanded="false"
+                        aria-label="Eksport">
+                    <i class="bi bi-download"></i>
+                    <span class="btn-text">Eksport</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                    <li>
+                        <button type="button" class="dropdown-item" onclick="window.print()">
+                            <i class="bi bi-filetype-pdf text-danger me-1"></i>
+                            PDF (chop etish)
+                            <div class="small text-muted ms-4 mt-1">
+                                Hozirgi ko'rinishni chop ettirib oling
+                            </div>
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item"
+                           href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=csv">
+                            <i class="bi bi-filetype-csv text-success me-1"></i>
+                            CSV (Excel'da ochish)
+                            <div class="small text-muted ms-4 mt-1">
+                                Jadval ma'lumotlari uchun
+                            </div>
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
 

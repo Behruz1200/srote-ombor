@@ -611,6 +611,65 @@
         }
         .srt-heatmap-cell:hover { transform: scale(1.08); z-index: 2; }
 
+        /* ---- Filter toolbar (insights & reports headers) ---- */
+        .srt-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .srt-period-chips {
+            border-radius: 999px;
+            overflow: hidden;
+            border: 1px solid var(--srt-border);
+            background: var(--srt-surface);
+            box-shadow: var(--srt-shadow-sm);
+        }
+        .srt-period-chips .btn {
+            border-radius: 0;
+            border: none;
+            font-size: 0.82rem;
+            font-weight: 500;
+            padding: 0.35rem 0.85rem;
+            color: var(--srt-fg-muted);
+            background: transparent;
+            transition: background var(--srt-trans), color var(--srt-trans);
+        }
+        .srt-period-chips .btn + .btn {
+            border-left: 1px solid var(--srt-border);
+        }
+        .srt-period-chips .btn:hover,
+        .srt-period-chips .btn:focus-visible {
+            background: var(--srt-surface-2);
+            color: var(--srt-fg);
+            text-decoration: none;
+        }
+        .srt-period-chips .btn-primary {
+            background: var(--srt-primary);
+            color: var(--srt-on-primary);
+        }
+        .srt-period-chips .btn-primary:hover {
+            background: var(--srt-primary);
+            color: var(--srt-on-primary);
+            filter: brightness(1.08);
+        }
+        .srt-branch-filter {
+            min-width: 220px;
+        }
+        .srt-branch-filter .input-group-text {
+            background: var(--srt-surface);
+            border-color: var(--srt-border);
+            color: var(--srt-fg-muted);
+        }
+        .srt-branch-filter .form-select {
+            border-color: var(--srt-border);
+            font-size: 0.85rem;
+        }
+        @media (max-width: 768px) {
+            .srt-period-chips .btn { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+            .srt-branch-filter { min-width: 0; flex: 1 1 100%; }
+        }
+
         /* ---- Reduced motion ---- */
         @media (prefers-reduced-motion: reduce) {
             .srt-kpi, .srt-data-table tbody tr,
