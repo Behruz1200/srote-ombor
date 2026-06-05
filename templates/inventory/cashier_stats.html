@@ -259,7 +259,7 @@
                 data: JSON.parse(document.getElementById('hour-qty').textContent),
                 backgroundColor: primary, borderRadius: 4, maxBarThickness: 22,
                 datalabels: {
-                    display: ctx => ctx.parsed.y > 0,
+                    display: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) > 0,
                     anchor: 'end', align: 'top', offset: 2,
                     color: muted, formatter: shortNum,
                     font: { family: 'Fira Code', size: 10, weight: 500 }

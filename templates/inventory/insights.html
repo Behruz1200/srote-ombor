@@ -1047,17 +1047,19 @@
                     tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
                     datalabels: {
                         display: ctx => {
+                            const v = ctx.dataset.data[ctx.dataIndex] || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            return total > 0 && (ctx.parsed / total) >= 0.04;
+                            return total > 0 && (v / total) >= 0.04;
                         },
                         color: '#FFFFFF',
                         font: { family: 'Fira Code', size: 11, weight: 600 },
                         textStrokeColor: 'rgba(0,0,0,0.35)',
                         textStrokeWidth: 2,
                         formatter: (v, ctx) => {
+                            const val = v || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            const pct = total ? Math.round(v/total*100) : 0;
-                            return shortNum(v) + '\n' + pct + '%';
+                            const pct = total ? Math.round(val/total*100) : 0;
+                            return shortNum(val) + '\n' + pct + '%';
                         },
                         textAlign: 'center'
                     }
@@ -1084,7 +1086,7 @@
                 plugins: {
                     legend: { display: false },
                     datalabels: {
-                        display: ctx => ctx.parsed.y > 0,
+                        display: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) > 0,
                         anchor: 'end', align: 'top', offset: 2,
                         color: muted, formatter: shortNum
                     }
@@ -1112,7 +1114,7 @@
                 plugins: {
                     legend: { display: false },
                     datalabels: {
-                        display: ctx => ctx.parsed.y > 0,
+                        display: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) > 0,
                         anchor: 'end', align: 'top', offset: 2,
                         color: muted, formatter: shortNum
                     }
@@ -1142,17 +1144,19 @@
                     tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
                     datalabels: {
                         display: ctx => {
+                            const v = ctx.dataset.data[ctx.dataIndex] || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            return total > 0 && (ctx.parsed / total) >= 0.04;
+                            return total > 0 && (v / total) >= 0.04;
                         },
                         color: '#FFFFFF',
                         font: { family: 'Fira Code', size: 11, weight: 600 },
                         textStrokeColor: 'rgba(0,0,0,0.35)',
                         textStrokeWidth: 2,
                         formatter: (v, ctx) => {
+                            const val = v || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            const pct = total ? Math.round(v/total*100) : 0;
-                            return shortNum(v) + '\n' + pct + '%';
+                            const pct = total ? Math.round(val/total*100) : 0;
+                            return shortNum(val) + '\n' + pct + '%';
                         },
                         textAlign: 'center'
                     }
