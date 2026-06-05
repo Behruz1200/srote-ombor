@@ -957,8 +957,12 @@
                  borderColor: danger, borderDash: [6, 4], tension: 0.3,
                  fill: false, pointRadius: 0, borderWidth: 2,
                  datalabels: {
-                    display: ctx => ctx.dataIndex === ctx.dataset.data.length - 1
-                                   || (ctx.dataIndex % 10 === 0 && ctx.parsed.y != null),
+                    display: ctx => {
+                        const v = ctx.dataset.data[ctx.dataIndex];
+                        if (v == null) return false;
+                        return ctx.dataIndex === ctx.dataset.data.length - 1
+                            || ctx.dataIndex % 10 === 0;
+                    },
                     align: 'top', anchor: 'end', offset: 4,
                     color: danger,
                     backgroundColor: isDark ? 'rgba(20,25,38,0.7)' : 'rgba(255,255,255,0.85)',
