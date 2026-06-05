@@ -222,6 +222,8 @@
     Chart.defaults.plugins.tooltip.borderWidth = 1;
     Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         ? false : { duration: 400 };
+    /* Avoid plugin-datalabels "_fn is not a function" on hover. */
+    Chart.defaults.transitions.active = { animation: { duration: 0 } };
 
     new Chart(document.getElementById('dailyChart'), {
         type: 'line',

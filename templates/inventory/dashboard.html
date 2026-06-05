@@ -386,6 +386,9 @@
     const gridColor = isDark ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.06)';
     const labelColor = isDark ? '#94A3B8' : '#475569';
 
+    /* Avoid plugin-datalabels "_fn is not a function" on hover. */
+    Chart.defaults.transitions.active = { animation: { duration: 0 } };
+
     const ctx = document.getElementById('trendChart');
     if (!ctx) return;
     new Chart(ctx, {

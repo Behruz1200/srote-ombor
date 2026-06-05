@@ -912,6 +912,12 @@
     Chart.defaults.plugins.tooltip.boxPadding = 4;
     Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         ? false : { duration: 400 };
+    /* Disable hover-triggered transition animation — chartjs-plugin-datalabels
+       2.2 + Chart.js 4 throws "this._fn is not a function" if the active
+       transition tries to interpolate function-valued options (display,
+       formatter). Tooltips still work; only the small color/x/y hover
+       tween is skipped. */
+    Chart.defaults.transitions.active = { animation: { duration: 0 } };
 
     function gridScale(opts) {
         return Object.assign({
