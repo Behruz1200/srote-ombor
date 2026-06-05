@@ -5,17 +5,25 @@
 
 {% block content %}
 <div class="container-fluid px-3">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-clipboard-data"></i> Audit log</h3>
-        <div class="d-flex gap-2 align-items-center">
-            <span class="text-muted small">Jami: <strong>{{ page.paginator.count }}</strong></span>
+
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1"><i class="bi bi-clipboard-data me-1 text-primary"></i> Audit log</h1>
+            <div class="srt-sub">Tizimda kim, qachon, nima qildi — to'liq tarix</div>
+        </div>
+        <div class="srt-actions">
+            <span class="srt-tag">Jami: <strong class="srt-num ms-1">{{ page.paginator.count }}</strong></span>
             <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-sm btn-outline-success">
-                <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+                <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-text">CSV</span>
             </a>
         </div>
     </div>
 
-    <div class="card p-3 mb-3">
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Filtrlar</h2>
+        </div>
+        <div class="srt-section-body">
         <form method="get" class="row g-2">
             <div class="col-md-3">
                 <label class="form-label small mb-1">Qidiruv</label>
@@ -58,87 +66,94 @@
                 <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
             </div>
             <div class="col-md-1 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-sm btn-primary flex-fill" title="Filter">
+                <button type="submit" class="btn btn-sm btn-primary flex-fill" title="Filter" aria-label="Filter">
                     <i class="bi bi-funnel"></i>
                 </button>
-                <a href="{% url 'audit_list' %}" class="btn btn-sm btn-outline-secondary" title="Tozalash">
+                <a href="{% url 'audit_list' %}" class="btn btn-sm btn-outline-secondary"
+                   title="Tozalash" aria-label="Tozalash">
                     <i class="bi bi-x"></i>
                 </a>
             </div>
         </form>
+        </div>
     </div>
 
-    <div class="card">
-        <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Sana</th>
-                    <th>Foydalanuvchi</th>
-                    <th>Harakat</th>
-                    <th>Obyekt</th>
-                    <th>O'zgarishlar</th>
-                    <th>IP</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for log in page %}
-                <tr>
-                    <td><small>{{ log.created_at|date:"d.m.Y H:i:s" }}</small></td>
-                    <td>
-                        <strong>{{ log.username_snapshot|default:"—" }}</strong>
-                    </td>
-                    <td>
-                        {% if log.action == 'create' %}
-                            <span class="badge bg-success">{{ log.get_action_display }}</span>
-                        {% elif log.action == 'update' %}
-                            <span class="badge bg-warning text-dark">{{ log.get_action_display }}</span>
-                        {% elif log.action == 'delete' %}
-                            <span class="badge bg-danger">{{ log.get_action_display }}</span>
-                        {% elif log.action == 'login' %}
-                            <span class="badge bg-info">{{ log.get_action_display }}</span>
-                        {% elif log.action == 'login_failed' %}
-                            <span class="badge bg-secondary">{{ log.get_action_display }}</span>
-                        {% else %}
-                            <span class="badge bg-light text-dark">{{ log.get_action_display }}</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <small class="text-muted">{{ log.model_name }}</small>
-                        {% if log.object_repr %}
-                        <div>{{ log.object_repr|truncatechars:60 }}</div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if log.changes %}
-                        <details>
-                            <summary class="text-primary" style="cursor:pointer;">
-                                {{ log.changes|length }} ta o'zgarish
-                            </summary>
-                            <div class="small mt-1" style="max-width: 480px;">
-                                {% for field, pair in log.changes.items %}
-                                    <div>
-                                        <code>{{ field }}</code>:
-                                        <span class="text-danger">{{ pair.0|default_if_none:"—"|truncatechars:40 }}</span>
-                                        →
-                                        <span class="text-success">{{ pair.1|default_if_none:"—"|truncatechars:40 }}</span>
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Yozuvlar</h2>
+        </div>
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead>
+                        <tr>
+                            <th>Sana</th>
+                            <th>Foydalanuvchi</th>
+                            <th>Harakat</th>
+                            <th>Obyekt</th>
+                            <th>O'zgarishlar</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for log in page %}
+                        <tr>
+                            <td><small class="srt-num">{{ log.created_at|date:"d.m.Y H:i:s" }}</small></td>
+                            <td>
+                                <strong>{{ log.username_snapshot|default:"—" }}</strong>
+                            </td>
+                            <td>
+                                {% if log.action == 'create' %}
+                                    <span class="srt-tag success">{{ log.get_action_display }}</span>
+                                {% elif log.action == 'update' %}
+                                    <span class="srt-tag accent">{{ log.get_action_display }}</span>
+                                {% elif log.action == 'delete' %}
+                                    <span class="srt-tag danger">{{ log.get_action_display }}</span>
+                                {% elif log.action == 'login' %}
+                                    <span class="srt-tag primary">{{ log.get_action_display }}</span>
+                                {% elif log.action == 'login_failed' %}
+                                    <span class="srt-tag">{{ log.get_action_display }}</span>
+                                {% else %}
+                                    <span class="srt-tag">{{ log.get_action_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ log.model_name }}</small>
+                                {% if log.object_repr %}
+                                <div>{{ log.object_repr|truncatechars:60 }}</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.changes %}
+                                <details>
+                                    <summary class="text-primary" style="cursor:pointer;">
+                                        {{ log.changes|length }} ta o'zgarish
+                                    </summary>
+                                    <div class="small mt-1" style="max-width: 480px;">
+                                        {% for field, pair in log.changes.items %}
+                                            <div>
+                                                <code>{{ field }}</code>:
+                                                <span class="text-danger">{{ pair.0|default_if_none:"—"|truncatechars:40 }}</span>
+                                                →
+                                                <span class="text-success">{{ pair.1|default_if_none:"—"|truncatechars:40 }}</span>
+                                            </div>
+                                        {% endfor %}
                                     </div>
-                                {% endfor %}
-                            </div>
-                        </details>
-                        {% else %}
-                            <span class="text-muted">—</span>
-                        {% endif %}
-                    </td>
-                    <td><small class="text-muted">{{ log.ip|default:"—" }}</small></td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="6" class="text-center text-muted py-4">
-                    Yozuvlar yo'q.
-                </td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
+                                </details>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td><small class="text-muted srt-num">{{ log.ip|default:"—" }}</small></td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">
+                            Yozuvlar yo'q.
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

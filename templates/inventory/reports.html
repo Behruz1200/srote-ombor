@@ -5,130 +5,128 @@
 
 {% block content %}
 <div class="container-fluid px-3">
-    <h3 class="mb-3"><i class="bi bi-file-earmark-bar-graph"></i> Hisobotlar</h3>
 
-    <!-- Quick preset chips -->
-    <div class="mb-3">
-        <span class="small text-muted me-2">Tezkor davr:</span>
-        <div class="btn-group btn-group-sm" role="group">
-            <a href="?period=today&report_type={{ form.report_type.value|default:'sales' }}"
-               class="btn btn-outline-primary">Bugun</a>
-            <a href="?period=yesterday&report_type={{ form.report_type.value|default:'sales' }}"
-               class="btn btn-outline-primary">Kecha</a>
-            <a href="?period=week&report_type={{ form.report_type.value|default:'sales' }}"
-               class="btn btn-outline-primary">7 kun</a>
-            <a href="?period=month&report_type={{ form.report_type.value|default:'sales' }}"
-               class="btn btn-outline-primary">30 kun</a>
-            <a href="?period=this_month&report_type={{ form.report_type.value|default:'sales' }}"
-               class="btn btn-outline-primary">Joriy oy</a>
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1"><i class="bi bi-file-earmark-bar-graph me-1 text-primary"></i> Hisobotlar</h1>
+            <div class="srt-sub">Tezkor davr + CSV/PDF eksport</div>
+        </div>
+        <div class="srt-actions">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Tezkor davr">
+                <a href="?period=today&report_type={{ form.report_type.value|default:'sales' }}"
+                   class="btn btn-outline-primary">Bugun</a>
+                <a href="?period=yesterday&report_type={{ form.report_type.value|default:'sales' }}"
+                   class="btn btn-outline-primary">Kecha</a>
+                <a href="?period=week&report_type={{ form.report_type.value|default:'sales' }}"
+                   class="btn btn-outline-primary">7 kun</a>
+                <a href="?period=month&report_type={{ form.report_type.value|default:'sales' }}"
+                   class="btn btn-outline-primary">30 kun</a>
+                <a href="?period=this_month&report_type={{ form.report_type.value|default:'sales' }}"
+                   class="btn btn-outline-primary">Joriy oy</a>
+            </div>
         </div>
     </div>
 
-    <div class="card p-3 mb-3">
-        <form method="get" class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">{{ form.report_type.label }}</label>
-                {{ form.report_type }}
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted mb-1">{{ form.period.label }}</label>
-                {{ form.period }}
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted mb-1">{{ form.date_from.label }}</label>
-                {{ form.date_from }}
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted mb-1">{{ form.date_to.label }}</label>
-                {{ form.date_to }}
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">{{ form.branch.label }}</label>
-                {{ form.branch }}
-            </div>
-            <div class="col-12 d-flex gap-2 flex-wrap mt-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-search"></i> Hisobot ko'rsatish
-                </button>
-                {% if rows %}
-                    <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-outline-success">
-                        <i class="bi bi-filetype-csv"></i> CSV
-                    </a>
-                    <a href="?{{ request.GET.urlencode }}&export=pdf" class="btn btn-outline-danger">
-                        <i class="bi bi-filetype-pdf"></i> PDF
-                    </a>
-                {% endif %}
-            </div>
-        </form>
-        <small class="text-muted mt-2 d-block">
-            <i class="bi bi-info-circle"></i> "Aniq sanalar" tanlanganda dan-gacha sanalarini to'ldiring.
-        </small>
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Hisobot filtri</h2>
+        </div>
+        <div class="srt-section-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">{{ form.report_type.label }}</label>
+                    {{ form.report_type }}
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1">{{ form.period.label }}</label>
+                    {{ form.period }}
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1">{{ form.date_from.label }}</label>
+                    {{ form.date_from }}
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1">{{ form.date_to.label }}</label>
+                    {{ form.date_to }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">{{ form.branch.label }}</label>
+                    {{ form.branch }}
+                </div>
+                <div class="col-12 d-flex gap-2 flex-wrap mt-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Hisobot ko'rsatish
+                    </button>
+                    {% if rows %}
+                        <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-outline-success">
+                            <i class="bi bi-filetype-csv"></i> CSV
+                        </a>
+                        <a href="?{{ request.GET.urlencode }}&export=pdf" class="btn btn-outline-danger">
+                            <i class="bi bi-filetype-pdf"></i> PDF
+                        </a>
+                    {% endif %}
+                </div>
+            </form>
+            <small class="text-muted mt-2 d-block">
+                <i class="bi bi-info-circle"></i> "Aniq sanalar" tanlanganda dan-gacha sanalarini to'ldiring.
+            </small>
+        </div>
     </div>
 
     {% if title %}
-    <div class="card p-3 mb-3">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <h5 class="mb-0">
-                <i class="bi bi-bar-chart-line"></i> {{ title }}
-            </h5>
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2">
+                <i class="bi bi-bar-chart-line text-primary"></i> {{ title }}
+            </h2>
             <div class="text-muted small">
-                <i class="bi bi-calendar"></i> {{ d_start }} → {{ d_end }}
+                <i class="bi bi-calendar"></i> <span class="srt-num">{{ d_start }} → {{ d_end }}</span>
                 <span class="mx-2">·</span>
                 <i class="bi bi-building"></i>
                 {% if branch %}{{ branch.name }}{% else %}Barcha filiallar{% endif %}
             </div>
         </div>
         {% if summary %}
-        <div class="row g-2 mt-3">
-            {% for k, v in summary.items %}
-                <div class="col-md-3 col-6">
-                    <div class="border rounded p-2 text-center bg-light">
-                        <div class="small text-muted">{{ k }}</div>
-                        <strong class="fs-5">{{ v|som }}</strong>
+        <div class="srt-section-body" style="padding-bottom: 0.5rem;">
+            <div class="srt-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                {% for k, v in summary.items %}
+                    <div class="srt-kpi accent">
+                        <div class="srt-kpi-label">{{ k }}</div>
+                        <div class="srt-kpi-value" style="font-size: 1.3rem;">{{ v|som }}</div>
                     </div>
-                </div>
-            {% endfor %}
+                {% endfor %}
+            </div>
         </div>
         {% endif %}
-    </div>
-
-    <div class="card">
-        <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        {% for h in headers %}<th>{{ h }}</th>{% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                {% for r in rows %}
-                    <tr>
-                        {% for cell in r %}<td>{{ cell }}</td>{% endfor %}
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="{{ headers|length }}" class="text-center text-muted py-4">
-                        Bu davr uchun ma'lumot yo'q.
-                    </td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead>
+                        <tr>
+                            {% for h in headers %}<th>{{ h }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in rows %}
+                        <tr>
+                            {% for cell in r %}<td>{{ cell }}</td>{% endfor %}
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="{{ headers|length }}" class="text-center text-muted py-4">
+                            Bu davr uchun ma'lumot yo'q.
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     {% else %}
-        <div class="card p-4 text-center">
-            <div class="text-muted">
-                <i class="bi bi-arrow-up" style="font-size: 2rem;"></i>
-                <p class="mb-0 mt-2">Yuqorida hisobot turi va davrni tanlab, "Hisobot ko'rsatish" tugmasini bosing.</p>
-                <p class="small">Yoki tezkor davr tugmalaridan birini bosing.</p>
-            </div>
+        <div class="srt-empty">
+            <i class="bi bi-arrow-up-circle srt-empty-icon"></i>
+            <p class="mb-0">Yuqorida hisobot turi va davrni tanlab, "Hisobot ko'rsatish" tugmasini bosing.</p>
+            <p class="small mb-0 mt-1">Yoki tezkor davr tugmalaridan birini bosing.</p>
         </div>
     {% endif %}
 </div>
-
-<style>
-    /* Compact form controls within reports filter card */
-    .card form .form-control, .card form .form-select {
-        font-size: 0.875rem;
-    }
-</style>
 {% endblock %}

@@ -5,154 +5,162 @@
 
 {% block content %}
 <div class="container-fluid px-3">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-tags"></i> Kategoriyalar</h3>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newCatModal">
-            <i class="bi bi-plus-circle"></i> Yangi kategoriya
-        </button>
+
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1"><i class="bi bi-tags me-1 text-primary"></i> Kategoriyalar</h1>
+            <div class="srt-sub">Mahsulot kategoriyalari va ularning 30 kunlik performansi</div>
+        </div>
+        <div class="srt-actions">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newCatModal">
+                <i class="bi bi-plus-circle"></i> <span class="btn-text">Yangi kategoriya</span>
+            </button>
+        </div>
     </div>
 
-    <!-- Top stats -->
-    <div class="row g-3 mb-3">
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Jami kategoriya</div>
-                <div class="h3 mb-0">{{ total_categories }}</div>
-            </div>
+    <div class="srt-kpi-grid">
+        <div class="srt-kpi accent">
+            <div class="srt-kpi-label"><i class="bi bi-tags"></i> Jami kategoriya</div>
+            <div class="srt-kpi-value">{{ total_categories }}</div>
         </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Kategoriyasiz mahsulot</div>
-                <div class="h3 mb-0 {% if no_category_count %}text-warning{% endif %}">
-                    {{ no_category_count }}
+        <div class="srt-kpi {% if no_category_count %}accent-amber{% endif %}">
+            <div class="srt-kpi-label"><i class="bi bi-question-octagon"></i> Kategoriyasiz mahsulot</div>
+            <div class="srt-kpi-value {% if no_category_count %}text-warning{% endif %}">{{ no_category_count }}</div>
+        </div>
+        <div class="srt-kpi accent-success">
+            <div class="srt-kpi-label"><i class="bi bi-trophy"></i> Top kategoriya (30 kun)</div>
+            {% if top_cat and top_cat.s_rev %}
+                <div class="srt-kpi-value" style="font-size: 1.3rem;">{{ top_cat.name }}</div>
+                <div class="srt-kpi-meta"><span class="srt-num">{{ top_cat.s_rev|som }}</span> so'm</div>
+            {% else %}
+                <div class="srt-kpi-value text-muted">—</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-search text-primary"></i> Qidiruv</h2>
+        </div>
+        <div class="srt-section-body">
+            <form method="get">
+                <div class="row g-2">
+                    <div class="col-md-9">
+                        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+                               placeholder="Kategoriya nomi bo'yicha qidirish...">
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                            <i class="bi bi-funnel"></i> Filter
+                        </button>
+                        <a href="{% url 'category_list' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-x"></i>
+                        </a>
+                    </div>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Top kategoriya (30 kun)</div>
-                {% if top_cat and top_cat.s_rev %}
-                    <div class="h5 mb-0 text-success">{{ top_cat.name }}</div>
-                    <small class="text-muted">{{ top_cat.s_rev|som }} so'm</small>
-                {% else %}
-                    <div class="h5 mb-0 text-muted">—</div>
-                {% endif %}
-            </div>
+            </form>
         </div>
     </div>
 
-    <!-- Search -->
-    <form method="get" class="card p-3 mb-3">
-        <div class="row g-2">
-            <div class="col-md-9">
-                <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
-                       placeholder="Kategoriya nomi bo'yicha qidirish...">
-            </div>
-            <div class="col-md-3 d-flex gap-2">
-                <button type="submit" class="btn btn-primary btn-sm flex-fill">
-                    <i class="bi bi-funnel"></i> Filter
-                </button>
-                <a href="{% url 'category_list' %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-x"></i>
-                </a>
-            </div>
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Kategoriyalar</h2>
+            <span class="srt-tag">Sotuv statistikasi so'nggi 30 kun</span>
         </div>
-    </form>
-
-    <!-- Categories table -->
-    <div class="card">
-        <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Nomi</th>
-                        <th>Prefiks</th>
-                        <th class="text-end">Mahsulotlar</th>
-                        <th class="text-end">Zaxira</th>
-                        <th class="text-end">Zaxira qiymati</th>
-                        <th class="text-end">30 kun sotilgan</th>
-                        <th class="text-end">30 kun tushum</th>
-                        <th class="text-end">Marja</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for c in categories %}
-                    <tr>
-                        <td>
-                            <strong>{{ c.name }}</strong>
-                        </td>
-                        <td><code>{{ c.prefix }}</code></td>
-                        <td class="text-end">
-                            {% if c.product_count %}
-                                <a href="{% url 'product_list' %}?category={{ c.id }}"
-                                   class="badge bg-primary text-decoration-none">
-                                    {{ c.product_count }}
-                                </a>
-                            {% else %}
-                                <span class="text-muted small">0</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">{{ c.s_stock }}</td>
-                        <td class="text-end text-muted">{{ c.s_value|som }}</td>
-                        <td class="text-end">
-                            {% if c.s_qty %}<strong>{{ c.s_qty }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if c.s_rev %}<strong class="text-success">{{ c.s_rev|som }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td class="text-end small">
-                            {% if c.s_margin %}
-                                <span class="text-{% if c.s_margin < 10 %}danger{% elif c.s_margin < 25 %}warning{% else %}success{% endif %}">
-                                    {{ c.s_margin|floatformat:0 }}%
-                                </span>
-                            {% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{% url 'product_list' %}?category={{ c.id }}"
-                                   class="btn btn-outline-primary" title="Mahsulotlarni ko'rish">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                <button type="button" class="btn btn-outline-secondary edit-cat-btn"
-                                        data-pk="{{ c.pk }}"
-                                        data-name="{{ c.name }}"
-                                        data-prefix="{{ c.prefix }}"
-                                        title="Tahrirlash">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                {% if not c.product_count %}
-                                <form method="post" class="d-inline"
-                                      onsubmit="return confirm('O\'chirishni tasdiqlaysizmi?');">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="pk" value="{{ c.pk }}">
-                                    <button type="submit" class="btn btn-outline-danger" title="O'chirish">
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead>
+                        <tr>
+                            <th>Nomi</th>
+                            <th>Prefiks</th>
+                            <th class="num">Mahsulotlar</th>
+                            <th class="num">Zaxira</th>
+                            <th class="num">Zaxira qiymati</th>
+                            <th class="num">30k sotilgan</th>
+                            <th class="num">30k tushum</th>
+                            <th class="num">Marja</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in categories %}
+                        <tr>
+                            <td>
+                                <strong>{{ c.name }}</strong>
+                            </td>
+                            <td><code>{{ c.prefix }}</code></td>
+                            <td class="num">
+                                {% if c.product_count %}
+                                    <a href="{% url 'product_list' %}?category={{ c.id }}"
+                                       class="srt-tag primary text-decoration-none">
+                                        {{ c.product_count }}
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted small">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="num">{{ c.s_stock }}</td>
+                            <td class="num text-muted">{{ c.s_value|som }}</td>
+                            <td class="num">
+                                {% if c.s_qty %}<strong>{{ c.s_qty }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="num">
+                                {% if c.s_rev %}<strong class="text-success">{{ c.s_rev|som }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="num">
+                                {% if c.s_margin %}
+                                    <span class="srt-tag {% if c.s_margin < 10 %}danger{% elif c.s_margin < 25 %}accent{% else %}success{% endif %}">
+                                        {{ c.s_margin|floatformat:0 }}%
+                                    </span>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'product_list' %}?category={{ c.id }}"
+                                       class="btn btn-outline-primary" title="Mahsulotlarni ko'rish" aria-label="Mahsulotlarni ko'rish">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-secondary edit-cat-btn"
+                                            data-pk="{{ c.pk }}"
+                                            data-name="{{ c.name }}"
+                                            data-prefix="{{ c.prefix }}"
+                                            title="Tahrirlash" aria-label="Tahrirlash">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    {% if not c.product_count %}
+                                    <form method="post" class="d-inline"
+                                          onsubmit="return confirm('O\'chirishni tasdiqlaysizmi?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="pk" value="{{ c.pk }}">
+                                        <button type="submit" class="btn btn-outline-danger"
+                                                title="O'chirish" aria-label="O'chirish">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <button class="btn btn-outline-danger" disabled
+                                            title="O'chirish uchun avval mahsulotlarni boshqa kategoriyaga o'tkazing">
                                         <i class="bi bi-trash"></i>
                                     </button>
-                                </form>
-                                {% else %}
-                                <button class="btn btn-outline-danger" disabled
-                                        title="O'chirish uchun avval mahsulotlarni boshqa kategoriyaga o'tkazing">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="9" class="text-center text-muted py-4">
-                        {% if q %}"{{ q }}" bo'yicha kategoriya topilmadi.
-                        {% else %}Kategoriyalar yo'q. Yuqorida "Yangi kategoriya" tugmasini bosing.{% endif %}
-                    </td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="text-center text-muted py-4">
+                            {% if q %}"{{ q }}" bo'yicha kategoriya topilmadi.
+                            {% else %}Kategoriyalar yo'q. Yuqorida "Yangi kategoriya" tugmasini bosing.{% endif %}
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     <small class="text-muted mt-2 d-block">
-        <i class="bi bi-info-circle"></i> Sotuv statistikasi so'nggi 30 kun bo'yicha.
-        Prefiks mahsulot kodi avtomatik yaratilishida ishlatiladi (masalan, OYO-0001).
+        <i class="bi bi-info-circle"></i> Prefiks mahsulot kodi avtomatik yaratilishida ishlatiladi (masalan, OYO-0001).
     </small>
 </div>
 

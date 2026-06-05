@@ -4,18 +4,30 @@
 {% block title %}Tahlil — Srote{% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Biznes tahlili</h3>
-        <div class="d-flex gap-2 flex-wrap">
-            <form method="get" class="d-flex gap-2">
-                <select name="period" class="form-select form-select-sm" onchange="this.form.submit()">
+<div class="container-fluid px-3">
+
+    <!-- ── Page header ────────────────────────────────────────────────── -->
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1">
+                <i class="bi bi-graph-up-arrow me-1 text-primary"></i> Biznes tahlili
+            </h1>
+            <div class="srt-sub">
+                {{ d_start }} — {{ d_end }} ({{ days }} kun)
+                {% if selected_branch %} · Filial: <strong>{{ selected_branch.name }}</strong>{% endif %}
+            </div>
+        </div>
+        <div class="srt-actions">
+            <form method="get" class="d-flex gap-2 flex-wrap">
+                <select name="period" class="form-select form-select-sm" onchange="this.form.submit()"
+                        aria-label="Davr">
                     <option value="today" {% if period == 'today' %}selected{% endif %}>Bugun</option>
                     <option value="week" {% if period == 'week' %}selected{% endif %}>Oxirgi 7 kun</option>
                     <option value="month" {% if period == 'month' %}selected{% endif %}>Oxirgi 30 kun</option>
                     <option value="quarter" {% if period == 'quarter' %}selected{% endif %}>Oxirgi 90 kun</option>
                 </select>
-                <select name="branch" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select name="branch" class="form-select form-select-sm" onchange="this.form.submit()"
+                        aria-label="Filial">
                     <option value="">Barcha filiallar</option>
                     {% for b in branches_all %}
                         <option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>
@@ -23,734 +35,822 @@
                 </select>
             </form>
             <a href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=pdf"
-               class="btn btn-danger btn-sm">
-                <i class="bi bi-filetype-pdf"></i> PDF
+               class="btn btn-outline-danger btn-sm" aria-label="PDF eksport">
+                <i class="bi bi-filetype-pdf"></i> <span class="btn-text">PDF</span>
             </a>
             <a href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=csv"
-               class="btn btn-success btn-sm">
-                <i class="bi bi-filetype-csv"></i> CSV
+               class="btn btn-outline-success btn-sm" aria-label="CSV eksport">
+                <i class="bi bi-filetype-csv"></i> <span class="btn-text">CSV</span>
             </a>
         </div>
     </div>
-    <p class="text-muted small mb-3">
-        Davr: {{ d_start }} — {{ d_end }} ({{ days }} kun){% if selected_branch %} · Filial: <strong>{{ selected_branch.name }}</strong>{% endif %}
-    </p>
 
-    <!-- KPI cards -->
-    <div class="row g-3 mb-3">
-        <div class="col-6 col-md-3">
-            <div class="card stat-card green p-3">
-                <div class="text-muted small">Jami daromad</div>
-                <h3 class="mb-0">{{ revenue|som }} so'm</h3>
+    <!-- ── Top KPIs ──────────────────────────────────────────────────── -->
+    <div class="srt-kpi-grid" role="group" aria-label="Davr ko'rsatkichlari">
+
+        <div class="srt-kpi accent-success">
+            <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> Jami daromad</div>
+            <div class="srt-kpi-value">{{ revenue|som }}</div>
+            <div class="srt-kpi-meta">
                 {% if rev_growth is not None %}
-                    <small class="{% if rev_growth >= 0 %}text-success{% else %}text-danger{% endif %}">
-                        <i class="bi bi-arrow-{% if rev_growth >= 0 %}up{% else %}down{% endif %}"></i>
-                        {{ rev_growth|floatformat:1 }}% oldingi davrga nisbatan
-                    </small>
+                    <span class="srt-delta {% if rev_growth > 0 %}up{% elif rev_growth < 0 %}down{% else %}flat{% endif %}">
+                        {% if rev_growth > 0 %}<i class="bi bi-arrow-up-short"></i>
+                        {% elif rev_growth < 0 %}<i class="bi bi-arrow-down-short"></i>
+                        {% else %}<i class="bi bi-dash"></i>{% endif %}
+                        {{ rev_growth|floatformat:1 }}%
+                    </span>
+                    <span>oldingi davrga</span>
+                {% else %}
+                    <span>oldingi davr ma'lumoti yo'q</span>
                 {% endif %}
             </div>
         </div>
-        <div class="col-6 col-md-3">
-            <div class="card stat-card orange p-3">
-                <div class="text-muted small">Tannarx</div>
-                <h3 class="mb-0">{{ total_cost|som }} so'm</h3>
-                <small class="text-muted">{{ sales_count }} sotuv · {{ qty }} dona</small>
+
+        <div class="srt-kpi accent-amber">
+            <div class="srt-kpi-label"><i class="bi bi-coin"></i> Tannarx (COGS)</div>
+            <div class="srt-kpi-value">{{ total_cost|som }}</div>
+            <div class="srt-kpi-meta">
+                <span><span class="srt-num">{{ sales_count }}</span> sotuv</span>
+                <span>·</span>
+                <span><span class="srt-num">{{ qty }}</span> dona</span>
             </div>
         </div>
-        <div class="col-6 col-md-3">
-            <div class="card stat-card p-3">
-                <div class="text-muted small">Sof foyda</div>
-                <h3 class="mb-0 text-primary">{{ profit|som }} so'm</h3>
-                <small class="text-muted">Marja: {{ margin|floatformat:1 }}%</small>
+
+        <div class="srt-kpi accent">
+            <div class="srt-kpi-label"><i class="bi bi-graph-up-arrow"></i> Sof foyda</div>
+            <div class="srt-kpi-value">{{ profit|som }}</div>
+            <div class="srt-kpi-meta">
+                <span>Marja: <span class="srt-num">{{ margin|floatformat:1 }}%</span></span>
             </div>
         </div>
-        <div class="col-6 col-md-3">
-            <div class="card stat-card red p-3">
-                <div class="text-muted small">O'rtacha 1 sotuv</div>
-                <h3 class="mb-0">{{ avg_sale_value|som }} so'm</h3>
+
+        <div class="srt-kpi">
+            <div class="srt-kpi-label"><i class="bi bi-cart-check"></i> O'rtacha 1 sotuv</div>
+            <div class="srt-kpi-value">{{ avg_sale_value|som }}</div>
+            <div class="srt-kpi-meta">
                 {% if largest_sale %}
-                    <small class="text-muted">Eng katta: {{ largest_sale.line|som }} so'm</small>
+                    <span>Eng katta: <span class="srt-num">{{ largest_sale.line|som }}</span></span>
+                {% else %}
+                    <span>Sotuvlar yo'q</span>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Growth comparison -->
-    <div class="card p-3 mb-3">
-        <h6 class="text-muted text-uppercase small mb-2">Oldingi davr bilan taqqoslash</h6>
-        <div class="row g-2">
-            <div class="col-md-4">
-                <div class="d-flex justify-content-between">
-                    <span>Daromad:</span>
-                    <span>{{ prev_revenue|som }} → <strong>{{ revenue|som }}</strong>
+    <!-- ── Growth comparison strip ───────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-arrow-left-right text-primary"></i> Oldingi davr bilan taqqoslash</h2>
+        </div>
+        <div class="srt-section-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="text-muted small mb-1">Daromad</div>
+                    <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                        <span class="srt-num text-muted">{{ prev_revenue|som }}</span>
+                        <i class="bi bi-arrow-right text-muted"></i>
+                        <strong class="srt-num">{{ revenue|som }}</strong>
                         {% if rev_growth is not None %}
-                        <span class="badge bg-{% if rev_growth >= 0 %}success{% else %}danger{% endif %}">
-                            {{ rev_growth|floatformat:1 }}%
-                        </span>
+                            <span class="srt-delta {% if rev_growth > 0 %}up{% elif rev_growth < 0 %}down{% else %}flat{% endif %}">
+                                {{ rev_growth|floatformat:1 }}%
+                            </span>
                         {% endif %}
-                    </span>
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="d-flex justify-content-between">
-                    <span>Sotuvlar:</span>
-                    <span>{{ prev_n }} → <strong>{{ sales_count }}</strong>
+                <div class="col-md-4">
+                    <div class="text-muted small mb-1">Sotuvlar</div>
+                    <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                        <span class="srt-num text-muted">{{ prev_n }}</span>
+                        <i class="bi bi-arrow-right text-muted"></i>
+                        <strong class="srt-num">{{ sales_count }}</strong>
                         {% if sales_growth is not None %}
-                        <span class="badge bg-{% if sales_growth >= 0 %}success{% else %}danger{% endif %}">
-                            {{ sales_growth|floatformat:1 }}%
-                        </span>
+                            <span class="srt-delta {% if sales_growth > 0 %}up{% elif sales_growth < 0 %}down{% else %}flat{% endif %}">
+                                {{ sales_growth|floatformat:1 }}%
+                            </span>
                         {% endif %}
-                    </span>
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="d-flex justify-content-between">
-                    <span>Dona:</span>
-                    <span>{{ prev_qty }} → <strong>{{ qty }}</strong>
+                <div class="col-md-4">
+                    <div class="text-muted small mb-1">Sotilgan dona</div>
+                    <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                        <span class="srt-num text-muted">{{ prev_qty }}</span>
+                        <i class="bi bi-arrow-right text-muted"></i>
+                        <strong class="srt-num">{{ qty }}</strong>
                         {% if qty_growth is not None %}
-                        <span class="badge bg-{% if qty_growth >= 0 %}success{% else %}danger{% endif %}">
-                            {{ qty_growth|floatformat:1 }}%
-                        </span>
+                            <span class="srt-delta {% if qty_growth > 0 %}up{% elif qty_growth < 0 %}down{% else %}flat{% endif %}">
+                                {{ qty_growth|floatformat:1 }}%
+                            </span>
                         {% endif %}
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Trend chart -->
-    <div class="card p-3 mb-3">
-        <h5><i class="bi bi-activity"></i> Kunlik sotuv trendi</h5>
-        <canvas id="trendChart" style="max-height: 280px;"></canvas>
-    </div>
-
-    <!-- Branch comparison -->
-    <div class="card p-3 mb-3">
-        <h5><i class="bi bi-building"></i> Filiallar yonma-yon taqqoslash — P&L</h5>
-        <div class="small text-muted mb-2">
-            Sof foyda = Daromad − Tannarx − Qat'iy xarajatlar (ijara + boshqa).
-            Qat'iy xarajatlar davr uzunligiga moslangan ({{ days }} kun / 30).
-        </div>
-        <div class="table-responsive">
-        <table class="table table-sm table-hover">
-            <thead class="table-light">
-                <tr>
-                    <th>Filial</th>
-                    <th class="text-end">Daromad</th>
-                    <th class="text-end">Tannarx (COGS)</th>
-                    <th class="text-end">Brutto foyda</th>
-                    <th class="text-end">Qat'iy xarajat</th>
-                    <th class="text-end">Sof foyda</th>
-                    <th class="text-end">Sof marja %</th>
-                    <th class="text-end">Sotuvlar</th>
-                    <th class="text-end">Omborda</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for b in branch_compare %}
-                <tr>
-                    <td><strong>{{ b.branch.name }}</strong></td>
-                    <td class="text-end">{{ b.revenue|som }}</td>
-                    <td class="text-end text-muted">{{ b.cost|som }}</td>
-                    <td class="text-end">{{ b.profit|som }}</td>
-                    <td class="text-end text-muted"
-                        title="Ijara: {{ b.rent_period|som }} so'm · Boshqa: {{ b.other_period|som }} so'm">
-                        {{ b.fixed_period|som }}
-                    </td>
-                    <td class="text-end {% if b.net_profit < 0 %}text-danger{% else %}text-primary{% endif %}">
-                        <strong>{{ b.net_profit|som }}</strong>
-                    </td>
-                    <td class="text-end">
-                        <span class="badge bg-{% if b.net_margin < 0 %}danger{% elif b.net_margin < 10 %}warning{% else %}success{% endif %}">
-                            {{ b.net_margin|floatformat:1 }}%
-                        </span>
-                    </td>
-                    <td class="text-end">{{ b.sales_count }}</td>
-                    <td class="text-end">{{ b.stock }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-        <!-- Top by revenue -->
-        <div class="col-lg-6">
-            <div class="card p-3 h-100">
-                <h5><i class="bi bi-trophy text-warning"></i> TOP-10 daromad bo'yicha</h5>
-                <div class="table-responsive"><table class="table table-sm">
-                    <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th>Dona</th><th>Daromad</th></tr></thead>
-                    <tbody>
-                    {% for p in top_products %}
-                        <tr>
-                            <td><strong>{{ forloop.counter }}</strong></td>
-                            <td><a href="{% url 'product_detail' p.variant__product__code %}">
-                                <span class="code-pill">{{ p.variant__product__code }}</span></a></td>
-                            <td>{{ p.variant__product__name|truncatechars:28 }}</td>
-                            <td>{{ p.qty }}</td>
-                            <td><strong>{{ p.revenue|som }}</strong></td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="5" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table></div>
-            </div>
-        </div>
-
-        <!-- TOP by profit -->
-        <div class="col-lg-6">
-            <div class="card p-3 h-100">
-                <h5><i class="bi bi-cash-stack text-success"></i> TOP-10 sof foyda bo'yicha</h5>
-                <small class="text-muted">Daromad — tannarx</small>
-                <div class="table-responsive"><table class="table table-sm mt-1">
-                    <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th>Foyda</th><th>Marja</th></tr></thead>
-                    <tbody>
-                    {% for p in top_profit %}
-                        <tr>
-                            <td><strong>{{ forloop.counter }}</strong></td>
-                            <td><a href="{% url 'product_detail' p.code %}">
-                                <span class="code-pill">{{ p.code }}</span></a></td>
-                            <td>{{ p.name|truncatechars:28 }}</td>
-                            <td><strong class="text-success">{{ p.profit|som }}</strong></td>
-                            <td>{{ p.margin|floatformat:1 }}%</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="5" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-        <!-- Slow movers -->
-        <div class="col-lg-6">
-            <div class="card p-3 h-100">
-                <h5><i class="bi bi-snow text-info"></i> Sotilmayotgan mahsulotlar</h5>
-                <small class="text-muted">Bu davrda umuman sotilmaganlar</small>
-                <div class="table-responsive"><table class="table table-sm mt-1">
-                    <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kategoriya</th><th>Omborda</th></tr></thead>
-                    <tbody>
-                    {% for p in slow_products %}
-                        <tr>
-                            <td><a href="{% url 'product_detail' p.code %}"><span class="code-pill">{{ p.code }}</span></a></td>
-                            <td>{{ p.name|truncatechars:28 }}</td>
-                            <td><small>{{ p.category.name|default:"—" }}</small></td>
-                            <td>{{ p.stock|default:0 }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="4" class="text-success text-center">Hammasi sotilmoqda!</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table></div>
-            </div>
-        </div>
-
-        <!-- Turnover / Days of stock left -->
-        <div class="col-lg-6">
-            <div class="card p-3 h-100">
-                <h5><i class="bi bi-arrow-repeat text-warning"></i> Tovar aylanmasi (top sotilganlar)</h5>
-                <small class="text-muted">Hozirgi sur'atda qancha kun yetadi</small>
-                <div class="table-responsive"><table class="table table-sm mt-1">
-                    <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kunlik o'rt.</th><th>Omborda</th><th>Yetadi</th></tr></thead>
-                    <tbody>
-                    {% for t in turnover %}
-                        <tr>
-                            <td><a href="{% url 'product_detail' t.code %}"><span class="code-pill">{{ t.code }}</span></a></td>
-                            <td>{{ t.name|truncatechars:25 }}</td>
-                            <td>{{ t.daily_avg|floatformat:1 }}</td>
-                            <td>{{ t.stock }}</td>
-                            <td>
-                                {% if t.days_left is not None %}
-                                    {% if t.days_left < 7 %}
-                                        <span class="badge bg-danger">{{ t.days_left|floatformat:0 }} kun</span>
-                                    {% elif t.days_left < 14 %}
-                                        <span class="badge bg-warning text-dark">{{ t.days_left|floatformat:0 }} kun</span>
-                                    {% else %}
-                                        <span class="badge bg-success">{{ t.days_left|floatformat:0 }} kun</span>
-                                    {% endif %}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="5" class="text-muted text-center">Ma'lumot yo'q.</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-        <!-- Top sellers -->
-        <div class="col-lg-7">
-            <div class="card p-3">
-                <h5><i class="bi bi-person-check text-success"></i> Eng yaxshi sotuvchilar</h5>
-                <div class="table-responsive"><table class="table table-sm">
-                    <thead><tr><th>#</th><th>Sotuvchi</th><th>Filial</th><th>Sotuvlar</th><th>Dona</th><th>Daromad</th><th class="text-end">Komissiya</th></tr></thead>
-                    <tbody>
-                    {% for s in top_sellers %}
-                        <tr>
-                            <td><strong>{{ forloop.counter }}</strong></td>
-                            <td>{{ s.sold_by__username }}
-                                {% if s.sold_by__first_name %}
-                                    <small class="text-muted d-block">{{ s.sold_by__first_name }} {{ s.sold_by__last_name }}</small>
-                                {% endif %}
-                            </td>
-                            <td><small>{{ s.sold_by__branch__name|default:"—" }}</small></td>
-                            <td>{{ s.n_sales }}</td>
-                            <td>{{ s.qty }}</td>
-                            <td><strong>{{ s.revenue|som }}</strong></td>
-                            <td class="text-end">
-                                {% if s.commission_percent %}
-                                    <strong class="text-success">{{ s.commission|som }}</strong>
-                                    <div class="small text-muted">{{ s.commission_percent }}%</div>
-                                {% else %}
-                                    <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="7" class="text-muted text-center">Sotuvlar yo'q.</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table></div>
-            </div>
-        </div>
-        <!-- Branch donut -->
-        <div class="col-lg-5">
-            <div class="card p-3 h-100">
-                <h5><i class="bi bi-pie-chart"></i> Filial bo'yicha ulush</h5>
-                <canvas id="branchChart" style="max-height: 250px;"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-        <div class="col-md-6">
-            <div class="card p-3">
-                <h5><i class="bi bi-clock"></i> Soatlar bo'yicha (dona)</h5>
-                <canvas id="hourChart" style="max-height: 200px;"></canvas>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card p-3">
-                <h5><i class="bi bi-calendar-week"></i> Hafta kunlari bo'yicha (dona)</h5>
-                <canvas id="weekdayChart" style="max-height: 200px;"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-        <div class="col-md-6">
-            <div class="card p-3">
-                <h5><i class="bi bi-tags"></i> Kategoriya bo'yicha</h5>
-                <canvas id="categoryChart" style="max-height: 230px;"></canvas>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card p-3">
-                <h5><i class="bi bi-x-octagon text-danger"></i> Omborda tugagan</h5>
-                <div class="table-responsive"><table class="table table-sm">
-                    <thead><tr><th>Filial</th><th>Kod</th><th>O'lcham/Rang</th></tr></thead>
-                    <tbody>
-                    {% for bs in out_of_stock %}
-                        <tr>
-                            <td><small>{{ bs.branch.name }}</small></td>
-                            <td><a href="{% url 'product_detail' bs.variant.product.code %}">{{ bs.variant.product.code }}</a></td>
-                            <td>{{ bs.variant.size }} / {{ bs.variant.color }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="3" class="text-success text-center">Hech narsa tugamagan!</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- D1: Sales forecast -->
-    <div class="card p-3 mb-3">
-        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-            <h5 class="mb-0">
-                <i class="bi bi-graph-up-arrow text-primary"></i>
-                Sotuv bashorati (linear regression)
-            </h5>
-            <div>
-                <span class="badge bg-{% if fc_trend_direction == 'up' %}success{% elif fc_trend_direction == 'down' %}danger{% else %}secondary{% endif %}">
-                    {% if fc_trend_direction == 'up' %}↑ O'sib bormoqda
-                    {% elif fc_trend_direction == 'down' %}↓ Pasayib bormoqda
-                    {% else %}→ Barqaror{% endif %}
-                </span>
-                <span class="ms-2 small text-muted">
-                    Kelgusi 30 kun: <strong>{{ fc_total_30d|som }}</strong>
-                </span>
-            </div>
-        </div>
-        <canvas id="forecastChart" style="max-height: 260px;"></canvas>
-        <small class="text-muted">
-            <i class="bi bi-info-circle"></i> Yashil — haqiqiy 90 kun, qizil chiziq — bashorat 30 kun.
-            Linear regression formulasi: y = a + b·x daily revenue ustida.
-        </small>
-    </div>
-
-    <!-- D2: Customer cohort retention -->
-    {% if cohort_rows|length > 0 %}
-    <div class="card p-3 mb-3">
-        <h5 class="mb-2">
-            <i class="bi bi-people-fill text-info"></i>
-            Mijoz qaytib kelish (cohort) — 6 oy
-        </h5>
-        <small class="text-muted mb-2 d-block">
-            Har qator — birinchi xarid qilgan oy. Hujayralar — keyingi oylarda
-            qaytib kelganlar foizi. Qancha to'q yashil bo'lsa, mijozlar shuncha sodiq.
-        </small>
-        <div class="table-responsive">
-            <table class="table table-sm mb-0" style="min-width: 600px;">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 100px;">Birinchi xarid</th>
-                        <th class="text-end">Mijozlar</th>
-                        {% for m in cohort_months %}<th class="text-center small">{{ m }}</th>{% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                {% for r in cohort_rows %}
-                    <tr>
-                        <td><strong>{{ r.cohort }}</strong></td>
-                        <td class="text-end">{{ r.size }}</td>
-                        {% for cell in r.cells %}
-                            <td class="text-center p-0" style="height: 32px; width: 60px;">
-                                {% if cell %}
-                                    <div style="background: rgba(25, 135, 84, {{ cell.pct|div:100 }});
-                                                color: {% if cell.pct > 50 %}#fff{% else %}#333{% endif %};
-                                                height: 32px; display: flex;
-                                                align-items: center; justify-content: center;
-                                                border-radius: 3px;"
-                                         title="{{ cell.count }} mijoz / {{ r.size }}">
-                                        {% if cell.pct > 0 %}{{ cell.pct|floatformat:0 }}%{% endif %}
-                                    </div>
-                                {% else %}
-                                    <span class="text-muted">—</span>
-                                {% endif %}
-                            </td>
-                        {% endfor %}
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Year-over-year -->
-    <div class="card p-3 mb-3">
-        <h5 class="mb-3"><i class="bi bi-calendar-event"></i> O'tgan yil bilan taqqoslash</h5>
-        {% if not ly_revenue and not ly_qty and not ly_txns %}
-            <div class="alert alert-info py-2 mb-0 small">
-                <i class="bi bi-info-circle"></i>
-                O'tgan yili shu davrda sotuvlar yo'q edi — taqqoslash uchun
-                yetarli ma'lumot to'planmagan. Biznes 1 yildan kam yoshda bo'lishi mumkin.
-            </div>
-        {% else %}
-        <div class="row g-2">
-            <div class="col-md-4">
-                <div class="border rounded p-2 bg-light h-100">
-                    <div class="small text-muted">Tushum</div>
-                    <div class="h5 mb-0">{{ revenue|som }}</div>
-                    <small class="text-muted">O'tgan yil: {{ ly_revenue|som }}</small>
-                    {% if yoy_revenue_delta is not None %}
-                        <span class="badge bg-{% if yoy_revenue_delta >= 0 %}success{% else %}danger{% endif %} ms-1">
-                            {% if yoy_revenue_delta >= 0 %}↑{% else %}↓{% endif %} {{ yoy_revenue_delta|floatformat:0 }}%
-                        </span>
-                    {% elif ly_revenue == 0 %}
-                        <span class="badge bg-secondary ms-1">Birinchi marta</span>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="border rounded p-2 bg-light h-100">
-                    <div class="small text-muted">Sotilgan dona</div>
-                    <div class="h5 mb-0">{{ qty }}</div>
-                    <small class="text-muted">O'tgan yil: {{ ly_qty }}</small>
-                    {% if yoy_qty_delta is not None %}
-                        <span class="badge bg-{% if yoy_qty_delta >= 0 %}success{% else %}danger{% endif %} ms-1">
-                            {% if yoy_qty_delta >= 0 %}↑{% else %}↓{% endif %} {{ yoy_qty_delta|floatformat:0 }}%
-                        </span>
-                    {% elif ly_qty == 0 %}
-                        <span class="badge bg-secondary ms-1">Birinchi marta</span>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="border rounded p-2 bg-light h-100">
-                    <div class="small text-muted">Cheklar</div>
-                    <div class="h5 mb-0">{{ sales_count }}</div>
-                    <small class="text-muted">O'tgan yil: {{ ly_txns }}</small>
-                    {% if yoy_txns_delta is not None %}
-                        <span class="badge bg-{% if yoy_txns_delta >= 0 %}success{% else %}danger{% endif %} ms-1">
-                            {% if yoy_txns_delta >= 0 %}↑{% else %}↓{% endif %} {{ yoy_txns_delta|floatformat:0 }}%
-                        </span>
-                    {% elif ly_txns == 0 %}
-                        <span class="badge bg-secondary ms-1">Birinchi marta</span>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Hour × Weekday heatmap -->
-    <div class="card p-3 mb-3">
-        <h5 class="mb-3">
-            <i class="bi bi-grid-3x3-gap"></i> Soat × Hafta kuni tushum xaritasi
-            <small class="text-muted d-md-none d-inline">← chap-o'ng siljiting</small>
-        </h5>
-        <div class="table-responsive" style="-webkit-overflow-scrolling: touch;">
-            <table class="table table-sm mb-0 heatmap-table" style="font-size:0.7rem; min-width: 600px;">
-                <thead>
-                    <tr>
-                        <th style="width:40px;"></th>
-                        {% for h in heatmap_hour_labels %}<th class="text-center p-1">{{ h }}</th>{% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                {% for day in heatmap_day_labels %}
-                    <tr>
-                        <th class="align-middle">{{ day }}</th>
-                        {% for cell in heatmap|get_item:forloop.counter0 %}
-                            {% with intensity=cell|div:heatmap_max %}
-                            <td class="text-center p-0" style="height:24px;">
-                                {% if cell > 0 %}
-                                    <div style="background: rgba(13, 110, 253, {{ intensity }});
-                                                color: {% if intensity > 0.5 %}#fff{% else %}#333{% endif %};
-                                                height:24px; display:flex;
-                                                align-items:center; justify-content:center;
-                                                border-radius: 2px;"
-                                         title="{{ day }} {{ forloop.counter0 }}:00 — {{ cell|floatformat:0 }} so'm">
-                                        {% if intensity > 0.3 %}{{ cell|som }}{% endif %}
-                                    </div>
-                                {% endif %}
-                            </td>
-                            {% endwith %}
-                        {% endfor %}
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <small class="text-muted">Hujayra rang qancha to'q bo'lsa, shu vaqtda tushum shuncha katta.</small>
-    </div>
-
-    <!-- ABC analysis -->
-    <div class="row g-3 mb-3">
-        <div class="col-lg-6">
-            <div class="card p-3 h-100">
-                <h5 class="mb-2">
-                    <i class="bi bi-bar-chart-steps"></i> ABC tahlili
-                    <small class="text-muted">— mahsulot ulushi</small>
-                </h5>
-                <div class="row g-2 mb-2">
-                    <div class="col-4">
-                        <div class="text-center p-2 border border-success rounded">
-                            <span class="badge bg-success">A</span>
-                            <div class="small">{{ abc_count.A }} mahsulot</div>
-                            <div class="fw-bold">{{ abc_summary.A|som }}</div>
-                            <small class="text-muted">~80% tushum</small>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="text-center p-2 border border-warning rounded">
-                            <span class="badge bg-warning text-dark">B</span>
-                            <div class="small">{{ abc_count.B }} mahsulot</div>
-                            <div class="fw-bold">{{ abc_summary.B|som }}</div>
-                            <small class="text-muted">~15% tushum</small>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="text-center p-2 border border-secondary rounded">
-                            <span class="badge bg-secondary">C</span>
-                            <div class="small">{{ abc_count.C }} mahsulot</div>
-                            <div class="fw-bold">{{ abc_summary.C|som }}</div>
-                            <small class="text-muted">~5% tushum</small>
-                        </div>
                     </div>
                 </div>
-                <div class="small text-muted mb-1">Top A-mahsulotlar:</div>
-                {% for p in abc_top_a %}
-                    <div class="small d-flex justify-content-between border-bottom py-1">
-                        <span>
-                            <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:30 }}</a>
-                        </span>
-                        <strong>{{ p.revenue|som }}</strong>
-                    </div>
-                {% endfor %}
             </div>
         </div>
+    </div>
 
-        <!-- Dead stock -->
+    <!-- ── Daily trend chart ─────────────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-activity text-primary"></i> Kunlik sotuv trendi</h2>
+            <span class="srt-tag">Daromad va dona</span>
+        </div>
+        <div class="srt-section-body">
+            <div class="srt-chart-box"><canvas id="trendChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- ── Branch P&L ────────────────────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-building text-primary"></i> Filiallar P&amp;L</h2>
+            <span class="srt-tag">Sof foyda = Daromad − COGS − Qat'iy</span>
+        </div>
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead><tr>
+                        <th>Filial</th>
+                        <th class="num">Daromad</th>
+                        <th class="num">Tannarx</th>
+                        <th class="num">Brutto</th>
+                        <th class="num">Qat'iy</th>
+                        <th class="num">Sof foyda</th>
+                        <th class="num">Marja</th>
+                        <th class="num">Sotuvlar</th>
+                        <th class="num">Omborda</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for b in branch_compare %}
+                        <tr>
+                            <td><strong>{{ b.branch.name }}</strong></td>
+                            <td class="num">{{ b.revenue|som }}</td>
+                            <td class="num text-muted">{{ b.cost|som }}</td>
+                            <td class="num">{{ b.profit|som }}</td>
+                            <td class="num text-muted"
+                                title="Ijara: {{ b.rent_period|som }} so'm · Boshqa: {{ b.other_period|som }} so'm">
+                                {{ b.fixed_period|som }}
+                            </td>
+                            <td class="num">
+                                <strong class="{% if b.net_profit < 0 %}text-danger{% else %}text-primary{% endif %}">
+                                    {{ b.net_profit|som }}
+                                </strong>
+                            </td>
+                            <td class="num">
+                                <span class="srt-tag {% if b.net_margin < 0 %}danger{% elif b.net_margin < 10 %}accent{% else %}success{% endif %}">
+                                    {{ b.net_margin|floatformat:1 }}%
+                                </span>
+                            </td>
+                            <td class="num">{{ b.sales_count }}</td>
+                            <td class="num text-muted">{{ b.stock }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="text-muted text-center py-3">Ma'lumot yo'q</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Top by revenue + Top by profit ────────────────────────────── -->
+    <div class="row g-3">
         <div class="col-lg-6">
-            <div class="card p-3 h-100">
-                <h5 class="mb-2">
-                    <i class="bi bi-snow text-info"></i> Dead stock
-                    <small class="text-muted">— 90+ kun sotilmagan</small>
-                </h5>
-                {% if dead_products %}
-                    <div class="small text-warning mb-2">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        Jami {{ dead_count }} ta mahsulot 90 kundan beri sotilmagan
-                    </div>
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-trophy text-warning"></i> TOP-10 daromad</h2>
+                </div>
+                <div class="srt-section-body flush">
                     <div class="table-responsive">
-                        <table class="table table-sm mb-0">
-                            <thead class="table-light">
-                                <tr><th>Mahsulot</th><th class="text-end">Zaxira</th><th class="text-end">Qiymat</th></tr>
-                            </thead>
+                        <table class="srt-data-table">
+                            <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th class="num">Dona</th><th class="num">Daromad</th></tr></thead>
                             <tbody>
-                            {% for p in dead_products %}
+                            {% for p in top_products %}
                                 <tr>
-                                    <td>
-                                        <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:24 }}</a>
-                                        <div class="small text-muted"><code>{{ p.code }}</code></div>
-                                    </td>
-                                    <td class="text-end">{{ p.stock|default:0 }}</td>
-                                    <td class="text-end"><strong>{{ p.value|default:0|som }}</strong></td>
+                                    <td><strong>{{ forloop.counter }}</strong></td>
+                                    <td><a href="{% url 'product_detail' p.variant__product__code %}">
+                                        <span class="code-pill">{{ p.variant__product__code }}</span></a></td>
+                                    <td>{{ p.variant__product__name|truncatechars:26 }}</td>
+                                    <td class="num">{{ p.qty }}</td>
+                                    <td class="num"><strong>{{ p.revenue|som }}</strong></td>
                                 </tr>
+                            {% empty %}
+                                <tr><td colspan="5" class="text-muted text-center py-3">Sotuvlar yo'q</td></tr>
                             {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                {% else %}
-                    <div class="text-success text-center py-3">
-                        <i class="bi bi-check-circle"></i> Dead stock yo'q
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-cash-stack text-success"></i> TOP-10 sof foyda</h2>
+                    <span class="srt-tag">Daromad − tannarx</span>
+                </div>
+                <div class="srt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="srt-data-table">
+                            <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th class="num">Foyda</th><th class="num">Marja</th></tr></thead>
+                            <tbody>
+                            {% for p in top_profit %}
+                                <tr>
+                                    <td><strong>{{ forloop.counter }}</strong></td>
+                                    <td><a href="{% url 'product_detail' p.code %}">
+                                        <span class="code-pill">{{ p.code }}</span></a></td>
+                                    <td>{{ p.name|truncatechars:26 }}</td>
+                                    <td class="num"><strong class="text-success">{{ p.profit|som }}</strong></td>
+                                    <td class="num">{{ p.margin|floatformat:1 }}%</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="5" class="text-muted text-center py-3">Sotuvlar yo'q</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                {% endif %}
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Margin alerts -->
-    {% if margin_alerts %}
-    <div class="card p-3 mb-3 border-danger">
-        <h5 class="mb-2 text-danger">
-            <i class="bi bi-exclamation-octagon-fill"></i> Margin ogohlantirish
-            <small class="text-muted">— tannarxdan past sotilgan</small>
-        </h5>
-        <div class="table-responsive">
-            <table class="table table-sm mb-0">
-                <thead class="table-light">
-                    <tr><th>Mahsulot</th><th>Filial</th><th>Sana</th>
-                        <th class="text-end">Sotuv</th><th class="text-end">Tannarx</th>
-                        <th class="text-end">Zarar</th></tr>
-                </thead>
-                <tbody>
-                {% for a in margin_alerts %}
-                    <tr>
-                        <td>
-                            <a href="{% url 'product_detail' a.product.code %}">{{ a.product.name|truncatechars:24 }}</a>
-                            <div class="small text-muted"><code>{{ a.product.code }}</code></div>
-                        </td>
-                        <td><small>{{ a.branch }}</small></td>
-                        <td><small>{{ a.date|date:"d.m.Y H:i" }}</small></td>
-                        <td class="text-end">{{ a.sale_price|som }}</td>
-                        <td class="text-end">{{ a.cost|som }}</td>
-                        <td class="text-end text-danger"><strong>−{{ a.loss|som }}</strong></td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+    <!-- ── Slow movers + Turnover ─────────────────────────────────────── -->
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-snow text-info"></i> Sotilmayotgan</h2>
+                    <span class="srt-tag">Davrda umuman sotilmagan</span>
+                </div>
+                <div class="srt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="srt-data-table">
+                            <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kategoriya</th><th class="num">Omborda</th></tr></thead>
+                            <tbody>
+                            {% for p in slow_products %}
+                                <tr>
+                                    <td><a href="{% url 'product_detail' p.code %}"><span class="code-pill">{{ p.code }}</span></a></td>
+                                    <td>{{ p.name|truncatechars:26 }}</td>
+                                    <td><small>{{ p.category.name|default:"—" }}</small></td>
+                                    <td class="num">{{ p.stock|default:0 }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="4" class="text-success text-center py-3">Hammasi sotilmoqda</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-arrow-repeat text-warning"></i> Tovar aylanmasi</h2>
+                    <span class="srt-tag">Hozirgi sur'atda qancha kun yetadi</span>
+                </div>
+                <div class="srt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="srt-data-table">
+                            <thead><tr><th>Kod</th><th>Mahsulot</th><th class="num">Kunlik o'rt.</th><th class="num">Omborda</th><th class="num">Yetadi</th></tr></thead>
+                            <tbody>
+                            {% for t in turnover %}
+                                <tr>
+                                    <td><a href="{% url 'product_detail' t.code %}"><span class="code-pill">{{ t.code }}</span></a></td>
+                                    <td>{{ t.name|truncatechars:24 }}</td>
+                                    <td class="num">{{ t.daily_avg|floatformat:1 }}</td>
+                                    <td class="num">{{ t.stock }}</td>
+                                    <td class="num">
+                                        {% if t.days_left is not None %}
+                                            <span class="srt-tag {% if t.days_left < 7 %}danger{% elif t.days_left < 14 %}accent{% else %}success{% endif %}">
+                                                {{ t.days_left|floatformat:0 }} kun
+                                            </span>
+                                        {% else %}—{% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="5" class="text-muted text-center py-3">Ma'lumot yo'q</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Top sellers + Branch donut ─────────────────────────────────── -->
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-person-check text-success"></i> Eng yaxshi sotuvchilar</h2>
+                </div>
+                <div class="srt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="srt-data-table">
+                            <thead><tr><th>#</th><th>Sotuvchi</th><th>Filial</th><th class="num">Sotuvlar</th><th class="num">Dona</th><th class="num">Daromad</th><th class="num">Komissiya</th></tr></thead>
+                            <tbody>
+                            {% for s in top_sellers %}
+                                <tr>
+                                    <td><strong>{{ forloop.counter }}</strong></td>
+                                    <td>
+                                        {{ s.sold_by__username }}
+                                        {% if s.sold_by__first_name %}
+                                            <div class="small text-muted">{{ s.sold_by__first_name }} {{ s.sold_by__last_name }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td><small>{{ s.sold_by__branch__name|default:"—" }}</small></td>
+                                    <td class="num">{{ s.n_sales }}</td>
+                                    <td class="num">{{ s.qty }}</td>
+                                    <td class="num"><strong>{{ s.revenue|som }}</strong></td>
+                                    <td class="num">
+                                        {% if s.commission_percent %}
+                                            <strong class="text-success">{{ s.commission|som }}</strong>
+                                            <div class="small text-muted">{{ s.commission_percent }}%</div>
+                                        {% else %}<span class="text-muted">—</span>{% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="7" class="text-muted text-center py-3">Sotuvlar yo'q</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-pie-chart text-primary"></i> Filial bo'yicha ulush</h2>
+                </div>
+                <div class="srt-section-body">
+                    <div class="srt-chart-box short"><canvas id="branchChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Hour + Weekday ─────────────────────────────────────────────── -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-clock text-primary"></i> Soatlar bo'yicha</h2>
+                    <span class="srt-tag">dona</span>
+                </div>
+                <div class="srt-section-body">
+                    <div class="srt-chart-box short"><canvas id="hourChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-calendar-week text-primary"></i> Hafta kunlari</h2>
+                    <span class="srt-tag">dona</span>
+                </div>
+                <div class="srt-section-body">
+                    <div class="srt-chart-box short"><canvas id="weekdayChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Category + Out of stock ────────────────────────────────────── -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-tags text-primary"></i> Kategoriya bo'yicha</h2>
+                </div>
+                <div class="srt-section-body">
+                    <div class="srt-chart-box short"><canvas id="categoryChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-x-octagon text-danger"></i> Omborda tugagan</h2>
+                </div>
+                <div class="srt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="srt-data-table">
+                            <thead><tr><th>Filial</th><th>Kod</th><th>O'lcham / Rang</th></tr></thead>
+                            <tbody>
+                            {% for bs in out_of_stock %}
+                                <tr>
+                                    <td><small>{{ bs.branch.name }}</small></td>
+                                    <td><a href="{% url 'product_detail' bs.variant.product.code %}">{{ bs.variant.product.code }}</a></td>
+                                    <td>{{ bs.variant.size }} / {{ bs.variant.color }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="3" class="text-success text-center py-3">Hech narsa tugamagan</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Forecast ──────────────────────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-graph-up-arrow text-primary"></i> Sotuv bashorati</h2>
+            <div class="d-flex align-items-center gap-2">
+                <span class="srt-tag {% if fc_trend_direction == 'up' %}success{% elif fc_trend_direction == 'down' %}danger{% else %}primary{% endif %}">
+                    {% if fc_trend_direction == 'up' %}<i class="bi bi-arrow-up-short"></i> O'sib bormoqda
+                    {% elif fc_trend_direction == 'down' %}<i class="bi bi-arrow-down-short"></i> Pasayib bormoqda
+                    {% else %}<i class="bi bi-dash"></i> Barqaror{% endif %}
+                </span>
+                <span class="small text-muted">Kelgusi 30 kun: <strong>{{ fc_total_30d|som }}</strong></span>
+            </div>
+        </div>
+        <div class="srt-section-body">
+            <div class="srt-chart-box"><canvas id="forecastChart"></canvas></div>
+            <div class="small text-muted mt-2">
+                <i class="bi bi-info-circle"></i>
+                Yashil — haqiqiy 90 kun, qizil chiziq — bashorat 30 kun.
+                Linear regression: y = a + b·x kunlik daromad ustida.
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Cohort retention ──────────────────────────────────────────── -->
+    {% if cohort_rows|length > 0 %}
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-people-fill text-info"></i> Mijoz qaytib kelish (cohort)</h2>
+            <span class="srt-tag">6 oy</span>
+        </div>
+        <div class="srt-section-body">
+            <div class="small text-muted mb-2">
+                Har qator — birinchi xarid qilgan oy. Hujayralar — keyingi oylarda
+                qaytib kelganlar foizi. Qancha to'q yashil bo'lsa, mijozlar shuncha sodiq.
+            </div>
+            <div class="table-responsive">
+                <table class="srt-data-table" style="min-width: 600px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 110px;">Birinchi xarid</th>
+                            <th class="num" style="width: 80px;">Mijozlar</th>
+                            {% for m in cohort_months %}<th class="text-center small">{{ m }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in cohort_rows %}
+                        <tr>
+                            <td><strong>{{ r.cohort }}</strong></td>
+                            <td class="num">{{ r.size }}</td>
+                            {% for cell in r.cells %}
+                                <td class="text-center p-1" style="width: 60px;">
+                                    {% if cell %}
+                                        <div class="srt-heatmap-cell"
+                                             style="background: rgba(21, 128, 61, {{ cell.pct|div:100 }});
+                                                    color: {% if cell.pct > 50 %}#fff{% else %}var(--srt-fg){% endif %};"
+                                             title="{{ cell.count }} mijoz / {{ r.size }}">
+                                            {% if cell.pct > 0 %}{{ cell.pct|floatformat:0 }}%{% endif %}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     {% endif %}
 
-    <div class="card p-3 mb-4">
-        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-            <h5 class="mb-0">
-                <i class="bi bi-arrow-counterclockwise text-warning"></i>
-                Qaytarilishlar tahlili
-                <small class="text-muted">— sifat muammosi indikator</small>
-            </h5>
+    <!-- ── YoY ───────────────────────────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-calendar-event text-primary"></i> O'tgan yil bilan taqqoslash</h2>
+        </div>
+        <div class="srt-section-body">
+            {% if not ly_revenue and not ly_qty and not ly_txns %}
+                <div class="srt-empty" style="border:none;">
+                    <i class="bi bi-info-circle srt-empty-icon"></i>
+                    O'tgan yil shu davrda sotuvlar yo'q edi — biznes 1 yildan kam yoshda bo'lishi mumkin.
+                </div>
+            {% else %}
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="srt-kpi">
+                            <div class="srt-kpi-label">Tushum</div>
+                            <div class="srt-kpi-value">{{ revenue|som }}</div>
+                            <div class="srt-kpi-meta">
+                                <span>O'tgan yil: <span class="srt-num">{{ ly_revenue|som }}</span></span>
+                                {% if yoy_revenue_delta is not None %}
+                                    <span class="srt-delta {% if yoy_revenue_delta > 0 %}up{% elif yoy_revenue_delta < 0 %}down{% else %}flat{% endif %}">
+                                        {{ yoy_revenue_delta|floatformat:0 }}%
+                                    </span>
+                                {% elif ly_revenue == 0 %}<span class="srt-tag">Birinchi marta</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="srt-kpi">
+                            <div class="srt-kpi-label">Sotilgan dona</div>
+                            <div class="srt-kpi-value">{{ qty }}</div>
+                            <div class="srt-kpi-meta">
+                                <span>O'tgan yil: <span class="srt-num">{{ ly_qty }}</span></span>
+                                {% if yoy_qty_delta is not None %}
+                                    <span class="srt-delta {% if yoy_qty_delta > 0 %}up{% elif yoy_qty_delta < 0 %}down{% else %}flat{% endif %}">
+                                        {{ yoy_qty_delta|floatformat:0 }}%
+                                    </span>
+                                {% elif ly_qty == 0 %}<span class="srt-tag">Birinchi marta</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="srt-kpi">
+                            <div class="srt-kpi-label">Cheklar</div>
+                            <div class="srt-kpi-value">{{ sales_count }}</div>
+                            <div class="srt-kpi-meta">
+                                <span>O'tgan yil: <span class="srt-num">{{ ly_txns }}</span></span>
+                                {% if yoy_txns_delta is not None %}
+                                    <span class="srt-delta {% if yoy_txns_delta > 0 %}up{% elif yoy_txns_delta < 0 %}down{% else %}flat{% endif %}">
+                                        {{ yoy_txns_delta|floatformat:0 }}%
+                                    </span>
+                                {% elif ly_txns == 0 %}<span class="srt-tag">Birinchi marta</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ── Hour × Weekday heatmap ────────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-grid-3x3-gap text-primary"></i> Soat × Hafta kuni tushumi</h2>
+            <span class="srt-tag d-md-none d-inline">← chap-o'ng siljiting</span>
+        </div>
+        <div class="srt-section-body">
+            <div class="table-responsive" style="-webkit-overflow-scrolling: touch;">
+                <table class="srt-data-table" style="font-size: 0.7rem; min-width: 600px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;"></th>
+                            {% for h in heatmap_hour_labels %}<th class="text-center p-1">{{ h }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for day in heatmap_day_labels %}
+                        <tr>
+                            <th class="align-middle">{{ day }}</th>
+                            {% for cell in heatmap|get_item:forloop.counter0 %}
+                                {% with intensity=cell|div:heatmap_max %}
+                                <td class="text-center p-0" style="height: 26px;">
+                                    {% if cell > 0 %}
+                                        <div class="srt-heatmap-cell"
+                                             style="background: rgba(59, 130, 246, {{ intensity }});
+                                                    color: {% if intensity > 0.5 %}#fff{% else %}var(--srt-fg){% endif %};"
+                                             title="{{ day }} {{ forloop.counter0 }}:00 — {{ cell|floatformat:0 }} so'm">
+                                            {% if intensity > 0.3 %}{{ cell|som }}{% endif %}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                {% endwith %}
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-muted mt-1">Hujayra rang qancha to'q bo'lsa, shu vaqtda tushum shuncha katta.</div>
+        </div>
+    </div>
+
+    <!-- ── ABC + Dead stock ──────────────────────────────────────────── -->
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-bar-chart-steps text-primary"></i> ABC tahlili</h2>
+                    <span class="srt-tag">mahsulot ulushi</span>
+                </div>
+                <div class="srt-section-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <div class="srt-kpi accent-success" style="padding: 0.7rem;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="srt-tag success">A</span>
+                                    <span class="small text-muted">~80%</span>
+                                </div>
+                                <div class="srt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.A|som }}</div>
+                                <div class="srt-kpi-meta"><span class="srt-num">{{ abc_count.A }}</span> mahsulot</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="srt-kpi accent-amber" style="padding: 0.7rem;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="srt-tag accent">B</span>
+                                    <span class="small text-muted">~15%</span>
+                                </div>
+                                <div class="srt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.B|som }}</div>
+                                <div class="srt-kpi-meta"><span class="srt-num">{{ abc_count.B }}</span> mahsulot</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="srt-kpi" style="padding: 0.7rem;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="srt-tag">C</span>
+                                    <span class="small text-muted">~5%</span>
+                                </div>
+                                <div class="srt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.C|som }}</div>
+                                <div class="srt-kpi-meta"><span class="srt-num">{{ abc_count.C }}</span> mahsulot</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="small text-muted mb-1 text-uppercase" style="letter-spacing: 0.04em; font-size: 0.72rem;">
+                        Top A-mahsulotlar
+                    </div>
+                    {% for p in abc_top_a %}
+                        <div class="small d-flex justify-content-between border-bottom py-1">
+                            <span>
+                                <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:30 }}</a>
+                            </span>
+                            <strong class="srt-num">{{ p.revenue|som }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2"><i class="bi bi-snow text-info"></i> Dead stock</h2>
+                    <span class="srt-tag">90+ kun sotilmagan</span>
+                </div>
+                <div class="srt-section-body flush">
+                    {% if dead_products %}
+                        <div class="px-3 pt-2 small text-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Jami <strong>{{ dead_count }}</strong> ta mahsulot 90 kundan beri sotilmagan
+                        </div>
+                        <div class="table-responsive">
+                            <table class="srt-data-table">
+                                <thead><tr><th>Mahsulot</th><th class="num">Zaxira</th><th class="num">Qiymat</th></tr></thead>
+                                <tbody>
+                                {% for p in dead_products %}
+                                    <tr>
+                                        <td>
+                                            <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:24 }}</a>
+                                            <div class="small text-muted"><code>{{ p.code }}</code></div>
+                                        </td>
+                                        <td class="num">{{ p.stock|default:0 }}</td>
+                                        <td class="num"><strong>{{ p.value|default:0|som }}</strong></td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="srt-empty" style="border:none;">
+                            <i class="bi bi-check-circle-fill srt-empty-icon text-success"></i>
+                            Dead stock yo'q
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Margin alerts ─────────────────────────────────────────────── -->
+    {% if margin_alerts %}
+    <div class="srt-section" style="border-color: var(--srt-danger);">
+        <div class="srt-section-head" style="background: rgba(185, 28, 28, 0.06);">
+            <h2 class="srt-h2 text-danger">
+                <i class="bi bi-exclamation-octagon-fill"></i> Margin ogohlantirish
+            </h2>
+            <span class="srt-tag danger">Tannarxdan past sotilgan</span>
+        </div>
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead><tr><th>Mahsulot</th><th>Filial</th><th>Sana</th>
+                        <th class="num">Sotuv</th><th class="num">Tannarx</th>
+                        <th class="num">Zarar</th></tr></thead>
+                    <tbody>
+                    {% for a in margin_alerts %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'product_detail' a.product.code %}">{{ a.product.name|truncatechars:24 }}</a>
+                                <div class="small text-muted"><code>{{ a.product.code }}</code></div>
+                            </td>
+                            <td><small>{{ a.branch }}</small></td>
+                            <td><small class="srt-num">{{ a.date|date:"d.m.Y H:i" }}</small></td>
+                            <td class="num">{{ a.sale_price|som }}</td>
+                            <td class="num">{{ a.cost|som }}</td>
+                            <td class="num text-danger"><strong>−{{ a.loss|som }}</strong></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Returns ──────────────────────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-arrow-counterclockwise text-warning"></i> Qaytarilishlar</h2>
             <div class="text-end">
                 <div class="small text-muted">Jami qaytarilgan</div>
                 <div>
-                    <strong>{{ returns_total_qty }}</strong> dona
+                    <strong class="srt-num">{{ returns_total_qty }}</strong> dona
                     {% if returns_total_amount %}
-                        · <strong>{{ returns_total_amount|som }}</strong> so'm
+                        · <strong class="srt-num">{{ returns_total_amount|som }}</strong> so'm
                     {% endif %}
                     {% if return_rate %}
-                        · <span class="badge bg-{% if return_rate > 5 %}danger{% elif return_rate > 2 %}warning{% else %}success{% endif %}">
+                        · <span class="srt-tag {% if return_rate > 5 %}danger{% elif return_rate > 2 %}accent{% else %}success{% endif %}">
                             {{ return_rate|floatformat:1 }}% sotuvlardan
                         </span>
                     {% endif %}
                 </div>
             </div>
         </div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Kod</th>
-                        <th>Mahsulot</th>
-                        <th class="text-end">Qaytarilgan</th>
-                        <th class="text-end">Sotilgan</th>
-                        <th class="text-end">Foiz</th>
-                        <th>Asosiy sabablar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for r in top_returns %}
-                    <tr>
-                        <td><a href="{% url 'product_detail' r.code %}"><code>{{ r.code }}</code></a></td>
-                        <td>{{ r.name|truncatechars:32 }}</td>
-                        <td class="text-end"><strong>{{ r.returned }}</strong></td>
-                        <td class="text-end text-muted">{{ r.sold }}</td>
-                        <td class="text-end">
-                            {% if r.sold %}
-                                <span class="badge bg-{% if r.rate > 20 %}danger{% elif r.rate > 10 %}warning{% else %}secondary{% endif %}">
-                                    {{ r.rate|floatformat:1 }}%
-                                </span>
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% for reason in r.reasons %}
-                                <span class="badge bg-light text-dark border">{{ reason|truncatechars:30 }}</span>
-                            {% empty %}
-                                <span class="text-muted small">sabab kiritilmagan</span>
-                            {% endfor %}
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="6" class="text-success text-center py-3">
-                            <i class="bi bi-check-circle"></i> Bu davrda qaytarilishlar yo'q
-                        </td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead>
+                        <tr>
+                            <th>Kod</th>
+                            <th>Mahsulot</th>
+                            <th class="num">Qaytarilgan</th>
+                            <th class="num">Sotilgan</th>
+                            <th class="num">Foiz</th>
+                            <th>Asosiy sabablar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in top_returns %}
+                        <tr>
+                            <td><a href="{% url 'product_detail' r.code %}"><code>{{ r.code }}</code></a></td>
+                            <td>{{ r.name|truncatechars:32 }}</td>
+                            <td class="num"><strong>{{ r.returned }}</strong></td>
+                            <td class="num text-muted">{{ r.sold }}</td>
+                            <td class="num">
+                                {% if r.sold %}
+                                    <span class="srt-tag {% if r.rate > 20 %}danger{% elif r.rate > 10 %}accent{% else %}primary{% endif %}">
+                                        {{ r.rate|floatformat:1 }}%
+                                    </span>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% for reason in r.reasons %}
+                                    <span class="srt-tag">{{ reason|truncatechars:30 }}</span>
+                                {% empty %}
+                                    <span class="text-muted small">sabab kiritilmagan</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-success text-center py-3">
+                            <i class="bi bi-check-circle"></i> Qaytarilishlar yo'q
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <div class="card p-3 mb-4">
-        <h5><i class="bi bi-percent text-success"></i> Eng yuqori foiz markup'li mahsulotlar</h5>
-        <div class="row g-2">
-        {% for p in high_margin %}
-            <div class="col-6 col-md-3">
-                <div class="border rounded p-2">
-                    <div class="small text-muted">{{ p.code }}</div>
-                    <div>{{ p.name|truncatechars:25 }}</div>
-                    <div class="text-success"><strong>{{ p.markup_percent }}%</strong> markup</div>
+    <!-- ── High markup ──────────────────────────────────────────────── -->
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-percent text-success"></i> Eng yuqori markup'li mahsulotlar</h2>
+        </div>
+        <div class="srt-section-body">
+            <div class="row g-2">
+            {% for p in high_margin %}
+                <div class="col-6 col-md-3">
+                    <div class="srt-kpi accent-success" style="padding: 0.7rem;">
+                        <div class="small text-muted">{{ p.code }}</div>
+                        <div style="font-size: 0.9rem; line-height: 1.2; min-height: 2.4em;">
+                            {{ p.name|truncatechars:25 }}
+                        </div>
+                        <div class="srt-kpi-value" style="font-size: 1.35rem;">
+                            <span class="text-success">{{ p.markup_percent }}%</span>
+                        </div>
+                        <div class="srt-kpi-meta">markup</div>
+                    </div>
                 </div>
+            {% endfor %}
             </div>
-        {% endfor %}
         </div>
     </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -759,108 +859,226 @@
 {{ fc_forecast_labels|json_script:"fc-forecast-labels" }}
 {{ fc_forecast_values|json_script:"fc-forecast-values" }}
 <script>
-const CH_COLORS = ['#0d6efd', '#198754', '#fd7e14', '#dc3545', '#6f42c1',
-                   '#20c997', '#ffc107', '#0dcaf0', '#d63384', '#6610f2'];
-
-// D1: Sales forecast chart
 (function() {
-    const el = document.getElementById('forecastChart');
-    if (!el) return;
-    const actualLabels = JSON.parse(document.getElementById('fc-actual-labels').textContent);
-    const actualValues = JSON.parse(document.getElementById('fc-actual-values').textContent);
-    const forecastLabels = JSON.parse(document.getElementById('fc-forecast-labels').textContent);
-    const forecastValues = JSON.parse(document.getElementById('fc-forecast-values').textContent);
-    const labels = [...actualLabels, ...forecastLabels];
-    const actualSeries = [...actualValues, ...Array(forecastValues.length).fill(null)];
-    const forecastSeries = [...Array(actualValues.length - 1).fill(null),
-                            actualValues[actualValues.length - 1],
-                            ...forecastValues];
-    new Chart(el, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {label: 'Haqiqiy (90 kun)', data: actualSeries, borderColor: '#198754',
-                 backgroundColor: 'rgba(25,135,84,0.1)', tension: 0.3, fill: true,
-                 pointRadius: 0},
-                {label: 'Bashorat (30 kun)', data: forecastSeries, borderColor: '#dc3545',
-                 borderDash: [6, 4], tension: 0.3, fill: false, pointRadius: 0},
-            ]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            scales: {
-                y: { ticks: { callback: v => (v/1000).toFixed(0) + 'k' } },
-                x: { ticks: { maxTicksLimit: 12 } }
+    /* ──────────── Theme helpers (read CSS vars + dark-mode aware) ────── */
+    function css(name, fallback) {
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return v || fallback;
+    }
+    function hexToRgba(hex, a) {
+        const f = hex.replace('#','');
+        const x = f.length === 3 ? f.split('').map(c=>c+c).join('') : f;
+        const r = parseInt(x.slice(0,2),16),
+              g = parseInt(x.slice(2,4),16),
+              b = parseInt(x.slice(4,6),16);
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const primary = css('--srt-primary', '#1E40AF');
+    const accent  = css('--srt-accent',  '#D97706');
+    const success = css('--srt-success', '#15803D');
+    const danger  = css('--srt-danger',  '#B91C1C');
+    const fg      = css('--srt-fg',      '#0F172A');
+    const muted   = css('--srt-fg-muted','#475569');
+    const gridColor = isDark ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.06)';
+
+    /* Palette for multi-series charts */
+    const PALETTE = [
+        primary,
+        success,
+        accent,
+        danger,
+        '#6366F1',  // indigo
+        '#10B981',  // emerald
+        '#F59E0B',  // amber
+        '#06B6D4',  // cyan
+        '#EC4899',  // pink
+        '#8B5CF6',  // violet
+    ];
+
+    /* Common defaults for every chart on the page */
+    Chart.defaults.font.family = 'Fira Sans';
+    Chart.defaults.color = muted;
+    Chart.defaults.plugins.legend.labels.color = muted;
+    Chart.defaults.plugins.tooltip.backgroundColor = isDark ? '#1C2230' : '#FFFFFF';
+    Chart.defaults.plugins.tooltip.titleColor = fg;
+    Chart.defaults.plugins.tooltip.bodyColor = fg;
+    Chart.defaults.plugins.tooltip.borderColor = gridColor;
+    Chart.defaults.plugins.tooltip.borderWidth = 1;
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.boxPadding = 4;
+    Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? false : { duration: 400 };
+
+    function gridScale(opts) {
+        return Object.assign({
+            grid: { color: gridColor },
+            ticks: { color: muted }
+        }, opts || {});
+    }
+    function somTickCb(v) {
+        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
+        if (v >= 1000) return (v/1000).toFixed(0) + 'k';
+        return v;
+    }
+    function fmtSom(n) {
+        return new Intl.NumberFormat('uz-UZ').format(n) + " so'm";
+    }
+
+    /* ──────────── Forecast (line, actual + dashed predicted) ──────── */
+    (function() {
+        const el = document.getElementById('forecastChart');
+        if (!el) return;
+        const actualLabels = JSON.parse(document.getElementById('fc-actual-labels').textContent);
+        const actualValues = JSON.parse(document.getElementById('fc-actual-values').textContent);
+        const forecastLabels = JSON.parse(document.getElementById('fc-forecast-labels').textContent);
+        const forecastValues = JSON.parse(document.getElementById('fc-forecast-values').textContent);
+        const labels = [...actualLabels, ...forecastLabels];
+        const actualSeries = [...actualValues, ...Array(forecastValues.length).fill(null)];
+        const forecastSeries = [...Array(actualValues.length - 1).fill(null),
+                                actualValues[actualValues.length - 1],
+                                ...forecastValues];
+        new Chart(el, {
+            type: 'line',
+            data: { labels, datasets: [
+                {label: 'Haqiqiy (90 kun)', data: actualSeries,
+                 borderColor: success, backgroundColor: hexToRgba(success, 0.10),
+                 tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2},
+                {label: 'Bashorat (30 kun)', data: forecastSeries,
+                 borderColor: danger, borderDash: [6, 4], tension: 0.3,
+                 fill: false, pointRadius: 0, borderWidth: 2},
+            ]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: gridScale({ ticks: { color: muted, callback: somTickCb } }),
+                    x: gridScale({ ticks: { color: muted, maxTicksLimit: 12 } })
+                },
+                plugins: { tooltip: { callbacks: { label: c => fmtSom(c.parsed.y || 0) } } }
             }
-        }
-    });
+        });
+    })();
+
+    /* ──────────── Daily trend (revenue + qty dual axis) ───────────── */
+    (function() {
+        const el = document.getElementById('trendChart');
+        if (!el) return;
+        new Chart(el, {
+            type: 'line',
+            data: {
+                labels: {{ daily_labels|safe }},
+                datasets: [{
+                    label: "Daromad (so'm)",
+                    data: {{ daily_revenue|safe }},
+                    borderColor: primary,
+                    backgroundColor: hexToRgba(primary, 0.10),
+                    fill: true, tension: 0.3, yAxisID: 'y',
+                    pointRadius: 0, borderWidth: 2,
+                }, {
+                    label: 'Sotilgan dona',
+                    data: {{ daily_qty|safe }},
+                    borderColor: accent, tension: 0.3, yAxisID: 'y1',
+                    pointRadius: 0, borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    y:  Object.assign(gridScale(), { position: 'left',
+                        ticks: { color: muted, callback: somTickCb },
+                        title: { display: true, text: "so'm", color: muted } }),
+                    y1: { position: 'right', grid: { drawOnChartArea: false },
+                        ticks: { color: muted },
+                        title: { display: true, text: 'dona', color: muted } },
+                    x:  gridScale()
+                },
+            },
+        });
+    })();
+
+    /* ──────────── Branch share (doughnut) ─────────────────────────── */
+    (function() {
+        const el = document.getElementById('branchChart');
+        if (!el) return;
+        new Chart(el, {
+            type: 'doughnut',
+            data: {
+                labels: [{% for b in by_branch %}"{{ b.branch__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                datasets: [{
+                    data: [{% for b in by_branch %}{{ b.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    backgroundColor: PALETTE,
+                    borderColor: isDark ? '#151A26' : '#FFFFFF',
+                    borderWidth: 2,
+                }],
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: { tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } } }
+            }
+        });
+    })();
+
+    /* ──────────── Hour bars ───────────────────────────────────────── */
+    (function() {
+        const el = document.getElementById('hourChart');
+        if (!el) return;
+        new Chart(el, {
+            type: 'bar',
+            data: {
+                labels: [...Array(24).keys()].map(h => h + ':00'),
+                datasets: [{ label: 'Sotilgan dona',
+                    data: {{ hour_buckets|safe }},
+                    backgroundColor: primary,
+                    borderRadius: 4, maxBarThickness: 22 }],
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: gridScale(), y: gridScale() }
+            }
+        });
+    })();
+
+    /* ──────────── Weekday bars ────────────────────────────────────── */
+    (function() {
+        const el = document.getElementById('weekdayChart');
+        if (!el) return;
+        new Chart(el, {
+            type: 'bar',
+            data: {
+                labels: {{ weekday_labels|safe }},
+                datasets: [{ label: 'Sotilgan dona',
+                    data: {{ weekday_buckets|safe }},
+                    backgroundColor: accent,
+                    borderRadius: 4, maxBarThickness: 32 }],
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: gridScale(), y: gridScale() }
+            }
+        });
+    })();
+
+    /* ──────────── Category pie ────────────────────────────────────── */
+    (function() {
+        const el = document.getElementById('categoryChart');
+        if (!el) return;
+        new Chart(el, {
+            type: 'doughnut',
+            data: {
+                labels: [{% for c in by_category %}"{{ c.variant__product__category__name|default:'(yo`q)'|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                datasets: [{
+                    data: [{% for c in by_category %}{{ c.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    backgroundColor: PALETTE,
+                    borderColor: isDark ? '#151A26' : '#FFFFFF',
+                    borderWidth: 2,
+                }],
+            },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '55%',
+                plugins: { tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } } }
+            }
+        });
+    })();
 })();
-
-new Chart(document.getElementById('trendChart'), {
-    type: 'line',
-    data: {
-        labels: {{ daily_labels|safe }},
-        datasets: [{
-            label: "Daromad (so'm)",
-            data: {{ daily_revenue|safe }},
-            borderColor: '#0d6efd',
-            backgroundColor: 'rgba(13,110,253,0.1)',
-            fill: true, tension: 0.3, yAxisID: 'y',
-        }, {
-            label: 'Sotilgan dona',
-            data: {{ daily_qty|safe }},
-            borderColor: '#198754', tension: 0.3, yAxisID: 'y1',
-        }],
-    },
-    options: {
-        responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-            y:  { position: 'left', title: { display: true, text: "so'm" } },
-            y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'dona' } },
-        },
-    },
-});
-
-new Chart(document.getElementById('branchChart'), {
-    type: 'doughnut',
-    data: {
-        labels: [{% for b in by_branch %}"{{ b.branch__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            data: [{% for b in by_branch %}{{ b.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
-            backgroundColor: CH_COLORS,
-        }],
-    },
-});
-
-new Chart(document.getElementById('hourChart'), {
-    type: 'bar',
-    data: {
-        labels: [...Array(24).keys()].map(h => h + ':00'),
-        datasets: [{ label: 'Sotilgan dona', data: {{ hour_buckets|safe }}, backgroundColor: '#0d6efd' }],
-    },
-    options: { plugins: { legend: { display: false } } },
-});
-
-new Chart(document.getElementById('weekdayChart'), {
-    type: 'bar',
-    data: {
-        labels: {{ weekday_labels|safe }},
-        datasets: [{ label: 'Sotilgan dona', data: {{ weekday_buckets|safe }}, backgroundColor: '#fd7e14' }],
-    },
-    options: { plugins: { legend: { display: false } } },
-});
-
-new Chart(document.getElementById('categoryChart'), {
-    type: 'pie',
-    data: {
-        labels: [{% for c in by_category %}"{{ c.variant__product__category__name|default:'(yo`q)'|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
-        datasets: [{
-            data: [{% for c in by_category %}{{ c.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
-            backgroundColor: CH_COLORS,
-        }],
-    },
-});
 </script>
 {% endblock %}

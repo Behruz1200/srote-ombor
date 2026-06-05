@@ -5,116 +5,121 @@
 
 {% block content %}
 <div class="container-fluid px-3">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-building"></i> Filiallar</h3>
-        <a href="{% url 'branch_create' %}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Yangi filial
-        </a>
-    </div>
 
-    <!-- Top stats -->
-    <div class="row g-3 mb-3">
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Faol filiallar</div>
-                <div class="h3 mb-0">{{ total_branches }}</div>
-            </div>
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1"><i class="bi bi-building me-1 text-primary"></i> Filiallar</h1>
+            <div class="srt-sub">Filiallar va ularning 30 kunlik P&amp;L</div>
         </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">30 kunlik jami tushum</div>
-                <div class="h3 mb-0 text-success">{{ total_revenue|som }}</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Jami zaxira qiymati</div>
-                <div class="h3 mb-0 text-primary">{{ total_stock_value|som }}</div>
-            </div>
+        <div class="srt-actions">
+            <a href="{% url 'branch_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> <span class="btn-text">Yangi filial</span>
+            </a>
         </div>
     </div>
 
-    <div class="card">
-        <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Filial</th>
-                        <th>Aloqa</th>
-                        <th class="text-end">Xodimlar</th>
-                        <th class="text-end">Zaxira</th>
-                        <th class="text-end">30 kun cheklar</th>
-                        <th class="text-end">30 kun tushum</th>
-                        <th class="text-end">Brutto foyda</th>
-                        <th class="text-end">Sof foyda</th>
-                        <th>Holat</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for b in branches %}
-                    <tr {% if not b.is_active %}class="text-muted"{% endif %}>
-                        <td>
-                            <strong>{{ b.name }}</strong>
-                            {% if b.address %}
-                                <div class="small text-muted">{{ b.address|truncatechars:32 }}</div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if b.phone %}
-                                <small><i class="bi bi-telephone"></i> {{ b.phone }}</small>
-                            {% endif %}
-                            {% if b.inn %}
-                                <div class="small text-muted">STIR: <code>{{ b.inn }}</code></div>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">{{ b.staff_count }}</td>
-                        <td class="text-end">
-                            <strong>{{ b.stock_total }}</strong>
-                            <div class="small text-muted">{{ b.stock_value|som }}</div>
-                        </td>
-                        <td class="text-end">{{ b.m_txns }}</td>
-                        <td class="text-end">
-                            {% if b.m_revenue %}<strong>{{ b.m_revenue|som }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if b.m_gross %}{{ b.m_gross|som }}{% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if b.m_net %}
-                                <strong class="text-{% if b.m_net < 0 %}danger{% else %}success{% endif %}">
-                                    {{ b.m_net|som }}
-                                </strong>
-                                {% if b.m_margin %}
-                                    <div class="small text-muted">{{ b.m_margin|floatformat:0 }}%</div>
+    <div class="srt-kpi-grid">
+        <div class="srt-kpi accent">
+            <div class="srt-kpi-label"><i class="bi bi-building"></i> Faol filiallar</div>
+            <div class="srt-kpi-value">{{ total_branches }}</div>
+        </div>
+        <div class="srt-kpi accent-success">
+            <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> 30 kunlik tushum</div>
+            <div class="srt-kpi-value">{{ total_revenue|som }}</div>
+        </div>
+        <div class="srt-kpi accent-amber">
+            <div class="srt-kpi-label"><i class="bi bi-archive"></i> Zaxira qiymati</div>
+            <div class="srt-kpi-value">{{ total_stock_value|som }}</div>
+        </div>
+    </div>
+
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Filiallar ro'yxati</h2>
+            <span class="srt-tag">Statistika so'nggi 30 kun</span>
+        </div>
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead>
+                        <tr>
+                            <th>Filial</th>
+                            <th>Aloqa</th>
+                            <th class="num">Xodimlar</th>
+                            <th class="num">Zaxira</th>
+                            <th class="num">30k cheklar</th>
+                            <th class="num">30k tushum</th>
+                            <th class="num">Brutto foyda</th>
+                            <th class="num">Sof foyda</th>
+                            <th>Holat</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for b in branches %}
+                        <tr {% if not b.is_active %}class="text-muted"{% endif %}>
+                            <td>
+                                <strong>{{ b.name }}</strong>
+                                {% if b.address %}
+                                    <div class="small text-muted">{{ b.address|truncatechars:32 }}</div>
                                 {% endif %}
-                            {% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td>
-                            {% if b.is_active %}
-                                <span class="badge bg-success">Faol</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Nofaol</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{% url 'branch_edit' b.pk %}" class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="10" class="text-center text-muted py-4">
-                        Filiallar yo'q. <a href="{% url 'branch_create' %}">Birinchisini qo'shing</a>.
-                    </td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+                            </td>
+                            <td>
+                                {% if b.phone %}
+                                    <small><i class="bi bi-telephone"></i> {{ b.phone }}</small>
+                                {% endif %}
+                                {% if b.inn %}
+                                    <div class="small text-muted">STIR: <code>{{ b.inn }}</code></div>
+                                {% endif %}
+                            </td>
+                            <td class="num">{{ b.staff_count }}</td>
+                            <td class="num">
+                                <strong>{{ b.stock_total }}</strong>
+                                <div class="small text-muted">{{ b.stock_value|som }}</div>
+                            </td>
+                            <td class="num">{{ b.m_txns }}</td>
+                            <td class="num">
+                                {% if b.m_revenue %}<strong>{{ b.m_revenue|som }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="num">
+                                {% if b.m_gross %}{{ b.m_gross|som }}{% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="num">
+                                {% if b.m_net %}
+                                    <strong class="text-{% if b.m_net < 0 %}danger{% else %}success{% endif %}">
+                                        {{ b.m_net|som }}
+                                    </strong>
+                                    {% if b.m_margin %}
+                                        <div class="small text-muted">{{ b.m_margin|floatformat:0 }}%</div>
+                                    {% endif %}
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if b.is_active %}
+                                    <span class="srt-tag success">Faol</span>
+                                {% else %}
+                                    <span class="srt-tag">Nofaol</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'branch_edit' b.pk %}"
+                                   class="btn btn-sm btn-outline-secondary" aria-label="Tahrirlash">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="10" class="text-center text-muted py-4">
+                            Filiallar yo'q. <a href="{% url 'branch_create' %}">Birinchisini qo'shing</a>.
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     <small class="text-muted mt-2 d-block">
         <i class="bi bi-info-circle"></i> Sof foyda = Tushum − COGS − Qat'iy oylik xarajatlar (ijara + boshqa).
-        Statistika so'nggi 30 kun bo'yicha.
     </small>
 </div>
 {% endblock %}

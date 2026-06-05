@@ -5,275 +5,348 @@
 
 {% block content %}
 <div class="container-fluid px-3">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0">
-            <i class="bi bi-speedometer2"></i> Boshqaruv
-            <small class="text-muted fs-6">— {{ today|date:"l, d F Y" }}</small>
-        </h3>
-        <div class="d-flex gap-2">
+
+    <!-- ── Page header ────────────────────────────────────────────────── -->
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1">
+                <i class="bi bi-speedometer2 me-1 text-primary"></i> Boshqaruv
+            </h1>
+            <div class="srt-sub">{{ today|date:"l, d F Y" }} — kunlik xulosa</div>
+        </div>
+        <div class="srt-actions">
             <a href="{% url 'pos_terminal' %}" class="btn btn-success">
-                <i class="bi bi-upc-scan"></i> POS ochish
+                <i class="bi bi-upc-scan"></i> <span class="btn-text">POS ochish</span>
             </a>
             <a href="{% url 'intake_quick' %}" class="btn btn-outline-primary">
-                <i class="bi bi-lightning-charge"></i> Tezkor qabul
+                <i class="bi bi-lightning-charge"></i> <span class="btn-text">Tezkor qabul</span>
             </a>
             <a href="{% url 'insights' %}" class="btn btn-outline-secondary">
-                <i class="bi bi-graph-up-arrow"></i> Tahlil
+                <i class="bi bi-graph-up-arrow"></i> <span class="btn-text">Tahlil</span>
             </a>
             <form method="post" action="{% url 'send_daily_summary_now' %}" class="d-inline">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline-info"
-                        title="Hozir Telegram'ga kunlik xulosa yuborish">
+                        title="Hozir Telegram'ga kunlik xulosa yuborish"
+                        aria-label="Telegram'ga kunlik xulosa yuborish">
                     <i class="bi bi-telegram"></i>
                 </button>
             </form>
         </div>
     </div>
 
-    <!-- Bugungi KPI'lar (kecha bilan taqqoslash) -->
-    <div class="row g-3 mb-3">
-        <div class="col-md-3">
-            <div class="card p-3 h-100">
-                <div class="text-muted small text-uppercase">Bugungi tushum</div>
-                <div class="display-6 fw-bold text-success">{{ today_stats.revenue|som }}</div>
-                <div class="small">
-                    <span class="text-muted">Kecha: {{ yesterday_stats.revenue|som }} so'm</span>
-                    {% if deltas.revenue is not None %}
-                        <span class="badge bg-{% if deltas.revenue >= 0 %}success{% else %}danger{% endif %} ms-1">
-                            {% if deltas.revenue >= 0 %}↑{% else %}↓{% endif %}
-                            {{ deltas.revenue|floatformat:0 }}%
-                        </span>
-                    {% endif %}
-                </div>
+    <!-- ── KPI strip ──────────────────────────────────────────────────── -->
+    <div class="srt-kpi-grid" role="group" aria-label="Bugungi asosiy ko'rsatkichlar">
+
+        <div class="srt-kpi accent-success">
+            <div class="srt-kpi-label">
+                <i class="bi bi-cash-coin"></i> Bugungi tushum
+            </div>
+            <div class="srt-kpi-value">{{ today_stats.revenue|som }}</div>
+            <div class="srt-kpi-meta">
+                <span>Kecha: <span class="srt-num">{{ yesterday_stats.revenue|som }}</span></span>
+                {% if deltas.revenue is not None %}
+                    <span class="srt-delta {% if deltas.revenue > 0 %}up{% elif deltas.revenue < 0 %}down{% else %}flat{% endif %}">
+                        {% if deltas.revenue > 0 %}<i class="bi bi-arrow-up-short"></i>
+                        {% elif deltas.revenue < 0 %}<i class="bi bi-arrow-down-short"></i>
+                        {% else %}<i class="bi bi-dash"></i>{% endif %}
+                        {{ deltas.revenue|floatformat:0 }}%
+                    </span>
+                {% endif %}
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card p-3 h-100">
-                <div class="text-muted small text-uppercase">Bugungi foyda</div>
-                <div class="display-6 fw-bold text-primary">{{ today_stats.profit|som }}</div>
-                <div class="small">
-                    <span class="text-muted">Marja: {{ today_stats.margin|floatformat:1 }}%</span>
-                    {% if deltas.profit is not None %}
-                        <span class="badge bg-{% if deltas.profit >= 0 %}success{% else %}danger{% endif %} ms-1">
-                            {% if deltas.profit >= 0 %}↑{% else %}↓{% endif %}
-                            {{ deltas.profit|floatformat:0 }}%
-                        </span>
-                    {% endif %}
-                </div>
+
+        <div class="srt-kpi accent">
+            <div class="srt-kpi-label">
+                <i class="bi bi-graph-up-arrow"></i> Bugungi foyda
+            </div>
+            <div class="srt-kpi-value">{{ today_stats.profit|som }}</div>
+            <div class="srt-kpi-meta">
+                <span>Marja: <span class="srt-num">{{ today_stats.margin|floatformat:1 }}%</span></span>
+                {% if deltas.profit is not None %}
+                    <span class="srt-delta {% if deltas.profit > 0 %}up{% elif deltas.profit < 0 %}down{% else %}flat{% endif %}">
+                        {% if deltas.profit > 0 %}<i class="bi bi-arrow-up-short"></i>
+                        {% elif deltas.profit < 0 %}<i class="bi bi-arrow-down-short"></i>
+                        {% else %}<i class="bi bi-dash"></i>{% endif %}
+                        {{ deltas.profit|floatformat:0 }}%
+                    </span>
+                {% endif %}
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card p-3 h-100">
-                <div class="text-muted small text-uppercase">Cheklar</div>
-                <div class="display-6 fw-bold">{{ today_stats.txns }}</div>
-                <div class="small">
-                    <span class="text-muted">Kecha: {{ yesterday_stats.txns }}</span>
-                    {% if deltas.txns is not None %}
-                        <span class="badge bg-{% if deltas.txns >= 0 %}success{% else %}danger{% endif %} ms-1">
-                            {% if deltas.txns >= 0 %}↑{% else %}↓{% endif %}
-                            {{ deltas.txns|floatformat:0 }}%
-                        </span>
-                    {% endif %}
-                </div>
+
+        <div class="srt-kpi accent-amber">
+            <div class="srt-kpi-label">
+                <i class="bi bi-receipt"></i> Cheklar
+            </div>
+            <div class="srt-kpi-value">{{ today_stats.txns }}</div>
+            <div class="srt-kpi-meta">
+                <span>Kecha: <span class="srt-num">{{ yesterday_stats.txns }}</span></span>
+                {% if deltas.txns is not None %}
+                    <span class="srt-delta {% if deltas.txns > 0 %}up{% elif deltas.txns < 0 %}down{% else %}flat{% endif %}">
+                        {% if deltas.txns > 0 %}<i class="bi bi-arrow-up-short"></i>
+                        {% elif deltas.txns < 0 %}<i class="bi bi-arrow-down-short"></i>
+                        {% else %}<i class="bi bi-dash"></i>{% endif %}
+                        {{ deltas.txns|floatformat:0 }}%
+                    </span>
+                {% endif %}
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card p-3 h-100">
-                <div class="text-muted small text-uppercase">Sotilgan dona</div>
-                <div class="display-6 fw-bold">{{ today_stats.qty }}</div>
-                <div class="small">
-                    <span class="text-muted">Kecha: {{ yesterday_stats.qty }}</span>
-                    {% if deltas.qty is not None %}
-                        <span class="badge bg-{% if deltas.qty >= 0 %}success{% else %}danger{% endif %} ms-1">
-                            {% if deltas.qty >= 0 %}↑{% else %}↓{% endif %}
-                            {{ deltas.qty|floatformat:0 }}%
-                        </span>
-                    {% endif %}
-                </div>
+
+        <div class="srt-kpi">
+            <div class="srt-kpi-label">
+                <i class="bi bi-box-seam"></i> Sotilgan dona
+            </div>
+            <div class="srt-kpi-value">{{ today_stats.qty }}</div>
+            <div class="srt-kpi-meta">
+                <span>Kecha: <span class="srt-num">{{ yesterday_stats.qty }}</span></span>
+                {% if deltas.qty is not None %}
+                    <span class="srt-delta {% if deltas.qty > 0 %}up{% elif deltas.qty < 0 %}down{% else %}flat{% endif %}">
+                        {% if deltas.qty > 0 %}<i class="bi bi-arrow-up-short"></i>
+                        {% elif deltas.qty < 0 %}<i class="bi bi-arrow-down-short"></i>
+                        {% else %}<i class="bi bi-dash"></i>{% endif %}
+                        {{ deltas.qty|floatformat:0 }}%
+                    </span>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- "Diqqat" widget'i + Trend chart -->
+    <!-- ── Trend + Attention ──────────────────────────────────────────── -->
     <div class="row g-3 mb-3">
         <div class="col-lg-8">
-            <div class="card p-3 h-100">
-                <h6 class="text-muted text-uppercase small mb-2">
-                    <i class="bi bi-graph-up"></i> So'nggi 7 kun tushum
-                </h6>
-                <canvas id="trendChart" style="max-height: 240px;"></canvas>
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2">
+                        <i class="bi bi-graph-up text-primary"></i> So'nggi 7 kun tushumi
+                    </h2>
+                    <span class="srt-tag">Kunlik so'mda</span>
+                </div>
+                <div class="srt-section-body">
+                    <div class="srt-chart-box"><canvas id="trendChart"></canvas></div>
+                </div>
             </div>
         </div>
         <div class="col-lg-4">
-            <div class="card p-3 h-100">
-                <h6 class="text-muted text-uppercase small mb-2">
-                    <i class="bi bi-exclamation-triangle text-warning"></i> Diqqat talab qiladi
-                </h6>
-                <div class="list-group list-group-flush">
-                    {% if out_of_stock_count %}
-                        <a href="{% url 'product_list' %}?stock=zero" class="list-group-item list-group-item-action d-flex justify-content-between">
-                            <span><i class="bi bi-x-octagon text-danger"></i> Omborda yo'q</span>
-                            <span class="badge bg-danger">{{ out_of_stock_count }}</span>
-                        </a>
-                    {% endif %}
-                    {% if low_stock_count %}
-                        <a href="{% url 'product_list' %}?stock=low" class="list-group-item list-group-item-action d-flex justify-content-between">
-                            <span><i class="bi bi-exclamation-circle text-warning"></i> Past zaxira (≤3)</span>
-                            <span class="badge bg-warning text-dark">{{ low_stock_count }}</span>
-                        </a>
-                    {% endif %}
-                    {% if open_shifts_count %}
-                        <a href="{% url 'shift_list' %}" class="list-group-item list-group-item-action d-flex justify-content-between">
-                            <span><i class="bi bi-clipboard-check text-success"></i> Ochiq smenlar</span>
-                            <span class="badge bg-success">{{ open_shifts_count }}</span>
-                        </a>
-                    {% endif %}
-                    {% if in_transit_count %}
-                        <a href="{% url 'transfer_list' %}" class="list-group-item list-group-item-action d-flex justify-content-between">
-                            <span><i class="bi bi-truck text-info"></i> Yo'ldagi ko'chirishlar</span>
-                            <span class="badge bg-info">{{ in_transit_count }}</span>
-                        </a>
-                    {% endif %}
-                    {% if pending_intents_count %}
-                        <div class="list-group-item d-flex justify-content-between">
-                            <span><i class="bi bi-hourglass-split text-muted"></i> Kutilayotgan to'lovlar</span>
-                            <span class="badge bg-secondary">{{ pending_intents_count }}</span>
-                        </div>
-                    {% endif %}
-                    {% if open_parked_count %}
-                        <div class="list-group-item d-flex justify-content-between">
-                            <span><i class="bi bi-pause-circle text-secondary"></i> Saqlangan savatlar</span>
-                            <span class="badge bg-secondary">{{ open_parked_count }}</span>
-                        </div>
-                    {% endif %}
-                    {% if not out_of_stock_count and not low_stock_count and not in_transit_count and not pending_intents_count and not open_parked_count %}
-                        <div class="text-success text-center py-3">
-                            <i class="bi bi-check-circle"></i> Hammasi me'yorida
-                        </div>
-                    {% endif %}
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2">
+                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                        Diqqat talab qiladi
+                    </h2>
+                </div>
+                <div class="srt-section-body flush">
+                    <div class="list-group list-group-flush">
+                        {% if out_of_stock_count %}
+                            <a href="{% url 'product_list' %}?stock=zero" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-x-octagon text-danger me-1"></i> Omborda yo'q</span>
+                                <span class="srt-tag danger">{{ out_of_stock_count }}</span>
+                            </a>
+                        {% endif %}
+                        {% if low_stock_count %}
+                            <a href="{% url 'product_list' %}?stock=low" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-exclamation-circle text-warning me-1"></i> Past zaxira (≤3)</span>
+                                <span class="srt-tag accent">{{ low_stock_count }}</span>
+                            </a>
+                        {% endif %}
+                        {% if open_shifts_count %}
+                            <a href="{% url 'shift_list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-clipboard-check text-success me-1"></i> Ochiq smenlar</span>
+                                <span class="srt-tag success">{{ open_shifts_count }}</span>
+                            </a>
+                        {% endif %}
+                        {% if in_transit_count %}
+                            <a href="{% url 'transfer_list' %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-truck text-info me-1"></i> Yo'ldagi ko'chirishlar</span>
+                                <span class="srt-tag primary">{{ in_transit_count }}</span>
+                            </a>
+                        {% endif %}
+                        {% if pending_intents_count %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-hourglass-split text-muted me-1"></i> Kutilayotgan to'lovlar</span>
+                                <span class="srt-tag">{{ pending_intents_count }}</span>
+                            </div>
+                        {% endif %}
+                        {% if open_parked_count %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-pause-circle text-secondary me-1"></i> Saqlangan savatlar</span>
+                                <span class="srt-tag">{{ open_parked_count }}</span>
+                            </div>
+                        {% endif %}
+                        {% if not out_of_stock_count and not low_stock_count and not in_transit_count and not pending_intents_count and not open_parked_count %}
+                            <div class="srt-empty" style="border:none; padding: 1.5rem 0.5rem;">
+                                <i class="bi bi-check-circle-fill srt-empty-icon text-success"></i>
+                                <div>Hammasi me'yorida</div>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Filiallar bugungi + Top mahsulotlar -->
+    <!-- ── Branches today + Top products ─────────────────────────────── -->
     <div class="row g-3 mb-3">
         <div class="col-lg-7">
-            <div class="card p-3">
-                <h6 class="text-muted text-uppercase small mb-2">
-                    <i class="bi bi-building"></i> Bugun filiallar bo'yicha
-                </h6>
-                <div class="table-responsive">
-                <table class="table table-sm mb-0">
-                    <thead class="table-light"><tr>
-                        <th>Filial</th><th class="text-end">Tushum</th>
-                        <th class="text-end">Cheklar</th><th class="text-end">Dona</th>
-                        <th class="text-end">Omborda</th>
-                    </tr></thead>
-                    <tbody>
-                    {% for b in branch_today %}
-                        <tr>
-                            <td><strong>{{ b.branch.name }}</strong></td>
-                            <td class="text-end">{{ b.revenue|som }}</td>
-                            <td class="text-end">{{ b.txns }}</td>
-                            <td class="text-end">{{ b.qty }}</td>
-                            <td class="text-end text-muted">{{ b.stock }}</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2">
+                        <i class="bi bi-building text-primary"></i> Bugun filiallar bo'yicha
+                    </h2>
+                </div>
+                <div class="srt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="srt-data-table">
+                            <thead><tr>
+                                <th>Filial</th>
+                                <th class="num">Tushum</th>
+                                <th class="num">Cheklar</th>
+                                <th class="num">Dona</th>
+                                <th class="num">Omborda</th>
+                            </tr></thead>
+                            <tbody>
+                            {% for b in branch_today %}
+                                <tr>
+                                    <td><strong>{{ b.branch.name }}</strong></td>
+                                    <td class="num">{{ b.revenue|som }}</td>
+                                    <td class="num">{{ b.txns }}</td>
+                                    <td class="num">{{ b.qty }}</td>
+                                    <td class="num text-muted">{{ b.stock }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="5" class="text-muted text-center py-3">Filiallar yo'q</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-lg-5">
-            <div class="card p-3 h-100">
-                <h6 class="text-muted text-uppercase small mb-2">
-                    <i class="bi bi-trophy text-warning"></i> Bugungi top mahsulotlar
-                </h6>
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2">
+                        <i class="bi bi-trophy text-warning"></i> Bugungi top mahsulotlar
+                    </h2>
+                </div>
+                <div class="srt-section-body">
                 {% if top_today %}
-                <ol class="ps-3 mb-0">
-                {% for t in top_today %}
-                    <li class="mb-1">
-                        <a href="{% url 'product_detail' t.variant__product__code %}">
-                            {{ t.variant__product__name|truncatechars:30 }}
-                        </a>
-                        <span class="badge bg-success ms-1">{{ t.qty }} dona</span>
-                        <small class="text-muted">{{ t.revenue|som }} so'm</small>
-                    </li>
-                {% endfor %}
-                </ol>
+                    <ol class="ps-3 mb-0">
+                    {% for t in top_today %}
+                        <li class="mb-2">
+                            <a href="{% url 'product_detail' t.variant__product__code %}" class="fw-medium">
+                                {{ t.variant__product__name|truncatechars:30 }}
+                            </a>
+                            <div class="d-flex justify-content-between align-items-center small">
+                                <span class="srt-tag success">{{ t.qty }} dona</span>
+                                <span class="srt-num text-muted">{{ t.revenue|som }}</span>
+                            </div>
+                        </li>
+                    {% endfor %}
+                    </ol>
                 {% else %}
-                <div class="text-muted text-center py-3">Bugun sotilmagan</div>
+                    <div class="srt-empty" style="border:none;">
+                        <i class="bi bi-inbox srt-empty-icon"></i>
+                        Bugun sotilmagan
+                    </div>
                 {% endif %}
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Ombor snapshot + So'nggi sotuvlar -->
+    <!-- ── Inventory snapshot + Recent sales ─────────────────────────── -->
     <div class="row g-3 mb-4">
         <div class="col-lg-4">
-            <div class="card p-3 h-100">
-                <h6 class="text-muted text-uppercase small mb-2">Ombor snapshot</h6>
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="text-muted">Jami mahsulot turi</span>
-                    <strong>{{ total_products }}</strong>
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2">
+                        <i class="bi bi-archive text-primary"></i> Ombor snapshot
+                    </h2>
                 </div>
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="text-muted">Faol filiallar</span>
-                    <strong>{{ total_branches }}</strong>
-                </div>
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="text-muted">Jami zaxira (dona)</span>
-                    <strong>{{ total_stock }}</strong>
-                </div>
-                <div class="d-flex justify-content-between">
-                    <span class="text-muted">Zaxira qiymati</span>
-                    <strong class="text-primary">{{ stock_value|som }} so'm</strong>
-                </div>
-                {% if low_stock_preview %}
-                <hr class="my-2">
-                <div class="small text-muted mb-1">Past zaxira:</div>
-                {% for s in low_stock_preview %}
-                    <div class="small d-flex justify-content-between">
-                        <span>
-                            <a href="{% url 'product_detail' s.variant.product.code %}">
-                                {{ s.variant.product.name|truncatechars:18 }}
-                            </a>
-                            <span class="text-muted">{{ s.branch.name|truncatechars:12 }}</span>
-                        </span>
-                        <span class="badge bg-{% if s.stock_count == 0 %}danger{% else %}warning{% endif %}">
-                            {{ s.stock_count }}
-                        </span>
+                <div class="srt-section-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Jami mahsulot turi</span>
+                        <strong class="srt-num">{{ total_products }}</strong>
                     </div>
-                {% endfor %}
-                {% endif %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Faol filiallar</span>
+                        <strong class="srt-num">{{ total_branches }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Jami zaxira (dona)</span>
+                        <strong class="srt-num">{{ total_stock }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">Zaxira qiymati</span>
+                        <strong class="srt-num text-primary">{{ stock_value|som }}</strong>
+                    </div>
+                    {% if low_stock_preview %}
+                    <hr class="my-2">
+                    <div class="small text-muted mb-2 text-uppercase" style="letter-spacing: 0.04em; font-size: 0.72rem;">
+                        Past zaxira
+                    </div>
+                    {% for s in low_stock_preview %}
+                        <div class="small d-flex justify-content-between mb-1">
+                            <span>
+                                <a href="{% url 'product_detail' s.variant.product.code %}">
+                                    {{ s.variant.product.name|truncatechars:18 }}
+                                </a>
+                                <span class="text-muted">· {{ s.branch.name|truncatechars:12 }}</span>
+                            </span>
+                            <span class="srt-tag {% if s.stock_count == 0 %}danger{% else %}accent{% endif %}">
+                                {{ s.stock_count }}
+                            </span>
+                        </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
             </div>
         </div>
         <div class="col-lg-8">
-            <div class="card p-3 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="text-muted text-uppercase small mb-0">So'nggi cheklar</h6>
-                    <a href="{% url 'sales_list' %}" class="small">Hammasi →</a>
+            <div class="srt-section">
+                <div class="srt-section-head">
+                    <h2 class="srt-h2">
+                        <i class="bi bi-receipt-cutoff text-primary"></i> So'nggi cheklar
+                    </h2>
+                    <a href="{% url 'sales_list' %}" class="small">
+                        Hammasi <i class="bi bi-arrow-right"></i>
+                    </a>
                 </div>
-                <div class="table-responsive">
-                <table class="table table-sm mb-0">
-                    <tbody>
-                    {% for t in recent_sales %}
-                        <tr>
-                            <td class="small text-muted">{{ t.sold_at|date:"H:i" }}</td>
-                            <td><small>{{ t.sold_by.username }}</small></td>
-                            <td><small>{{ t.branch.name }}</small></td>
-                            <td>{{ t.item_count }} dona</td>
-                            <td><strong>{{ t.total|som }}</strong></td>
-                            <td><small class="text-muted">{{ t.get_payment_method_display }}</small></td>
-                            <td><a href="{% url 'transaction_detail' t.pk %}" class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-receipt"></i></a></td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="7" class="text-muted text-center py-3">Cheklar yo'q</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+                <div class="srt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="srt-data-table">
+                            <thead><tr>
+                                <th>Vaqt</th>
+                                <th>Kassir</th>
+                                <th>Filial</th>
+                                <th class="num">Dona</th>
+                                <th class="num">Jami</th>
+                                <th>To'lov</th>
+                                <th></th>
+                            </tr></thead>
+                            <tbody>
+                            {% for t in recent_sales %}
+                                <tr>
+                                    <td class="text-muted srt-num">{{ t.sold_at|date:"H:i" }}</td>
+                                    <td>{{ t.sold_by.username }}</td>
+                                    <td>{{ t.branch.name }}</td>
+                                    <td class="num">{{ t.item_count }}</td>
+                                    <td class="num"><strong>{{ t.total|som }}</strong></td>
+                                    <td><span class="srt-tag">{{ t.get_payment_method_display }}</span></td>
+                                    <td>
+                                        <a href="{% url 'transaction_detail' t.pk %}"
+                                           class="btn btn-sm btn-outline-secondary"
+                                           aria-label="Chek tafsilotlari">
+                                            <i class="bi bi-receipt"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="7" class="text-muted text-center py-4">Cheklar yo'q</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -284,27 +357,81 @@
 {{ trend_labels|json_script:"trend-labels" }}
 {{ trend_revenue|json_script:"trend-revenue" }}
 <script>
-new Chart(document.getElementById('trendChart'), {
-    type: 'line',
-    data: {
-        labels: JSON.parse(document.getElementById('trend-labels').textContent),
-        datasets: [{
-            label: "Tushum (so'm)",
-            data: JSON.parse(document.getElementById('trend-revenue').textContent),
-            borderColor: '#198754',
-            backgroundColor: 'rgba(25, 135, 84, 0.1)',
-            tension: 0.3,
-            fill: true,
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { ticks: { callback: v => (v/1000).toFixed(0) + 'k' } }
-        }
+(function() {
+    function srtCss(name, fallback) {
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return v || fallback;
     }
-});
+    function hexToRgba(hex, a) {
+        const m = hex.replace('#','');
+        const f = m.length === 3 ? m.split('').map(c=>c+c).join('') : m;
+        const r = parseInt(f.slice(0,2),16),
+              g = parseInt(f.slice(2,4),16),
+              b = parseInt(f.slice(4,6),16);
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const primary = srtCss('--srt-primary', '#1E40AF');
+    const gridColor = isDark ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.06)';
+    const labelColor = isDark ? '#94A3B8' : '#475569';
+
+    const ctx = document.getElementById('trendChart');
+    if (!ctx) return;
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: JSON.parse(document.getElementById('trend-labels').textContent),
+            datasets: [{
+                label: "Tushum (so'm)",
+                data: JSON.parse(document.getElementById('trend-revenue').textContent),
+                borderColor: primary,
+                backgroundColor: hexToRgba(primary, 0.10),
+                pointBackgroundColor: primary,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                tension: 0.35,
+                fill: true,
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                       ? false : { duration: 400 },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: isDark ? '#1C2230' : '#FFFFFF',
+                    titleColor: isDark ? '#E2E8F0' : '#0F172A',
+                    bodyColor: isDark ? '#E2E8F0' : '#0F172A',
+                    borderColor: gridColor, borderWidth: 1,
+                    padding: 10, boxPadding: 4, displayColors: false,
+                    callbacks: {
+                        label: function(ctx) {
+                            return new Intl.NumberFormat('uz-UZ').format(ctx.parsed.y) + " so'm";
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: labelColor, font: { family: "Fira Sans" } }
+                },
+                y: {
+                    grid: { color: gridColor },
+                    ticks: {
+                        color: labelColor,
+                        font: { family: "Fira Code" },
+                        callback: v => v >= 1000000 ? (v/1000000).toFixed(1) + 'M'
+                                       : v >= 1000 ? (v/1000).toFixed(0) + 'k'
+                                       : v
+                    }
+                }
+            }
+        }
+    });
+})();
 </script>
 {% endblock %}

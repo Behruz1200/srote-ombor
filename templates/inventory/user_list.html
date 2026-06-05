@@ -5,144 +5,162 @@
 
 {% block content %}
 <div class="container-fluid px-3">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-people"></i> Foydalanuvchilar</h3>
-        <a href="{% url 'user_create' %}" class="btn btn-primary">
-            <i class="bi bi-person-plus"></i> Yangi foydalanuvchi
-        </a>
+
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1"><i class="bi bi-people me-1 text-primary"></i> Foydalanuvchilar</h1>
+            <div class="srt-sub">Adminlar, sotuvchilar va ularning 30 kunlik samaradorligi</div>
+        </div>
+        <div class="srt-actions">
+            <a href="{% url 'user_create' %}" class="btn btn-primary">
+                <i class="bi bi-person-plus"></i> <span class="btn-text">Yangi foydalanuvchi</span>
+            </a>
+        </div>
     </div>
 
-    <!-- Filtrlar -->
-    <form method="get" class="card p-3 mb-3">
-        <div class="row g-2">
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">Rol</label>
-                <select name="role" class="form-select form-select-sm">
-                    <option value="">— hammasi —</option>
-                    {% for v, l in role_choices %}
-                        <option value="{{ v }}" {% if role_filter == v %}selected{% endif %}>{{ l }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">Filial</label>
-                <select name="branch" class="form-select form-select-sm">
-                    <option value="">— hammasi —</option>
-                    {% for b in branches %}
-                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <div class="form-check">
-                    <input type="checkbox" name="active" value="1" id="onlyActive"
-                           class="form-check-input" {% if only_active %}checked{% endif %}>
-                    <label for="onlyActive" class="form-check-label">Faqat faollar</label>
-                </div>
-            </div>
-            <div class="col-md-3 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-primary btn-sm flex-fill">
-                    <i class="bi bi-funnel"></i> Filter
-                </button>
-                <a href="{% url 'user_list' %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-x"></i>
-                </a>
-            </div>
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Filtrlar</h2>
         </div>
-    </form>
+        <div class="srt-section-body">
+            <form method="get">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Rol</label>
+                        <select name="role" class="form-select form-select-sm">
+                            <option value="">— hammasi —</option>
+                            {% for v, l in role_choices %}
+                                <option value="{{ v }}" {% if role_filter == v %}selected{% endif %}>{{ l }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Filial</label>
+                        <select name="branch" class="form-select form-select-sm">
+                            <option value="">— hammasi —</option>
+                            {% for b in branches %}
+                                <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check">
+                            <input type="checkbox" name="active" value="1" id="onlyActive"
+                                   class="form-check-input" {% if only_active %}checked{% endif %}>
+                            <label for="onlyActive" class="form-check-label">Faqat faollar</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                            <i class="bi bi-funnel"></i> Filter
+                        </button>
+                        <a href="{% url 'user_list' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-x"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    <div class="card">
-        <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Foydalanuvchi</th>
-                        <th>Rol / Filial</th>
-                        <th>Komissiya %</th>
-                        <th class="text-end">30 kun sotuv</th>
-                        <th class="text-end">Tushum</th>
-                        <th class="text-end">Komissiya</th>
-                        <th>Oxirgi kirish</th>
-                        <th>Holat</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for u in users %}
-                    <tr {% if not u.is_active %}class="text-muted"{% endif %}>
-                        <td>
-                            <strong>{{ u.username }}</strong>
-                            {% if u.first_name or u.last_name %}
-                                <div class="small text-muted">{{ u.first_name }} {{ u.last_name }}</div>
-                            {% endif %}
-                            {% if u.is_superuser %}
-                                <span class="badge bg-dark small">superuser</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if u.role == 'admin' %}
-                                <span class="badge bg-danger">Admin</span>
-                            {% else %}
-                                <span class="badge bg-info">Sotuvchi</span>
-                            {% endif %}
-                            {% if u.branch %}
-                                <div class="small text-muted">
-                                    <i class="bi bi-building"></i> {{ u.branch.name }}
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Foydalanuvchilar</h2>
+            <span class="srt-tag">Statistika so'nggi 30 kun</span>
+        </div>
+        <div class="srt-section-body flush">
+            <div class="table-responsive">
+                <table class="srt-data-table">
+                    <thead>
+                        <tr>
+                            <th>Foydalanuvchi</th>
+                            <th>Rol / Filial</th>
+                            <th>Komissiya %</th>
+                            <th class="num">30k sotuv</th>
+                            <th class="num">Tushum</th>
+                            <th class="num">Komissiya</th>
+                            <th>Oxirgi kirish</th>
+                            <th>Holat</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for u in users %}
+                        <tr {% if not u.is_active %}class="text-muted"{% endif %}>
+                            <td>
+                                <strong>{{ u.username }}</strong>
+                                {% if u.first_name or u.last_name %}
+                                    <div class="small text-muted">{{ u.first_name }} {{ u.last_name }}</div>
+                                {% endif %}
+                                {% if u.is_superuser %}
+                                    <span class="srt-tag">superuser</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.role == 'admin' %}
+                                    <span class="srt-tag danger">Admin</span>
+                                {% else %}
+                                    <span class="srt-tag primary">Sotuvchi</span>
+                                {% endif %}
+                                {% if u.branch %}
+                                    <div class="small text-muted mt-1">
+                                        <i class="bi bi-building"></i> {{ u.branch.name }}
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.commission_percent %}
+                                    <span class="srt-tag success">{{ u.commission_percent }}%</span>
+                                {% else %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="num">
+                                {% if u.s_txns %}
+                                    <strong>{{ u.s_txns }}</strong>
+                                    <div class="small text-muted">{{ u.s_qty }} dona</div>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="num">
+                                {% if u.s_revenue %}{{ u.s_revenue|som }}{% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="num">
+                                {% if u.s_commission %}
+                                    <strong class="text-success">{{ u.s_commission|som }}</strong>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if u.last_login %}
+                                    <small class="srt-num">{{ u.last_login|date:"d.m H:i" }}</small>
+                                    <div class="small text-muted">{{ u.last_login|timesince }} oldin</div>
+                                {% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if u.is_active %}
+                                    <span class="srt-tag success">Faol</span>
+                                {% else %}
+                                    <span class="srt-tag">O'chirilgan</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'cashier_stats' u.pk %}"
+                                       class="btn btn-outline-primary" title="Performans" aria-label="Performans">
+                                        <i class="bi bi-graph-up"></i>
+                                    </a>
+                                    <a href="{% url 'user_edit' u.pk %}"
+                                       class="btn btn-outline-secondary" title="Tahrirlash" aria-label="Tahrirlash">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
                                 </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if u.commission_percent %}
-                                <span class="badge bg-success">{{ u.commission_percent }}%</span>
-                            {% else %}
-                                <span class="text-muted small">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if u.s_txns %}
-                                <strong>{{ u.s_txns }}</strong>
-                                <div class="small text-muted">{{ u.s_qty }} dona</div>
-                            {% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if u.s_revenue %}{{ u.s_revenue|som }}{% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if u.s_commission %}
-                                <strong class="text-success">{{ u.s_commission|som }}</strong>
-                            {% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td>
-                            {% if u.last_login %}
-                                <small>{{ u.last_login|date:"d.m H:i" }}</small>
-                                <div class="small text-muted">{{ u.last_login|timesince }} oldin</div>
-                            {% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td>
-                            {% if u.is_active %}
-                                <span class="badge bg-success">Faol</span>
-                            {% else %}
-                                <span class="badge bg-secondary">O'chirilgan</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{% url 'cashier_stats' u.pk %}"
-                                   class="btn btn-outline-primary" title="Performans">
-                                    <i class="bi bi-graph-up"></i>
-                                </a>
-                                <a href="{% url 'user_edit' u.pk %}"
-                                   class="btn btn-outline-secondary" title="Tahrirlash">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="9" class="text-center text-muted py-4">Foydalanuvchilar yo'q.</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="text-center text-muted py-4">Foydalanuvchilar yo'q.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     <small class="text-muted mt-2 d-block">

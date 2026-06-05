@@ -5,86 +5,85 @@
 
 {% block content %}
 <div class="container-fluid px-3">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0">
-            <i class="bi bi-arrow-clockwise text-primary"></i> Smart buyurtma
-            <small class="text-muted fs-6">— past zaxira + avto-hisoblangan taklif</small>
-        </h3>
-        <a href="{% url 'intake_quick' %}" class="btn btn-success">
-            <i class="bi bi-lightning-charge"></i> Tezkor qabulga o'tish
-        </a>
+
+    <div class="srt-page-header">
+        <div>
+            <h1 class="srt-h1"><i class="bi bi-arrow-clockwise me-1 text-primary"></i> Smart buyurtma</h1>
+            <div class="srt-sub">Past zaxira + avto-hisoblangan taklif (velocity × buffer)</div>
+        </div>
+        <div class="srt-actions">
+            <a href="{% url 'intake_quick' %}" class="btn btn-success">
+                <i class="bi bi-lightning-charge"></i> <span class="btn-text">Tezkor qabul</span>
+            </a>
+        </div>
     </div>
 
-    <!-- Filtrlar -->
-    <form method="get" class="card p-3 mb-3">
-        <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">Filial</label>
-                <select name="branch" class="form-select form-select-sm">
-                    <option value="">— hammasi —</option>
-                    {% for b in branches %}
-                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">Past zaxira limiti</label>
-                <input type="number" name="threshold" value="{{ low_threshold }}" min="0" max="50"
-                       class="form-control form-control-sm">
-                <small class="text-muted">Shu sondan kam qolgan zaxiralar</small>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">Buffer (kun)</label>
-                <input type="number" name="buffer" value="{{ buffer_days }}" min="1" max="90"
-                       class="form-control form-control-sm">
-                <small class="text-muted">Kerakli zaxira N kunga yetadi</small>
-            </div>
-            <div class="col-md-3 d-flex gap-2">
-                <button type="submit" class="btn btn-sm btn-primary flex-fill">
-                    <i class="bi bi-funnel"></i> Filter
-                </button>
-                <a href="{% url 'reorder_page' %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-x"></i>
-                </a>
-            </div>
+    <div class="srt-section">
+        <div class="srt-section-head">
+            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Filtrlar</h2>
         </div>
-    </form>
+        <div class="srt-section-body">
+            <form method="get">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Filial</label>
+                        <select name="branch" class="form-select form-select-sm">
+                            <option value="">— hammasi —</option>
+                            {% for b in branches %}
+                                <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Past zaxira limiti</label>
+                        <input type="number" name="threshold" value="{{ low_threshold }}" min="0" max="50"
+                               class="form-control form-control-sm">
+                        <small class="text-muted">Shu sondan kam qolgan zaxiralar</small>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Buffer (kun)</label>
+                        <input type="number" name="buffer" value="{{ buffer_days }}" min="1" max="90"
+                               class="form-control form-control-sm">
+                        <small class="text-muted">Kerakli zaxira N kunga yetadi</small>
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary flex-fill">
+                            <i class="bi bi-funnel"></i> Filter
+                        </button>
+                        <a href="{% url 'reorder_page' %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    <!-- Top stats -->
-    <div class="row g-3 mb-3">
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Buyurtma kerak</div>
-                <div class="h3 mb-0 text-warning">{{ total_items }}</div>
-                <small class="text-muted">ta variant</small>
-            </div>
+    <div class="srt-kpi-grid">
+        <div class="srt-kpi accent-amber">
+            <div class="srt-kpi-label"><i class="bi bi-exclamation-circle"></i> Buyurtma kerak</div>
+            <div class="srt-kpi-value text-warning">{{ total_items }}</div>
+            <div class="srt-kpi-meta">ta variant</div>
         </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Yetkazib beruvchilar</div>
-                <div class="h3 mb-0">{{ by_supplier|length }}</div>
-                <small class="text-muted">ta turli</small>
-            </div>
+        <div class="srt-kpi accent">
+            <div class="srt-kpi-label"><i class="bi bi-truck"></i> Yetkazib beruvchilar</div>
+            <div class="srt-kpi-value">{{ by_supplier|length }}</div>
+            <div class="srt-kpi-meta">ta turli</div>
         </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Taklif etilgan jami qiymat</div>
-                <div class="h3 mb-0 text-success">{{ total_suggested_value|som }}</div>
-                <small class="text-muted">so'm (tannarx)</small>
-            </div>
+        <div class="srt-kpi accent-success">
+            <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> Taklif etilgan jami</div>
+            <div class="srt-kpi-value">{{ total_suggested_value|som }}</div>
+            <div class="srt-kpi-meta">so'm (tannarx)</div>
         </div>
     </div>
 
     {% if not items %}
-        <div class="card p-5 text-center">
-            <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
-            <h5 class="mt-3">Hammasi yaxshi!</h5>
-            <p class="text-muted mb-0">
-                Belgilangan limitdan past zaxiralar topilmadi.
-            </p>
+        <div class="srt-empty">
+            <i class="bi bi-check-circle-fill srt-empty-icon text-success"></i>
+            <h5 class="mt-2">Hammasi yaxshi</h5>
+            <p class="mb-0">Belgilangan limitdan past zaxiralar topilmadi.</p>
         </div>
     {% else %}
-        <!-- View mode toggle -->
         <div class="btn-group mb-3" role="group">
             <a href="?{% if branch_id %}branch={{ branch_id }}&{% endif %}view=supplier"
                class="btn btn-sm btn-{% if view_mode == 'supplier' %}primary{% else %}outline-primary{% endif %}">
@@ -97,127 +96,130 @@
         </div>
 
         {% if view_mode == 'product' %}
-        <!-- Aggregated per product -->
-        <div class="card">
-            <div class="card-header bg-light">
-                <h6 class="mb-0">Mahsulot bo'yicha jami ({{ products_grouped|length }} ta)</h6>
+        <div class="srt-section">
+            <div class="srt-section-head">
+                <h2 class="srt-h2"><i class="bi bi-box-seam text-primary"></i> Mahsulot bo'yicha jami</h2>
+                <span class="srt-tag">{{ products_grouped|length }} ta</span>
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Mahsulot</th>
-                            <th>Filiallar</th>
-                            <th class="text-end">Jami zaxira</th>
-                            <th class="text-end">30 kun sotilgan</th>
-                            <th class="text-end">Taklif (jami)</th>
-                            <th class="text-end">Taxminiy qiymat</th>
-                            <th>Yetkazib beruvchi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for p in products_grouped %}
-                        <tr>
-                            <td>
-                                <a href="{% url 'product_detail' p.product.code %}">
-                                    <strong>{{ p.product.name|truncatechars:28 }}</strong>
-                                </a>
-                                <div class="small text-muted"><code>{{ p.product.code }}</code></div>
-                            </td>
-                            <td><small class="text-muted">
-                                {{ p.branches|length }} ta: {{ p.branches|join:", "|truncatechars:30 }}
-                            </small></td>
-                            <td class="text-end">
-                                <span class="badge bg-warning text-dark">{{ p.stock_total }}</span>
-                            </td>
-                            <td class="text-end">{{ p.sold_30d_total }}</td>
-                            <td class="text-end">
-                                <strong class="text-primary">+{{ p.suggested_total }}</strong>
-                            </td>
-                            <td class="text-end"><strong>{{ p.estimated_cost_total|som }}</strong></td>
-                            <td><small>{{ p.last_supplier|default:"—" }}</small></td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+            <div class="srt-section-body flush">
+                <div class="table-responsive">
+                    <table class="srt-data-table">
+                        <thead>
+                            <tr>
+                                <th>Mahsulot</th>
+                                <th>Filiallar</th>
+                                <th class="num">Jami zaxira</th>
+                                <th class="num">30k sotilgan</th>
+                                <th class="num">Taklif (jami)</th>
+                                <th class="num">Qiymat</th>
+                                <th>Yetkazib beruvchi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for p in products_grouped %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'product_detail' p.product.code %}">
+                                        <strong>{{ p.product.name|truncatechars:28 }}</strong>
+                                    </a>
+                                    <div class="small text-muted"><code>{{ p.product.code }}</code></div>
+                                </td>
+                                <td><small class="text-muted">
+                                    {{ p.branches|length }} ta: {{ p.branches|join:", "|truncatechars:30 }}
+                                </small></td>
+                                <td class="num">
+                                    <span class="srt-tag accent">{{ p.stock_total }}</span>
+                                </td>
+                                <td class="num">{{ p.sold_30d_total }}</td>
+                                <td class="num">
+                                    <strong class="text-primary">+{{ p.suggested_total }}</strong>
+                                </td>
+                                <td class="num"><strong>{{ p.estimated_cost_total|som }}</strong></td>
+                                <td><small>{{ p.last_supplier|default:"—" }}</small></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
         {% else %}
-        <!-- Suppliers grouped -->
         {% for supplier_name, supplier_items in by_supplier %}
-        <div class="card mb-3">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">
-                    <i class="bi bi-truck"></i> {{ supplier_name }}
-                    <span class="badge bg-secondary ms-2">{{ supplier_items|length }} ta variant</span>
-                </h6>
+        <div class="srt-section">
+            <div class="srt-section-head">
+                <h2 class="srt-h2">
+                    <i class="bi bi-truck text-primary"></i> {{ supplier_name }}
+                    <span class="srt-tag ms-2">{{ supplier_items|length }} variant</span>
+                </h2>
                 {% with sup_total=0 %}
                     {% for it in supplier_items %}
                         {% with sup_total=sup_total|add:it.estimated_cost %}
                             {% if forloop.last %}
-                                <strong class="text-success">{{ sup_total|som }} so'm</strong>
+                                <strong class="text-success srt-num">{{ sup_total|som }} so'm</strong>
                             {% endif %}
                         {% endwith %}
                     {% endfor %}
                 {% endwith %}
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Mahsulot</th>
-                            <th>Variant</th>
-                            <th>Filial</th>
-                            <th class="text-end">Joriy zaxira</th>
-                            <th class="text-end">30 kun sotilgan</th>
-                            <th class="text-end">Yetadi</th>
-                            <th class="text-end">Taklif (dona)</th>
-                            <th class="text-end">Taxminiy qiymat</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for it in supplier_items %}
-                        <tr>
-                            <td>
-                                <a href="{% url 'product_detail' it.product.code %}">
-                                    <strong>{{ it.product.name|truncatechars:28 }}</strong>
-                                </a>
-                                <div class="small text-muted"><code>{{ it.product.code }}</code></div>
-                            </td>
-                            <td><small>{{ it.variant.size }} / {{ it.variant.color }}</small></td>
-                            <td><small>{{ it.branch.name }}</small></td>
-                            <td class="text-end">
-                                <span class="badge bg-{% if it.stock.stock_count == 0 %}danger{% elif it.stock.stock_count <= 3 %}warning text-dark{% else %}secondary{% endif %}">
-                                    {{ it.stock.stock_count }}
-                                </span>
-                            </td>
-                            <td class="text-end">
-                                {{ it.sold_30d }}
-                                {% if it.trend_label == 'up' %}
-                                    <i class="bi bi-arrow-up-right text-success small" title="So'nggi 7 kun jadalashayapti"></i>
-                                {% elif it.trend_label == 'down' %}
-                                    <i class="bi bi-arrow-down-right text-danger small" title="So'nggi 7 kun sustlashayapti"></i>
-                                {% endif %}
-                            </td>
-                            <td class="text-end small">
-                                {% if it.days_left is not None %}
-                                    <span class="text-{% if it.days_left < 7 %}danger{% elif it.days_left < 14 %}warning{% else %}muted{% endif %}">
-                                        {{ it.days_left|floatformat:0 }} kun
+            <div class="srt-section-body flush">
+                <div class="table-responsive">
+                    <table class="srt-data-table">
+                        <thead>
+                            <tr>
+                                <th>Mahsulot</th>
+                                <th>Variant</th>
+                                <th>Filial</th>
+                                <th class="num">Zaxira</th>
+                                <th class="num">30k sotilgan</th>
+                                <th class="num">Yetadi</th>
+                                <th class="num">Taklif</th>
+                                <th class="num">Qiymat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for it in supplier_items %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'product_detail' it.product.code %}">
+                                        <strong>{{ it.product.name|truncatechars:28 }}</strong>
+                                    </a>
+                                    <div class="small text-muted"><code>{{ it.product.code }}</code></div>
+                                </td>
+                                <td><small>{{ it.variant.size }} / {{ it.variant.color }}</small></td>
+                                <td><small>{{ it.branch.name }}</small></td>
+                                <td class="num">
+                                    <span class="srt-tag {% if it.stock.stock_count == 0 %}danger{% elif it.stock.stock_count <= 3 %}accent{% endif %}">
+                                        {{ it.stock.stock_count }}
                                     </span>
-                                {% else %}<span class="text-muted">—</span>{% endif %}
-                            </td>
-                            <td class="text-end">
-                                {% if it.suggested %}
-                                    <strong class="text-primary">+{{ it.suggested }}</strong>
-                                {% else %}<span class="text-muted">0</span>{% endif %}
-                            </td>
-                            <td class="text-end">
-                                {% if it.estimated_cost %}{{ it.estimated_cost|som }}{% else %}—{% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+                                </td>
+                                <td class="num">
+                                    {{ it.sold_30d }}
+                                    {% if it.trend_label == 'up' %}
+                                        <i class="bi bi-arrow-up-right text-success small" title="So'nggi 7 kun jadalashayapti"></i>
+                                    {% elif it.trend_label == 'down' %}
+                                        <i class="bi bi-arrow-down-right text-danger small" title="So'nggi 7 kun sustlashayapti"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="num">
+                                    {% if it.days_left is not None %}
+                                        <span class="srt-tag {% if it.days_left < 7 %}danger{% elif it.days_left < 14 %}accent{% endif %}">
+                                            {{ it.days_left|floatformat:0 }} kun
+                                        </span>
+                                    {% else %}<span class="text-muted">—</span>{% endif %}
+                                </td>
+                                <td class="num">
+                                    {% if it.suggested %}
+                                        <strong class="text-primary">+{{ it.suggested }}</strong>
+                                    {% else %}<span class="text-muted">0</span>{% endif %}
+                                </td>
+                                <td class="num">
+                                    {% if it.estimated_cost %}{{ it.estimated_cost|som }}{% else %}—{% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
         {% endfor %}
@@ -227,7 +229,7 @@
     <small class="text-muted">
         <i class="bi bi-info-circle"></i>
         Formula: Taklif = (30 kunlik sotuv / 30) × buffer kunlar − joriy zaxira.
-        Velocity yo'q (sotilmagan) mahsulotlar uchun taklif 0 — qo'lda buyurtma bering.
+        Velocity yo'q mahsulotlar uchun taklif 0 — qo'lda buyurtma bering.
     </small>
 </div>
 {% endblock %}
