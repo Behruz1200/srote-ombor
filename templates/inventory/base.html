@@ -617,6 +617,10 @@
             .srt-heatmap-cell { transition: none; }
         }
 
+        /* Print snapshot lives in DOM but is hidden on screen — print
+           media query swaps which one is visible (see @media print). */
+        img.srt-chart-print { display: none; }
+
         /* ---- Print: hide nav/actions, expand layout, force light ---- */
         @media print {
             /* Force light palette regardless of dark-mode toggle */
@@ -677,19 +681,25 @@
             .srt-data-table { font-size: 9pt; }
             .srt-data-table thead { display: table-header-group; }
             .srt-data-table tr { page-break-inside: avoid; }
-            /* Charts — fixed print height; Chart.js owns the rest.
-               Forcing canvas { width:100% } in CSS made Chart.js draw the
-               legend at screen-pixel font sizes inside a tiny canvas and
-               the result was unreadable; better to let Chart.js resize()
-               into the container itself (see beforeprint handler). */
+            /* Charts: every .srt-chart-box has a hidden img.srt-chart-print
+               snapshot sitting next to its canvas. In print we hide the
+               canvas (which the print pipeline mis-sizes) and show the
+               img — the browser prints a regular bitmap, perfectly scaled
+               by object-fit:contain into the container. */
             .srt-chart-box, .srt-chart-box.short {
                 height: 70mm !important;
                 page-break-inside: avoid;
+                position: relative;
             }
             .srt-chart-box.tall { height: 100mm !important; }
-            /* The .srt-section card has overflow:hidden on screen so
-               rounded corners clip; in print, a wider canvas would get
-               sliced. Let it spill so Chart.js' own resize handles it. */
+            .srt-chart-box > canvas { display: none !important; }
+            .srt-chart-box > img.srt-chart-print {
+                display: block !important;
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: contain !important;
+                object-position: center !important;
+            }
             .srt-section { overflow: visible !important; }
             /* Data tables — keep numeric columns on a single line.
                The on-screen layout has enough room; in print the narrower
@@ -1294,65 +1304,42 @@ window.addEventListener('beforeinstallprompt', (e) => {
     }
 });
 </script>
-<!-- Print: snapshot every Chart.js canvas to a PNG so print rasterization
-     can't misrender it. The image takes the canvas' slot for the duration
-     of the print, then we swap the canvas back in. -->
+<!-- Print: pre-render each Chart.js canvas as a PNG <img> sitting hidden in
+     the DOM. The print stylesheet swaps which one is visible. Because the
+     <img> is in the DOM well before window.print() is called, the browser
+     has already decoded it and the printer rasterizes a regular bitmap. -->
 <script>
 (function() {
-    if (typeof Chart === 'undefined' && !window.Chart) {
-        // Chart not on this page — nothing to do.
-        return;
-    }
-    let snapshots = [];
-
-    function snapshotForPrint() {
-        snapshots.forEach(s => s.cleanup());
-        snapshots = [];
+    function snapshotCharts() {
         if (typeof Chart === 'undefined') return;
         document.querySelectorAll('.srt-chart-box canvas').forEach(canvas => {
-            const chart = Chart.getChart(canvas);
-            if (!chart) return;
+            if (canvas.parentNode.querySelector('img.srt-chart-print')) return;
             try {
-                // Disable animation so the next update paints synchronously
-                // at the current pixel buffer — important for capture.
-                chart.options.animation = false;
-                chart.update('none');
                 const dataUrl = canvas.toDataURL('image/png', 1.0);
+                if (!dataUrl || dataUrl.length < 100) return;
                 const img = document.createElement('img');
                 img.src = dataUrl;
                 img.className = 'srt-chart-print';
                 img.alt = '';
-                img.style.cssText =
-                    'width:100%;height:100%;object-fit:contain;display:block;';
-                const prevCanvasDisplay = canvas.style.display;
-                canvas.style.display = 'none';
                 canvas.parentNode.insertBefore(img, canvas);
-                snapshots.push({
-                    cleanup() {
-                        if (img.parentNode) img.parentNode.removeChild(img);
-                        canvas.style.display = prevCanvasDisplay;
-                    },
-                });
-            } catch (e) {
-                // Tainted canvas or render error — give up on this chart.
-            }
+            } catch (e) {}
         });
     }
-    function restoreAfterPrint() {
-        snapshots.forEach(s => s.cleanup());
-        snapshots = [];
+    function rebuildSnapshots() {
+        // Drop old PNGs and re-capture — used after layout changes.
+        document.querySelectorAll('img.srt-chart-print').forEach(el => el.remove());
+        snapshotCharts();
     }
-
-    window.addEventListener('beforeprint', snapshotForPrint);
-    window.addEventListener('afterprint', restoreAfterPrint);
-    try {
-        const mql = window.matchMedia('print');
-        if (mql && mql.addEventListener) {
-            mql.addEventListener('change', e => {
-                if (e.matches) snapshotForPrint(); else restoreAfterPrint();
-            });
-        }
-    } catch (e) {}
+    // First pass once everything (Chart.js + data) has had time to paint.
+    if (document.readyState === 'complete') {
+        setTimeout(snapshotCharts, 350);
+    } else {
+        window.addEventListener('load', () => setTimeout(snapshotCharts, 350));
+    }
+    // Re-capture on theme toggle so the print PNG reflects current colors.
+    document.addEventListener('srote:theme-changed', rebuildSnapshots);
+    // Re-capture just before print as a belt-and-braces.
+    window.addEventListener('beforeprint', snapshotCharts);
 })();
 </script>
 </body>
