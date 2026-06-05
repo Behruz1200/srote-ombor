@@ -611,7 +611,44 @@
         }
         .srt-heatmap-cell:hover { transform: scale(1.08); z-index: 2; }
 
-        /* ---- Filter toolbar (insights & reports headers) ---- */
+        /* ---- Stacked page header (title row + filter row) ---- */
+        .srt-page-header-stack {
+            display: block;       /* override flex from .srt-page-header */
+        }
+        .srt-page-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .srt-page-filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1.25rem;
+            margin-top: 0.85rem;
+            padding-top: 0.85rem;
+            border-top: 1px dashed var(--srt-border);
+        }
+        .srt-filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+        }
+        .srt-filter-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--srt-fg-muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            white-space: nowrap;
+        }
+
+        /* ---- Filter toolbar (single-row variant kept for other pages) ---- */
         .srt-toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -654,20 +691,17 @@
             filter: brightness(1.08);
         }
         .srt-branch-filter {
-            min-width: 220px;
-        }
-        .srt-branch-filter .input-group-text {
-            background: var(--srt-surface);
-            border-color: var(--srt-border);
-            color: var(--srt-fg-muted);
+            min-width: 180px;
         }
         .srt-branch-filter .form-select {
             border-color: var(--srt-border);
             font-size: 0.85rem;
         }
         @media (max-width: 768px) {
+            .srt-page-filter-row { gap: 0.85rem; }
+            .srt-filter-group { flex-wrap: wrap; }
             .srt-period-chips .btn { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
-            .srt-branch-filter { min-width: 0; flex: 1 1 100%; }
+            .srt-branch-filter { min-width: 0; flex: 1 1 auto; }
         }
 
         /* ---- Reduced motion ---- */
