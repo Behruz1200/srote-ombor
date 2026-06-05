@@ -6,61 +6,81 @@
 {% block content %}
 <div class="container-fluid px-3">
 
-    <div class="srt-page-header">
-        <div>
-            <h1 class="srt-h1"><i class="bi bi-people me-1 text-primary"></i> Foydalanuvchilar</h1>
-            <div class="srt-sub">Adminlar, sotuvchilar va ularning 30 kunlik samaradorligi</div>
-        </div>
-        <div class="srt-actions">
+    <div class="srt-page-header srt-page-header-stack">
+        <!-- Row 1: identity + primary action -->
+        <div class="srt-page-title-row">
+            <div>
+                <h1 class="srt-h1"><i class="bi bi-people me-1 text-primary"></i> Foydalanuvchilar</h1>
+                <div class="srt-sub">
+                    Adminlar, sotuvchilar va ularning 30 kunlik samaradorligi
+                </div>
+            </div>
             <a href="{% url 'user_create' %}" class="btn btn-primary">
-                <i class="bi bi-person-plus"></i> <span class="btn-text">Yangi foydalanuvchi</span>
+                <i class="bi bi-person-plus"></i>
+                <span class="btn-text">Yangi foydalanuvchi</span>
             </a>
         </div>
-    </div>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Filtrlar</h2>
-        </div>
-        <div class="srt-section-body">
-            <form method="get">
-                <div class="row g-2">
-                    <div class="col-md-3">
-                        <label class="form-label small text-muted mb-1">Rol</label>
-                        <select name="role" class="form-select form-select-sm">
-                            <option value="">— hammasi —</option>
-                            {% for v, l in role_choices %}
-                                <option value="{{ v }}" {% if role_filter == v %}selected{% endif %}>{{ l }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-muted mb-1">Filial</label>
-                        <select name="branch" class="form-select form-select-sm">
-                            <option value="">— hammasi —</option>
-                            {% for b in branches %}
-                                <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <div class="form-check">
-                            <input type="checkbox" name="active" value="1" id="onlyActive"
-                                   class="form-check-input" {% if only_active %}checked{% endif %}>
-                            <label for="onlyActive" class="form-check-label">Faqat faollar</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end gap-2">
-                        <button type="submit" class="btn btn-primary btn-sm flex-fill">
-                            <i class="bi bi-funnel"></i> Filter
+        <!-- Row 2: filter toolbar -->
+        <form method="get" class="srt-page-filter-row">
+            <!-- Role chips -->
+            <div class="srt-filter-group">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-person-badge"></i> Rol
+                </span>
+                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="Rol">
+                    <button type="submit" name="role" value=""
+                            class="btn {% if not role_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        Hammasi
+                    </button>
+                    {% for v, l in role_choices %}
+                        <button type="submit" name="role" value="{{ v }}"
+                                class="btn {% if role_filter == v %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                            {{ l }}
                         </button>
-                        <a href="{% url 'user_list' %}" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-x"></i>
-                        </a>
-                    </div>
+                    {% endfor %}
                 </div>
-            </form>
-        </div>
+            </div>
+
+            <input type="hidden" name="role" value="{{ role_filter }}">
+
+            <!-- Branch dropdown -->
+            <div class="srt-filter-group">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-building"></i> Filial
+                </span>
+                <select name="branch" class="form-select form-select-sm srt-branch-filter"
+                        onchange="this.form.submit()" aria-label="Filial">
+                    <option value="">Hammasi</option>
+                    {% for b in branches %}
+                        <option value="{{ b.id }}"
+                                {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>
+                            {{ b.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Active toggle -->
+            <div class="srt-filter-group">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox"
+                           name="active" value="1" id="onlyActive"
+                           onchange="this.form.submit()"
+                           {% if only_active %}checked{% endif %}>
+                    <label for="onlyActive" class="form-check-label small">
+                        Faqat faollar
+                    </label>
+                </div>
+            </div>
+
+            {% if role_filter or branch_id or only_active %}
+            <a href="{% url 'user_list' %}" class="btn btn-outline-secondary btn-sm"
+               title="Filtrni tozalash" aria-label="Filtrni tozalash">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
+        </form>
     </div>
 
     <div class="srt-section">

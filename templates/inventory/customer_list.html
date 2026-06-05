@@ -6,15 +6,69 @@
 {% block content %}
 <div class="container-fluid px-3">
 
-    <div class="srt-page-header">
-        <div>
-            <h1 class="srt-h1"><i class="bi bi-person-rolodex me-1 text-primary"></i> Mijozlar</h1>
-            <div class="srt-sub">Sotuvlar tarixiga ko'ra segmentlangan mijozlar</div>
-        </div>
-        <div class="srt-actions">
+    <div class="srt-page-header srt-page-header-stack">
+        <!-- Row 1: identity + export -->
+        <div class="srt-page-title-row">
+            <div>
+                <h1 class="srt-h1"><i class="bi bi-person-rolodex me-1 text-primary"></i> Mijozlar</h1>
+                <div class="srt-sub">
+                    Sotuvlar tarixiga ko'ra segmentlangan mijozlar
+                    {% if q %}&nbsp;·&nbsp; <i class="bi bi-search"></i> "{{ q }}"{% endif %}
+                </div>
+            </div>
             <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-sm btn-outline-success">
                 <i class="bi bi-file-earmark-spreadsheet"></i> <span class="btn-text">CSV eksport</span>
             </a>
+        </div>
+
+        <!-- Row 2: filter toolbar -->
+        <div class="srt-page-filter-row">
+            <!-- Search (own form so Enter submits it) -->
+            <form method="get" class="srt-filter-group flex-grow-1" style="min-width: 240px;">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-search"></i> Qidirish
+                </span>
+                {% if segment %}<input type="hidden" name="segment" value="{{ segment }}">{% endif %}
+                <input type="text" name="q" value="{{ q }}"
+                       class="form-control form-control-sm flex-grow-1"
+                       placeholder="Telefon yoki ism..." autofocus
+                       style="min-width: 200px;">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-search"></i>
+                </button>
+            </form>
+
+            <!-- Segment chips (anchor links, preserve current search) -->
+            <div class="srt-filter-group">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-tags"></i> Segment
+                </span>
+                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="Segment">
+                    <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"
+                       class="btn {% if not segment %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        Hammasi
+                    </a>
+                    <a href="?segment=vip{% if q %}&q={{ q|urlencode }}{% endif %}"
+                       class="btn {% if segment == 'vip' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        VIP
+                    </a>
+                    <a href="?segment=regular{% if q %}&q={{ q|urlencode }}{% endif %}"
+                       class="btn {% if segment == 'regular' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        Doimiy
+                    </a>
+                    <a href="?segment=new{% if q %}&q={{ q|urlencode }}{% endif %}"
+                       class="btn {% if segment == 'new' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        Yangi
+                    </a>
+                </div>
+            </div>
+
+            {% if q or segment %}
+            <a href="{% url 'customer_list' %}" class="btn btn-outline-secondary btn-sm"
+               title="Filtrni tozalash" aria-label="Filtrni tozalash">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
         </div>
     </div>
 
@@ -30,41 +84,6 @@
         <div class="srt-kpi accent-success">
             <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> Jami sarf qilingan</div>
             <div class="srt-kpi-value">{{ total_revenue|som }}</div>
-        </div>
-    </div>
-
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Filtrlar</h2>
-            <span class="srt-tag">POS'da telefon kiritilsa avto-yaratiladi</span>
-        </div>
-        <div class="srt-section-body">
-            <form method="get">
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <label class="form-label small text-muted mb-1">Qidirish</label>
-                        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
-                               placeholder="Telefon yoki ism..." autofocus>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted mb-1">Segment</label>
-                        <select name="segment" class="form-select form-select-sm">
-                            <option value="">— hammasi —</option>
-                            <option value="vip" {% if segment == 'vip' %}selected{% endif %}>VIP (5M+ so'm)</option>
-                            <option value="regular" {% if segment == 'regular' %}selected{% endif %}>Doimiy (500K+)</option>
-                            <option value="new" {% if segment == 'new' %}selected{% endif %}>Yangi (&lt;500K)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end gap-2">
-                        <button type="submit" class="btn btn-primary btn-sm flex-fill">
-                            <i class="bi bi-funnel"></i> Filter
-                        </button>
-                        <a href="{% url 'customer_list' %}" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-x"></i>
-                        </a>
-                    </div>
-                </div>
-            </form>
         </div>
     </div>
 
