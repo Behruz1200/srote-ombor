@@ -965,9 +965,11 @@
                  datalabels: {
                     display: ctx => {
                         const v = ctx.dataset.data[ctx.dataIndex];
-                        if (v == null) return false;
-                        return ctx.dataIndex === ctx.dataset.data.length - 1
-                            || ctx.dataIndex % 10 === 0;
+                        if (v == null || v <= 0) return false;  // skip null & 0
+                        const idx = ctx.dataIndex;
+                        const last = ctx.dataset.data.length - 1;
+                        // First forecast point, the last, and every 10th in between
+                        return idx === last || idx === actualValues.length || idx % 10 === 0;
                     },
                     align: 'top', anchor: 'end', offset: 4,
                     color: danger,
@@ -979,11 +981,14 @@
             options: {
                 responsive: true, maintainAspectRatio: false,
                 layout: { padding: { top: 18 } },
+                interaction: { mode: 'index', intersect: false },
                 scales: {
                     y: gridScale({ ticks: { color: muted, callback: somTickCb } }),
                     x: gridScale({ ticks: { color: muted, maxTicksLimit: 12 } })
                 },
-                plugins: { tooltip: { callbacks: { label: c => fmtSom(c.parsed.y || 0) } } }
+                plugins: { tooltip: { callbacks: {
+                    label: c => c.raw == null ? null : c.dataset.label + ': ' + fmtSom(c.raw)
+                } } }
             }
         });
     })();
@@ -1049,25 +1054,28 @@
             },
             options: { responsive: true, maintainAspectRatio: false,
                 cutout: '60%',
+                layout: { padding: 24 },
                 plugins: {
                     tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
                     datalabels: {
                         display: ctx => {
                             const v = ctx.dataset.data[ctx.dataIndex] || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            return total > 0 && (v / total) >= 0.04;
+                            return total > 0 && (v / total) >= 0.08;
                         },
-                        color: '#FFFFFF',
-                        font: { family: 'Fira Code', size: 11, weight: 600 },
-                        textStrokeColor: 'rgba(0,0,0,0.35)',
-                        textStrokeWidth: 2,
+                        anchor: 'end', align: 'end', offset: 6,
+                        clip: false,
+                        color: fg,
+                        backgroundColor: isDark ? 'rgba(20,25,38,0.85)' : 'rgba(255,255,255,0.9)',
+                        borderColor: gridColor, borderWidth: 1, borderRadius: 4,
+                        padding: { top: 3, bottom: 3, left: 6, right: 6 },
+                        font: { family: 'Fira Code', size: 10, weight: 600 },
                         formatter: (v, ctx) => {
                             const val = v || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
                             const pct = total ? Math.round(val/total*100) : 0;
-                            return shortNum(val) + '\n' + pct + '%';
+                            return shortNum(val) + ' · ' + pct + '%';
                         },
-                        textAlign: 'center'
                     }
                 }
             }
@@ -1146,25 +1154,30 @@
                 }],
             },
             options: { responsive: true, maintainAspectRatio: false, cutout: '55%',
+                layout: { padding: 24 },  // room for outside labels
                 plugins: {
                     tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
                     datalabels: {
+                        // Outside the donut so they never overlap each other,
+                        // and only on slices ≥ 8 % (smaller go to the legend).
                         display: ctx => {
                             const v = ctx.dataset.data[ctx.dataIndex] || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            return total > 0 && (v / total) >= 0.04;
+                            return total > 0 && (v / total) >= 0.08;
                         },
-                        color: '#FFFFFF',
-                        font: { family: 'Fira Code', size: 11, weight: 600 },
-                        textStrokeColor: 'rgba(0,0,0,0.35)',
-                        textStrokeWidth: 2,
+                        anchor: 'end', align: 'end', offset: 6,
+                        clip: false,
+                        color: fg,
+                        backgroundColor: isDark ? 'rgba(20,25,38,0.85)' : 'rgba(255,255,255,0.9)',
+                        borderColor: gridColor, borderWidth: 1, borderRadius: 4,
+                        padding: { top: 3, bottom: 3, left: 6, right: 6 },
+                        font: { family: 'Fira Code', size: 10, weight: 600 },
                         formatter: (v, ctx) => {
                             const val = v || 0;
                             const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
                             const pct = total ? Math.round(val/total*100) : 0;
-                            return shortNum(val) + '\n' + pct + '%';
+                            return shortNum(val) + ' · ' + pct + '%';
                         },
-                        textAlign: 'center'
                     }
                 }
             }
