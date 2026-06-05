@@ -1,5 +1,5 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load srote_extras l10n %}
 
 {% block title %}Tahlil — Srote{% endblock %}
 
@@ -1031,7 +1031,7 @@
             data: {
                 labels: [{% for b in by_branch %}"{{ b.branch__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
                 datasets: [{
-                    data: [{% for b in by_branch %}{{ b.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    data: [{% for b in by_branch %}{{ b.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}],
                     backgroundColor: PALETTE,
                     borderColor: isDark ? '#151A26' : '#FFFFFF',
                     borderWidth: 2,
@@ -1127,7 +1127,7 @@
             data: {
                 labels: [{% for c in by_category %}"{{ c.variant__product__category__name|default:'(yo`q)'|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
                 datasets: [{
-                    data: [{% for c in by_category %}{{ c.revenue|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    data: [{% for c in by_category %}{{ c.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}],
                     backgroundColor: PALETTE,
                     borderColor: isDark ? '#151A26' : '#FFFFFF',
                     borderWidth: 2,
