@@ -4,73 +4,160 @@
 {% block title %}Hisobotlar — Srote{% endblock %}
 
 {% block content %}
+{% with current_type=form.report_type.value|default:'sales' selected_period=form.period.value|default:'week' selected_branch_id=form.branch.value|default:'' %}
 <div class="container-fluid px-3">
 
-    <div class="srt-page-header">
-        <div>
-            <h1 class="srt-h1"><i class="bi bi-file-earmark-bar-graph me-1 text-primary"></i> Hisobotlar</h1>
-            <div class="srt-sub">Tezkor davr + CSV/PDF eksport</div>
-        </div>
-        <div class="srt-actions">
-            <div class="btn-group btn-group-sm" role="group" aria-label="Tezkor davr">
-                <a href="?period=today&report_type={{ form.report_type.value|default:'sales' }}"
-                   class="btn btn-outline-primary">Bugun</a>
-                <a href="?period=yesterday&report_type={{ form.report_type.value|default:'sales' }}"
-                   class="btn btn-outline-primary">Kecha</a>
-                <a href="?period=week&report_type={{ form.report_type.value|default:'sales' }}"
-                   class="btn btn-outline-primary">7 kun</a>
-                <a href="?period=month&report_type={{ form.report_type.value|default:'sales' }}"
-                   class="btn btn-outline-primary">30 kun</a>
-                <a href="?period=this_month&report_type={{ form.report_type.value|default:'sales' }}"
-                   class="btn btn-outline-primary">Joriy oy</a>
-            </div>
-        </div>
-    </div>
-
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Hisobot filtri</h2>
-        </div>
-        <div class="srt-section-body">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">{{ form.report_type.label }}</label>
-                    {{ form.report_type }}
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted mb-1">{{ form.period.label }}</label>
-                    {{ form.period }}
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted mb-1">{{ form.date_from.label }}</label>
-                    {{ form.date_from }}
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted mb-1">{{ form.date_to.label }}</label>
-                    {{ form.date_to }}
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">{{ form.branch.label }}</label>
-                    {{ form.branch }}
-                </div>
-                <div class="col-12 d-flex gap-2 flex-wrap mt-2">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-search"></i> Hisobot ko'rsatish
-                    </button>
-                    {% if rows %}
-                        <a href="?{{ request.GET.urlencode }}&export=csv" class="btn btn-outline-success">
-                            <i class="bi bi-filetype-csv"></i> CSV
-                        </a>
-                        <a href="?{{ request.GET.urlencode }}&export=pdf" class="btn btn-outline-danger">
-                            <i class="bi bi-filetype-pdf"></i> PDF
-                        </a>
+    <!-- ── Page header (title row + filter row) ─────────────────────── -->
+    <div class="srt-page-header srt-page-header-stack">
+        <!-- Row 1: identity + export -->
+        <div class="srt-page-title-row">
+            <div>
+                <h1 class="srt-h1">
+                    <i class="bi bi-file-earmark-bar-graph me-1 text-primary"></i> Hisobotlar
+                </h1>
+                <div class="srt-sub">
+                    {% if title %}
+                        <i class="bi bi-calendar3"></i>
+                        {{ d_start }} → {{ d_end }}
+                        {% if branch %}
+                            &nbsp;·&nbsp; <i class="bi bi-building"></i> {{ branch.name }}
+                        {% else %}
+                            &nbsp;·&nbsp; <i class="bi bi-building"></i> Barcha filiallar
+                        {% endif %}
+                    {% else %}
+                        Tezkor hisobot + Excel/PDF eksport
                     {% endif %}
                 </div>
-            </form>
-            <small class="text-muted mt-2 d-block">
-                <i class="bi bi-info-circle"></i> "Aniq sanalar" tanlanganda dan-gacha sanalarini to'ldiring.
-            </small>
+            </div>
+            {% if rows %}
+            <div class="dropdown">
+                <button type="button"
+                        class="btn btn-outline-primary btn-sm dropdown-toggle"
+                        data-bs-toggle="dropdown" aria-expanded="false"
+                        aria-label="Eksport">
+                    <i class="bi bi-download"></i>
+                    <span class="btn-text">Eksport</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                    <li>
+                        <a class="dropdown-item py-2"
+                           href="?{{ request.GET.urlencode }}&export=pdf">
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="bi bi-filetype-pdf text-danger fs-5"></i>
+                                <div>
+                                    <div class="fw-medium">PDF</div>
+                                    <div class="small text-muted">Chop etish uchun hisobot</div>
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item py-2"
+                           href="?{{ request.GET.urlencode }}&export=csv">
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="bi bi-filetype-csv text-success fs-5"></i>
+                                <div>
+                                    <div class="fw-medium">CSV</div>
+                                    <div class="small text-muted">Excel'da ochish uchun jadval</div>
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
         </div>
+
+        <!-- Row 2: filter toolbar (single GET form) -->
+        <form method="get" id="reportForm" class="srt-page-filter-row">
+            <!-- Default period (used when the form is submitted by a non-period
+                 control like the branch dropdown). Period chip buttons append
+                 their own ?period=... which Django reads as the last value. -->
+            <input type="hidden" name="period" value="{{ selected_period }}">
+
+            <!-- Report type -->
+            <div class="srt-filter-group">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-clipboard-data"></i> Hisobot turi
+                </span>
+                <select name="report_type" class="form-select form-select-sm srt-report-type"
+                        onchange="this.form.submit()" aria-label="Hisobot turi">
+                    {% for v, lbl in form.report_type.field.choices %}
+                        <option value="{{ v }}" {% if current_type == v %}selected{% endif %}>{{ lbl }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Period chips (submit on click) -->
+            <div class="srt-filter-group">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-calendar-range"></i> Davr
+                </span>
+                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="Davr">
+                    <button type="submit" name="period" value="today"
+                            class="btn {% if selected_period == 'today' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        Bugun
+                    </button>
+                    <button type="submit" name="period" value="yesterday"
+                            class="btn {% if selected_period == 'yesterday' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        Kecha
+                    </button>
+                    <button type="submit" name="period" value="week"
+                            class="btn {% if selected_period == 'week' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        7 kun
+                    </button>
+                    <button type="submit" name="period" value="month"
+                            class="btn {% if selected_period == 'month' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        30 kun
+                    </button>
+                    <button type="submit" name="period" value="this_month"
+                            class="btn {% if selected_period == 'this_month' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        Joriy oy
+                    </button>
+                    <button type="button" id="customDateToggle"
+                            class="btn {% if selected_period == 'custom' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        <i class="bi bi-pencil"></i> Aniq sanalar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Branch -->
+            <div class="srt-filter-group">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-building"></i> Filial
+                </span>
+                <select name="branch" class="form-select form-select-sm srt-branch-filter"
+                        onchange="this.form.submit()" aria-label="Filial">
+                    {% for v, lbl in form.branch.field.choices %}
+                        <option value="{{ v|default_if_none:'' }}"
+                                {% if selected_branch_id == v|stringformat:'s' %}selected{% endif %}>
+                            {{ lbl }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Custom date range — shown only when "Aniq sanalar" is active -->
+            <div class="srt-filter-group srt-custom-range {% if selected_period != 'custom' %}d-none{% endif %}"
+                 id="customRange">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-calendar-event"></i> Dan
+                </span>
+                <input type="date" name="date_from" value="{{ form.date_from.value|default:'' }}"
+                       class="form-control form-control-sm" style="max-width: 150px;"
+                       aria-label="Boshlanish sanasi">
+                <span class="srt-filter-label" aria-hidden="true">
+                    <i class="bi bi-calendar-check"></i> Gacha
+                </span>
+                <input type="date" name="date_to" value="{{ form.date_to.value|default:'' }}"
+                       class="form-control form-control-sm" style="max-width: 150px;"
+                       aria-label="Tugash sanasi">
+                <button type="submit" name="period" value="custom" class="btn btn-primary btn-sm">
+                    <i class="bi bi-arrow-right"></i> Ko'rsatish
+                </button>
+            </div>
+        </form>
     </div>
 
     {% if title %}
@@ -79,12 +166,9 @@
             <h2 class="srt-h2">
                 <i class="bi bi-bar-chart-line text-primary"></i> {{ title }}
             </h2>
-            <div class="text-muted small">
-                <i class="bi bi-calendar"></i> <span class="srt-num">{{ d_start }} → {{ d_end }}</span>
-                <span class="mx-2">·</span>
-                <i class="bi bi-building"></i>
-                {% if branch %}{{ branch.name }}{% else %}Barcha filiallar{% endif %}
-            </div>
+            <span class="srt-tag">
+                <span class="srt-num">{{ rows|length }}</span> qator
+            </span>
         </div>
         {% if summary %}
         <div class="srt-section-body" style="padding-bottom: 0.5rem;">
@@ -124,9 +208,26 @@
     {% else %}
         <div class="srt-empty">
             <i class="bi bi-arrow-up-circle srt-empty-icon"></i>
-            <p class="mb-0">Yuqorida hisobot turi va davrni tanlab, "Hisobot ko'rsatish" tugmasini bosing.</p>
-            <p class="small mb-0 mt-1">Yoki tezkor davr tugmalaridan birini bosing.</p>
+            <p class="mb-0">Yuqorida hisobot turi va davrni tanlang.</p>
+            <p class="small mb-0 mt-1">Davr chiplaridan birini bossangiz hisobot avtomatik ko'rsatiladi.</p>
         </div>
     {% endif %}
 </div>
+
+<script>
+(function() {
+    // "Aniq sanalar" toggle reveals the date inputs.
+    const btn = document.getElementById('customDateToggle');
+    const range = document.getElementById('customRange');
+    if (!btn || !range) return;
+    btn.addEventListener('click', function() {
+        range.classList.toggle('d-none');
+        if (!range.classList.contains('d-none')) {
+            const first = range.querySelector('input[type="date"]');
+            if (first) first.focus();
+        }
+    });
+})();
+</script>
+{% endwith %}
 {% endblock %}
