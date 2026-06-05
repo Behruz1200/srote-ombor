@@ -178,12 +178,20 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 {{ daily_labels|json_script:"daily-labels" }}
 {{ daily_values|json_script:"daily-values" }}
 {{ hour_labels|json_script:"hour-labels" }}
 {{ hour_qty|json_script:"hour-qty" }}
 <script>
 (function() {
+    if (window.ChartDataLabels) Chart.register(ChartDataLabels);
+    function shortNum(v) {
+        if (v == null) return '';
+        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
+        if (v >= 1000) return (v/1000).toFixed(0) + 'k';
+        return v;
+    }
     function css(name, fb) {
         return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
     }
@@ -222,10 +230,16 @@
                 borderColor: success,
                 backgroundColor: hexToRgba(success, 0.10),
                 tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2,
+                datalabels: {
+                    display: 'auto', align: 'top', anchor: 'end', offset: 4,
+                    color: success, formatter: shortNum,
+                    font: { family: 'Fira Code', size: 10, weight: 500 }
+                }
             }]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 18 } },
             plugins: { legend: { display: false } },
             scales: {
                 y: { grid: { color: grid }, ticks: { color: muted, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k' : v } },
@@ -240,10 +254,18 @@
             labels: JSON.parse(document.getElementById('hour-labels').textContent),
             datasets: [{ label: "Cheklar",
                 data: JSON.parse(document.getElementById('hour-qty').textContent),
-                backgroundColor: primary, borderRadius: 4, maxBarThickness: 22 }]
+                backgroundColor: primary, borderRadius: 4, maxBarThickness: 22,
+                datalabels: {
+                    display: ctx => ctx.parsed.y > 0,
+                    anchor: 'end', align: 'top', offset: 2,
+                    color: muted, formatter: shortNum,
+                    font: { family: 'Fira Code', size: 10, weight: 500 }
+                }
+            }]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 18 } },
             plugins: { legend: { display: false } },
             scales: {
                 y: { beginAtZero: true, grid: { color: grid },

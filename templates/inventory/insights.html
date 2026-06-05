@@ -854,12 +854,15 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 {{ fc_actual_labels|json_script:"fc-actual-labels" }}
 {{ fc_actual_values|json_script:"fc-actual-values" }}
 {{ fc_forecast_labels|json_script:"fc-forecast-labels" }}
 {{ fc_forecast_values|json_script:"fc-forecast-values" }}
 <script>
 (function() {
+    if (window.ChartDataLabels) Chart.register(ChartDataLabels);
+
     /* ──────────── Theme helpers (read CSS vars + dark-mode aware) ────── */
     function css(name, fallback) {
         const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -924,6 +927,19 @@
     function fmtSom(n) {
         return new Intl.NumberFormat('uz-UZ').format(n) + " so'm";
     }
+    function shortNum(v) {
+        if (v == null) return '';
+        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
+        if (v >= 1000) return (v/1000).toFixed(0) + 'k';
+        return v;
+    }
+
+    /* Data-label defaults: subtle, theme-aware, line charts auto-skip */
+    Chart.defaults.set('plugins.datalabels', {
+        display: 'auto',
+        color: muted,
+        font: { family: 'Fira Code', size: 10, weight: 500 },
+    });
 
     /* ──────────── Forecast (line, actual + dashed predicted) ──────── */
     (function() {
@@ -943,13 +959,24 @@
             data: { labels, datasets: [
                 {label: 'Haqiqiy (90 kun)', data: actualSeries,
                  borderColor: success, backgroundColor: hexToRgba(success, 0.10),
-                 tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2},
+                 tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2,
+                 datalabels: { display: false }},
                 {label: 'Bashorat (30 kun)', data: forecastSeries,
                  borderColor: danger, borderDash: [6, 4], tension: 0.3,
-                 fill: false, pointRadius: 0, borderWidth: 2},
+                 fill: false, pointRadius: 0, borderWidth: 2,
+                 datalabels: {
+                    display: ctx => ctx.dataIndex === ctx.dataset.data.length - 1
+                                   || (ctx.dataIndex % 10 === 0 && ctx.parsed.y != null),
+                    align: 'top', anchor: 'end', offset: 4,
+                    color: danger,
+                    backgroundColor: isDark ? 'rgba(20,25,38,0.7)' : 'rgba(255,255,255,0.85)',
+                    borderRadius: 3, padding: { top: 1, bottom: 1, left: 4, right: 4 },
+                    formatter: shortNum
+                 }},
             ]},
             options: {
                 responsive: true, maintainAspectRatio: false,
+                layout: { padding: { top: 18 } },
                 scales: {
                     y: gridScale({ ticks: { color: muted, callback: somTickCb } }),
                     x: gridScale({ ticks: { color: muted, maxTicksLimit: 12 } })
@@ -974,16 +1001,22 @@
                     backgroundColor: hexToRgba(primary, 0.10),
                     fill: true, tension: 0.3, yAxisID: 'y',
                     pointRadius: 0, borderWidth: 2,
+                    datalabels: {
+                        display: 'auto', align: 'top', anchor: 'end', offset: 4,
+                        color: primary, formatter: shortNum
+                    }
                 }, {
                     label: 'Sotilgan dona',
                     data: {{ daily_qty|safe }},
                     borderColor: accent, tension: 0.3, yAxisID: 'y1',
                     pointRadius: 0, borderWidth: 2,
+                    datalabels: { display: false }
                 }],
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
+                layout: { padding: { top: 18 } },
                 scales: {
                     y:  Object.assign(gridScale(), { position: 'left',
                         ticks: { color: muted, callback: somTickCb },
@@ -1014,7 +1047,25 @@
             },
             options: { responsive: true, maintainAspectRatio: false,
                 cutout: '60%',
-                plugins: { tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } } }
+                plugins: {
+                    tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
+                    datalabels: {
+                        display: ctx => {
+                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
+                            return total > 0 && (ctx.parsed / total) >= 0.04;
+                        },
+                        color: '#FFFFFF',
+                        font: { family: 'Fira Code', size: 11, weight: 600 },
+                        textStrokeColor: 'rgba(0,0,0,0.35)',
+                        textStrokeWidth: 2,
+                        formatter: (v, ctx) => {
+                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
+                            const pct = total ? Math.round(v/total*100) : 0;
+                            return shortNum(v) + '\n' + pct + '%';
+                        },
+                        textAlign: 'center'
+                    }
+                }
             }
         });
     })();
@@ -1033,7 +1084,15 @@
                     borderRadius: 4, maxBarThickness: 22 }],
             },
             options: { responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                layout: { padding: { top: 18 } },
+                plugins: {
+                    legend: { display: false },
+                    datalabels: {
+                        display: ctx => ctx.parsed.y > 0,
+                        anchor: 'end', align: 'top', offset: 2,
+                        color: muted, formatter: shortNum
+                    }
+                },
                 scales: { x: gridScale(), y: gridScale() }
             }
         });
@@ -1053,7 +1112,15 @@
                     borderRadius: 4, maxBarThickness: 32 }],
             },
             options: { responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                layout: { padding: { top: 18 } },
+                plugins: {
+                    legend: { display: false },
+                    datalabels: {
+                        display: ctx => ctx.parsed.y > 0,
+                        anchor: 'end', align: 'top', offset: 2,
+                        color: muted, formatter: shortNum
+                    }
+                },
                 scales: { x: gridScale(), y: gridScale() }
             }
         });
@@ -1075,7 +1142,25 @@
                 }],
             },
             options: { responsive: true, maintainAspectRatio: false, cutout: '55%',
-                plugins: { tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } } }
+                plugins: {
+                    tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
+                    datalabels: {
+                        display: ctx => {
+                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
+                            return total > 0 && (ctx.parsed / total) >= 0.04;
+                        },
+                        color: '#FFFFFF',
+                        font: { family: 'Fira Code', size: 11, weight: 600 },
+                        textStrokeColor: 'rgba(0,0,0,0.35)',
+                        textStrokeWidth: 2,
+                        formatter: (v, ctx) => {
+                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
+                            const pct = total ? Math.round(v/total*100) : 0;
+                            return shortNum(v) + '\n' + pct + '%';
+                        },
+                        textAlign: 'center'
+                    }
+                }
             }
         });
     })();

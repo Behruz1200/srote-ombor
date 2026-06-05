@@ -354,10 +354,18 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 {{ trend_labels|json_script:"trend-labels" }}
 {{ trend_revenue|json_script:"trend-revenue" }}
 <script>
 (function() {
+    if (window.ChartDataLabels) Chart.register(ChartDataLabels);
+    function shortSom(v) {
+        if (v == null) return '';
+        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
+        if (v >= 1000) return (v/1000).toFixed(0) + 'k';
+        return v;
+    }
     function srtCss(name, fallback) {
         const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         return v || fallback;
@@ -399,6 +407,7 @@
             maintainAspectRatio: false,
             animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches
                        ? false : { duration: 400 },
+            layout: { padding: { top: 22 } },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -412,6 +421,15 @@
                             return new Intl.NumberFormat('uz-UZ').format(ctx.parsed.y) + " so'm";
                         }
                     }
+                },
+                datalabels: {
+                    display: 'auto',
+                    align: 'top',
+                    anchor: 'end',
+                    offset: 4,
+                    color: labelColor,
+                    font: { family: 'Fira Code', size: 10, weight: 500 },
+                    formatter: shortSom
                 }
             },
             scales: {
