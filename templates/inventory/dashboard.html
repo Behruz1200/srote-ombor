@@ -360,11 +360,14 @@
 <script>
 (function() {
     if (window.ChartDataLabels) Chart.register(ChartDataLabels);
+    /* Uzbek-friendly compact: 2 412 000 -> "2.4mln" */
     function shortSom(v) {
-        if (v == null) return '';
-        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
-        if (v >= 1000) return (v/1000).toFixed(0) + 'k';
-        return v;
+        if (v == null || v === 0) return v === 0 ? '0' : '';
+        const a = Math.abs(v);
+        if (a >= 1000000000) return (v/1000000000).toFixed(1).replace('.0','') + 'mlrd';
+        if (a >= 1000000)    return (v/1000000).toFixed(1).replace('.0','') + 'mln';
+        if (a >= 1000)       return (v/1000).toFixed(a >= 10000 ? 0 : 1).replace('.0','') + 'k';
+        return Math.round(v);
     }
     function srtCss(name, fallback) {
         const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -442,9 +445,7 @@
                     ticks: {
                         color: labelColor,
                         font: { family: "Fira Code" },
-                        callback: v => v >= 1000000 ? (v/1000000).toFixed(1) + 'M'
-                                       : v >= 1000 ? (v/1000).toFixed(0) + 'k'
-                                       : v
+                        callback: shortSom
                     }
                 }
             }

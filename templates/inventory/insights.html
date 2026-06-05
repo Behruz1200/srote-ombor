@@ -919,27 +919,19 @@
             ticks: { color: muted }
         }, opts || {});
     }
-    function somTickCb(v) {
-        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
-        if (v >= 1000) return (v/1000).toFixed(0) + 'k';
-        return v;
-    }
-    function fmtSom(n) {
-        return new Intl.NumberFormat('uz-UZ').format(n) + " so'm";
-    }
+    /* Compact number formatter (Uzbek-friendly: 2 412 000 -> "2.4mln") */
     function shortNum(v) {
-        if (v == null) return '';
-        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
-        if (v >= 1000) return (v/1000).toFixed(0) + 'k';
-        return v;
+        if (v == null || v === 0) return v === 0 ? '0' : '';
+        const a = Math.abs(v);
+        if (a >= 1000000000) return (v/1000000000).toFixed(1).replace('.0','') + 'mlrd';
+        if (a >= 1000000)    return (v/1000000).toFixed(1).replace('.0','') + 'mln';
+        if (a >= 1000)       return (v/1000).toFixed(a >= 10000 ? 0 : 1).replace('.0','') + 'k';
+        return Math.round(v);
     }
-
-    /* Data-label defaults: subtle, theme-aware, line charts auto-skip */
-    Chart.defaults.set('plugins.datalabels', {
-        display: 'auto',
-        color: muted,
-        font: { family: 'Fira Code', size: 10, weight: 500 },
-    });
+    const somTickCb = shortNum;       // alias for axis ticks
+    function fmtSom(n) {
+        return new Intl.NumberFormat('uz-UZ').format(n || 0) + " so'm";
+    }
 
     /* ──────────── Forecast (line, actual + dashed predicted) ──────── */
     (function() {
