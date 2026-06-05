@@ -75,22 +75,39 @@
                  Django reads as the later (winning) value. pivot_rows is
                  multi-valued so we don't echo it here — the checkboxes are
                  the only source of truth. -->
+            <input type="hidden" name="report_type" value="{{ current_type }}">
             <input type="hidden" name="period" value="{{ selected_period }}">
             <input type="hidden" name="pivot_cols" value="{{ p_cols }}">
             <input type="hidden" name="pivot_metric" value="{{ p_metric }}">
 
-            <!-- Report type -->
+            <!-- Report type: standard list reports vs. pivot/matritsa.
+                 Split into a chip group so pivot has equal prominence. -->
             <div class="srt-filter-group">
                 <span class="srt-filter-label" aria-hidden="true">
                     <i class="bi bi-clipboard-data"></i> Hisobot turi
                 </span>
-                <select name="report_type" id="reportTypeSelect"
-                        class="form-select form-select-sm srt-report-type"
-                        onchange="this.form.submit()" aria-label="Hisobot turi">
-                    {% for v, lbl in form.report_type.field.choices %}
-                        <option value="{{ v }}" {% if current_type == v %}selected{% endif %}>{{ lbl }}</option>
-                    {% endfor %}
-                </select>
+                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="Hisobot turi">
+                    <button type="submit" name="report_type" value="sales"
+                            class="btn {% if current_type == 'sales' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        <i class="bi bi-cart-check"></i> Sotuvlar
+                    </button>
+                    <button type="submit" name="report_type" value="intakes"
+                            class="btn {% if current_type == 'intakes' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        <i class="bi bi-box-arrow-in-down"></i> Qabullar
+                    </button>
+                    <button type="submit" name="report_type" value="inventory"
+                            class="btn {% if current_type == 'inventory' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        <i class="bi bi-archive"></i> Ombor
+                    </button>
+                    <button type="submit" name="report_type" value="by_product"
+                            class="btn {% if current_type == 'by_product' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        <i class="bi bi-bar-chart"></i> Mahsulot xulosasi
+                    </button>
+                    <button type="submit" name="report_type" value="pivot"
+                            class="btn {% if current_type == 'pivot' %}btn-primary{% else %}btn-outline-secondary{% endif %} srt-pivot-chip">
+                        <i class="bi bi-grid-3x3-gap-fill"></i> Pivot / Matritsa
+                    </button>
+                </div>
             </div>
 
             <!-- Period chips (submit on click) -->
@@ -401,16 +418,8 @@
         });
     }
 
-    // Reveal/hide pivot controls when the user picks "Pivot / Matritsa".
-    const typeSel = document.getElementById('reportTypeSelect');
-    const pivotCtrl = document.getElementById('pivotControls');
-    if (typeSel && pivotCtrl) {
-        function syncPivot() {
-            pivotCtrl.classList.toggle('d-none', typeSel.value !== 'pivot');
-        }
-        // Reflect immediate intent before the page reload that onchange triggers.
-        typeSel.addEventListener('change', syncPivot);
-    }
+    // No client toggle needed — report_type is a chip group, each click
+    // posts the form and the server re-renders with the right d-none state.
 
     // Heatmap colouring for the 2D pivot — paint cells with a blue tint
     // proportional to their share of the grand total.
@@ -461,6 +470,19 @@
 .srt-pivot-1d .srt-pivot-row-head {
     white-space: nowrap;
     border-right: 1px solid var(--srt-border);
+}
+/* Pivot chip gets a subtle accent so users notice the new option. */
+.srt-period-chips .btn.srt-pivot-chip {
+    color: var(--srt-accent);
+    border-left: 1px solid var(--srt-border) !important;
+}
+.srt-period-chips .btn.srt-pivot-chip.btn-primary {
+    background: var(--srt-accent);
+    color: var(--srt-on-primary);
+}
+.srt-period-chips .btn.srt-pivot-chip:hover:not(.btn-primary) {
+    color: var(--srt-accent);
+    background: rgba(217, 119, 6, 0.08);
 }
 /* Pivot control blocks (each label+control group) get a subtle outline */
 .srt-pivot-controls {
