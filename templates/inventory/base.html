@@ -714,6 +714,405 @@
            media query swaps which one is visible (see @media print). */
         img.srt-chart-print { display: none; }
 
+        /* =====================================================================
+           MODERN ADMIN SHELL (v2)
+           Synthesis of Linear (tight monochrome typography), Stripe (light
+           breathing professional surfaces) and Apple Liquid Glass (subtle
+           depth via backdrop-filter on sticky / overlay layers). Replaces
+           the top navbar with a fixed-width sidebar. Token overrides come
+           last so they win every cascade race.
+           ===================================================================== */
+
+        :root {
+            /* Light palette: Stripe-ish surfaces, Linear-ish text */
+            --srt-bg:            #F7F8FA;
+            --srt-surface:       #FFFFFF;
+            --srt-surface-2:     #F3F4F6;
+            --srt-fg:            #0B0D12;
+            --srt-fg-muted:      #5C6470;
+            --srt-border:        #ECEEF1;
+            --srt-border-strong: #D4D7DC;
+            --srt-primary:       #5B5BD6;   /* Indigo — Linear vibe */
+            --srt-primary-soft:  #6E70E0;
+            --srt-on-primary:    #FFFFFF;
+            --srt-accent:        #D97706;
+            --srt-success:       #167C3F;
+            --srt-warning:       #B45309;
+            --srt-danger:        #C8312B;
+
+            /* Softer, layered shadows (Stripe-style) */
+            --srt-shadow-sm: 0 1px 2px rgba(11, 13, 18, 0.04);
+            --srt-shadow-md: 0 1px 2px rgba(11, 13, 18, 0.04),
+                             0 8px 24px rgba(11, 13, 18, 0.05);
+            --srt-shadow-lg: 0 1px 2px rgba(11, 13, 18, 0.04),
+                             0 12px 48px rgba(11, 13, 18, 0.08);
+
+            --srt-radius:    10px;
+            --srt-radius-lg: 14px;
+            --srt-radius-sm: 6px;
+
+            --srt-sidebar-w: 240px;
+            --srt-glass-bg-light:  rgba(255, 255, 255, 0.72);
+            --srt-glass-bg-dark:   rgba(15, 17, 22, 0.70);
+        }
+        [data-bs-theme="dark"] {
+            --srt-bg:            #0A0B0E;
+            --srt-surface:       #131418;
+            --srt-surface-2:     #1A1C21;
+            --srt-fg:            #F3F4F6;
+            --srt-fg-muted:      #9197A3;
+            --srt-border:        #232631;
+            --srt-border-strong: #353945;
+            --srt-primary:       #7C7CFA;
+            --srt-primary-soft:  #9292FB;
+            --srt-on-primary:    #FFFFFF;
+            --srt-accent:        #F59E0B;
+            --srt-success:       #34D399;
+            --srt-warning:       #FBBF24;
+            --srt-danger:        #F87171;
+
+            --srt-shadow-sm: 0 1px 2px rgba(0,0,0,0.45);
+            --srt-shadow-md: 0 8px 32px rgba(0,0,0,0.45);
+            --srt-shadow-lg: 0 18px 56px rgba(0,0,0,0.55);
+        }
+
+        body {
+            background: var(--srt-bg) !important;
+            color: var(--srt-fg);
+            font-feature-settings: 'cv11', 'ss01';
+            letter-spacing: -0.005em;
+        }
+
+        /* ---- Sidebar: convert the existing .srote-nav <nav> to a fixed
+               left rail. The dropdown sub-menus still pop, but they slide
+               out to the RIGHT of the active item. ---- */
+        nav.srote-nav.navbar {
+            position: fixed;
+            inset: 0 auto 0 0;
+            width: var(--srt-sidebar-w);
+            height: 100dvh;
+            padding: 0.85rem 0.75rem;
+            background: var(--srt-glass-bg-light);
+            backdrop-filter: blur(16px) saturate(160%);
+            -webkit-backdrop-filter: blur(16px) saturate(160%);
+            border-right: 1px solid var(--srt-border);
+            border-bottom: none;
+            box-shadow: none;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            margin: 0 !important;
+            z-index: 1040;
+            overflow-y: auto;
+            overflow-x: visible;
+        }
+        [data-bs-theme="dark"] nav.srote-nav.navbar {
+            background: var(--srt-glass-bg-dark);
+        }
+        nav.srote-nav .container-fluid {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            width: 100%;
+            padding: 0;
+            gap: 0.5rem;
+        }
+        /* Brand: smaller, refined */
+        .srote-brand {
+            padding: 0.45rem 0.65rem 0.85rem;
+            font-size: 1.05rem !important;
+            color: var(--srt-fg) !important;
+            border-bottom: 1px solid var(--srt-border);
+            margin-bottom: 0.5rem;
+        }
+        .srote-brand .brand-logo {
+            width: 28px; height: 28px;
+            background: linear-gradient(135deg, var(--srt-primary) 0%, var(--srt-primary-soft) 100%);
+            border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(91, 91, 214, 0.32);
+            font-size: 0.95rem;
+        }
+        .srote-brand .brand-text {
+            color: var(--srt-fg);
+            font-weight: 600;
+        }
+
+        /* POS button in sidebar — full width */
+        nav.srote-nav .srote-pos-btn {
+            width: 100%;
+            justify-content: flex-start;
+            background: linear-gradient(135deg, #198754, #20c997);
+            border: none;
+            border-radius: var(--srt-radius);
+            padding: 0.55rem 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        nav.srote-nav .d-lg-none { display: none !important; }  /* mobile pos button hidden, sidebar shows it always */
+
+        /* Nav items vertical layout */
+        nav.srote-nav .navbar-toggler { display: none; }
+        nav.srote-nav .collapse,
+        nav.srote-nav .navbar-collapse {
+            display: flex !important;
+            flex-direction: column;
+            flex: 1 1 auto;
+            align-items: stretch;
+            min-height: 0;
+        }
+        nav.srote-nav .navbar-nav {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            padding: 0 !important;
+            gap: 1px;
+            width: 100%;
+        }
+        nav.srote-nav .navbar-nav:last-child {
+            margin-top: auto;   /* push user/status block to bottom */
+            border-top: 1px solid var(--srt-border);
+            padding-top: 0.5rem !important;
+        }
+        nav.srote-nav .nav-item {
+            margin: 0;
+            width: 100%;
+        }
+        nav.srote-nav .nav-link {
+            color: var(--srt-fg-muted) !important;
+            padding: 0.5rem 0.7rem !important;
+            border-radius: var(--srt-radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex !important;
+            align-items: center;
+            gap: 0.55rem;
+            background: transparent !important;
+            transition: background 120ms ease, color 120ms ease;
+        }
+        nav.srote-nav .nav-link i.bi {
+            font-size: 1rem;
+            opacity: 0.85;
+        }
+        nav.srote-nav .nav-link:hover,
+        nav.srote-nav .nav-link:focus-visible {
+            color: var(--srt-fg) !important;
+            background: var(--srt-surface-2) !important;
+        }
+        nav.srote-nav .nav-link.show,
+        nav.srote-nav .nav-item.active .nav-link {
+            color: var(--srt-fg) !important;
+            background: var(--srt-surface-2) !important;
+        }
+        nav.srote-nav .nav-link.dropdown-toggle::after {
+            margin-left: auto;
+            opacity: 0.55;
+        }
+        /* Dropdown menus float to the right of sidebar */
+        nav.srote-nav .dropdown-menu {
+            position: absolute !important;
+            left: calc(100% + 8px) !important;
+            top: 0 !important;
+            margin: 0 !important;
+            min-width: 230px;
+            background: var(--srt-glass-bg-light);
+            backdrop-filter: blur(20px) saturate(160%);
+            -webkit-backdrop-filter: blur(20px) saturate(160%);
+            border: 1px solid var(--srt-border);
+            border-radius: var(--srt-radius);
+            box-shadow: var(--srt-shadow-lg);
+            padding: 0.4rem;
+        }
+        [data-bs-theme="dark"] nav.srote-nav .dropdown-menu {
+            background: var(--srt-glass-bg-dark);
+        }
+        nav.srote-nav .dropdown-menu .dropdown-item {
+            border-radius: var(--srt-radius-sm);
+            padding: 0.45rem 0.65rem;
+            font-size: 0.875rem;
+            color: var(--srt-fg);
+        }
+        nav.srote-nav .dropdown-menu .dropdown-item:hover {
+            background: var(--srt-surface-2);
+        }
+        nav.srote-nav .dropdown-menu .dropdown-header {
+            font-size: 0.66rem;
+            color: var(--srt-fg-muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 0.4rem 0.65rem 0.2rem;
+        }
+        /* Connection badge & user avatar at sidebar bottom */
+        nav.srote-nav .srote-status-badge {
+            background: var(--srt-surface-2) !important;
+            color: var(--srt-fg-muted) !important;
+            padding: 0.3rem 0.6rem;
+            font-size: 0.74rem;
+        }
+        nav.srote-nav .srote-user-link {
+            color: var(--srt-fg) !important;
+            padding: 0.55rem 0.7rem !important;
+        }
+        nav.srote-nav .srote-avatar {
+            background: linear-gradient(135deg, var(--srt-primary), var(--srt-primary-soft));
+            box-shadow: 0 2px 8px rgba(91, 91, 214, 0.25);
+        }
+
+        /* ---- Content offset for the sidebar (desktop) ---- */
+        body > .container-fluid:last-of-type,
+        body > div.container-fluid {
+            margin-left: var(--srt-sidebar-w);
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+            max-width: none;
+        }
+        /* Offline banner sits above content but to the right of sidebar */
+        body > #offlineBanner { margin-left: var(--srt-sidebar-w); }
+
+        /* ---- Mobile: sidebar slides off, hamburger triggers it ---- */
+        @media (max-width: 991.98px) {
+            nav.srote-nav.navbar {
+                transform: translateX(-100%);
+                transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: var(--srt-shadow-lg);
+            }
+            nav.srote-nav.navbar.show-mobile {
+                transform: translateX(0);
+            }
+            nav.srote-nav .d-lg-none {
+                display: inline-flex !important;
+            }
+            body > .container-fluid,
+            body > #offlineBanner {
+                margin-left: 0;
+                padding-left: 12px !important;
+                padding-right: 12px !important;
+            }
+            /* Mobile top bar (added via JS) replaces the sidebar header */
+            .srt-mobile-topbar {
+                position: sticky;
+                top: 0;
+                z-index: 1030;
+                background: var(--srt-glass-bg-light);
+                backdrop-filter: blur(14px) saturate(160%);
+                -webkit-backdrop-filter: blur(14px) saturate(160%);
+                border-bottom: 1px solid var(--srt-border);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.55rem 0.75rem;
+                margin: -1rem -12px 1rem;
+            }
+            [data-bs-theme="dark"] .srt-mobile-topbar {
+                background: var(--srt-glass-bg-dark);
+            }
+            .srt-mobile-topbar .srt-hamburger {
+                background: transparent;
+                border: 1px solid var(--srt-border);
+                border-radius: 8px;
+                padding: 0.4rem 0.55rem;
+                color: var(--srt-fg);
+            }
+        }
+        @media (min-width: 992px) {
+            .srt-mobile-topbar { display: none; }
+        }
+
+        /* ---- Refined .srt-* components for the new aesthetic ---- */
+        .srt-kpi {
+            background: var(--srt-surface);
+            border: 1px solid var(--srt-border);
+            box-shadow: var(--srt-shadow-sm);
+            border-radius: var(--srt-radius);
+        }
+        .srt-kpi:hover {
+            box-shadow: var(--srt-shadow-md);
+            transform: translateY(-1px);
+        }
+        .srt-section {
+            background: var(--srt-surface);
+            border: 1px solid var(--srt-border);
+            box-shadow: var(--srt-shadow-sm);
+            border-radius: var(--srt-radius);
+        }
+        .srt-section-head {
+            background: transparent;
+            border-bottom: 1px solid var(--srt-border);
+            padding: 0.95rem 1.15rem;
+        }
+        .srt-page-header {
+            border-bottom: 1px solid var(--srt-border);
+        }
+
+        /* Period chips — sleeker, no heavy borders */
+        .srt-period-chips {
+            border: 1px solid var(--srt-border);
+            background: var(--srt-surface);
+            box-shadow: var(--srt-shadow-sm);
+        }
+        .srt-period-chips .btn-primary {
+            background: var(--srt-fg);
+            color: var(--srt-surface);
+        }
+        [data-bs-theme="dark"] .srt-period-chips .btn-primary {
+            background: var(--srt-primary);
+            color: var(--srt-on-primary);
+        }
+
+        /* Buttons — slightly tighter, more modern */
+        .btn-primary {
+            background: var(--srt-fg);
+            border-color: var(--srt-fg);
+            color: var(--srt-bg);
+        }
+        .btn-primary:hover, .btn-primary:focus-visible {
+            background: var(--srt-fg);
+            border-color: var(--srt-fg);
+            filter: brightness(1.05);
+        }
+        [data-bs-theme="dark"] .btn-primary {
+            background: var(--srt-primary);
+            border-color: var(--srt-primary);
+            color: var(--srt-on-primary);
+        }
+        .btn { letter-spacing: 0; font-weight: 500; }
+
+        /* Modals & dropdown panels — glass treatment */
+        .modal-content,
+        .dropdown-menu {
+            background: var(--srt-glass-bg-light);
+            backdrop-filter: blur(20px) saturate(160%);
+            -webkit-backdrop-filter: blur(20px) saturate(160%);
+            border: 1px solid var(--srt-border);
+            box-shadow: var(--srt-shadow-lg);
+            border-radius: var(--srt-radius);
+        }
+        [data-bs-theme="dark"] .modal-content,
+        [data-bs-theme="dark"] .dropdown-menu {
+            background: var(--srt-glass-bg-dark);
+        }
+
+        /* Tighten typography */
+        .srt-page-header .srt-h1 {
+            font-size: 1.5rem;
+            letter-spacing: -0.018em;
+            font-weight: 600;
+        }
+        .srt-h2 {
+            font-size: 0.95rem;
+            letter-spacing: -0.008em;
+            font-weight: 600;
+        }
+
+        /* Reduce print-on-screen "alert" noise */
+        .alert {
+            border: 1px solid var(--srt-border);
+            background: var(--srt-surface);
+            color: var(--srt-fg);
+            border-radius: var(--srt-radius);
+        }
+
+        /* Hide the screen-reader cmdk button — sidebar already has it */
+        /* (no-op placeholder) */
+
         /* ---- Print: hide nav/actions, expand layout, force light ---- */
         @media print {
             /* Force light palette regardless of dark-mode toggle */
@@ -1068,6 +1467,30 @@
 </nav>
 {% endif %}
 
+<!-- Mobile topbar (only visible <992px). Hamburger toggles the sidebar. -->
+{% if user.is_authenticated %}
+<div class="srt-mobile-topbar" id="mobileTopbar">
+    <button type="button" class="srt-hamburger" id="sidebarToggle"
+            aria-label="Menu" aria-controls="nav" aria-expanded="false">
+        <i class="bi bi-list" style="font-size: 1.35rem; line-height: 1;"></i>
+    </button>
+    <a href="{% url 'home' %}" class="d-flex align-items-center gap-2 text-decoration-none">
+        <span style="width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#5B5BD6,#6E70E0);display:inline-flex;align-items:center;justify-content:center;">
+            <i class="bi bi-shop" style="color:#fff;font-size:0.85rem;"></i>
+        </span>
+        <strong style="color: var(--srt-fg);">Srote</strong>
+    </a>
+    <a href="{% url 'pos_terminal' %}" class="btn btn-success btn-sm"
+       style="padding:0.35rem 0.7rem;">
+        <i class="bi bi-upc-scan"></i> POS
+    </a>
+</div>
+<div class="srt-sidebar-scrim" id="sidebarScrim" style="display:none;
+     position:fixed;inset:0;background:rgba(11,13,18,0.5);
+     z-index:1035;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);"
+     aria-hidden="true"></div>
+{% endif %}
+
 <div class="container-fluid pb-5">
     {% if messages %}
         <div class="container">
@@ -1115,6 +1538,39 @@
         });
     });
     markCurrent();
+})();
+
+// Mobile sidebar toggle (hamburger + scrim)
+(function() {
+    const sidebar = document.querySelector('nav.srote-nav');
+    const toggle = document.getElementById('sidebarToggle');
+    const scrim = document.getElementById('sidebarScrim');
+    if (!sidebar || !toggle || !scrim) return;
+    function open() {
+        sidebar.classList.add('show-mobile');
+        scrim.style.display = 'block';
+        toggle.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden';
+    }
+    function close() {
+        sidebar.classList.remove('show-mobile');
+        scrim.style.display = 'none';
+        toggle.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+    }
+    toggle.addEventListener('click', () => {
+        if (sidebar.classList.contains('show-mobile')) close(); else open();
+    });
+    scrim.addEventListener('click', close);
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && sidebar.classList.contains('show-mobile')) close();
+    });
+    // Close on navigation
+    sidebar.querySelectorAll('a[href]:not(.dropdown-toggle)').forEach(a => {
+        a.addEventListener('click', () => {
+            if (window.matchMedia('(max-width: 991.98px)').matches) close();
+        });
+    });
 })();
 
 // Dark mode toggle + Chart.js theme sync
