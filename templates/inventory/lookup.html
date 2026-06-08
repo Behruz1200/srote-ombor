@@ -57,69 +57,83 @@
 
     <!-- Suggestions: multiple matches -->
     {% if suggestions %}
-    <div class="card p-3 mb-3">
-        <h6 class="text-muted text-uppercase small mb-2">
-            <i class="bi bi-list"></i> {{ suggestions|length }} ta mos kelgan mahsulot
-        </h6>
-        <div class="list-group list-group-flush">
-            {% for p in suggestions %}
-                <a href="?code={{ p.code }}"
-                   class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>{{ p.name }}</strong>
-                        {% if p.category %}
-                            <span class="badge bg-light text-dark ms-2">{{ p.category.name }}</span>
-                        {% endif %}
-                    </div>
-                    <div class="d-flex gap-2 align-items-center">
-                        <span class="text-primary fw-bold">{{ p.default_sale_price|som }} so'm</span>
-                        <code>{{ p.code }}</code>
-                    </div>
-                </a>
-            {% endfor %}
+    <article class="dash-card">
+        <header class="dash-card__head">
+            <h2 class="dash-card__title">
+                <i class="bi bi-list-ul"></i> {{ suggestions|length }} ta mos mahsulot topildi
+            </h2>
+        </header>
+        <div class="dash-card__body dash-card__body--flush">
+            <ul class="lookup-suggest srt-stagger">
+                {% for p in suggestions %}
+                    <li>
+                        <a href="?code={{ p.code }}" class="lookup-suggest__item srt-hover-lift">
+                            <div class="lookup-suggest__main">
+                                <strong>{{ p.name }}</strong>
+                                <span class="lookup-suggest__meta">
+                                    <span class="code-pill">{{ p.code }}</span>
+                                    {% if p.category %}
+                                        <span class="dash-pill">{{ p.category.name }}</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <span class="lookup-suggest__price">{{ p.default_sale_price|som }} <small>so'm</small></span>
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
         </div>
-    </div>
+    </article>
     {% endif %}
 
     <!-- Empty state: popular products + categories -->
     {% if not product and not suggestions and not code %}
         {% if popular_products %}
-        <div class="card p-3 mb-3">
-            <h6 class="text-muted text-uppercase small mb-2">
-                <i class="bi bi-fire text-danger"></i> Eng ko'p sotilgan (30 kun)
-            </h6>
-            <div class="row g-2">
-                {% for item in popular_products %}
-                    <div class="col-md-3 col-6">
-                        <a href="?code={{ item.p.code }}"
-                           class="card text-decoration-none p-2 border h-100 hover-shadow">
-                            <div class="small text-muted"><code>{{ item.p.code }}</code></div>
-                            <div class="fw-bold text-dark">{{ item.p.name|truncatechars:24 }}</div>
-                            <div class="d-flex justify-content-between align-items-end mt-1">
-                                <span class="text-primary small">{{ item.p.default_sale_price|som }} so'm</span>
-                                <span class="badge bg-success">{{ item.qty }} dona</span>
+        <article class="dash-card">
+            <header class="dash-card__head">
+                <h2 class="dash-card__title">
+                    <i class="bi bi-fire" style="color: var(--srt-danger);"></i>
+                    Eng ko'p sotilgan
+                </h2>
+                <p class="dash-card__sub">So'nggi 30 kun</p>
+            </header>
+            <div class="dash-card__body">
+                <div class="lookup-grid srt-stagger">
+                    {% for item in popular_products %}
+                        <a href="?code={{ item.p.code }}" class="lookup-tile srt-hover-lift">
+                            <span class="code-pill">{{ item.p.code }}</span>
+                            <div class="lookup-tile__name">{{ item.p.name|truncatechars:30 }}</div>
+                            <div class="lookup-tile__foot">
+                                <span class="lookup-tile__price">{{ item.p.default_sale_price|som }} <small>so'm</small></span>
+                                <span class="srt-tile" data-tone="success" style="padding: 0.2rem 0.5rem;">
+                                    <strong>{{ item.qty }}</strong>&nbsp;dona
+                                </span>
                             </div>
                         </a>
-                    </div>
-                {% endfor %}
+                    {% endfor %}
+                </div>
             </div>
-        </div>
+        </article>
         {% endif %}
 
         {% if categories_quick %}
-        <div class="card p-3 mb-3">
-            <h6 class="text-muted text-uppercase small mb-2">
-                <i class="bi bi-tags"></i> Kategoriya bo'yicha tezkor o'tish
-            </h6>
-            <div class="d-flex flex-wrap gap-2">
-                {% for c in categories_quick %}
-                    <a href="?code={{ c.name }}" class="btn btn-sm btn-outline-secondary">
-                        {{ c.name }}
-                        <span class="badge bg-secondary ms-1">{{ c.n }}</span>
-                    </a>
-                {% endfor %}
+        <article class="dash-card">
+            <header class="dash-card__head">
+                <h2 class="dash-card__title">
+                    <i class="bi bi-tags"></i> Kategoriyalar bo'yicha tezkor o'tish
+                </h2>
+            </header>
+            <div class="dash-card__body">
+                <div class="lookup-cats">
+                    {% for c in categories_quick %}
+                        <a href="?code={{ c.name }}" class="lookup-cat">
+                            <span>{{ c.name }}</span>
+                            <span class="lookup-cat__count">{{ c.n }}</span>
+                        </a>
+                    {% endfor %}
+                </div>
             </div>
-        </div>
+        </article>
         {% endif %}
     {% endif %}
 
@@ -475,26 +489,142 @@
 </div>
 
 <style>
+/* ════════════════════════════════════════════════════════════════════
+   Lookup — Executive Glass treatment for product search surfaces
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Suggestion list — single-row picker with strong hierarchy */
+.lookup-suggest { list-style: none; padding: 0.5rem; margin: 0; }
+.lookup-suggest__item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: var(--srt-radius);
+    color: var(--srt-fg);
+    text-decoration: none;
+    transition: background var(--srt-trans-fast);
+}
+.lookup-suggest__item:hover { background: var(--srt-surface-2); color: var(--srt-fg); }
+.lookup-suggest__main { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.lookup-suggest__main strong { font-size: 0.95rem; font-weight: 600; }
+.lookup-suggest__meta {
+    display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center;
+}
+.lookup-suggest__price {
+    font-family: var(--srt-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--srt-primary);
+    white-space: nowrap;
+}
+.lookup-suggest__price small {
+    font-size: 0.7rem;
+    color: var(--srt-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 0.2rem;
+    font-weight: 500;
+}
+
+/* Popular products — bento grid with hover lift */
+.lookup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.7rem;
+}
+.lookup-tile {
+    display: flex; flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.85rem 0.95rem;
+    border-radius: var(--srt-radius);
+    background: var(--srt-surface);
+    border: 1px solid var(--srt-border);
+    color: var(--srt-fg);
+    text-decoration: none;
+    transition: transform var(--srt-trans-fast), box-shadow var(--srt-trans-fast);
+}
+.lookup-tile:hover {
+    color: var(--srt-fg);
+    transform: translateY(-2px);
+    box-shadow: var(--srt-shadow-md);
+    border-color: var(--srt-primary-soft);
+}
+.lookup-tile__name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.25;
+    min-height: 2.2em;
+    color: var(--srt-fg);
+}
+.lookup-tile__foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: auto;
+    gap: 0.4rem;
+}
+.lookup-tile__price {
+    font-family: var(--srt-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--srt-primary);
+}
+.lookup-tile__price small {
+    font-size: 0.68rem;
+    color: var(--srt-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 0.15rem;
+    font-weight: 500;
+}
+
+/* Category quick-jump chips */
+.lookup-cats {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+}
+.lookup-cat {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: var(--srt-radius-pill);
+    background: var(--srt-surface-2);
+    border: 1px solid var(--srt-border);
+    color: var(--srt-fg);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all var(--srt-trans-fast);
+}
+.lookup-cat:hover {
+    color: var(--srt-primary);
+    background: var(--srt-surface);
+    border-color: var(--srt-primary-soft);
+    transform: translateY(-1px);
+}
+.lookup-cat__count {
+    font-family: var(--srt-font-mono);
+    font-variant-numeric: tabular-nums;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--srt-radius-pill);
+    background: var(--srt-surface-3);
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--srt-fg-muted);
+}
+.lookup-cat:hover .lookup-cat__count {
+    background: var(--srt-primary);
+    color: #FFFFFF;
+}
+
+/* Legacy lookup-hero (still referenced in places) */
 .lookup-hero {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
-    border: 1px solid rgba(13, 110, 253, 0.1);
+    background: var(--srt-surface);
+    border: 1px solid var(--srt-border);
 }
-[data-bs-theme="dark"] .lookup-hero {
-    background: linear-gradient(135deg, #1c1f26 0%, #1a2842 60%, #11151f 100%);
-    border: 1px solid rgba(110, 168, 254, 0.15);
-}
-[data-bs-theme="dark"] .lookup-hero .form-control {
-    background: rgba(255,255,255,0.05);
-    color: #d4d6db;
-    border-color: rgba(255,255,255,0.1);
-}
-[data-bs-theme="dark"] .lookup-hero .form-control:focus {
-    background: rgba(255,255,255,0.08);
-    border-color: #6ea8fe;
-}
-.hover-shadow { transition: box-shadow 0.15s, transform 0.15s; }
+.hover-shadow { transition: box-shadow var(--srt-trans-fast), transform var(--srt-trans-fast); }
 .hover-shadow:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    box-shadow: var(--srt-shadow-md);
     transform: translateY(-2px);
 }
 </style>

@@ -67,45 +67,60 @@
     </header>
 
     <!-- KPI strip -->
-    <div class="row g-2 mb-3">
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Jami zaxira</div>
-                <div class="h4 mb-0 {% if product_kpis.total_stock == 0 %}text-danger{% endif %}">
-                    {{ product_kpis.total_stock }}
+    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Mahsulot ko'rsatkichlari">
+        <article class="dash-kpi" data-tone="{% if product_kpis.total_stock == 0 %}danger{% else %}indigo{% endif %}">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-archive"></i> Jami zaxira</span>
+            </div>
+            <div class="dash-kpi__value" style="{% if product_kpis.total_stock == 0 %}color: var(--srt-danger);{% endif %}">
+                <span data-countup="{{ product_kpis.total_stock|default:0 }}">{{ product_kpis.total_stock }}</span>
+            </div>
+            <div class="dash-kpi__footer">
+                <span>{{ product_kpis.variants_in_stock }}/{{ product_kpis.total_variants }} variant</span>
+            </div>
+        </article>
+
+        <article class="dash-kpi" data-tone="info">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cash-stack"></i> Zaxira qiymati</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ product_kpis.total_value|default:0 }}">{{ product_kpis.total_value|som }}</span>
+            </div>
+            <div class="dash-kpi__footer">
+                <span class="dash-kpi__unit">so'm</span>
+            </div>
+        </article>
+
+        <article class="dash-kpi" data-tone="success">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cart-check"></i> 30 kun sotilgan</span>
+            </div>
+            <div class="dash-kpi__value" style="color: var(--srt-success);">
+                <span data-countup="{{ product_kpis.sold_30d|default:0 }}">{{ product_kpis.sold_30d }}</span>
+            </div>
+            <div class="dash-kpi__footer">
+                <span>{{ product_kpis.txns_30d }} chek · <strong>{{ product_kpis.rev_30d|som }}</strong></span>
+            </div>
+        </article>
+
+        <article class="dash-kpi" data-tone="{% if product_kpis.days_left is not None and product_kpis.days_left < 7 %}danger{% elif product_kpis.days_left is not None and product_kpis.days_left < 14 %}amber{% else %}slate{% endif %}">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-hourglass-split"></i> Yetadigan kun</span>
+            </div>
+            {% if product_kpis.days_left is not None %}
+                <div class="dash-kpi__value" style="color: {% if product_kpis.days_left < 7 %}var(--srt-danger){% elif product_kpis.days_left < 14 %}var(--srt-warning){% else %}var(--srt-success){% endif %};">
+                    <span data-countup="{{ product_kpis.days_left|floatformat:0 }}">{{ product_kpis.days_left|floatformat:0 }}</span>
                 </div>
-                <small class="text-muted">{{ product_kpis.variants_in_stock }}/{{ product_kpis.total_variants }} variant</small>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Zaxira qiymati</div>
-                <div class="h4 mb-0">{{ product_kpis.total_value|som }}</div>
-                <small class="text-muted">so'm</small>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">30 kun sotilgan</div>
-                <div class="h4 mb-0 text-success">{{ product_kpis.sold_30d }}</div>
-                <small class="text-muted">{{ product_kpis.txns_30d }} chek · {{ product_kpis.rev_30d|som }}</small>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Yetadigan kun</div>
-                {% if product_kpis.days_left is not None %}
-                    <div class="h4 mb-0 text-{% if product_kpis.days_left < 7 %}danger{% elif product_kpis.days_left < 14 %}warning{% else %}success{% endif %}">
-                        {{ product_kpis.days_left|floatformat:0 }}
-                    </div>
-                    <small class="text-muted">kun</small>
-                {% else %}
-                    <div class="h4 mb-0 text-muted">—</div>
-                    <small class="text-muted">sotilmagan</small>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+                <div class="dash-kpi__footer">
+                    <span class="dash-kpi__unit">kun</span>
+                </div>
+            {% else %}
+                <div class="dash-kpi__value" style="color: var(--srt-fg-muted);">—</div>
+                <div class="dash-kpi__footer"><span>sotilmagan</span></div>
+            {% endif %}
+        </article>
+    </section>
 
     <!-- Chart + Top branch + Cross-sell -->
     <div class="row g-3 mb-3">

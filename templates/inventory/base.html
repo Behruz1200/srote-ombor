@@ -313,50 +313,99 @@
            Bootstrap continues to power non-opted-in pages unchanged.
            ===================================================================== */
         :root {
-            --srt-font-ui: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            --srt-font-ui:   'Fira Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
             --srt-font-mono: 'Fira Code', ui-monospace, 'SF Mono', Menlo, monospace;
 
-            /* Light palette */
-            --srt-primary:       #1E40AF;
-            --srt-primary-soft:  #3B82F6;
+            /* ── Light palette — Executive Indigo lead, semantic tints ─── */
+            --srt-primary:       #5B5BD6;
+            --srt-primary-soft:  #818CF8;
+            --srt-primary-deep:  #4F46E5;
             --srt-on-primary:    #FFFFFF;
             --srt-accent:        #D97706;
-            --srt-bg:            #F8FAFC;
+            --srt-accent-soft:   #F59E0B;
+            --srt-bg:            #F6F7FB;
             --srt-surface:       #FFFFFF;
             --srt-surface-2:     #F1F5F9;
+            --srt-surface-3:     #E2E8F0;
             --srt-fg:            #0F172A;
-            --srt-fg-muted:      #475569;
-            --srt-border:        #E2E8F0;
+            --srt-fg-muted:      #5C6470;
+            --srt-fg-soft:       #94A3B8;
+            --srt-border:        #E5E8EE;
             --srt-border-strong: #CBD5E1;
-            --srt-success:       #15803D;
-            --srt-warning:       #B45309;
-            --srt-danger:        #B91C1C;
 
-            --srt-shadow-sm: 0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06);
+            /* Semantic colour ramps — each with text + tint pair */
+            --srt-success:       #15803D;  --srt-success-tint:  rgba(34,197,94,0.12);
+            --srt-warning:       #B45309;  --srt-warning-tint:  rgba(245,158,11,0.14);
+            --srt-danger:        #B91C1C;  --srt-danger-tint:   rgba(239,68,68,0.12);
+            --srt-info:          #0369A1;  --srt-info-tint:     rgba(14,165,233,0.12);
+
+            /* Shadow depth scale */
+            --srt-shadow-xs: 0 1px 1px rgba(15,23,42,0.03);
+            --srt-shadow-sm: 0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.05);
             --srt-shadow-md: 0 4px 12px rgba(15,23,42,0.06), 0 2px 4px rgba(15,23,42,0.04);
-            --srt-radius:    10px;
-            --srt-radius-lg: 14px;
+            --srt-shadow-lg: 0 10px 24px -8px rgba(15,23,42,0.12), 0 4px 8px -4px rgba(15,23,42,0.06);
+            --srt-shadow-xl: 0 24px 56px -16px rgba(15,23,42,0.22), 0 8px 16px -8px rgba(15,23,42,0.10);
+            --srt-shadow-indigo: 0 8px 24px -6px rgba(91,91,214,0.30);
+            --srt-shadow-green:  0 8px 24px -6px rgba(22,163,74,0.30);
+            --srt-shadow-amber:  0 8px 24px -6px rgba(217,119,6,0.30);
+
+            /* Radius scale */
+            --srt-radius-xs: 4px;
             --srt-radius-sm: 6px;
-            --srt-trans:     150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --srt-radius:    10px;
+            --srt-radius-md: 12px;
+            --srt-radius-lg: 16px;
+            --srt-radius-xl: 20px;
+            --srt-radius-pill: 999px;
+
+            /* Spacing scale (4 / 8 base) */
+            --srt-space-1: 0.25rem;   /* 4 */
+            --srt-space-2: 0.5rem;    /* 8 */
+            --srt-space-3: 0.75rem;   /* 12 */
+            --srt-space-4: 1rem;      /* 16 */
+            --srt-space-5: 1.25rem;   /* 20 */
+            --srt-space-6: 1.5rem;    /* 24 */
+            --srt-space-8: 2rem;      /* 32 */
+            --srt-space-10: 2.5rem;   /* 40 */
+            --srt-space-12: 3rem;     /* 48 */
+
+            /* Motion — single source of truth */
+            --srt-ease:        cubic-bezier(0.22, 1, 0.36, 1);
+            --srt-ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+            --srt-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+            --srt-trans-fast:  120ms var(--srt-ease);
+            --srt-trans:       180ms var(--srt-ease);
+            --srt-trans-slow:  280ms var(--srt-ease);
         }
         [data-bs-theme="dark"] {
-            --srt-primary:       #3B82F6;
-            --srt-primary-soft:  #60A5FA;
-            --srt-on-primary:    #FFFFFF;
+            --srt-primary:       #818CF8;
+            --srt-primary-soft:  #A5B4FC;
+            --srt-primary-deep:  #5B5BD6;
             --srt-accent:        #F59E0B;
+            --srt-accent-soft:   #FBBF24;
             --srt-bg:            #0B0F1A;
             --srt-surface:       #151A26;
             --srt-surface-2:     #1C2230;
+            --srt-surface-3:     #283142;
             --srt-fg:            #E2E8F0;
             --srt-fg-muted:      #94A3B8;
+            --srt-fg-soft:       #64748B;
             --srt-border:        #25304A;
             --srt-border-strong: #334155;
-            --srt-success:       #34D399;
-            --srt-warning:       #FBBF24;
-            --srt-danger:        #F87171;
 
+            --srt-success: #34D399; --srt-success-tint: rgba(52,211,153,0.16);
+            --srt-warning: #FBBF24; --srt-warning-tint: rgba(251,191,36,0.16);
+            --srt-danger:  #F87171; --srt-danger-tint:  rgba(248,113,113,0.16);
+            --srt-info:    #38BDF8; --srt-info-tint:    rgba(56,189,248,0.16);
+
+            --srt-shadow-xs: 0 1px 1px rgba(0,0,0,0.3);
             --srt-shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
             --srt-shadow-md: 0 4px 16px rgba(0,0,0,0.45);
+            --srt-shadow-lg: 0 12px 30px -8px rgba(0,0,0,0.55);
+            --srt-shadow-xl: 0 28px 64px -16px rgba(0,0,0,0.6);
+            --srt-shadow-indigo: 0 10px 28px -8px rgba(129,140,248,0.40);
+            --srt-shadow-green:  0 10px 28px -8px rgba(52,211,153,0.35);
+            --srt-shadow-amber:  0 10px 28px -8px rgba(251,191,36,0.35);
         }
 
         /* Global typography upgrade — applies everywhere */
@@ -2155,6 +2204,143 @@
         [data-bs-theme="dark"] .srt-page-header::before { opacity: 1; }
 
         /* ════════════════════════════════════════════════════════════════
+           MICRO-INTERACTIONS LIBRARY — global
+           Skeleton shimmer, count-up numeric tween, pulse dot variants,
+           hover-lift card, press-scale button, status tile badges.
+           ════════════════════════════════════════════════════════════════ */
+
+        /* Skeleton — show while data loads. Wrap any block in .srt-skeleton
+           and the contents are hidden; on hydration remove the class.
+           If your view needs a placeholder shape, use <div class="srt-skel"
+           style="width: X; height: Y"></div>. */
+        @keyframes srtShimmer {
+            0%   { background-position: -468px 0; }
+            100% { background-position:  468px 0; }
+        }
+        .srt-skel {
+            display: inline-block;
+            border-radius: var(--srt-radius-sm);
+            background: linear-gradient(90deg,
+                var(--srt-surface-2) 0%,
+                var(--srt-surface-3) 40%,
+                var(--srt-surface-2) 80%);
+            background-size: 936px 100%;
+            animation: srtShimmer 1.4s linear infinite;
+            color: transparent !important;
+            user-select: none;
+            pointer-events: none;
+        }
+        .srt-skel.is-block { display: block; }
+
+        /* Pulse — live status indicator, multiple tones */
+        @keyframes srtPulse {
+            0%   { box-shadow: 0 0 0 0 currentColor; }
+            70%  { box-shadow: 0 0 0 9px transparent; }
+            100% { box-shadow: 0 0 0 0 transparent; }
+        }
+        .srt-pulse {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: var(--srt-radius-pill);
+            background: var(--srt-success);
+            color: rgba(34,197,94,0.55);  /* feeds the keyframe via currentColor */
+            animation: srtPulse 2.4s var(--srt-ease) infinite;
+        }
+        .srt-pulse[data-tone="amber"]  { background: var(--srt-accent-soft); color: rgba(245,158,11,0.55); }
+        .srt-pulse[data-tone="danger"] { background: var(--srt-danger); color: rgba(239,68,68,0.55); }
+        .srt-pulse[data-tone="info"]   { background: var(--srt-info); color: rgba(14,165,233,0.55); }
+        .srt-pulse[data-tone="indigo"] { background: var(--srt-primary); color: rgba(91,91,214,0.55); }
+
+        /* Hover-lift — universal interactive surface treatment */
+        .srt-hover-lift {
+            transition: transform var(--srt-trans), box-shadow var(--srt-trans);
+            will-change: transform;
+        }
+        .srt-hover-lift:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--srt-shadow-lg);
+        }
+        .srt-hover-lift:active { transform: translateY(0); transition-duration: 80ms; }
+
+        /* Press-scale — for tap-friendly buttons (mobile) */
+        @media (hover: none) and (pointer: coarse) {
+            .srt-press-scale:active { transform: scale(0.97); }
+        }
+
+        /* Status tile — small label + value badge cluster
+           <span class="srt-tile" data-tone="success">
+              <span class="srt-tile__icon"><i class="bi bi-check"></i></span>
+              <span class="srt-tile__body">
+                  <strong>Tugallandi</strong><small>5 daqiqa oldin</small>
+              </span>
+           </span> */
+        .srt-tile {
+            display: inline-flex; gap: 0.55rem; align-items: center;
+            padding: 0.45rem 0.7rem;
+            border-radius: var(--srt-radius);
+            background: var(--srt-surface-2);
+            border: 1px solid var(--srt-border);
+            font-size: 0.82rem;
+        }
+        .srt-tile[data-tone="success"] { background: var(--srt-success-tint); border-color: transparent; color: var(--srt-success); }
+        .srt-tile[data-tone="warning"] { background: var(--srt-warning-tint); border-color: transparent; color: var(--srt-warning); }
+        .srt-tile[data-tone="danger"]  { background: var(--srt-danger-tint);  border-color: transparent; color: var(--srt-danger); }
+        .srt-tile[data-tone="info"]    { background: var(--srt-info-tint);    border-color: transparent; color: var(--srt-info); }
+        .srt-tile__icon {
+            width: 24px; height: 24px;
+            border-radius: var(--srt-radius-sm);
+            display: inline-flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.55);
+        }
+        .srt-tile__body { display: inline-flex; flex-direction: column; line-height: 1.15; }
+        .srt-tile__body small { opacity: 0.75; font-size: 0.72rem; }
+
+        /* Staggered entrance — opt-in via .srt-stagger on a parent, the
+           children fade up sequentially. Keeps focus on hero data first. */
+        @keyframes srtStaggerFade {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .srt-stagger > * {
+            opacity: 0;
+            animation: srtStaggerFade 360ms var(--srt-ease-out) both;
+        }
+        .srt-stagger > *:nth-child(1) { animation-delay: 40ms; }
+        .srt-stagger > *:nth-child(2) { animation-delay: 90ms; }
+        .srt-stagger > *:nth-child(3) { animation-delay: 140ms; }
+        .srt-stagger > *:nth-child(4) { animation-delay: 190ms; }
+        .srt-stagger > *:nth-child(5) { animation-delay: 240ms; }
+        .srt-stagger > *:nth-child(6) { animation-delay: 280ms; }
+        @media (prefers-reduced-motion: reduce) {
+            .srt-stagger > *,
+            .srt-skel,
+            .srt-pulse,
+            .srt-hover-lift { animation: none !important; transition: none !important; }
+        }
+
+        /* Refined glass surface — opt-in with .srt-glass on any container */
+        .srt-glass {
+            background: rgba(255,255,255,0.72);
+            backdrop-filter: blur(12px) saturate(1.1);
+            -webkit-backdrop-filter: blur(12px) saturate(1.1);
+            border: 1px solid rgba(255,255,255,0.55);
+            box-shadow: var(--srt-shadow-md);
+        }
+        [data-bs-theme="dark"] .srt-glass {
+            background: rgba(20,25,38,0.66);
+            border-color: rgba(255,255,255,0.05);
+        }
+
+        /* Count-up — for numeric display; JS sets the value, CSS provides
+           the monospace + tabular treatment so the digits don't jitter. */
+        .srt-count {
+            font-family: var(--srt-font-mono);
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: 'tnum';
+            display: inline-block;
+        }
+
+        /* ════════════════════════════════════════════════════════════════
            Bootstrap .table → Executive Glass treatment
            Every plain Bootstrap table inherits the dashboard's data-dense
            look: glass header with uppercase labels, tabular numerics,
@@ -3127,6 +3313,48 @@
         /* Categorical palette: matches the dashboard accent rotation. */
         palette: ['#5B5BD6', '#22C55E', '#F59E0B', '#0EA5E9', '#EC4899', '#8B5CF6', '#10B981', '#EF4444'],
     };
+
+    /* ────────────────────────────────────────────────────────────────
+       window.srtUI — generic micro-interaction helpers used across the
+       app: count-up animation for KPI values, skeleton hydration.
+       ──────────────────────────────────────────────────────────────── */
+    window.srtUI = window.srtUI || {
+        /* Animate a numeric value from 0 → final. Respects
+           prefers-reduced-motion (snaps to final). Formatting hook lets
+           callers pipe through the Uzbek thousand-separator. */
+        countUp(el, final, opts) {
+            opts = opts || {};
+            const duration = opts.duration || 900;
+            const fmt = opts.format || (n => new Intl.NumberFormat('uz-UZ').format(Math.round(n)));
+            const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reduce || duration === 0) { el.textContent = fmt(final); return; }
+            const start = performance.now();
+            const initial = parseFloat(el.dataset.from || 0);
+            const step = (t) => {
+                const p = Math.min(1, (t - start) / duration);
+                const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+                el.textContent = fmt(initial + (final - initial) * eased);
+                if (p < 1) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        },
+
+        /* Scan the DOM for [data-countup="123456"] elements and animate
+           them in once. Call after data loads or on DOMContentLoaded. */
+        hydrateCountUps(root) {
+            root = root || document;
+            root.querySelectorAll('[data-countup]').forEach(el => {
+                const final = parseFloat(el.dataset.countup);
+                if (Number.isFinite(final)) {
+                    el.classList.add('srt-count');
+                    this.countUp(el, final);
+                }
+            });
+        },
+    };
+    // Auto-hydrate on DOM ready so pages get free animation by tagging a
+    // <span data-countup="123456"></span>.
+    document.addEventListener('DOMContentLoaded', () => window.srtUI.hydrateCountUps());
     // applyChartTheme is intentionally NOT auto-fired on load — the page's
     // own inline chart script handles dark/light coloring via CSS vars at
     // creation time. We only need to re-tint when the user toggles theme.

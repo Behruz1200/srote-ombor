@@ -5,35 +5,147 @@
 
 {% block content %}
 <style>
-/* Compact POS right column — fit everything in viewport */
-.pos-side .card { border-radius: 8px; }
-.pos-side .form-label { margin-bottom: 0.2rem; font-size: 0.72rem; }
-.pos-side .payment-btn { padding: 0.3rem 0.4rem; font-size: 0.85rem; }
-/* QR provider buttons — touch-friendly (min 44×44px Apple HIG) */
-.pos-side .qr-provider-btn {
-    font-size: 0.92rem;
-    padding: 0.6rem 0.85rem !important;
-    min-height: 48px;
-    font-weight: 500;
+/* ════════════════════════════════════════════════════════════════════
+   POS Terminal — Executive Liquid Glass polish (page-scoped)
+   Compact right column, touch-friendly action grid, glass cards.
+   ════════════════════════════════════════════════════════════════════ */
+.pos-side .card {
+    border-radius: var(--srt-radius-lg);
+    border-color: var(--srt-border);
+    box-shadow: var(--srt-shadow-sm);
 }
-.pos-side .qr-provider-btn i { font-size: 1.1rem; margin-right: 0.25rem; }
-#qrProviders { gap: 0.4rem !important; }
-.pos-side .display-6 { font-size: 1.85rem; line-height: 1; }
-.pos-side hr { margin-top: 0.4rem; margin-bottom: 0.4rem; }
+.pos-side .form-label {
+    margin-bottom: 0.3rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--srt-fg-muted);
+}
+.pos-side hr {
+    margin: 0.55rem 0;
+    border-color: var(--srt-border);
+    opacity: 0.7;
+}
 
-/* Sticky checkout button at bottom of viewport */
+/* Payment method tiles — touch-friendly 44pt min, neutral resting */
+.pos-side .payment-btn {
+    padding: 0.6rem 0.6rem;
+    font-size: 0.86rem;
+    font-weight: 500;
+    min-height: 48px;
+    border-radius: var(--srt-radius);
+    transition: transform var(--srt-trans-fast), box-shadow var(--srt-trans-fast),
+                background var(--srt-trans-fast);
+}
+.pos-side .payment-btn:hover { transform: translateY(-1px); }
+.pos-side .payment-btn:active { transform: scale(0.97); transition-duration: 80ms; }
+.pos-side .payment-btn i { font-size: 1rem; }
+.pos-side .payment-btn.btn-primary,
+.pos-side .payment-btn.active {
+    background: linear-gradient(135deg, var(--srt-primary), var(--srt-primary-soft));
+    border-color: transparent;
+    color: #FFFFFF;
+    box-shadow: var(--srt-shadow-indigo);
+}
+
+/* QR / Muddatli provider buttons — extra touch padding, glass surface */
+.pos-side .qr-provider-btn {
+    font-size: 0.88rem;
+    padding: 0.7rem 0.85rem !important;
+    min-height: 52px;
+    font-weight: 500;
+    border-radius: var(--srt-radius);
+    background: var(--srt-surface);
+    border: 1px solid var(--srt-border);
+    transition: transform var(--srt-trans-fast), box-shadow var(--srt-trans-fast),
+                background var(--srt-trans-fast);
+}
+.pos-side .qr-provider-btn:hover {
+    transform: translateY(-1px);
+    background: var(--srt-surface-2);
+    box-shadow: var(--srt-shadow-md);
+}
+.pos-side .qr-provider-btn:active { transform: scale(0.97); transition-duration: 80ms; }
+.pos-side .qr-provider-btn i { font-size: 1.1rem; margin-right: 0.3rem; color: var(--srt-primary); }
+#qrProviders { gap: 0.5rem !important; }
+
+/* Big numeric — mijoz to'laydi / oraliq */
+.pos-side .display-6 {
+    font-size: 1.9rem;
+    line-height: 1;
+    font-family: var(--srt-font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    color: var(--srt-fg);
+    font-weight: 600;
+}
+
+/* Sticky checkout — green gradient, lifted shadow */
 .pos-checkout-sticky {
     position: sticky;
     bottom: 0.5rem;
     z-index: 10;
-    background: var(--bs-body-bg, #f4f6fa);
-    padding-top: 0.5rem;
+    background: linear-gradient(180deg,
+        rgba(246,247,251,0) 0%,
+        var(--srt-bg) 30%,
+        var(--srt-bg) 100%);
+    padding: 0.85rem 0 0.5rem;
     margin-bottom: 0.5rem;
 }
-[data-bs-theme="dark"] .pos-checkout-sticky { background: #15171c; }
+.pos-checkout-sticky .btn-success,
+.pos-checkout-sticky .dash-btn--primary {
+    padding: 1rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    box-shadow: var(--srt-shadow-green);
+    letter-spacing: 0.01em;
+}
+[data-bs-theme="dark"] .pos-checkout-sticky {
+    background: linear-gradient(180deg, rgba(11,15,26,0) 0%, var(--srt-bg) 30%);
+}
 
-/* Smaller payment-btn icons */
-.pos-side .payment-btn i { font-size: 0.95rem; }
+/* Scan input — extra prominence */
+#scanInput {
+    font-size: 1.1rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--srt-radius);
+    border-color: var(--srt-border);
+    background: var(--srt-surface);
+    transition: border-color var(--srt-trans), box-shadow var(--srt-trans);
+}
+#scanInput:focus {
+    border-color: var(--srt-primary);
+    box-shadow: 0 0 0 4px rgba(91,91,214,0.15);
+}
+
+/* Cart line items — denser, hover row */
+.cart-items .cart-row {
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--srt-radius-sm);
+    transition: background var(--srt-trans-fast);
+}
+.cart-items .cart-row:hover { background: var(--srt-surface-2); }
+
+/* Section chips — chakana/ulgurji segmented control */
+.pos-side .btn-group .btn {
+    padding: 0.55rem 0.85rem;
+    font-weight: 500;
+    border-radius: var(--srt-radius);
+}
+
+/* Discount quick-pick chips */
+.pos-side .discount-chip {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.78rem;
+    border-radius: var(--srt-radius-pill);
+    background: var(--srt-warning-tint);
+    color: var(--srt-warning);
+    border: none;
+    cursor: pointer;
+    transition: transform var(--srt-trans-fast);
+}
+.pos-side .discount-chip:hover { transform: translateY(-1px); }
 </style>
 
 <div class="container-fluid px-3 dash-page">

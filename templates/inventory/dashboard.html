@@ -44,7 +44,7 @@
     </header>
 
     <!-- ── KPI hero strip (lead + 3 satellites) ─────────────────────────── -->
-    <section class="dash-kpis" role="group" aria-label="Bugungi asosiy ko'rsatkichlar">
+    <section class="dash-kpis srt-stagger" role="group" aria-label="Bugungi asosiy ko'rsatkichlar">
         <article class="dash-kpi dash-kpi--lead">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label">
@@ -60,7 +60,9 @@
                     </span>
                 {% endif %}
             </div>
-            <div class="dash-kpi__value">{{ today_stats.revenue|som }}</div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ today_stats.revenue|default:0 }}">{{ today_stats.revenue|som }}</span>
+            </div>
             <div class="dash-kpi__footer">
                 <span class="dash-kpi__compare">
                     Kechagisi: <strong>{{ yesterday_stats.revenue|som }}</strong>
@@ -80,7 +82,9 @@
                     </span>
                 {% endif %}
             </div>
-            <div class="dash-kpi__value">{{ today_stats.profit|som }}</div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ today_stats.profit|default:0 }}">{{ today_stats.profit|som }}</span>
+            </div>
             <div class="dash-kpi__footer">
                 <span>Marja: <strong>{{ today_stats.margin|floatformat:1 }}%</strong></span>
             </div>
@@ -97,7 +101,9 @@
                     </span>
                 {% endif %}
             </div>
-            <div class="dash-kpi__value">{{ today_stats.txns }}</div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ today_stats.txns|default:0 }}">{{ today_stats.txns }}</span>
+            </div>
             <div class="dash-kpi__footer">
                 <span>Kecha: <strong>{{ yesterday_stats.txns }}</strong></span>
             </div>
@@ -114,7 +120,9 @@
                     </span>
                 {% endif %}
             </div>
-            <div class="dash-kpi__value">{{ today_stats.qty }}</div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ today_stats.qty|default:0 }}">{{ today_stats.qty }}</span>
+            </div>
             <div class="dash-kpi__footer">
                 <span>Kecha: <strong>{{ yesterday_stats.qty }}</strong></span>
             </div>
