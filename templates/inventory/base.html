@@ -906,10 +906,25 @@
         }
         /* The sidebar has overflow-x:visible so dropdowns can spill right;
            that also allows long brand text to bleed past the 64px width.
-           Force the brand's link box to clip. */
+           Force the brand's link box to clip + full-width center so the
+           logo lines up with the nav-link icons below it. */
         body.srt-sidebar-collapsed nav.srote-nav .srote-brand {
             overflow: hidden;
+            width: 100%;
             max-width: 100%;
+            align-self: stretch;
+            display: flex !important;
+            justify-content: center !important;
+            margin: 0 !important;
+        }
+        /* Status badge (Wifi pill) — center inside its <li> too. */
+        body.srt-sidebar-collapsed nav.srote-nav .navbar-nav:last-child .nav-item {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+        body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge {
+            margin: 0 auto !important;
         }
         [data-bs-theme="dark"] nav.srote-nav.navbar {
             background: var(--srt-glass-bg-dark);
@@ -1017,13 +1032,15 @@
         nav.srote-nav .nav-item.dropdown { position: relative; }
         nav.srote-nav .dropdown-menu {
             position: fixed !important;
-            inset: auto !important;
+            /* CRITICAL: no inset/top/left/right/bottom rules here — JS sets
+               top + left as inline styles; an !important reset would
+               outrank the inline values and the menu would render at 0,0. */
             margin: 0 !important;
             min-width: 220px;
             max-width: 260px;
-            background: var(--srt-glass-bg-light);
-            backdrop-filter: blur(20px) saturate(160%);
-            -webkit-backdrop-filter: blur(20px) saturate(160%);
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
             border: 1px solid var(--srt-border);
             border-radius: var(--srt-radius);
             box-shadow: var(--srt-shadow-lg);
@@ -1031,7 +1048,7 @@
             z-index: 1080;
         }
         [data-bs-theme="dark"] nav.srote-nav .dropdown-menu {
-            background: var(--srt-glass-bg-dark);
+            background: rgba(20, 22, 28, 0.97);
         }
         nav.srote-nav .dropdown-menu .dropdown-item {
             border-radius: var(--srt-radius-sm);
@@ -1671,9 +1688,7 @@
 // Sidebar dropdowns: position with fixed coordinates so they escape any
 // overflow on the rail and float over the right-side content.
 (function() {
-    function positionMenu(toggle) {
-        const menu = toggle.nextElementSibling;
-        if (!menu || !menu.classList.contains('dropdown-menu')) return;
+    function positionMenu(toggle, menu) {
         const rect = toggle.getBoundingClientRect();
         const vw = window.innerWidth;
         const vh = window.innerHeight;
@@ -1686,18 +1701,34 @@
         menu.style.left = left + 'px';
         menu.style.top = top + 'px';
     }
-    document.addEventListener('show.bs.dropdown', function(ev) {
+    // Bootstrap fires dropdown events on the TOGGLE element itself
+    // (the <a>/<button> with data-bs-toggle="dropdown"), not the
+    // .dropdown wrapper. ev.target is the toggle. We listen to
+    // `shown.bs.dropdown` (past tense) instead of `show.bs.dropdown`
+    // because the menu has .show class + measurable offsetHeight only
+    // after Bootstrap has finished its show pass — positioning before
+    // that point yields zero dimensions and an unpositioned menu.
+    document.addEventListener('shown.bs.dropdown', function(ev) {
         const toggle = ev.target;
-        if (!toggle.closest('nav.srote-nav')) return;
-        // Defer one frame so Bootstrap has added the .show class and the
-        // menu has measurable dimensions.
-        requestAnimationFrame(() => positionMenu(toggle));
+        if (!toggle.closest || !toggle.closest('nav.srote-nav')) return;
+        const menu = toggle.nextElementSibling;
+        if (!menu || !menu.classList.contains('dropdown-menu')) return;
+        positionMenu(toggle, menu);
     });
-    // Re-position on resize / scroll while open
+    // Clean up inline coords when the menu hides so the next open starts fresh.
+    document.addEventListener('hidden.bs.dropdown', function(ev) {
+        const toggle = ev.target;
+        if (!toggle.closest || !toggle.closest('nav.srote-nav')) return;
+        const menu = toggle.nextElementSibling;
+        if (menu) {
+            menu.style.left = '';
+            menu.style.top = '';
+        }
+    });
     function repositionOpen() {
         document.querySelectorAll('nav.srote-nav .dropdown-menu.show').forEach(menu => {
             const toggle = menu.previousElementSibling;
-            if (toggle) positionMenu(toggle);
+            if (toggle) positionMenu(toggle, menu);
         });
     }
     window.addEventListener('resize', repositionOpen);
