@@ -1,10 +1,19 @@
 {% extends 'inventory/base.html' %}
 
 {% block content %}
-<div class="container">
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Tashkilot</span>
+                <h1 class="dash-hero__title"><i class="bi bi-building"></i> {{ title }}</h1>
+                <p class="dash-hero__sub">Filial nomi, manzili va ijara/qat'iy xarajatlari.</p>
+            </div>
+        </div>
+    </header>
     <div class="row justify-content-center">
         <div class="col-lg-6">
-            <h3 class="mb-4">{{ title }}</h3>
             <div class="card p-4">
                 <form method="post">
                     {% csrf_token %}

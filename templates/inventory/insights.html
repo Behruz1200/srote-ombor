@@ -4,93 +4,85 @@
 {% block title %}Tahlil — Srote{% endblock %}
 
 {% block content %}
-<div class="container-fluid px-3">
+<div class="container-fluid px-3 dash-page">
 
-    <!-- ── Page header (title row + filter row) ─────────────────────── -->
-    <div class="srt-page-header srt-page-header-stack">
-        <!-- Row 1: identity + export -->
-        <div class="srt-page-title-row">
-            <div>
-                <h1 class="srt-h1">
-                    <i class="bi bi-graph-up-arrow me-1 text-primary"></i> Biznes tahlili
+    <!-- ── Aurora hero header + filter row ──────────────────────────── -->
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow">
+                    <span class="dash-pulse"></span>
+                    Biznes tahlili · {{ period|default:"week" }}
+                </span>
+                <h1 class="dash-hero__title">
+                    <i class="bi bi-graph-up-arrow"></i> Tahlil
                 </h1>
-                <div class="srt-sub">
-                    <i class="bi bi-calendar3"></i>
-                    {{ d_start }} — {{ d_end }} ({{ days }} kun)
+                <p class="dash-hero__sub">
+                    <span><i class="bi bi-calendar3"></i> {{ d_start }} — {{ d_end }} ({{ days }} kun)</span>
                     {% if selected_branch %}
-                        &nbsp;·&nbsp;
-                        <i class="bi bi-building"></i> {{ selected_branch.name }}
+                        <span><i class="bi bi-building"></i> {{ selected_branch.name }}</span>
                     {% endif %}
-                </div>
+                </p>
             </div>
-            <div class="dropdown">
-                <button type="button"
-                        class="btn btn-outline-primary btn-sm dropdown-toggle"
-                        data-bs-toggle="dropdown" aria-expanded="false"
-                        aria-label="Eksport">
-                    <i class="bi bi-download"></i>
-                    <span class="btn-text">Eksport</span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                    <li>
-                        <button type="button" class="dropdown-item py-2" onclick="window.print()">
-                            <div class="d-flex align-items-start gap-2">
-                                <i class="bi bi-filetype-pdf text-danger fs-5"></i>
-                                <div>
-                                    <div class="fw-medium">PDF</div>
-                                    <div class="small text-muted">Hozirgi ko'rinishni chop ettirib oling</div>
+            <div class="dash-hero__actions">
+                <div class="dropdown">
+                    <button type="button"
+                            class="dash-btn dash-btn--ghost dropdown-toggle"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-download"></i>
+                        <span>Eksport</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                        <li>
+                            <button type="button" class="dropdown-item py-2" onclick="window.print()">
+                                <div class="d-flex align-items-start gap-2">
+                                    <i class="bi bi-filetype-pdf text-danger fs-5"></i>
+                                    <div>
+                                        <div class="fw-medium">PDF</div>
+                                        <div class="small text-muted">Hozirgi ko'rinishni chop ettirib oling</div>
+                                    </div>
                                 </div>
-                            </div>
-                        </button>
-                    </li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li>
-                        <a class="dropdown-item py-2"
-                           href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=csv">
-                            <div class="d-flex align-items-start gap-2">
-                                <i class="bi bi-filetype-csv text-success fs-5"></i>
-                                <div>
-                                    <div class="fw-medium">CSV</div>
-                                    <div class="small text-muted">Excel'da ochish uchun jadval ma'lumotlari</div>
+                            </button>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item py-2"
+                               href="?period={{ period }}{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}&export=csv">
+                                <div class="d-flex align-items-start gap-2">
+                                    <i class="bi bi-filetype-csv text-success fs-5"></i>
+                                    <div>
+                                        <div class="fw-medium">CSV</div>
+                                        <div class="small text-muted">Excel uchun jadval</div>
+                                    </div>
                                 </div>
-                            </div>
-                        </a>
-                    </li>
-                </ul>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
-
-        <!-- Row 2: filter toolbar -->
-        <div class="srt-page-filter-row">
-            <div class="srt-filter-group">
-                <span class="srt-filter-label" aria-hidden="true">
+        <div class="dash-hero__filters">
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">
                     <i class="bi bi-calendar-range"></i> Davr
                 </span>
-                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="Davr tanlash">
+                <div class="dash-chips">
                     <a href="?period=today{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
-                       class="btn {% if period == 'today' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                        Bugun
-                    </a>
+                       class="dash-chip {% if period == 'today' %}is-active{% endif %}">Bugun</a>
                     <a href="?period=week{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
-                       class="btn {% if period == 'week' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                        7 kun
-                    </a>
+                       class="dash-chip {% if period == 'week' %}is-active{% endif %}">7 kun</a>
                     <a href="?period=month{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
-                       class="btn {% if period == 'month' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                        30 kun
-                    </a>
+                       class="dash-chip {% if period == 'month' %}is-active{% endif %}">30 kun</a>
                     <a href="?period=quarter{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
-                       class="btn {% if period == 'quarter' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-                        90 kun
-                    </a>
+                       class="dash-chip {% if period == 'quarter' %}is-active{% endif %}">90 kun</a>
                 </div>
             </div>
-
-            <div class="srt-filter-group">
-                <span class="srt-filter-label" aria-hidden="true">
+            <div class="dash-filter-group">
+                <span class="dash-filter-label">
                     <i class="bi bi-building"></i> Filial
                 </span>
-                <form method="get" class="srt-branch-filter">
+                <form method="get">
                     <input type="hidden" name="period" value="{{ period }}">
                     <select name="branch" class="form-select form-select-sm"
                             onchange="this.form.submit()" aria-label="Filial">
@@ -104,59 +96,63 @@
                 </form>
             </div>
         </div>
-    </div>
+    </header>
 
-    <!-- ── Top KPIs ──────────────────────────────────────────────────── -->
-    <div class="srt-kpi-grid" role="group" aria-label="Davr ko'rsatkichlari">
-
-        <div class="srt-kpi accent-success">
-            <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> Jami daromad</div>
-            <div class="srt-kpi-value">{{ revenue|som }}</div>
-            <div class="srt-kpi-meta">
+    <!-- ── KPI hero strip (lead + 3 satellites) ─────────────────────── -->
+    <section class="dash-kpis" role="group" aria-label="Davr ko'rsatkichlari">
+        <article class="dash-kpi dash-kpi--lead">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami daromad</span>
                 {% if rev_growth is not None %}
-                    <span class="srt-delta {% if rev_growth > 0 %}up{% elif rev_growth < 0 %}down{% else %}flat{% endif %}">
-                        {% if rev_growth > 0 %}<i class="bi bi-arrow-up-short"></i>
-                        {% elif rev_growth < 0 %}<i class="bi bi-arrow-down-short"></i>
-                        {% else %}<i class="bi bi-dash"></i>{% endif %}
-                        {{ rev_growth|floatformat:1 }}%
+                    <span class="dash-delta {% if rev_growth > 0 %}is-up{% elif rev_growth < 0 %}is-down{% else %}is-flat{% endif %}">
+                        {% if rev_growth > 0 %}<i class="bi bi-arrow-up-right"></i>
+                        {% elif rev_growth < 0 %}<i class="bi bi-arrow-down-right"></i>
+                        {% else %}<i class="bi bi-dash-lg"></i>{% endif %}
+                        {{ rev_growth|floatformat:0 }}%
                     </span>
-                    <span>oldingi davrga</span>
-                {% else %}
-                    <span>oldingi davr ma'lumoti yo'q</span>
                 {% endif %}
             </div>
-        </div>
-
-        <div class="srt-kpi accent-amber">
-            <div class="srt-kpi-label"><i class="bi bi-coin"></i> Tannarx (COGS)</div>
-            <div class="srt-kpi-value">{{ total_cost|som }}</div>
-            <div class="srt-kpi-meta">
-                <span><span class="srt-num">{{ sales_count }}</span> sotuv</span>
-                <span>·</span>
-                <span><span class="srt-num">{{ qty }}</span> dona</span>
+            <div class="dash-kpi__value">{{ revenue|som }}</div>
+            <div class="dash-kpi__footer">
+                <span>Oldingi davr: <strong>{{ prev_revenue|som }}</strong></span>
+                <span class="dash-kpi__unit">so'm</span>
             </div>
-        </div>
+        </article>
 
-        <div class="srt-kpi accent">
-            <div class="srt-kpi-label"><i class="bi bi-graph-up-arrow"></i> Sof foyda</div>
-            <div class="srt-kpi-value">{{ profit|som }}</div>
-            <div class="srt-kpi-meta">
-                <span>Marja: <span class="srt-num">{{ margin|floatformat:1 }}%</span></span>
+        <article class="dash-kpi" data-tone="amber">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-coin"></i> Tannarx (COGS)</span>
             </div>
-        </div>
+            <div class="dash-kpi__value">{{ total_cost|som }}</div>
+            <div class="dash-kpi__footer">
+                <span><strong>{{ sales_count }}</strong> sotuv · <strong>{{ qty }}</strong> dona</span>
+            </div>
+        </article>
 
-        <div class="srt-kpi">
-            <div class="srt-kpi-label"><i class="bi bi-cart-check"></i> O'rtacha 1 sotuv</div>
-            <div class="srt-kpi-value">{{ avg_sale_value|som }}</div>
-            <div class="srt-kpi-meta">
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-graph-up-arrow"></i> Sof foyda</span>
+            </div>
+            <div class="dash-kpi__value">{{ profit|som }}</div>
+            <div class="dash-kpi__footer">
+                <span>Marja: <strong>{{ margin|floatformat:1 }}%</strong></span>
+            </div>
+        </article>
+
+        <article class="dash-kpi" data-tone="slate">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cart-check"></i> O'rtacha 1 sotuv</span>
+            </div>
+            <div class="dash-kpi__value">{{ avg_sale_value|som }}</div>
+            <div class="dash-kpi__footer">
                 {% if largest_sale %}
-                    <span>Eng katta: <span class="srt-num">{{ largest_sale.line|som }}</span></span>
+                    <span>Eng katta: <strong>{{ largest_sale.line|som }}</strong></span>
                 {% else %}
                     <span>Sotuvlar yo'q</span>
                 {% endif %}
             </div>
-        </div>
-    </div>
+        </article>
+    </section>
 
     <!-- ── Growth comparison strip ───────────────────────────────────── -->
     <div class="srt-section">

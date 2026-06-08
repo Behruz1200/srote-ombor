@@ -3,33 +3,52 @@
 {% block title %}Kirish — Srote{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5 col-lg-4">
-        <div class="card p-4 mt-5">
-            <div class="text-center mb-4">
-                <i class="bi bi-shop" style="font-size: 3rem; color: #0d6efd;"></i>
-                <h3 class="mt-2">Srote</h3>
-                <p class="text-muted">Ombor boshqaruv tizimi</p>
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <label class="form-label">{{ form.username.label }}</label>
-                    {{ form.username }}
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">{{ form.password.label }}</label>
-                    {{ form.password }}
-                </div>
-                {% if form.non_field_errors %}
-                    <div class="alert alert-danger py-2">
-                        {{ form.non_field_errors }}
+<div class="dash-page" style="min-height: calc(100vh - 60px); display: flex; align-items: center; justify-content: center; padding: 1.5rem;">
+    <div style="width: 100%; max-width: 420px;">
+        <div class="dash-hero" style="margin-bottom: 0;">
+            <div class="dash-hero__glow"></div>
+            <div class="dash-hero__inner" style="display: block; padding: 2.25rem 1.85rem 2rem; text-align: center;">
+                <div style="margin-bottom: 1rem;">
+                    <div style="width: 64px; height: 64px; margin: 0 auto;
+                                display: inline-flex; align-items: center; justify-content: center;
+                                background: linear-gradient(135deg, #5B5BD6, #8B5CF6, #EC4899);
+                                border-radius: 18px; color: #FFFFFF; font-size: 2rem;
+                                box-shadow: 0 12px 32px -10px rgba(91, 91, 214, 0.55);">
+                        <i class="bi bi-shop"></i>
                     </div>
-                {% endif %}
-                <button type="submit" class="btn btn-primary w-100 btn-lg">
-                    <i class="bi bi-box-arrow-in-right"></i> Kirish
-                </button>
-            </form>
+                </div>
+                <span class="dash-hero__eyebrow" style="justify-content: center;">
+                    <span class="dash-pulse"></span>
+                    Ombor boshqaruv tizimi
+                </span>
+                <h1 class="dash-hero__title" style="justify-content: center; margin-top: 0.4rem;">
+                    Srote
+                </h1>
+                <p class="dash-hero__sub" style="justify-content: center;">
+                    Hisobingizga kirib biznesni boshqaring.
+                </p>
+
+                <form method="post" style="text-align: left; margin-top: 1.25rem;">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.username.label }}</label>
+                        {{ form.username }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.password.label }}</label>
+                        {{ form.password }}
+                    </div>
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+                    <button type="submit" class="dash-btn dash-btn--indigo btn-lg w-100" style="justify-content: center;">
+                        <i class="bi bi-box-arrow-in-right"></i>
+                        <span>Kirish</span>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 </div>

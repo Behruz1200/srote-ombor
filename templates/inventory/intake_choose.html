@@ -4,15 +4,22 @@
 {% block title %}Qabul — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0">
-            <i class="bi bi-box-arrow-in-down"></i> Qabul
-        </h3>
-        <a href="{% url 'supplier_list' %}" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-people"></i> Yetkazib beruvchilar
-        </a>
-    </div>
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Yangi qabul</span>
+                <h1 class="dash-hero__title"><i class="bi bi-box-arrow-in-down"></i> Qabul rejimini tanlang</h1>
+                <p class="dash-hero__sub">Tezkor, matritsa yoki sessiya — vazifaga qarab tanlang.</p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'supplier_list' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-people"></i> <span>Yetkazib beruvchilar</span>
+                </a>
+            </div>
+        </div>
+    </header>
 
     <!-- 3 ta kirish nuqtasi -->
     <div class="row g-3 mb-4">

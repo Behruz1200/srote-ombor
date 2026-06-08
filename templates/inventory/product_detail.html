@@ -4,64 +4,67 @@
 {% block title %}{{ product.name }} — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container dash-page">
     <a href="{% url 'product_list' %}" class="btn btn-link p-0 mb-2">← Mahsulotlar</a>
 
-    <!-- Header -->
-    <div class="card p-3 mb-3">
-        <div class="row g-3 align-items-start">
-            {% if product.image %}
-            <div class="col-md-3">
-                <a href="{{ product.image.url }}" target="_blank">
+    <!-- Aurora header card -->
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner" style="align-items: flex-start;">
+            <div class="dash-hero__heading" style="display: flex; gap: 1.15rem; align-items: flex-start; flex: 1 1 360px;">
+                {% if product.image %}
+                <a href="{{ product.image.url }}" target="_blank" style="flex-shrink: 0;">
                     <img src="{{ product.image.url }}" alt="{{ product.name }}"
-                         class="img-fluid rounded" style="max-height: 200px; object-fit: cover;">
+                         class="rounded" style="width: 130px; height: 130px; object-fit: cover; border: 1px solid var(--srt-border);">
                 </a>
-            </div>
-            {% endif %}
-            <div class="col-md{% if product.image %}-6{% else %}-9{% endif %}">
-                <h3 class="mb-1">{{ product.name }}</h3>
-                <div>
-                    <code>{{ product.code }}</code>
-                    {% if product.external_barcode %}
-                        <span class="ms-2 small text-muted"
-                              title="Ishlab chiqaruvchi barcode (qadoqdagi)">
-                            <i class="bi bi-upc"></i> {{ product.external_barcode }}
-                        </span>
-                    {% endif %}
-                    {% if product.category %}
-                        <span class="badge bg-light text-dark ms-2">{{ product.category.name }}</span>
-                    {% endif %}
-                </div>
-                {% if product.description %}
-                    <p class="text-muted mt-2 mb-0">{{ product.description }}</p>
                 {% endif %}
-                <div class="d-flex gap-2 mt-3 flex-wrap">
-                    <a href="{% url 'product_edit' product.code %}" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-pencil"></i> Tahrirlash
-                    </a>
-                    <a href="{% url 'intake_for_product' product.code %}" class="btn btn-sm btn-success">
-                        <i class="bi bi-box-arrow-in-down"></i> Qabul
-                    </a>
-                    <a href="{% url 'product_label' product.code %}" target="_blank" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-printer"></i> QR etiketka
-                    </a>
-                    <a href="{% url 'qr_image' product.code %}" download="{{ product.code }}.png"
-                       class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-qr-code"></i> QR rasm
-                    </a>
+                <div style="min-width: 0;">
+                    <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Mahsulot</span>
+                    <h1 class="dash-hero__title">{{ product.name }}</h1>
+                    <p class="dash-hero__sub">
+                        <span class="code-pill">{{ product.code }}</span>
+                        {% if product.external_barcode %}
+                            <span><i class="bi bi-upc"></i> {{ product.external_barcode }}</span>
+                        {% endif %}
+                        {% if product.category %}
+                            <span class="dash-pill">{{ product.category.name }}</span>
+                        {% endif %}
+                    </p>
+                    {% if product.description %}
+                        <p style="margin-top: 0.5rem; color: var(--srt-fg-muted); font-size: 0.88rem; margin-bottom: 0;">
+                            {{ product.description }}
+                        </p>
+                    {% endif %}
+                    <div class="dash-hero__actions" style="margin-top: 0.85rem;">
+                        <a href="{% url 'product_edit' product.code %}" class="dash-btn dash-btn--ghost dash-btn--sm">
+                            <i class="bi bi-pencil"></i> <span>Tahrirlash</span>
+                        </a>
+                        <a href="{% url 'intake_for_product' product.code %}" class="dash-btn dash-btn--primary dash-btn--sm">
+                            <i class="bi bi-box-arrow-in-down"></i> <span>Qabul</span>
+                        </a>
+                        <a href="{% url 'product_label' product.code %}" target="_blank" class="dash-btn dash-btn--ghost dash-btn--sm">
+                            <i class="bi bi-printer"></i> <span>QR etiketka</span>
+                        </a>
+                        <a href="{% url 'qr_image' product.code %}" download="{{ product.code }}.png"
+                           class="dash-btn dash-btn--ghost dash-btn--sm">
+                            <i class="bi bi-qr-code"></i> <span>QR rasm</span>
+                        </a>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-3 text-md-end">
-                <div class="text-muted small">Sotuv narxi</div>
-                <h3 class="text-primary mb-0">{{ product.default_sale_price|som }}</h3>
-                <small class="text-muted">so'm · Markup: {{ product.markup_percent }}%</small>
-                <div class="mt-2">
+            <div style="text-align: right; flex-shrink: 0;">
+                <div style="font-size: 0.74rem; color: var(--srt-fg-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Sotuv narxi</div>
+                <div style="font-family: var(--srt-font-mono); font-size: 1.75rem; font-weight: 700; color: var(--srt-primary); line-height: 1.1;">
+                    {{ product.default_sale_price|som }}
+                </div>
+                <small style="color: var(--srt-fg-muted);">so'm · Markup: {{ product.markup_percent }}%</small>
+                <div style="margin-top: 0.7rem;">
                     <img src="{% url 'qr_image' product.code %}" alt="QR"
-                         style="width: 140px; height: 140px; image-rendering: pixelated;">
+                         style="width: 120px; height: 120px; image-rendering: pixelated; background: #FFFFFF; padding: 4px; border-radius: 8px; border: 1px solid var(--srt-border);">
                 </div>
             </div>
         </div>
-    </div>
+    </header>
 
     <!-- KPI strip -->
     <div class="row g-2 mb-3">

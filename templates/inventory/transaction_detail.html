@@ -4,18 +4,28 @@
 {% block title %}Chek #{{ txn.pk }} — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-receipt"></i> Chek #{{ txn.pk }}</h3>
-        <div class="d-flex gap-2">
-            <button onclick="window.print()" class="btn btn-outline-primary btn-sm">
-                <i class="bi bi-printer"></i> Chop etish
-            </button>
-            <a href="{% url 'lookup' %}" class="btn btn-success btn-sm">
-                <i class="bi bi-plus-lg"></i> Yangi sotuv
-            </a>
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Chek tafsiloti</span>
+                <h1 class="dash-hero__title"><i class="bi bi-receipt"></i> Chek #{{ txn.pk }}</h1>
+                <p class="dash-hero__sub">
+                    <span><i class="bi bi-building"></i> {{ txn.branch.name }}</span>
+                    <span><i class="bi bi-clock"></i> {{ txn.sold_at|date:"d.m.Y H:i" }}</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <button onclick="window.print()" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-printer"></i> <span>Chop etish</span>
+                </button>
+                <a href="{% url 'lookup' %}" class="dash-btn dash-btn--primary">
+                    <i class="bi bi-plus-lg"></i> <span>Yangi sotuv</span>
+                </a>
+            </div>
         </div>
-    </div>
+    </header>
 
     <div class="card p-4" id="receipt">
         <div class="text-center mb-3">

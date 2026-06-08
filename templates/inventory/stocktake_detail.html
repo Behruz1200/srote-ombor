@@ -4,15 +4,28 @@
 {% block title %}Inv #{{ session.pk }} — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container dash-page">
     <a href="{% url 'stocktake_list' %}" class="btn btn-link p-0 mb-2">← Ro'yxat</a>
 
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Inventarizatsiya #{{ session.pk }}</h3>
-        <span class="badge fs-6 bg-{% if session.status == 'applied' %}success{% elif session.status == 'open' %}warning text-dark{% else %}secondary{% endif %}">
-            {{ session.get_status_display }}
-        </span>
-    </div>
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Inventarizatsiya sessiyasi</span>
+                <h1 class="dash-hero__title"><i class="bi bi-clipboard-check"></i> Sessiya #{{ session.pk }}</h1>
+                <p class="dash-hero__sub">
+                    <span><i class="bi bi-building"></i> {{ session.branch.name }}</span>
+                    <span>·</span>
+                    <span><i class="bi bi-person"></i> {{ session.started_by.username }}</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <span class="dash-pill dash-pill--{% if session.status == 'applied' %}success{% elif session.status == 'open' %}warn{% else %}muted{% endif %}">
+                    {{ session.get_status_display }}
+                </span>
+            </div>
+        </div>
+    </header>
 
     <!-- Meta + variance summary -->
     <div class="card p-3 mb-3">

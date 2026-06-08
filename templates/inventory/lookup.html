@@ -4,40 +4,56 @@
 {% block title %}Qidirish — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
-    <!-- Hero search -->
-    <div class="card p-4 mb-3 lookup-hero">
-        <h4 class="mb-3"><i class="bi bi-search"></i> Mahsulotni topish</h4>
-        <form method="get" id="lookupForm">
-            <div class="input-group input-group-lg mb-2">
-                <input type="text" name="code" id="lookupCode" value="{{ code }}"
-                       placeholder="Kod (OYO-0001), nom, yoki kategoriya..."
-                       class="form-control" autofocus autocomplete="off"
-                       style="font-size: 1.15rem;">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-search"></i> Topish
-                </button>
-                <button type="button" class="btn btn-success"
-                        data-bs-toggle="modal" data-bs-target="#scanModal" title="Kamera bilan scan">
-                    <i class="bi bi-qr-code-scan"></i>
-                </button>
-            </div>
-        </form>
+<div class="container dash-page">
+    <!-- Aurora hero search -->
+    <header class="dash-hero mb-3">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner" style="display:block;">
+            <span class="dash-hero__eyebrow">
+                <span class="dash-pulse"></span>
+                Tezkor qidiruv
+            </span>
+            <h1 class="dash-hero__title">
+                <i class="bi bi-search"></i> Mahsulotni topish
+            </h1>
+            <p class="dash-hero__sub">
+                Kod, nom yoki kategoriya bo'yicha — yoki kamera bilan skan qiling.
+            </p>
 
-        <!-- Recent searches (localStorage) -->
-        <div id="recentSearches" class="d-flex flex-wrap gap-1 mt-2" style="display:none;"></div>
+            <form method="get" id="lookupForm" class="mt-3">
+                <div class="input-group input-group-lg">
+                    <input type="text" name="code" id="lookupCode" value="{{ code }}"
+                           placeholder="Kod (OYO-0001), nom, yoki kategoriya..."
+                           class="form-control" autofocus autocomplete="off"
+                           style="font-size: 1.1rem; border-radius: var(--dash-radius-sm) 0 0 var(--dash-radius-sm);">
+                    <button type="submit" class="dash-btn dash-btn--indigo" style="border-radius: 0;">
+                        <i class="bi bi-search"></i>
+                        <span>Topish</span>
+                    </button>
+                    <button type="button" class="dash-btn dash-btn--primary"
+                            data-bs-toggle="modal" data-bs-target="#scanModal"
+                            title="Kamera bilan scan"
+                            style="border-radius: 0 var(--dash-radius-sm) var(--dash-radius-sm) 0;">
+                        <i class="bi bi-qr-code-scan"></i>
+                    </button>
+                </div>
+            </form>
 
-        {% if not user.is_admin and user.branch %}
-            <small class="text-muted mt-2">
-                <i class="bi bi-building"></i> Sizning filialingiz: <strong>{{ user.branch.name }}</strong>
-            </small>
-        {% elif not user.is_admin %}
-            <div class="alert alert-warning mt-2 mb-0">
-                <i class="bi bi-exclamation-triangle"></i>
-                Sizga filial biriktirilmagan. Administrator bilan bog'laning.
-            </div>
-        {% endif %}
-    </div>
+            <!-- Recent searches (localStorage) -->
+            <div id="recentSearches" class="d-flex flex-wrap gap-1 mt-3" style="display:none;"></div>
+
+            {% if not user.is_admin and user.branch %}
+                <div class="mt-3" style="font-size: 0.82rem; color: var(--srt-fg-muted);">
+                    <i class="bi bi-building"></i> Sizning filialingiz: <strong>{{ user.branch.name }}</strong>
+                </div>
+            {% elif not user.is_admin %}
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Sizga filial biriktirilmagan. Administrator bilan bog'laning.
+                </div>
+            {% endif %}
+        </div>
+    </header>
 
     <!-- Suggestions: multiple matches -->
     {% if suggestions %}

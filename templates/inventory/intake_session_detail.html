@@ -4,21 +4,28 @@
 {% block title %}Qabul sessiyasi #{{ session.pk }}{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0">
-            <i class="bi bi-box-arrow-in-down"></i>
-            Sessiya #{{ session.pk }}
-        </h3>
-        <div class="d-flex gap-2">
-            <a href="{% url 'intake_new' %}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> Orqaga
-            </a>
-            <a href="{% url 'intake_quick' %}" class="btn btn-primary">
-                <i class="bi bi-lightning-charge"></i> Yangi sessiya
-            </a>
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Qabul sessiyasi</span>
+                <h1 class="dash-hero__title"><i class="bi bi-box-arrow-in-down"></i> Sessiya #{{ session.pk }}</h1>
+                <p class="dash-hero__sub">
+                    <span><i class="bi bi-building"></i> {{ session.branch.name }}</span>
+                    {% if session.supplier %}<span>·</span><span><i class="bi bi-truck"></i> {{ session.supplier.name }}</span>{% endif %}
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-arrow-left"></i> <span>Orqaga</span>
+                </a>
+                <a href="{% url 'intake_quick' %}" class="dash-btn dash-btn--primary">
+                    <i class="bi bi-lightning-charge"></i> <span>Yangi sessiya</span>
+                </a>
+            </div>
         </div>
-    </div>
+    </header>
 
     <div class="row g-3">
         <div class="col-md-8">

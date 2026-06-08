@@ -5,24 +5,31 @@
 
 {% block content %}
 {% with current_type=form.report_type.value|default:'sales' selected_period=form.period.value|default:'week' selected_branch_id=form.branch.value|default:'' p_rows_list=form.pivot_rows.value|default_if_none:'' p_cols=form.pivot_cols.value|default:'' p_metric=form.pivot_metric.value|default:'revenue' %}
-<div class="container-fluid px-3">
+<div class="container-fluid px-3 dash-page">
 
     <!-- ── Page header (title row + filter row) ─────────────────────── -->
     <div class="srt-page-header srt-page-header-stack">
+        <!-- aurora glow comes from .srt-page-header::before -->
         <!-- Row 1: identity + export -->
-        <div class="srt-page-title-row">
+        <div class="srt-page-title-row" style="position:relative; z-index:1;">
             <div>
-                <h1 class="srt-h1">
-                    <i class="bi bi-file-earmark-bar-graph me-1 text-primary"></i> Hisobotlar
+                <span class="dash-hero__eyebrow">
+                    <span class="dash-pulse"></span>
+                    Hisobotlar markazi
+                </span>
+                <h1 class="srt-h1 dash-hero__title">
+                    <i class="bi bi-file-earmark-bar-graph"></i> Hisobotlar
                 </h1>
                 <div class="srt-sub">
                     {% if title %}
                         <i class="bi bi-calendar3"></i>
-                        {{ d_start }} → {{ d_end }}
+                        <span>{{ d_start }} → {{ d_end }}</span>
                         {% if branch %}
-                            &nbsp;·&nbsp; <i class="bi bi-building"></i> {{ branch.name }}
+                            <span>·</span>
+                            <i class="bi bi-building"></i> <span>{{ branch.name }}</span>
                         {% else %}
-                            &nbsp;·&nbsp; <i class="bi bi-building"></i> Barcha filiallar
+                            <span>·</span>
+                            <i class="bi bi-building"></i> <span>Barcha filiallar</span>
                         {% endif %}
                     {% else %}
                         Tezkor hisobot + Excel/PDF eksport
@@ -32,11 +39,11 @@
             {% if rows %}
             <div class="dropdown">
                 <button type="button"
-                        class="btn btn-outline-primary btn-sm dropdown-toggle"
+                        class="dash-btn dash-btn--ghost dropdown-toggle"
                         data-bs-toggle="dropdown" aria-expanded="false"
                         aria-label="Eksport">
                     <i class="bi bi-download"></i>
-                    <span class="btn-text">Eksport</span>
+                    <span>Eksport</span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                     <li>

@@ -4,17 +4,33 @@
 {% block title %}Smen #{{ shift.pk }} — Srote{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container dash-page">
     <a href="{% url 'shift_list' %}" class="btn btn-link p-0 mb-2">← Smenlar</a>
 
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <h3 class="mb-0"><i class="bi bi-clipboard-check"></i> Smen #{{ shift.pk }}</h3>
-        {% if shift.status == 'open' %}
-            <span class="badge bg-success fs-6"><i class="bi bi-circle-fill"></i> Ochiq</span>
-        {% else %}
-            <span class="badge bg-secondary fs-6">Yopilgan</span>
-        {% endif %}
-    </div>
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow">
+                    <span class="dash-pulse"></span>
+                    {% if shift.status == 'open' %}Ochiq smen{% else %}Yopilgan smen{% endif %}
+                </span>
+                <h1 class="dash-hero__title"><i class="bi bi-clipboard-check"></i> Smen #{{ shift.pk }}</h1>
+                <p class="dash-hero__sub">
+                    <span><i class="bi bi-building"></i> {{ shift.branch.name }}</span>
+                    <span>·</span>
+                    <span><i class="bi bi-person"></i> {{ shift.opened_by.username }}</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                {% if shift.status == 'open' %}
+                    <span class="dash-pill dash-pill--success"><i class="bi bi-circle-fill"></i>&nbsp; Ochiq</span>
+                {% else %}
+                    <span class="dash-pill">Yopilgan</span>
+                {% endif %}
+            </div>
+        </div>
+    </header>
 
     <!-- Meta -->
     <div class="card p-3 mb-3">
