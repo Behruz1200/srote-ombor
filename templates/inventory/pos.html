@@ -275,6 +275,54 @@
 /* Collapsed state: hide hero, show rail */
 .pos-page-collapsed .pos-header { display: none; }
 .pos-page-collapsed .pos-header-rail { display: flex; }
+
+/* ════════════════════════════════════════════════════════════════════
+   POS — generic collapsible section (<details><summary>)
+   Used by "QR / Muddatli" provider grid so cashiers can hide the
+   wallet picker on a clean cash sale. Persists open/closed in
+   localStorage per [data-collapse-key].
+   ════════════════════════════════════════════════════════════════════ */
+.pos-collapse { margin: 0; }
+.pos-collapse > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.25rem 0.1rem;
+    user-select: none;
+    transition: color var(--srt-trans-fast);
+}
+.pos-collapse > summary::-webkit-details-marker { display: none; }
+.pos-collapse > summary:hover { color: var(--srt-primary); }
+.pos-collapse__count {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    background: var(--srt-surface-2);
+    border-radius: var(--srt-radius-pill);
+    color: var(--srt-fg-muted);
+    font-size: 0.66rem;
+    font-weight: 600;
+}
+.pos-collapse__chev {
+    transition: transform var(--srt-trans);
+    color: var(--srt-fg-muted);
+    font-size: 0.9rem;
+}
+.pos-collapse[open] > summary .pos-collapse__chev { transform: rotate(180deg); }
+.pos-collapse__body {
+    padding-top: 0.45rem;
+    animation: posCollapseSlide 220ms var(--srt-ease) both;
+}
+@keyframes posCollapseSlide {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pos-collapse__chev,
+    .pos-collapse__body { animation: none !important; transition: none !important; }
+}
 </style>
 
 <div class="container-fluid px-3 dash-page">
@@ -574,21 +622,29 @@
 
                 {% if payment_providers %}
                 <hr class="my-1">
-                <label class="form-label small text-uppercase mb-1">QR / Muddatli</label>
-                <div class="d-flex flex-wrap gap-1" id="qrProviders">
-                    {% for p in payment_providers %}
-                        <button type="button"
-                                class="btn btn-outline-{% if p.is_installment %}info{% else %}primary{% endif %} qr-provider-btn"
-                                data-provider="{{ p.name }}"
-                                data-display="{{ p.display_name }}"
-                                data-installment="{% if p.is_installment %}1{% else %}0{% endif %}"
-                                data-static-qr-id="{{ p.static_qr_id|default:'' }}"
-                                {% if p.has_static_qr %}title="QR ulangan"{% endif %}>
-                            <i class="bi {{ p.icon }}"></i> {{ p.display_name }}
-                            {% if p.has_static_qr %}<i class="bi bi-check2-circle text-success ms-1"></i>{% endif %}
-                        </button>
-                    {% endfor %}
-                </div>
+                <details class="pos-collapse" id="qrProvidersWrap" open>
+                    <summary class="pos-collapse__head">
+                        <span class="form-label small text-uppercase mb-0">
+                            QR / Muddatli
+                            <span class="pos-collapse__count">{{ payment_providers|length }}</span>
+                        </span>
+                        <i class="bi bi-chevron-down pos-collapse__chev"></i>
+                    </summary>
+                    <div class="d-flex flex-wrap gap-1 pos-collapse__body" id="qrProviders">
+                        {% for p in payment_providers %}
+                            <button type="button"
+                                    class="btn btn-outline-{% if p.is_installment %}info{% else %}primary{% endif %} qr-provider-btn"
+                                    data-provider="{{ p.name }}"
+                                    data-display="{{ p.display_name }}"
+                                    data-installment="{% if p.is_installment %}1{% else %}0{% endif %}"
+                                    data-static-qr-id="{{ p.static_qr_id|default:'' }}"
+                                    {% if p.has_static_qr %}title="QR ulangan"{% endif %}>
+                                <i class="bi {{ p.icon }}"></i> {{ p.display_name }}
+                                {% if p.has_static_qr %}<i class="bi bi-check2-circle text-success ms-1"></i>{% endif %}
+                            </button>
+                        {% endfor %}
+                    </div>
+                </details>
                 {% endif %}
 
                 <!-- Mixed payment split — faqat "Mixed" tanlanganda ko'rinadi -->
@@ -2417,6 +2473,25 @@ setInterval(tickClock, 30000); tickClock();
             e.preventDefault();
             setCollapsed(!document.body.classList.contains('pos-page-collapsed'));
         }
+    });
+})();
+
+// ── Generic <details class="pos-collapse"> state persistence ──────
+// Each <details> with an id is remembered (open/closed) in localStorage
+// so cashiers don't have to re-collapse the QR providers every page
+// load. Apply state BEFORE first paint to avoid a flash of open content.
+(function() {
+    const PREFIX = 'srote_pos_coll_';
+    document.querySelectorAll('details.pos-collapse[id]').forEach(d => {
+        const key = PREFIX + d.id;
+        try {
+            const saved = localStorage.getItem(key);
+            if (saved === '0') d.removeAttribute('open');
+            else if (saved === '1') d.setAttribute('open', '');
+        } catch(e) {}
+        d.addEventListener('toggle', () => {
+            try { localStorage.setItem(key, d.open ? '1' : '0'); } catch(e) {}
+        });
     });
 })();
 
