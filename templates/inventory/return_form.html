@@ -18,50 +18,66 @@
     <div class="row justify-content-center">
         <div class="col-lg-6">
 
-            <div class="card p-3 mb-3 bg-light">
-                <div><strong>{{ sale.variant.product.name }}</strong>
-                    <span class="code-pill ms-2">{{ sale.variant.product.code }}</span></div>
-                <div class="text-muted">
-                    <i class="bi bi-building"></i> {{ sale.branch.name }} ·
-                    {{ sale.variant.size }} / {{ sale.variant.color }}
+            <!-- Asl sotuv ma'lumoti -->
+            <article class="dash-card mb-3 srt-glass">
+                <div class="dash-card__body dash-card__body--padded">
+                    <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap mb-2">
+                        <div>
+                            <h3 style="font-size: 1.05rem; font-weight: 600; margin: 0;">{{ sale.variant.product.name }}</h3>
+                            <div class="mt-1">
+                                <span class="code-pill">{{ sale.variant.product.code }}</span>
+                                <span class="dash-pill ms-1"><i class="bi bi-building"></i>&nbsp; {{ sale.branch.name }}</span>
+                            </div>
+                        </div>
+                        <span class="srt-tile" data-tone="warning">
+                            <strong>{{ max_returnable }}</strong>&nbsp; qaytarish mumkin
+                        </span>
+                    </div>
+                    <div style="font-size: 0.86rem; color: var(--srt-fg-muted); margin-bottom: 0.5rem;">
+                        O'lcham: <strong>{{ sale.variant.size }}</strong> · Rang: <strong>{{ sale.variant.color }}</strong>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="dash-pill dash-pill--muted">Sotilgan: <strong>{{ sale.quantity }}</strong></span>
+                        <span class="dash-pill dash-pill--warn">Qaytarilgan: <strong>{{ sale.returned_qty }}</strong></span>
+                        <span class="dash-pill dash-pill--info">{{ sale.sale_price|som }} so'm/dona</span>
+                    </div>
+                    <div style="margin-top: 0.65rem; font-size: 0.78rem; color: var(--srt-fg-muted);">
+                        {{ sale.sold_at|date:"d.m.Y H:i" }} · {{ sale.sold_by.username }}
+                    </div>
                 </div>
-                <div class="d-flex gap-3 mt-2 small">
-                    <span>Sotilgan: <strong>{{ sale.quantity }}</strong> dona</span>
-                    <span>Qaytarilgan: <strong>{{ sale.returned_qty }}</strong> dona</span>
-                    <span class="text-warning">Qaytarish mumkin: <strong>{{ max_returnable }}</strong> dona</span>
-                </div>
-                <div class="text-muted small mt-1">
-                    Narx: {{ sale.sale_price|som }} so'm/dona ·
-                    Sana: {{ sale.sold_at|date:"d.m.Y H:i" }} ·
-                    Sotuvchi: {{ sale.sold_by.username }}
-                </div>
-            </div>
+            </article>
 
-            <div class="card p-4">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label">Qaytariladigan soni</label>
-                        <input type="number" name="quantity" min="1" max="{{ max_returnable }}"
-                               value="{{ max_returnable }}" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Sabab</label>
-                        <textarea name="reason" rows="2" class="form-control"
-                                  placeholder="Masalan: nuqson, o'lcham to'g'ri kelmadi, mijoz fikrini o'zgartirdi..."></textarea>
-                    </div>
-                    <div class="alert alert-warning small">
-                        <i class="bi bi-info-circle"></i>
-                        Qaytarilgan tovar omborga qaytariladi va bu harakat audit log'da qayd qilinadi.
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-warning">
-                            <i class="bi bi-arrow-counterclockwise"></i> Qaytarishni tasdiqlash
-                        </button>
-                        <a href="{% url 'sales_list' %}" class="btn btn-outline-secondary">Bekor qilish</a>
-                    </div>
-                </form>
-            </div>
+            <!-- Qaytarish formasi -->
+            <article class="dash-card">
+                <header class="dash-card__head">
+                    <h2 class="dash-card__title"><i class="bi bi-arrow-counterclockwise"></i> Qaytarish tafsiloti</h2>
+                </header>
+                <div class="dash-card__body dash-card__body--padded">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Qaytariladigan soni</label>
+                            <input type="number" name="quantity" min="1" max="{{ max_returnable }}"
+                                   value="{{ max_returnable }}" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Sabab</label>
+                            <textarea name="reason" rows="2" class="form-control"
+                                      placeholder="Masalan: nuqson, o'lcham to'g'ri kelmadi, mijoz fikrini o'zgartirdi..."></textarea>
+                        </div>
+                        <div class="alert alert-warning small">
+                            <i class="bi bi-info-circle"></i>
+                            Qaytarilgan tovar omborga qaytariladi va bu harakat audit log'da qayd qilinadi.
+                        </div>
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a href="{% url 'sales_list' %}" class="dash-btn dash-btn--ghost">Bekor qilish</a>
+                            <button type="submit" class="dash-btn dash-btn--primary" style="background: linear-gradient(135deg, #D97706, #F59E0B); box-shadow: var(--srt-shadow-amber);">
+                                <i class="bi bi-arrow-counterclockwise"></i> <span>Qaytarishni tasdiqlash</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </article>
         </div>
     </div>
 </div>

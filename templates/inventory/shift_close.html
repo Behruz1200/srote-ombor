@@ -18,53 +18,76 @@
     <div class="row justify-content-center">
         <div class="col-lg-6">
 
-            <div class="card p-3 mb-3">
-                <div class="row text-center">
-                    <div class="col">
-                        <div class="text-muted small">Boshlang'ich</div>
-                        <h4>{{ shift.opening_cash|som }} <small class="text-muted">so'm</small></h4>
+            <!-- Naqd kassa xulosasi -->
+            <section class="dash-kpis dash-kpis--three srt-stagger mb-3" aria-label="Smen naqd xulosasi">
+                <article class="dash-kpi" data-tone="slate">
+                    <div class="dash-kpi__head">
+                        <span class="dash-kpi__label"><i class="bi bi-cash"></i> Boshlang'ich</span>
                     </div>
-                    <div class="col">
-                        <div class="text-muted small">Naqd sotuvlar</div>
-                        <h4 class="text-success">+{{ cash_sales|som }}</h4>
+                    <div class="dash-kpi__value">
+                        <span data-countup="{{ shift.opening_cash|default:0 }}">{{ shift.opening_cash|som }}</span>
                     </div>
-                    <div class="col">
-                        <div class="text-muted small">Kutilgan naqd</div>
-                        <h4 class="text-primary">{{ expected|som }}</h4>
+                    <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+                </article>
+                <article class="dash-kpi" data-tone="success">
+                    <div class="dash-kpi__head">
+                        <span class="dash-kpi__label"><i class="bi bi-plus-circle"></i> Naqd sotuvlar</span>
                     </div>
-                </div>
-                <small class="text-muted text-center d-block mt-2">
-                    Smen ochildi: {{ shift.opened_at|date:"d.m.Y H:i" }} · {{ shift.opened_by.username }}
-                </small>
+                    <div class="dash-kpi__value" style="color: var(--srt-success);">
+                        +<span data-countup="{{ cash_sales|default:0 }}">{{ cash_sales|som }}</span>
+                    </div>
+                    <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+                </article>
+                <article class="dash-kpi" data-tone="indigo">
+                    <div class="dash-kpi__head">
+                        <span class="dash-kpi__label"><i class="bi bi-calculator"></i> Kutilgan</span>
+                    </div>
+                    <div class="dash-kpi__value" style="color: var(--srt-primary);">
+                        <span data-countup="{{ expected|default:0 }}">{{ expected|som }}</span>
+                    </div>
+                    <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span></div>
+                </article>
+            </section>
+            <div class="text-center mb-3" style="font-size: 0.78rem; color: var(--srt-fg-muted);">
+                Smen ochildi: <strong>{{ shift.opened_at|date:"d.m.Y H:i" }}</strong> · {{ shift.opened_by.username }}
             </div>
 
-            <div class="card p-4">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label">Kassadan sanab chiqilgan naqd</label>
-                        <input type="number" name="counted_cash" min="0" step="1000"
-                               class="form-control form-control-lg" required autofocus
-                               placeholder="masalan: {{ expected|floatformat:0 }}">
-                        <small class="text-muted">
-                            Tizim shu summani kutilgan naqd bilan taqqoslab, kassa farqini ko'rsatadi.
-                        </small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Izoh (ixtiyoriy)</label>
-                        <input type="text" name="note" class="form-control"
-                               placeholder="Tushuntirish bo'lsa yozing">
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-danger btn-lg flex-grow-1">
-                            <i class="bi bi-check2-circle"></i> Smen yopish
-                        </button>
-                        <a href="{% url 'pos_terminal' %}" class="btn btn-outline-secondary btn-lg">
-                            Bekor qilish
-                        </a>
-                    </div>
-                </form>
-            </div>
+            <!-- Yopish formasi -->
+            <article class="dash-card">
+                <header class="dash-card__head">
+                    <h2 class="dash-card__title"><i class="bi bi-clipboard-check"></i> Sanab chiqilgan naqdni kiriting</h2>
+                </header>
+                <div class="dash-card__body dash-card__body--padded">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
+                                Kassadan sanab chiqilgan naqd
+                            </label>
+                            <input type="number" name="counted_cash" min="0" step="1000"
+                                   class="form-control form-control-lg" required autofocus
+                                   placeholder="masalan: {{ expected|floatformat:0 }}"
+                                   style="font-family: var(--srt-font-mono); font-variant-numeric: tabular-nums;">
+                            <small class="text-muted">
+                                Tizim shu summani kutilgan naqd bilan taqqoslab, kassa farqini ko'rsatadi.
+                            </small>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
+                                Izoh <span style="color: var(--srt-fg-muted); font-weight: 400;">(ixtiyoriy)</span>
+                            </label>
+                            <input type="text" name="note" class="form-control"
+                                   placeholder="Tushuntirish bo'lsa yozing">
+                        </div>
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a href="{% url 'pos_terminal' %}" class="dash-btn dash-btn--ghost">Bekor qilish</a>
+                            <button type="submit" class="dash-btn dash-btn--primary" style="background: linear-gradient(135deg, #B91C1C, #EF4444); box-shadow: 0 8px 24px -6px rgba(239,68,68,0.45);">
+                                <i class="bi bi-door-closed"></i> <span>Smen yopish</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </article>
         </div>
     </div>
 </div>

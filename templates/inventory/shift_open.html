@@ -17,43 +17,52 @@
     </header>
     <div class="row justify-content-center">
         <div class="col-lg-6">
-            <div class="card p-4">
-                <div class="alert alert-info py-2 mb-3">
-                    <i class="bi bi-info-circle"></i>
-                    Filial: <strong>{{ branch.name }}</strong>.
-                    POS sotuvini boshlash uchun avval smen oching.
-                </div>
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label">Boshlang'ich naqd (kassada hozir qancha pul bor?)</label>
-                        <input type="number" name="opening_cash" min="0" step="1000"
-                               class="form-control form-control-lg"
-                               value="{{ last_closed.counted_cash|default:0|floatformat:0 }}"
-                               required autofocus>
-                        <small class="text-muted">
-                            Smen yopilganda tizim shu summaga sotuvlarni qo'shib,
-                            kassa farqini ko'rsatadi.
-                        </small>
-                        {% if last_closed %}
-                        <div class="alert alert-info py-2 mt-2 small mb-0">
-                            <i class="bi bi-info-circle"></i>
-                            Oldingi smen (#{{ last_closed.pk }}) yopilganda kassada
-                            <strong>{{ last_closed.counted_cash|floatformat:0 }} so'm</strong>
-                            qolgan ({{ last_closed.closed_at|date:"d.m H:i" }}).
+            <article class="dash-card">
+                <header class="dash-card__head">
+                    <h2 class="dash-card__title"><i class="bi bi-building"></i> {{ branch.name }}</h2>
+                    <p class="dash-card__sub">POS sotuvini boshlash uchun smen oching va boshlang'ich naqdni kiriting.</p>
+                </header>
+                <div class="dash-card__body dash-card__body--padded">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
+                                Boshlang'ich naqd <span style="color: var(--srt-fg-muted); font-weight: 400;">(kassada hozir qancha pul bor?)</span>
+                            </label>
+                            <input type="number" name="opening_cash" min="0" step="1000"
+                                   class="form-control form-control-lg"
+                                   value="{{ last_closed.counted_cash|default:0|floatformat:0 }}"
+                                   required autofocus
+                                   style="font-family: var(--srt-font-mono); font-variant-numeric: tabular-nums;">
+                            <small class="text-muted">
+                                Smen yopilganda tizim shu summaga sotuvlarni qo'shib, kassa farqini ko'rsatadi.
+                            </small>
+                            {% if last_closed %}
+                            <div class="dash-alert dash-alert--info mt-2" style="padding: 0.55rem 0.7rem;">
+                                <span class="dash-alert__icon"><i class="bi bi-clock-history"></i></span>
+                                <span class="dash-alert__text">
+                                    <strong>Oldingi smen #{{ last_closed.pk }}</strong>
+                                    <small>
+                                        Yopilganda kassada <strong>{{ last_closed.counted_cash|floatformat:0 }} so'm</strong>
+                                        qolgan · {{ last_closed.closed_at|date:"d.m H:i" }}
+                                    </small>
+                                </span>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Izoh (ixtiyoriy)</label>
-                        <input type="text" name="note" class="form-control"
-                               placeholder="Masalan: ertalabki smen">
-                    </div>
-                    <button type="submit" class="btn btn-success btn-lg w-100">
-                        <i class="bi bi-check-circle"></i> Smen ochish va POS'ga o'tish
-                    </button>
-                </form>
-            </div>
+                        <div class="mb-4">
+                            <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
+                                Izoh <span style="color: var(--srt-fg-muted); font-weight: 400;">(ixtiyoriy)</span>
+                            </label>
+                            <input type="text" name="note" class="form-control"
+                                   placeholder="Masalan: ertalabki smen">
+                        </div>
+                        <button type="submit" class="dash-btn dash-btn--primary w-100" style="padding: 0.95rem; font-size: 1rem; justify-content: center;">
+                            <i class="bi bi-door-open"></i> <span>Smen ochish va POS'ga o'tish</span>
+                        </button>
+                    </form>
+                </div>
+            </article>
         </div>
     </div>
 </div>
