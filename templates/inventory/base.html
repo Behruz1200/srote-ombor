@@ -818,11 +818,11 @@
 
         /* Sidebar collapse/expand toggle (desktop only) */
         .srt-sidebar-collapser {
-            position: absolute;
-            top: 16px;
-            right: -12px;
-            width: 22px;
-            height: 22px;
+            position: fixed;
+            top: 22px;
+            left: calc(var(--srt-sidebar-current) - 14px);
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             background: var(--srt-surface);
             border: 1px solid var(--srt-border);
@@ -831,13 +831,19 @@
             justify-content: center;
             color: var(--srt-fg-muted);
             cursor: pointer;
-            z-index: 2;
-            transition: color 120ms, transform 180ms;
-            box-shadow: var(--srt-shadow-sm);
+            z-index: 1050;
+            transition: left 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                        color 120ms, background 120ms, transform 120ms;
+            box-shadow: var(--srt-shadow-md);
             padding: 0;
         }
         .srt-sidebar-collapser:hover {
             color: var(--srt-fg);
+            transform: scale(1.08);
+        }
+        .srt-sidebar-collapser i {
+            transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.82rem;
         }
         body.srt-sidebar-collapsed .srt-sidebar-collapser i {
             transform: rotate(180deg);
@@ -846,29 +852,41 @@
             .srt-sidebar-collapser { display: inline-flex; }
         }
 
-        /* Collapsed sidebar: icon-only, labels hidden */
-        body.srt-sidebar-collapsed nav.srote-nav .brand-text,
-        body.srt-sidebar-collapsed nav.srote-nav .nav-link span:not(.srote-avatar),
-        body.srt-sidebar-collapsed nav.srote-nav .srt-nav-label,
-        body.srt-sidebar-collapsed nav.srote-nav .nav-link.dropdown-toggle::after,
-        body.srt-sidebar-collapsed nav.srote-nav .srote-pos-btn strong,
-        body.srt-sidebar-collapsed nav.srote-nav #connStatusText {
-            display: none;
-        }
+        /* Collapsed sidebar: icon-only.
+           Use font-size:0 on link/btn containers to hide every text node
+           and child span without needing template changes; re-set the
+           icon font so glyphs stay visible. */
         body.srt-sidebar-collapsed nav.srote-nav .nav-link,
-        body.srt-sidebar-collapsed nav.srote-nav .srote-pos-btn {
+        body.srt-sidebar-collapsed nav.srote-nav .srote-pos-btn,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-brand,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-user-link,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge {
+            font-size: 0;
             justify-content: center;
+            gap: 0;
             padding-left: 0.4rem;
             padding-right: 0.4rem;
         }
-        body.srt-sidebar-collapsed nav.srote-nav .srote-brand {
-            justify-content: center;
-            padding: 0.45rem 0 0.85rem;
+        body.srt-sidebar-collapsed nav.srote-nav .nav-link i,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-pos-btn i,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge i {
+            font-size: 1rem;
+            margin: 0;
         }
-        body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge {
-            padding: 0.3rem;
+        body.srt-sidebar-collapsed nav.srote-nav .nav-link.dropdown-toggle::after {
+            display: none;
         }
-        body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge i + span { display: none; }
+        body.srt-sidebar-collapsed nav.srote-nav .srote-avatar {
+            font-size: 0.85rem !important;
+            width: 30px;
+            height: 30px;
+        }
+        body.srt-sidebar-collapsed nav.srote-nav .srote-brand .brand-logo {
+            margin: 0;
+        }
+        body.srt-sidebar-collapsed nav.srote-nav .container-fluid {
+            align-items: center;
+        }
         [data-bs-theme="dark"] nav.srote-nav.navbar {
             background: var(--srt-glass-bg-dark);
         }
@@ -969,13 +987,21 @@
             margin-left: auto;
             opacity: 0.55;
         }
-        /* Dropdown menus float to the right of sidebar */
+        /* Dropdown menus inside the sidebar: rendered to the right of the
+           clicked nav-link via Bootstrap's data-bs-display="static" hint.
+           We anchor to the parent .nav-item which is the dropdown's
+           relative ancestor. Bootstrap injects position:absolute + top/left
+           via Popper; the rules below win because of the !importants. */
+        nav.srote-nav .nav-item.dropdown { position: relative; }
         nav.srote-nav .dropdown-menu {
             position: absolute !important;
-            left: calc(100% + 8px) !important;
-            top: 0 !important;
+            inset: 0 auto auto 0 !important;
+            top: -4px !important;
+            left: calc(100% + 10px) !important;
+            transform: none !important;
             margin: 0 !important;
-            min-width: 230px;
+            min-width: 220px;
+            max-width: 260px;
             background: var(--srt-glass-bg-light);
             backdrop-filter: blur(20px) saturate(160%);
             -webkit-backdrop-filter: blur(20px) saturate(160%);
@@ -983,6 +1009,12 @@
             border-radius: var(--srt-radius);
             box-shadow: var(--srt-shadow-lg);
             padding: 0.4rem;
+            z-index: 1060;
+        }
+        /* User dropdown opens upward + right */
+        nav.srote-nav .navbar-nav:last-child .dropdown-menu {
+            top: auto !important;
+            bottom: 0 !important;
         }
         [data-bs-theme="dark"] nav.srote-nav .dropdown-menu {
             background: var(--srt-glass-bg-dark);
@@ -1340,11 +1372,11 @@
 </div>
 
 {% if user.is_authenticated %}
+<button type="button" class="srt-sidebar-collapser" id="sidebarCollapser"
+        aria-label="Sidebar'ni yashirish/ko'rsatish" title="Sidebar'ni yashirish/ko'rsatish">
+    <i class="bi bi-chevron-left"></i>
+</button>
 <nav class="navbar navbar-expand-lg srote-nav mb-4">
-    <button type="button" class="srt-sidebar-collapser" id="sidebarCollapser"
-            aria-label="Sidebar'ni yashirish/ko'rsatish" title="Sidebar'ni yashirish/ko'rsatish">
-        <i class="bi bi-chevron-left" style="font-size: 0.75rem;"></i>
-    </button>
     <div class="container-fluid">
         <a class="navbar-brand srote-brand" href="{% url 'home' %}">
             <span class="brand-logo">
@@ -1390,7 +1422,7 @@
 
                 <!-- Sotuv guruhi -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">
                         <i class="bi bi-cart-check"></i> Sotuv
                     </a>
                     <ul class="dropdown-menu shadow">
@@ -1403,7 +1435,7 @@
 
                 <!-- Ombor guruhi -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">
                         <i class="bi bi-box-seam"></i> Ombor
                     </a>
                     <ul class="dropdown-menu shadow">
@@ -1426,7 +1458,7 @@
 
                 <!-- Hisobot guruhi -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">
                         <i class="bi bi-graph-up"></i> Hisobot
                     </a>
                     <ul class="dropdown-menu shadow">
@@ -1439,7 +1471,7 @@
 
                 <!-- Boshqarish guruhi -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">
                         <i class="bi bi-gear"></i> Boshqarish
                     </a>
                     <ul class="dropdown-menu shadow">
@@ -1486,7 +1518,7 @@
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center srote-user-link"
-                       data-bs-toggle="dropdown" href="#">
+                       data-bs-toggle="dropdown" data-bs-display="static" href="#">
                         <span class="srote-avatar">{{ user.username|slice:":1"|upper }}</span>
                         <span class="d-none d-lg-inline ms-2">{{ user.username }}</span>
                     </a>
