@@ -852,26 +852,33 @@
             .srt-sidebar-collapser { display: inline-flex; }
         }
 
-        /* Collapsed sidebar: icon-only.
-           Use font-size:0 on link/btn containers to hide every text node
-           and child span without needing template changes; re-set the
-           icon font so glyphs stay visible. */
+        /* Collapsed sidebar: icon-only. Hide every text descendant
+           explicitly so nothing bleeds out of the 64px rail. */
         body.srt-sidebar-collapsed nav.srote-nav .nav-link,
         body.srt-sidebar-collapsed nav.srote-nav .srote-pos-btn,
         body.srt-sidebar-collapsed nav.srote-nav .srote-brand,
         body.srt-sidebar-collapsed nav.srote-nav .srote-user-link,
         body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge {
-            font-size: 0;
+            font-size: 0 !important;
             justify-content: center;
             gap: 0;
-            padding-left: 0.4rem;
-            padding-right: 0.4rem;
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
         }
         body.srt-sidebar-collapsed nav.srote-nav .nav-link i,
         body.srt-sidebar-collapsed nav.srote-nav .srote-pos-btn i,
-        body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge i {
-            font-size: 1rem;
-            margin: 0;
+        body.srt-sidebar-collapsed nav.srote-nav .srote-status-badge i,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-brand .brand-logo,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-brand .brand-logo i {
+            font-size: 1rem !important;
+            margin: 0 !important;
+        }
+        /* Belt-and-braces: nuke the text spans completely so nothing
+           inherits or escapes our font-size zero. */
+        body.srt-sidebar-collapsed nav.srote-nav .brand-text,
+        body.srt-sidebar-collapsed nav.srote-nav #connStatusText,
+        body.srt-sidebar-collapsed nav.srote-nav .srote-user-link > span:not(.srote-avatar) {
+            display: none !important;
         }
         body.srt-sidebar-collapsed nav.srote-nav .nav-link.dropdown-toggle::after {
             display: none;
@@ -881,11 +888,15 @@
             width: 30px;
             height: 30px;
         }
-        body.srt-sidebar-collapsed nav.srote-nav .srote-brand .brand-logo {
-            margin: 0;
-        }
         body.srt-sidebar-collapsed nav.srote-nav .container-fluid {
             align-items: center;
+        }
+        /* The sidebar has overflow-x:visible so dropdowns can spill right;
+           that also allows long brand text to bleed past the 64px width.
+           Force the brand's link box to clip. */
+        body.srt-sidebar-collapsed nav.srote-nav .srote-brand {
+            overflow: hidden;
+            max-width: 100%;
         }
         [data-bs-theme="dark"] nav.srote-nav.navbar {
             background: var(--srt-glass-bg-dark);
