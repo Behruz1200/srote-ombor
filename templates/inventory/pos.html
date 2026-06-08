@@ -146,6 +146,54 @@
     transition: transform var(--srt-trans-fast);
 }
 .pos-side .discount-chip:hover { transform: translateY(-1px); }
+
+/* Narx turi — segmented pill toggle (Chakana / Ulgurji)
+   Subtle muted track, active slot fills with the indigo gradient
+   and lifts. Both labels stay the same size, no border-collision. */
+.pos-tier {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    background: var(--srt-surface-2);
+    border: 1px solid var(--srt-border);
+    border-radius: var(--srt-radius-pill);
+    width: 100%;
+}
+.pos-tier__opt {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: var(--srt-radius-pill);
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--srt-fg-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    margin: 0;
+    transition: background var(--srt-trans-fast),
+                color var(--srt-trans-fast),
+                box-shadow var(--srt-trans-fast),
+                transform var(--srt-trans-fast);
+}
+.pos-tier__opt i { font-size: 1rem; opacity: 0.8; }
+.pos-tier__opt:hover { color: var(--srt-fg); }
+.pos-tier__opt:active { transform: scale(0.97); transition-duration: 80ms; }
+
+/* Active state — keyed to the hidden btn-check just before each label */
+.pos-tier .btn-check:checked + .pos-tier__opt {
+    background: linear-gradient(135deg, var(--srt-primary), var(--srt-primary-soft));
+    color: #FFFFFF;
+    box-shadow: var(--srt-shadow-indigo);
+}
+.pos-tier .btn-check:checked + .pos-tier__opt i { opacity: 1; }
+.pos-tier .btn-check:focus-visible + .pos-tier__opt {
+    outline: 2px solid var(--srt-primary);
+    outline-offset: 2px;
+}
 </style>
 
 <div class="container-fluid px-3 dash-page">
@@ -337,14 +385,14 @@
         <div class="col-lg-4 pos-side">
             <div class="card p-2 mb-2">
                 <label class="form-label small text-uppercase">Narx turi</label>
-                <div class="btn-group w-100" role="group" id="priceModeToggle">
+                <div class="pos-tier" role="group" id="priceModeToggle">
                     <input type="radio" class="btn-check" name="priceMode" id="priceModeRetail" value="retail" checked>
-                    <label class="btn btn-outline-primary" for="priceModeRetail">
-                        <i class="bi bi-shop"></i> Chakana
+                    <label class="pos-tier__opt" for="priceModeRetail">
+                        <i class="bi bi-shop"></i> <span>Chakana</span>
                     </label>
                     <input type="radio" class="btn-check" name="priceMode" id="priceModeWholesale" value="wholesale">
-                    <label class="btn btn-outline-warning" for="priceModeWholesale">
-                        <i class="bi bi-boxes"></i> Ulgurji
+                    <label class="pos-tier__opt" for="priceModeWholesale">
+                        <i class="bi bi-boxes"></i> <span>Ulgurji</span>
                     </label>
                 </div>
                 <div class="small text-muted mt-1" id="priceModeHint" style="display:none;">
