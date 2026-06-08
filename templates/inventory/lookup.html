@@ -20,23 +20,20 @@
                 Kod, nom yoki kategoriya bo'yicha — yoki kamera bilan skan qiling.
             </p>
 
-            <form method="get" id="lookupForm" class="mt-3">
-                <div class="input-group input-group-lg">
-                    <input type="text" name="code" id="lookupCode" value="{{ code }}"
-                           placeholder="Kod (OYO-0001), nom, yoki kategoriya..."
-                           class="form-control" autofocus autocomplete="off"
-                           style="font-size: 1.1rem; border-radius: var(--dash-radius-sm) 0 0 var(--dash-radius-sm);">
-                    <button type="submit" class="dash-btn dash-btn--indigo" style="border-radius: 0;">
-                        <i class="bi bi-search"></i>
-                        <span>Topish</span>
-                    </button>
-                    <button type="button" class="dash-btn dash-btn--primary"
-                            data-bs-toggle="modal" data-bs-target="#scanModal"
-                            title="Kamera bilan scan"
-                            style="border-radius: 0 var(--dash-radius-sm) var(--dash-radius-sm) 0;">
-                        <i class="bi bi-qr-code-scan"></i>
-                    </button>
-                </div>
+            <form method="get" id="lookupForm" class="lookup-search mt-3">
+                <input type="text" name="code" id="lookupCode" value="{{ code }}"
+                       placeholder="Kod (OYO-0001), nom, yoki kategoriya..."
+                       class="form-control form-control-lg lookup-search__input"
+                       autofocus autocomplete="off">
+                <button type="submit" class="dash-btn dash-btn--indigo lookup-search__btn">
+                    <i class="bi bi-search"></i>
+                    <span>Topish</span>
+                </button>
+                <button type="button" class="dash-btn dash-btn--primary lookup-search__btn lookup-search__btn--icon"
+                        data-bs-toggle="modal" data-bs-target="#scanModal"
+                        title="Kamera bilan scan" aria-label="Kamera bilan skan qilish">
+                    <i class="bi bi-qr-code-scan"></i>
+                </button>
             </form>
 
             <!-- Recent searches (localStorage) -->
@@ -492,6 +489,50 @@
 /* ════════════════════════════════════════════════════════════════════
    Lookup — Executive Glass treatment for product search surfaces
    ════════════════════════════════════════════════════════════════════ */
+
+/* Search row — input + 2 separated buttons (full-radius all elements) */
+.lookup-search {
+    display: flex;
+    gap: 0.6rem;
+    align-items: stretch;
+    flex-wrap: wrap;
+}
+.lookup-search__input {
+    flex: 1 1 360px;
+    min-width: 0;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.05rem;
+    border-radius: var(--srt-radius) !important;
+    border: 1px solid var(--srt-border);
+    background: var(--srt-surface);
+    color: var(--srt-fg);
+    transition: border-color var(--srt-trans), box-shadow var(--srt-trans);
+}
+.lookup-search__input:focus {
+    border-color: var(--srt-primary);
+    box-shadow: 0 0 0 4px rgba(91,91,214,0.15);
+    outline: none;
+}
+.lookup-search__btn {
+    flex: 0 0 auto;
+    padding: 0.75rem 1.2rem;
+    font-size: 1rem;
+    border-radius: var(--srt-radius) !important;
+    min-height: 52px;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 0.45rem;
+}
+.lookup-search__btn--icon {
+    padding: 0.75rem 1rem;
+    min-width: 56px;
+}
+.lookup-search__btn--icon i { font-size: 1.25rem; }
+@media (max-width: 540px) {
+    .lookup-search__input { flex-basis: 100%; }
+    .lookup-search__btn { flex: 1 1 auto; }
+    .lookup-search__btn--icon { flex: 0 0 auto; min-width: 56px; }
+}
+
 
 /* Suggestion list — single-row picker with strong hierarchy */
 .lookup-suggest { list-style: none; padding: 0.5rem; margin: 0; }
