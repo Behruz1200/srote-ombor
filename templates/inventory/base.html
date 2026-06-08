@@ -3155,21 +3155,83 @@
     markCurrent();
 })();
 
-// Sidebar dropdowns: position with fixed coordinates so they escape any
-// overflow on the rail and float over the right-side content.
+// Dropdown overflow escape — sidebar AND any dropdown inside a
+// clipping container (.dash-hero has overflow:hidden for its aurora
+// glow, which would otherwise clip the menu). Strategy: portal the
+// open menu into <body>, position with fixed coords, restore on hide.
+// Bypasses both Bootstrap's Popper inline transforms AND ancestor
+// overflow:hidden in one move.
 (function() {
+    const portalKey = '_srtPortalOrigin';
+    // Does the menu need overflow escape? Sidebar dropdowns and any
+    // dropdown inside a container that clips its content (dash-hero,
+    // srt-page-header, sliding panels) qualify.
+    function needsEscape(toggle) {
+        if (!toggle.closest) return false;
+        if (toggle.closest('nav.srote-nav')) return true;
+        if (toggle.closest('.dash-hero')) return true;
+        if (toggle.closest('.srt-page-header')) return true;
+        if (toggle.closest('[data-dropdown-escape]')) return true;
+        return false;
+    }
+    // Bootstrap 5 uses Popper to position dropdowns. Popper sets
+    // position:absolute + transform on the menu, then keeps updating
+    // them, which fights our position:fixed override. Setting
+    // data-bs-display="static" tells Bootstrap NOT to use Popper — the
+    // menu then has only the .show class and our inline coords win.
+    document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(toggle => {
+        if (needsEscape(toggle) && !toggle.hasAttribute('data-bs-display')) {
+            toggle.setAttribute('data-bs-display', 'static');
+        }
+    });
+    function preferAlignEnd(toggle) {
+        const menu = toggle.nextElementSibling;
+        return menu && menu.classList.contains('dropdown-menu-end');
+    }
     function positionMenu(toggle, menu) {
         const rect = toggle.getBoundingClientRect();
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const menuW = menu.offsetWidth || 240;
         const menuH = menu.offsetHeight || 200;
-        let left = rect.right + 10;
+        const gap = 6;
+        let left, top;
+
+        if (toggle.closest('nav.srote-nav')) {
+            // Sidebar: open to the right of the rail
+            left = rect.right + 10;
+            top = rect.top;
+        } else if (preferAlignEnd(toggle)) {
+            // dropdown-menu-end: anchor menu's right edge to toggle's right edge
+            left = rect.right - menuW;
+            top = rect.bottom + gap;
+        } else {
+            // Default: open below toggle, left-aligned
+            left = rect.left;
+            top = rect.bottom + gap;
+        }
+        // Clamp to viewport with 8px safety inset
         if (left + menuW > vw - 8) left = Math.max(8, vw - menuW - 8);
-        let top = rect.top;
-        if (top + menuH > vh - 8) top = Math.max(8, vh - menuH - 8);
-        menu.style.left = left + 'px';
-        menu.style.top = top + 'px';
+        if (left < 8) left = 8;
+        if (top + menuH > vh - 8) {
+            // Flip above the toggle if there's room
+            const above = rect.top - menuH - gap;
+            top = (above >= 8) ? above : Math.max(8, vh - menuH - 8);
+        }
+        // Reset Popper's inline transform first; then set the
+        // individual edges. `inset` MUST be cleared BEFORE setting
+        // left/top — otherwise the browser merges them into the
+        // shorthand and a subsequent `inset: auto` would wipe them.
+        menu.style.removeProperty('inset');
+        menu.style.setProperty('position',  'fixed',     'important');
+        menu.style.setProperty('transform', 'none',      'important');
+        menu.style.setProperty('margin',    '0',         'important');
+        menu.style.setProperty('right',     'auto',      'important');
+        menu.style.setProperty('bottom',    'auto',      'important');
+        menu.style.setProperty('left',      left + 'px', 'important');
+        menu.style.setProperty('top',       top + 'px',  'important');
+        // Beat nearby stacking contexts (modals are 1050).
+        menu.style.setProperty('z-index',   '1040',      'important');
     }
     // Bootstrap fires dropdown events on the TOGGLE element itself
     // (the <a>/<button> with data-bs-toggle="dropdown"), not the
@@ -3180,25 +3242,48 @@
     // that point yields zero dimensions and an unpositioned menu.
     document.addEventListener('shown.bs.dropdown', function(ev) {
         const toggle = ev.target;
-        if (!toggle.closest || !toggle.closest('nav.srote-nav')) return;
-        const menu = toggle.nextElementSibling;
+        if (!needsEscape(toggle)) return;
+        // For escape-needing toggles, dropdown-menu is the very next
+        // sibling at template-time; AFTER portal it lives in <body> and
+        // we track it via toggle._srtPortaledMenu.
+        const menu = toggle._srtPortaledMenu || toggle.nextElementSibling;
         if (!menu || !menu.classList.contains('dropdown-menu')) return;
+        // Portal once — record where it came from so we can restore.
+        if (!menu[portalKey]) {
+            menu[portalKey] = {
+                parent: menu.parentNode,
+                next: menu.nextSibling,
+                toggle: toggle,
+            };
+            toggle._srtPortaledMenu = menu;
+            document.body.appendChild(menu);
+        }
         positionMenu(toggle, menu);
     });
-    // Clean up inline coords when the menu hides so the next open starts fresh.
+    // Restore menu to its original DOM slot when it hides so any
+    // template-relative selectors keep working.
     document.addEventListener('hidden.bs.dropdown', function(ev) {
         const toggle = ev.target;
-        if (!toggle.closest || !toggle.closest('nav.srote-nav')) return;
-        const menu = toggle.nextElementSibling;
-        if (menu) {
-            menu.style.left = '';
-            menu.style.top = '';
+        if (!needsEscape(toggle)) return;
+        const menu = toggle._srtPortaledMenu;
+        if (!menu) return;
+        const origin = menu[portalKey];
+        if (origin && origin.parent) {
+            if (origin.next && origin.next.parentNode === origin.parent) {
+                origin.parent.insertBefore(menu, origin.next);
+            } else {
+                origin.parent.appendChild(menu);
+            }
         }
+        ['position','left','top','right','bottom','transform','inset','margin','z-index']
+            .forEach(p => menu.style.removeProperty(p));
+        delete menu[portalKey];
+        delete toggle._srtPortaledMenu;
     });
     function repositionOpen() {
-        document.querySelectorAll('nav.srote-nav .dropdown-menu.show').forEach(menu => {
-            const toggle = menu.previousElementSibling;
-            if (toggle) positionMenu(toggle, menu);
+        document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+            const origin = menu[portalKey];
+            if (origin && origin.toggle) positionMenu(origin.toggle, menu);
         });
     }
     window.addEventListener('resize', repositionOpen);
