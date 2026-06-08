@@ -3082,60 +3082,19 @@
         // Chart.js may not be loaded on every page — guard via typeof
         if (typeof Chart === 'undefined') return;
         const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-        const css = (name, fb) => getComputedStyle(document.documentElement)
-            .getPropertyValue(name).trim() || fb;
-
-        const primary  = css('--srt-primary', dark ? '#3B82F6' : '#5B5BD6');
-        const fg       = css('--srt-fg', dark ? '#E2E8F0' : '#0F172A');
-        const muted    = dark ? '#94A3B8' : '#5C6470';
-        const grid     = dark ? 'rgba(148,163,184,0.10)' : 'rgba(15,23,42,0.05)';
-        const tipBg    = dark ? '#0E1116' : '#0B0D12';
-
-        // Register the datalabels plugin if available (loaded via CDN on chart pages)
-        if (window.ChartDataLabels) {
-            try { Chart.register(ChartDataLabels); } catch(e) { /* already registered */ }
+        // Only touch the bare-minimum dark/light colors here. Each chart
+        // page owns its full Chart.defaults block — re-applying rich
+        // defaults AFTER the chart is instantiated and then calling
+        // c.update() mis-scales line plots because the y-axis recomputes
+        // while the datalabels stay anchored at stale positions.
+        Chart.defaults.color = dark ? '#cbd5e1' : '#495057';
+        Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)';
+        // Re-render existing charts ONLY when the theme has actually toggled,
+        // never on initial load (the page script just created them).
+        if (window.__srtThemeInitialized) {
+            Chart.instances && Object.values(Chart.instances).forEach(c => c.update && c.update('none'));
         }
-
-        Chart.defaults.font.family = 'Fira Sans, system-ui, sans-serif';
-        Chart.defaults.font.size = 11;
-        Chart.defaults.color = muted;
-        Chart.defaults.borderColor = grid;
-        Chart.defaults.plugins.legend.labels.color = muted;
-        Chart.defaults.plugins.legend.labels.usePointStyle = true;
-        Chart.defaults.plugins.legend.labels.boxWidth = 8;
-        Chart.defaults.plugins.legend.labels.padding = 12;
-
-        // Glass tooltip
-        Chart.defaults.plugins.tooltip.backgroundColor = tipBg;
-        Chart.defaults.plugins.tooltip.titleColor = '#FFFFFF';
-        Chart.defaults.plugins.tooltip.bodyColor = '#FFFFFF';
-        Chart.defaults.plugins.tooltip.borderColor = 'transparent';
-        Chart.defaults.plugins.tooltip.padding = 12;
-        Chart.defaults.plugins.tooltip.boxPadding = 6;
-        Chart.defaults.plugins.tooltip.displayColors = true;
-        Chart.defaults.plugins.tooltip.cornerRadius = 10;
-        Chart.defaults.plugins.tooltip.titleFont = { family: 'Fira Sans', weight: 600, size: 12 };
-        Chart.defaults.plugins.tooltip.bodyFont  = { family: 'Fira Code', size: 12 };
-
-        // Sensible default datalabel: only render on bar/line, hidden by default
-        if (Chart.defaults.plugins.datalabels) {
-            Chart.defaults.plugins.datalabels.color = muted;
-            Chart.defaults.plugins.datalabels.font = { family: 'Fira Code', size: 10, weight: 600 };
-            Chart.defaults.plugins.datalabels.backgroundColor = dark
-                ? 'rgba(20,22,28,0.7)' : 'rgba(255,255,255,0.92)';
-            Chart.defaults.plugins.datalabels.borderRadius = 6;
-            Chart.defaults.plugins.datalabels.padding = { top: 2, bottom: 2, left: 5, right: 5 };
-        }
-
-        Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-            ? false : { duration: 600, easing: 'easeOutQuart' };
-        // Avoid the plugin-datalabels "_fn is not a function" hover crash
-        if (Chart.defaults.transitions) {
-            Chart.defaults.transitions.active = { animation: { duration: 0 } };
-        }
-
-        // Re-render any existing charts so the new colors take effect
-        Chart.instances && Object.values(Chart.instances).forEach(c => c.update && c.update());
+        window.__srtThemeInitialized = true;
     }
 
     /* ── Shared Executive Glass chart helpers (window.srtChart) ──
