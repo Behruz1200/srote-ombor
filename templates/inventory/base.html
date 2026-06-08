@@ -3079,22 +3079,16 @@
     const label = document.getElementById('themeLabel');
 
     function applyChartTheme() {
-        // Chart.js may not be loaded on every page — guard via typeof
+        // Chart.js may not be loaded on every page — guard via typeof.
+        // This function is ONLY called from the theme-toggle click handler;
+        // never on page load. Calling update() on already-instantiated charts
+        // wipes some canvases (function-valued backgroundColor + custom
+        // plugins are sensitive to mid-life update cycles).
         if (typeof Chart === 'undefined') return;
         const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-        // Only touch the bare-minimum dark/light colors here. Each chart
-        // page owns its full Chart.defaults block — re-applying rich
-        // defaults AFTER the chart is instantiated and then calling
-        // c.update() mis-scales line plots because the y-axis recomputes
-        // while the datalabels stay anchored at stale positions.
         Chart.defaults.color = dark ? '#cbd5e1' : '#495057';
         Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)';
-        // Re-render existing charts ONLY when the theme has actually toggled,
-        // never on initial load (the page script just created them).
-        if (window.__srtThemeInitialized) {
-            Chart.instances && Object.values(Chart.instances).forEach(c => c.update && c.update('none'));
-        }
-        window.__srtThemeInitialized = true;
+        Chart.instances && Object.values(Chart.instances).forEach(c => c.update && c.update('none'));
     }
 
     /* ── Shared Executive Glass chart helpers (window.srtChart) ──
@@ -3133,9 +3127,9 @@
         /* Categorical palette: matches the dashboard accent rotation. */
         palette: ['#5B5BD6', '#22C55E', '#F59E0B', '#0EA5E9', '#EC4899', '#8B5CF6', '#10B981', '#EF4444'],
     };
-    // Apply on load when Chart.js is ready (it loads via script tags in pages)
-    window.addEventListener('load', applyChartTheme);
-    document.addEventListener('DOMContentLoaded', () => setTimeout(applyChartTheme, 500));
+    // applyChartTheme is intentionally NOT auto-fired on load — the page's
+    // own inline chart script handles dark/light coloring via CSS vars at
+    // creation time. We only need to re-tint when the user toggles theme.
 
     function render() {
         const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';

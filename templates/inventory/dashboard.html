@@ -456,8 +456,14 @@
     const gridColor = isDark ? 'rgba(148,163,184,0.10)' : 'rgba(15,23,42,0.05)';
     const labelColor = isDark ? '#94A3B8' : '#5C6470';
 
-    /* Avoid plugin-datalabels "_fn is not a function" on hover. */
+    /* Avoid plugin-datalabels "_fn is not a function" — fires on ANY
+       transition that interpolates function-valued options. Disable all
+       animations to keep the chart drawing every render. */
+    Chart.defaults.animation = false;
     Chart.defaults.transitions.active = { animation: { duration: 0 } };
+    Chart.defaults.transitions.resize = { animation: { duration: 0 } };
+    Chart.defaults.transitions.show   = { animation: { duration: 0 } };
+    Chart.defaults.transitions.hide   = { animation: { duration: 0 } };
 
     const ctx = document.getElementById('trendChart');
     if (!ctx) return;

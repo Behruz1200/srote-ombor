@@ -220,10 +220,14 @@
     Chart.defaults.plugins.tooltip.bodyColor = fg;
     Chart.defaults.plugins.tooltip.borderColor = grid;
     Chart.defaults.plugins.tooltip.borderWidth = 1;
-    Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? false : { duration: 400 };
-    /* Avoid plugin-datalabels "_fn is not a function" on hover. */
+    /* Avoid plugin-datalabels "_fn is not a function" — fires on ANY
+       transition that interpolates function-valued options. Disable all
+       animations to keep the chart drawing on every render. */
+    Chart.defaults.animation = false;
     Chart.defaults.transitions.active = { animation: { duration: 0 } };
+    Chart.defaults.transitions.resize = { animation: { duration: 0 } };
+    Chart.defaults.transitions.show   = { animation: { duration: 0 } };
+    Chart.defaults.transitions.hide   = { animation: { duration: 0 } };
 
     new Chart(document.getElementById('dailyChart'), {
         type: 'line',

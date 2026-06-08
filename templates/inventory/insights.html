@@ -967,14 +967,18 @@
     Chart.defaults.plugins.tooltip.borderWidth = 1;
     Chart.defaults.plugins.tooltip.padding = 10;
     Chart.defaults.plugins.tooltip.boxPadding = 4;
-    Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? false : { duration: 400 };
-    /* Disable hover-triggered transition animation — chartjs-plugin-datalabels
-       2.2 + Chart.js 4 throws "this._fn is not a function" if the active
-       transition tries to interpolate function-valued options (display,
-       formatter). Tooltips still work; only the small color/x/y hover
-       tween is skipped. */
+    /* chartjs-plugin-datalabels 2.2 + Chart.js 4 throws
+       "this._fn is not a function" if ANY transition (default, active,
+       resize, show, hide) tries to interpolate function-valued options
+       like display/formatter/color. The crash silently aborts the draw,
+       leaving canvases blank. Disabling chart animation entirely makes
+       the data snap into place on every render and sidesteps the bug —
+       acceptable trade for a data-dense analytics page. */
+    Chart.defaults.animation = false;
     Chart.defaults.transitions.active = { animation: { duration: 0 } };
+    Chart.defaults.transitions.resize = { animation: { duration: 0 } };
+    Chart.defaults.transitions.show   = { animation: { duration: 0 } };
+    Chart.defaults.transitions.hide   = { animation: { duration: 0 } };
 
     function gridScale(opts) {
         return Object.assign({
@@ -1504,6 +1508,16 @@
             }
         });
     })();
+
+    /* ── Force initial paint ─────────────────────────────────────────
+       With function-valued backgroundColors + custom plugins, Chart.js
+       sometimes schedules the first draw but never commits it (the
+       canvas stays transparent until a hover/resize event nudges it).
+       Kicking a manual draw on the next frame is a cheap, well-defined
+       fix and runs only once.                                        */
+    requestAnimationFrame(() => {
+        Object.values(Chart.instances).forEach(c => { try { c.draw(); } catch(e) {} });
+    });
 })();
 </script>
 {% endblock %}
