@@ -75,11 +75,11 @@
             </div>
         </div>
 
-        <div class="d-flex gap-2 mb-5">
-            <button type="submit" class="btn btn-success btn-lg">
-                <i class="bi bi-truck"></i> Yo'lga chiqarish
+        <div class="d-flex gap-2 mb-5 justify-content-end">
+            <a href="{% url 'transfer_list' %}" class="dash-btn dash-btn--ghost">Bekor qilish</a>
+            <button type="submit" class="dash-btn dash-btn--primary" style="padding: 0.85rem 1.5rem; font-size: 1rem;">
+                <i class="bi bi-truck"></i> <span>Yo'lga chiqarish</span>
             </button>
-            <a href="{% url 'transfer_list' %}" class="btn btn-outline-secondary btn-lg">Bekor qilish</a>
         </div>
     </form>
 </div>

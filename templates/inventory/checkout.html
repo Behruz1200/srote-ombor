@@ -18,75 +18,92 @@
 
     <div class="row g-3">
         <div class="col-lg-7">
-            <div class="card p-3 mb-3">
-                <h6 class="text-muted text-uppercase small">Tovarlar ({{ lines|length }})</h6>
-                <div class="table-responsive">
-                <table class="table table-sm mb-0">
-                    <thead class="table-light">
-                        <tr><th>Mahsulot</th><th>Soni</th><th class="text-end">Jami</th></tr>
-                    </thead>
-                    <tbody>
-                    {% for l in lines %}
-                        <tr>
-                            <td>
-                                <strong>{{ l.stock.variant.product.code }}</strong>
-                                — {{ l.stock.variant.product.name|truncatechars:30 }}
-                                <div class="small text-muted">
-                                    {{ l.stock.variant.size }} / {{ l.stock.variant.color }}
-                                </div>
-                            </td>
-                            <td>{{ l.qty }}</td>
-                            <td class="text-end">{{ l.subtotal|som }}</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                    <tfoot class="table-light">
-                        <tr><th colspan="2" class="text-end">Jami:</th>
-                            <th class="text-end fs-5">{{ total|som }} so'm</th></tr>
-                    </tfoot>
-                </table>
+            <article class="dash-card">
+                <header class="dash-card__head">
+                    <h2 class="dash-card__title">
+                        <i class="bi bi-bag-check"></i> Tovarlar
+                        <span class="dash-pill ms-1">{{ lines|length }}</span>
+                    </h2>
+                </header>
+                <div class="dash-card__body dash-card__body--flush">
+                    <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead>
+                            <tr><th>Mahsulot</th><th class="text-end">Soni</th><th class="text-end">Jami</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for l in lines %}
+                            <tr>
+                                <td>
+                                    <strong>{{ l.stock.variant.product.name|truncatechars:30 }}</strong>
+                                    <div class="small text-muted">
+                                        <span class="code-pill">{{ l.stock.variant.product.code }}</span>
+                                        {{ l.stock.variant.size }} / {{ l.stock.variant.color }}
+                                    </div>
+                                </td>
+                                <td class="text-end">{{ l.qty }}</td>
+                                <td class="text-end"><strong>{{ l.subtotal|som }}</strong></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background: var(--srt-surface-2);">
+                                <th colspan="2" class="text-end" style="text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.05em;">Jami:</th>
+                                <th class="text-end" style="font-family: var(--srt-font-mono); font-size: 1.25rem; font-weight: 600; color: var(--srt-primary);">
+                                    {{ total|som }} <small style="font-size: 0.65rem; color: var(--srt-fg-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">so'm</small>
+                                </th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    </div>
                 </div>
-            </div>
+            </article>
         </div>
 
         <div class="col-lg-5">
-            <div class="card p-4">
-                <form method="post">
-                    {% csrf_token %}
-                    <h5>To'lov</h5>
-                    <div class="mb-3">
-                        <label class="form-label">To'lov turi</label>
-                        <select name="payment_method" class="form-select" required>
-                            {% for value, label in payment_methods %}
-                                <option value="{{ value }}" {% if value == 'cash' %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+            <article class="dash-card">
+                <header class="dash-card__head">
+                    <h2 class="dash-card__title"><i class="bi bi-credit-card"></i> To'lov ma'lumotlari</h2>
+                </header>
+                <div class="dash-card__body dash-card__body--padded">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">To'lov turi</label>
+                            <select name="payment_method" class="form-select" required>
+                                {% for value, label in payment_methods %}
+                                    <option value="{{ value }}" {% if value == 'cash' %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
 
-                    <h6 class="text-muted text-uppercase small mt-3">Mijoz (ixtiyoriy)</h6>
-                    <div class="mb-2">
-                        <label class="form-label small">Ism</label>
-                        <input type="text" name="customer_name" class="form-control"
-                               placeholder="Masalan: Aziza opa">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small">Telefon</label>
-                        <input type="tel" name="customer_phone" class="form-control"
-                               placeholder="+998 90 123 45 67">
-                    </div>
+                        <div class="mb-2 mt-4" style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--srt-fg-muted); font-weight: 600;">
+                            <i class="bi bi-person"></i> Mijoz (ixtiyoriy)
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small" style="font-size: 0.78rem; text-transform: none; letter-spacing: 0;">Ism</label>
+                            <input type="text" name="customer_name" class="form-control"
+                                   placeholder="Masalan: Aziza opa">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small" style="font-size: 0.78rem; text-transform: none; letter-spacing: 0;">Telefon</label>
+                            <input type="tel" name="customer_phone" class="form-control"
+                                   placeholder="+998 90 123 45 67">
+                        </div>
 
-                    <div class="mb-3">
-                        <label class="form-label small">Izoh</label>
-                        <textarea name="note" rows="2" class="form-control"
-                                  placeholder="Doimiy mijoz, chegirma, ..."></textarea>
-                    </div>
+                        <div class="mb-3">
+                            <label class="form-label small" style="font-size: 0.78rem; text-transform: none; letter-spacing: 0;">Izoh</label>
+                            <textarea name="note" rows="2" class="form-control"
+                                      placeholder="Doimiy mijoz, chegirma, ..."></textarea>
+                        </div>
 
-                    <button type="submit" class="btn btn-success btn-lg w-100">
-                        <i class="bi bi-check2-circle"></i> Tasdiqlash va saqlash
-                    </button>
-                    <a href="{% url 'cart_view' %}" class="btn btn-link w-100 mt-1">Savatga qaytish</a>
-                </form>
-            </div>
+                        <button type="submit" class="dash-btn dash-btn--primary w-100" style="padding: 0.95rem; font-size: 1.05rem; justify-content: center;">
+                            <i class="bi bi-check2-circle"></i> <span>Tasdiqlash va saqlash</span>
+                        </button>
+                        <a href="{% url 'cart_view' %}" class="dash-link d-block text-center mt-2">Savatga qaytish</a>
+                    </form>
+                </div>
+            </article>
         </div>
     </div>
 </div>

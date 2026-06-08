@@ -14,7 +14,8 @@
     </header>
     <div class="row justify-content-center">
         <div class="col-lg-6">
-            <div class="card p-4">
+            <article class="dash-card">
+                <div class="dash-card__body dash-card__body--padded">
                 <form method="post">
                     {% csrf_token %}
                     <div class="mb-3">
@@ -63,14 +64,15 @@
                         {{ form.is_active }}
                         <label class="form-check-label">{{ form.is_active.label }}</label>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-save"></i> Saqlash
+                    <div class="d-flex gap-2 justify-content-end">
+                        <a href="{% url 'branch_list' %}" class="dash-btn dash-btn--ghost">Bekor qilish</a>
+                        <button type="submit" class="dash-btn dash-btn--primary">
+                            <i class="bi bi-save"></i> <span>Saqlash</span>
                         </button>
-                        <a href="{% url 'branch_list' %}" class="btn btn-outline-secondary">Bekor qilish</a>
                     </div>
                 </form>
-            </div>
+                </div>
+            </article>
         </div>
     </div>
 </div>

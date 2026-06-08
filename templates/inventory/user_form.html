@@ -14,7 +14,8 @@
     </header>
     <div class="row justify-content-center">
         <div class="col-lg-7">
-            <div class="card p-4">
+            <article class="dash-card">
+                <div class="dash-card__body dash-card__body--padded">
                 <form method="post">
                     {% csrf_token %}
                     <div class="row g-3">
@@ -77,14 +78,15 @@
                             </div>
                         </div>
                     </div>
-                    <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-save"></i> Saqlash
+                    <div class="mt-4 d-flex gap-2 justify-content-end">
+                        <a href="{% url 'user_list' %}" class="dash-btn dash-btn--ghost">Bekor qilish</a>
+                        <button type="submit" class="dash-btn dash-btn--primary">
+                            <i class="bi bi-save"></i> <span>Saqlash</span>
                         </button>
-                        <a href="{% url 'user_list' %}" class="btn btn-outline-secondary">Bekor qilish</a>
                     </div>
                 </form>
-            </div>
+                </div>
+            </article>
         </div>
     </div>
 </div>

@@ -44,24 +44,29 @@
                 </table>
             </div>
 
-            <div class="card p-4">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="alert alert-info py-2">
-                        <i class="bi bi-info-circle"></i>
-                        Tasdiqlasangiz, barcha tovarlar <strong>{{ transfer.to_branch.name }}</strong> omboriga
-                        qo'shiladi. Mahsulotlar manba filialdan oldindan kamaytirilgan.
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-success btn-lg flex-grow-1">
-                            <i class="bi bi-check2-circle"></i> Hammasini qabul qilish
-                        </button>
-                        <a href="{% url 'transfer_detail' transfer.pk %}" class="btn btn-outline-secondary btn-lg">
-                            Bekor
-                        </a>
-                    </div>
-                </form>
-            </div>
+            <article class="dash-card">
+                <div class="dash-card__body dash-card__body--padded">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="dash-alert dash-alert--info mb-3" style="padding: 0.75rem 0.9rem;">
+                            <span class="dash-alert__icon"><i class="bi bi-info-circle"></i></span>
+                            <span class="dash-alert__text">
+                                <strong>Qabul qilishni tasdiqlash</strong>
+                                <small>
+                                    Barcha tovarlar <strong>{{ transfer.to_branch.name }}</strong> omboriga qo'shiladi.
+                                    Mahsulotlar manba filialdan oldindan kamaytirilgan.
+                                </small>
+                            </span>
+                        </div>
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a href="{% url 'transfer_detail' transfer.pk %}" class="dash-btn dash-btn--ghost">Bekor</a>
+                            <button type="submit" class="dash-btn dash-btn--primary" style="padding: 0.85rem 1.5rem; font-size: 1rem;">
+                                <i class="bi bi-check2-circle"></i> <span>Hammasini qabul qilish</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </article>
         </div>
     </div>
 </div>
