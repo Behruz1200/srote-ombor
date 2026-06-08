@@ -27,6 +27,62 @@
         </div>
     </header>
 
+    <!-- Tezkor xulosa (chop etishda yashiriladi) -->
+    <section class="dash-kpis dash-kpis--four srt-stagger d-print-none" aria-label="Chek xulosasi">
+        <article class="dash-kpi dash-kpi--lead">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami summa</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ txn.total|default:0 }}">{{ txn.total|som }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-box-seam"></i> Tovarlar</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ txn.item_count|default:0 }}">{{ txn.item_count }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>{{ txn.lines.count }} qator</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="success">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-credit-card"></i> To'lov</span>
+            </div>
+            <div class="dash-kpi__value" style="font-size: 1.25rem; line-height: 1.3;">
+                {{ txn.get_payment_method_display }}
+            </div>
+            <div class="dash-kpi__footer">
+                {% if txn.discount_total > 0 %}
+                    <span style="color: var(--srt-warning);">−{{ txn.discount_total|som }} chegirma</span>
+                {% else %}
+                    <span>chegirma yo'q</span>
+                {% endif %}
+            </div>
+        </article>
+        <article class="dash-kpi" data-tone="slate">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-person"></i> Mijoz</span>
+            </div>
+            <div class="dash-kpi__value" style="font-size: 1.05rem; line-height: 1.3;">
+                {% if txn.customer_name %}
+                    {{ txn.customer_name|truncatechars:16 }}
+                {% else %}
+                    <span style="color: var(--srt-fg-muted);">anonim</span>
+                {% endif %}
+            </div>
+            <div class="dash-kpi__footer">
+                {% if txn.customer_phone %}
+                    <span>{{ txn.customer_phone }}</span>
+                {% else %}
+                    <span>sotuvchi: <strong>{{ txn.sold_by.username }}</strong></span>
+                {% endif %}
+            </div>
+        </article>
+    </section>
+
     <div class="card p-4" id="receipt">
         <div class="text-center mb-3">
             <h4 class="mb-0">SROTE</h4>

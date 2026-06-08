@@ -35,79 +35,146 @@
         </div>
     </header>
 
-    <!-- Status timeline (wizard) -->
-    <div class="card p-3 mb-3">
-        <div class="d-flex align-items-center justify-content-between position-relative">
-            <!-- Step 1: Created -->
-            <div class="text-center flex-fill position-relative" style="z-index:2;">
-                <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-success text-white"
-                     style="width:48px; height:48px;">
-                    <i class="bi bi-file-earmark-text"></i>
-                </div>
-                <div class="small mt-1"><strong>Yaratilgan</strong></div>
-                <div class="small text-muted">{{ transfer.created_at|date:"d.m H:i" }}</div>
-                <div class="small text-muted">{{ transfer.created_by.username }}</div>
-            </div>
-            <!-- Line 1 -->
-            <div class="position-absolute" style="top:24px; left:16%; right:50%; height:2px;
-                 background: {% if transfer.status != 'draft' %}#198754{% else %}#dee2e6{% endif %};
-                 z-index:1;"></div>
-
-            <!-- Step 2: In Transit -->
-            <div class="text-center flex-fill position-relative" style="z-index:2;">
-                <div class="rounded-circle d-inline-flex align-items-center justify-content-center
-                            {% if transfer.dispatched_at %}bg-warning text-dark{% else %}bg-light text-muted border{% endif %}"
-                     style="width:48px; height:48px;">
-                    <i class="bi bi-truck"></i>
-                </div>
-                <div class="small mt-1"><strong>Yo'lda</strong></div>
-                {% if transfer.dispatched_at %}
-                    <div class="small text-muted">{{ transfer.dispatched_at|date:"d.m H:i" }}</div>
-                    {% if transfer.status == 'in_transit' %}
-                        <div class="small text-warning">{{ transfer.dispatched_at|timesince }} oldin</div>
-                    {% endif %}
-                {% else %}
-                    <div class="small text-muted">—</div>
-                {% endif %}
-            </div>
-            <!-- Line 2 -->
-            <div class="position-absolute" style="top:24px; left:50%; right:16%; height:2px;
-                 background: {% if transfer.status == 'received' %}#198754{% else %}#dee2e6{% endif %};
-                 z-index:1;"></div>
-
-            <!-- Step 3: Received -->
-            <div class="text-center flex-fill position-relative" style="z-index:2;">
-                <div class="rounded-circle d-inline-flex align-items-center justify-content-center
-                            {% if transfer.status == 'received' %}bg-success text-white
-                            {% elif transfer.status == 'cancelled' %}bg-danger text-white
-                            {% else %}bg-light text-muted border{% endif %}"
-                     style="width:48px; height:48px;">
-                    {% if transfer.status == 'cancelled' %}
-                        <i class="bi bi-x"></i>
-                    {% else %}
-                        <i class="bi bi-check"></i>
-                    {% endif %}
-                </div>
-                <div class="small mt-1">
-                    <strong>
-                        {% if transfer.status == 'cancelled' %}Bekor qilingan
-                        {% else %}Qabul qilingan{% endif %}
-                    </strong>
-                </div>
-                {% if transfer.received_at %}
-                    <div class="small text-muted">{{ transfer.received_at|date:"d.m H:i" }}</div>
-                    <div class="small text-muted">{{ transfer.received_by.username }}</div>
-                    {% if transfer.dispatched_at %}
-                        <div class="small text-success">
-                            ⏱ {{ transfer.received_at|timesince:transfer.dispatched_at }}
-                        </div>
-                    {% endif %}
-                {% else %}
-                    <div class="small text-muted">—</div>
-                {% endif %}
-            </div>
+    <!-- Status stepper — 3 steps with gradient connector -->
+    <article class="dash-card mb-3">
+        <div class="dash-card__body dash-card__body--padded">
+            <ol class="srt-stepper" data-current="{% if transfer.status == 'received' %}3{% elif transfer.status == 'in_transit' %}2{% elif transfer.status == 'cancelled' %}-1{% else %}1{% endif %}">
+                <!-- Step 1: Created -->
+                <li class="srt-step is-done">
+                    <span class="srt-step__circle" data-tone="success">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </span>
+                    <span class="srt-step__body">
+                        <strong>Yaratilgan</strong>
+                        <small>{{ transfer.created_at|date:"d.m H:i" }} · {{ transfer.created_by.username }}</small>
+                    </span>
+                </li>
+                <!-- Step 2: In Transit -->
+                <li class="srt-step {% if transfer.dispatched_at %}is-done{% endif %} {% if transfer.status == 'in_transit' %}is-active{% endif %}">
+                    <span class="srt-step__circle" data-tone="{% if transfer.dispatched_at %}amber{% else %}neutral{% endif %}">
+                        <i class="bi bi-truck"></i>
+                    </span>
+                    <span class="srt-step__body">
+                        <strong>Yo'lda</strong>
+                        {% if transfer.dispatched_at %}
+                            <small>{{ transfer.dispatched_at|date:"d.m H:i" }}</small>
+                            {% if transfer.status == 'in_transit' %}
+                                <small style="color: var(--srt-warning);">{{ transfer.dispatched_at|timesince }} oldin</small>
+                            {% endif %}
+                        {% else %}
+                            <small>kutilmoqda</small>
+                        {% endif %}
+                    </span>
+                </li>
+                <!-- Step 3: Received / Cancelled -->
+                <li class="srt-step {% if transfer.status == 'received' or transfer.status == 'cancelled' %}is-done{% endif %}">
+                    <span class="srt-step__circle" data-tone="{% if transfer.status == 'received' %}success{% elif transfer.status == 'cancelled' %}danger{% else %}neutral{% endif %}">
+                        <i class="bi {% if transfer.status == 'cancelled' %}bi-x-lg{% else %}bi-check-lg{% endif %}"></i>
+                    </span>
+                    <span class="srt-step__body">
+                        <strong>{% if transfer.status == 'cancelled' %}Bekor qilingan{% else %}Qabul qilingan{% endif %}</strong>
+                        {% if transfer.received_at %}
+                            <small>{{ transfer.received_at|date:"d.m H:i" }} · {{ transfer.received_by.username }}</small>
+                            {% if transfer.dispatched_at %}
+                                <small style="color: var(--srt-success);">
+                                    ⏱ {{ transfer.received_at|timesince:transfer.dispatched_at }}
+                                </small>
+                            {% endif %}
+                        {% else %}
+                            <small>kutilmoqda</small>
+                        {% endif %}
+                    </span>
+                </li>
+            </ol>
         </div>
-    </div>
+    </article>
+
+    <style>
+        .srt-stepper {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            position: relative;
+        }
+        .srt-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 0.5rem;
+            position: relative;
+        }
+        /* Connector lines between steps */
+        .srt-step::before,
+        .srt-step::after {
+            content: '';
+            position: absolute;
+            top: 24px;
+            height: 2px;
+            background: var(--srt-border);
+            z-index: 0;
+        }
+        .srt-step::before { left: 0; right: 50%; }
+        .srt-step::after  { left: 50%; right: 0; }
+        .srt-step:first-child::before,
+        .srt-step:last-child::after { display: none; }
+        .srt-step.is-done::before,
+        .srt-step.is-done + .srt-step::before { background: var(--srt-success); }
+        .srt-step:has(+ .is-done)::after { background: var(--srt-success); }
+
+        .srt-step__circle {
+            position: relative;
+            z-index: 1;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--srt-surface);
+            border: 2px solid var(--srt-border);
+            color: var(--srt-fg-muted);
+            font-size: 1.15rem;
+            transition: all var(--srt-trans);
+        }
+        .srt-step__circle[data-tone="success"] {
+            background: linear-gradient(135deg, var(--srt-success), #22C55E);
+            color: #FFFFFF;
+            border-color: transparent;
+            box-shadow: var(--srt-shadow-green);
+        }
+        .srt-step__circle[data-tone="amber"] {
+            background: linear-gradient(135deg, var(--srt-warning), var(--srt-accent-soft));
+            color: #FFFFFF;
+            border-color: transparent;
+            box-shadow: var(--srt-shadow-amber);
+        }
+        .srt-step__circle[data-tone="danger"] {
+            background: linear-gradient(135deg, var(--srt-danger), #EF4444);
+            color: #FFFFFF;
+            border-color: transparent;
+        }
+        .srt-step.is-active .srt-step__circle {
+            animation: srtPulse 2.4s var(--srt-ease) infinite;
+            color: rgba(245,158,11,0.55);
+        }
+        .srt-step__body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+        }
+        .srt-step__body strong {
+            font-size: 0.9rem;
+            color: var(--srt-fg);
+        }
+        .srt-step__body small {
+            font-size: 0.74rem;
+            color: var(--srt-fg-muted);
+        }
+    </style>
 
     <!-- Route info -->
     <div class="card p-3 mb-3">

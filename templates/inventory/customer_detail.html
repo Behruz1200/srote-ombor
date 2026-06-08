@@ -43,41 +43,48 @@
         </div>
     </header>
 
-    <!-- KPI cards -->
-    <div class="row g-2 mb-3">
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Jami sarflagan</div>
-                <div class="h4 mb-0 text-success">{{ total_spent|som }}</div>
-                <small class="text-muted">so'm</small>
+    <!-- Mijoz KPI strip -->
+    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Mijoz xulosasi">
+        <article class="dash-kpi dash-kpi--lead">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami sarflagan</span>
             </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Sotuvlar soni</div>
-                <div class="h4 mb-0">{{ n_txns }}</div>
-                <small class="text-muted">ta chek</small>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ total_spent|default:0 }}">{{ total_spent|som }}</span>
             </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">O'rtacha chek</div>
-                <div class="h4 mb-0">{{ avg_ticket|som }}</div>
-                <small class="text-muted">so'm</small>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-receipt"></i> Sotuvlar</span>
             </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Oxirgi tashrif</div>
-                {% if last_visit %}
-                    <div class="h6 mb-0">{{ last_visit|date:"d.m.Y" }}</div>
-                    <small class="text-muted">{{ last_visit|timesince }} oldin</small>
-                {% else %}
-                    <div class="h6 mb-0 text-muted">—</div>
-                {% endif %}
+            <div class="dash-kpi__value">
+                <span data-countup="{{ n_txns|default:0 }}">{{ n_txns }}</span>
             </div>
-        </div>
-    </div>
+            <div class="dash-kpi__footer"><span>ta chek</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="amber">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-graph-up"></i> O'rtacha chek</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ avg_ticket|default:0 }}">{{ avg_ticket|som }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="slate">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-clock-history"></i> Oxirgi tashrif</span>
+            </div>
+            {% if last_visit %}
+                <div class="dash-kpi__value" style="font-size: 1.15rem; line-height: 1.3;">{{ last_visit|date:"d.m.Y" }}</div>
+                <div class="dash-kpi__footer"><span>{{ last_visit|timesince }} oldin</span></div>
+            {% else %}
+                <div class="dash-kpi__value" style="color: var(--srt-fg-muted);">—</div>
+                <div class="dash-kpi__footer"><span>tashrif yo'q</span></div>
+            {% endif %}
+        </article>
+    </section>
 
     <!-- Chart + Favorites -->
     <div class="row g-3 mb-3">

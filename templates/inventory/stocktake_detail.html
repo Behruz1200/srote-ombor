@@ -27,32 +27,52 @@
         </div>
     </header>
 
-    <!-- Meta + variance summary -->
-    <div class="card p-3 mb-3">
-        <div class="row g-3 align-items-center">
-            <div class="col-md-3">
-                <small class="text-muted">Filial</small><br>
-                <strong>{{ session.branch.name }}</strong>
+    <!-- Sessiya xulosasi — KPI strip -->
+    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Sessiya xulosasi">
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-building"></i> Filial</span>
             </div>
-            <div class="col-md-3">
-                <small class="text-muted">Boshladi</small><br>
-                <strong>{{ session.started_by.username }}</strong><br>
-                <small class="text-muted">{{ session.started_at|date:"d.m.Y H:i" }}</small>
+            <div class="dash-kpi__value" style="font-size: 1.2rem; line-height: 1.3;">{{ session.branch.name }}</div>
+            <div class="dash-kpi__footer"><span>{{ session.started_by.username }}</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="slate">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-calendar-event"></i> Boshlandi</span>
             </div>
-            <div class="col-md-3">
-                <small class="text-muted">Variantlar</small><br>
-                <strong>{{ counts|length }}</strong>
+            <div class="dash-kpi__value" style="font-size: 1.1rem; line-height: 1.3;">{{ session.started_at|date:"d.m H:i" }}</div>
+            <div class="dash-kpi__footer"><span>{{ session.started_at|date:"Y-m-d" }}</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="info">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-grid-3x3"></i> Variantlar</span>
             </div>
-            <div class="col-md-3">
-                <small class="text-muted">Farqlar</small><br>
-                <strong class="{% if diff_count > 0 %}text-danger{% endif %}">{{ diff_count }}</strong>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ counts|length }}">{{ counts|length }}</span>
             </div>
-        </div>
-        {% if session.note %}
-            <hr class="my-2">
-            <small class="text-muted">Izoh:</small> {{ session.note }}
-        {% endif %}
+            <div class="dash-kpi__footer"><span>sanab chiqilishi kerak</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="{% if diff_count > 0 %}danger{% else %}success{% endif %}">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-exclamation-diamond"></i> Farqlar</span>
+            </div>
+            <div class="dash-kpi__value" style="color: {% if diff_count > 0 %}var(--srt-danger){% else %}var(--srt-success){% endif %};">
+                <span data-countup="{{ diff_count|default:0 }}">{{ diff_count }}</span>
+            </div>
+            <div class="dash-kpi__footer">
+                {% if diff_count > 0 %}
+                    <span>kutilgan vs sanalgan</span>
+                {% else %}
+                    <span><i class="bi bi-check2-circle"></i>&nbsp; mukammal</span>
+                {% endif %}
+            </div>
+        </article>
+    </section>
+    {% if session.note %}
+    <div class="alert alert-info py-2 mb-3">
+        <i class="bi bi-info-circle"></i> <strong>Izoh:</strong> {{ session.note }}
     </div>
+    {% endif %}
 
     <!-- Toolbar: search, diff filter, scanner, progress -->
     {% if session.status == 'open' %}

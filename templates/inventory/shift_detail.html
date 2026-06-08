@@ -56,46 +56,61 @@
         </div>
     </div>
 
-    <!-- KPI cards -->
-    <div class="row g-2 mb-3">
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Boshlang'ich naqd</div>
-                <div class="h5 mb-0">{{ shift.opening_cash|som }}</div>
+    <!-- Cash KPI strip -->
+    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Naqd kassa xulosasi">
+        <article class="dash-kpi" data-tone="slate">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cash"></i> Boshlang'ich</span>
             </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Naqd sotuvlar</div>
-                <div class="h5 mb-0 text-success">+{{ cash_sales|som }}</div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ shift.opening_cash|default:0 }}">{{ shift.opening_cash|som }}</span>
             </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Kutilgan kassa</div>
-                <div class="h5 mb-0 text-primary">{{ expected|som }}</div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+        </article>
+
+        <article class="dash-kpi" data-tone="success">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-plus-circle"></i> Naqd sotuvlar</span>
             </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center h-100
-                    {% if shift.counted_cash is None %}bg-light{% elif variance_value == 0 %}bg-success bg-opacity-10{% elif variance_value > 0 %}bg-info bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
-                <div class="small text-muted">Sanalgan</div>
-                {% if shift.counted_cash is not None %}
-                    <div class="h5 mb-0">{{ shift.counted_cash|som }}</div>
+            <div class="dash-kpi__value" style="color: var(--srt-success);">
+                +<span data-countup="{{ cash_sales|default:0 }}">{{ cash_sales|som }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+        </article>
+
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-calculator"></i> Kutilgan</span>
+            </div>
+            <div class="dash-kpi__value" style="color: var(--srt-primary);">
+                <span data-countup="{{ expected|default:0 }}">{{ expected|som }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span></div>
+        </article>
+
+        <article class="dash-kpi" data-tone="{% if shift.counted_cash is None %}slate{% elif variance_value == 0 %}success{% elif variance_value > 0 %}info{% else %}danger{% endif %}">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-clipboard-check"></i> Sanalgan</span>
+            </div>
+            {% if shift.counted_cash is not None %}
+                <div class="dash-kpi__value" style="color: {% if variance_value == 0 %}var(--srt-success){% elif variance_value > 0 %}var(--srt-info){% else %}var(--srt-danger){% endif %};">
+                    <span data-countup="{{ shift.counted_cash|default:0 }}">{{ shift.counted_cash|som }}</span>
+                </div>
+                <div class="dash-kpi__footer">
                     {% if variance_value == 0 %}
-                        <small class="text-success">✓ To'g'ri</small>
+                        <span style="color: var(--srt-success);"><i class="bi bi-check2-circle"></i>&nbsp; Aniq mos</span>
                     {% elif variance_value > 0 %}
-                        <small class="text-info">+{{ variance_value|som }} ortiqcha</small>
+                        <span style="color: var(--srt-info);">+{{ variance_value|som }} ortiqcha</span>
                     {% else %}
-                        <small class="text-danger">{{ variance_value|som }} kam</small>
+                        <span style="color: var(--srt-danger);">{{ variance_value|som }} yetishmadi</span>
                     {% endif %}
-                {% else %}
-                    <div class="h5 mb-0 text-muted">—</div>
-                    <small class="text-muted">Sanalmagan</small>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+                </div>
+            {% else %}
+                <div class="dash-kpi__value" style="color: var(--srt-fg-muted);">—</div>
+                <div class="dash-kpi__footer"><span>sanalmagan</span></div>
+            {% endif %}
+        </article>
+    </section>
 
     <!-- Payment breakdown + Top products -->
     <div class="row g-3 mb-3">
