@@ -77,3 +77,31 @@ def som_with_decimals(value, places=2):
     formatted = f'{n:,.{places}f}'
     int_part, _, dec_part = formatted.partition('.')
     return int_part.replace(',', ' ') + ('.' + dec_part if dec_part else '')
+
+
+# ── Stock-aggregation helpers used by product_list KPI strip ────────────
+# Each iterates the queryset client-side once. For typical catalog sizes
+# (under a few thousand items) this is cheaper than a separate DB round-
+# trip and keeps the template self-contained.
+def _stock_value(p):
+    """Pull the annotated total_stock without crashing on weird shapes."""
+    try:
+        v = getattr(p, 'total_stock', None)
+        return int(v) if v is not None else 0
+    except (ValueError, TypeError):
+        return 0
+
+
+@register.filter
+def out_of_stock_count(products):
+    return sum(1 for p in (products or []) if _stock_value(p) == 0)
+
+
+@register.filter
+def low_stock_count(products):
+    return sum(1 for p in (products or []) if 0 < _stock_value(p) <= 3)
+
+
+@register.filter
+def in_stock_count(products):
+    return sum(1 for p in (products or []) if _stock_value(p) > 0)

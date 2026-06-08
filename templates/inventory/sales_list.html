@@ -21,6 +21,39 @@
         </div>
     </header>
 
+    <!-- Filtrlangan davr xulosasi -->
+    {% if sales %}
+    <section class="dash-kpis dash-kpis--three srt-stagger" aria-label="Filtrlangan davr xulosasi">
+        <article class="dash-kpi dash-kpi--lead">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami tushum</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ total|default:0 }}">{{ total|som }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-receipt"></i> Tranzaksiyalar</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ sales|length }}">{{ sales|length }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>filtrlangan natijada</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="amber">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-box-seam"></i> Sotilgan dona</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ qty_total|default:0 }}">{{ qty_total }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>jami birlik</span></div>
+        </article>
+    </section>
+    {% endif %}
+
     <!-- Filterlar -->
     <form method="get" class="card p-3 mb-3">
         <div class="row g-2">

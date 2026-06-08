@@ -21,44 +21,73 @@
         </div>
     </header>
 
-    <!-- Overdue alert -->
+    <!-- Overdue alert — converted to dash-alert glass style -->
     {% if overdue_transfers %}
-    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
-        <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
-        <div class="flex-grow-1">
+    <a href="?status=in_transit" class="dash-alert dash-alert--warn mb-3" style="text-decoration: none;">
+        <span class="dash-alert__icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+        <span class="dash-alert__text">
             <strong>{{ overdue_transfers|length }} ta ko'chirish 3 kundan ortiq yo'lda turibdi</strong>
-            <div class="small mt-1">
-                {% for t in overdue_transfers %}
-                    <a href="{% url 'transfer_detail' t.pk %}" class="badge bg-white text-warning border border-warning me-1">
-                        #{{ t.pk }} {{ t.from_branch.name }} → {{ t.to_branch.name }}
-                        ({{ t.dispatched_at|timesince }})
-                    </a>
+            <small>
+                {% for t in overdue_transfers|slice:":4" %}
+                    #{{ t.pk }} ({{ t.dispatched_at|timesince }}){% if not forloop.last %} · {% endif %}
                 {% endfor %}
-            </div>
-        </div>
-    </div>
+                {% if overdue_transfers|length > 4 %} · +{{ overdue_transfers|length|add:-4 }} yana{% endif %}
+            </small>
+        </span>
+        <span class="dash-alert__count">{{ overdue_transfers|length }}</span>
+    </a>
     {% endif %}
 
-    <!-- Status counts -->
-    <div class="row g-2 mb-3">
+    <!-- Status counts — bento KPI strip with click-to-filter -->
+    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Holat bo'yicha xulosa">
         {% for s, label in status_choices %}
-        <div class="col-md-3">
-            <a href="?status={{ s }}" class="card p-2 text-decoration-none
-                     {% if status == s %}border-primary{% endif %}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-muted small">
-                        {% if s == 'draft' %}<i class="bi bi-file-earmark text-secondary"></i>
-                        {% elif s == 'in_transit' %}<i class="bi bi-truck text-warning"></i>
-                        {% elif s == 'received' %}<i class="bi bi-check-circle text-success"></i>
-                        {% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}
-                        {{ label }}
-                    </span>
-                    <strong class="h5 mb-0">{{ counts|get_item:s }}</strong>
-                </div>
-            </a>
-        </div>
+            {% if s == 'draft' %}{% with tone='slate' icon='bi-file-earmark' %}
+                <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                    <div class="dash-kpi__head">
+                        <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
+                    </div>
+                    <div class="dash-kpi__value">
+                        <span data-countup="{{ counts|get_item:s|default:0 }}">{{ counts|get_item:s|default:0 }}</span>
+                    </div>
+                </a>
+            {% endwith %}
+            {% elif s == 'in_transit' %}{% with tone='amber' icon='bi-truck' %}
+                <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                    <div class="dash-kpi__head">
+                        <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
+                    </div>
+                    <div class="dash-kpi__value">
+                        <span data-countup="{{ counts|get_item:s|default:0 }}">{{ counts|get_item:s|default:0 }}</span>
+                    </div>
+                </a>
+            {% endwith %}
+            {% elif s == 'received' %}{% with tone='success' icon='bi-check-circle' %}
+                <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                    <div class="dash-kpi__head">
+                        <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
+                    </div>
+                    <div class="dash-kpi__value" style="color: var(--srt-success);">
+                        <span data-countup="{{ counts|get_item:s|default:0 }}">{{ counts|get_item:s|default:0 }}</span>
+                    </div>
+                </a>
+            {% endwith %}
+            {% else %}{% with tone='danger' icon='bi-x-circle' %}
+                <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                    <div class="dash-kpi__head">
+                        <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
+                    </div>
+                    <div class="dash-kpi__value" style="color: var(--srt-danger);">
+                        <span data-countup="{{ counts|get_item:s|default:0 }}">{{ counts|get_item:s|default:0 }}</span>
+                    </div>
+                </a>
+            {% endwith %}
+            {% endif %}
         {% endfor %}
-    </div>
+    </section>
 
     <!-- Filtrlar -->
     <form method="get" class="card p-3 mb-3">

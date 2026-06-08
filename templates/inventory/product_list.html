@@ -24,6 +24,51 @@
         </div>
     </header>
 
+    <!-- Katalog xulosasi (filtrlangan ro'yxat asosida) -->
+    {% if products %}
+    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Katalog xulosasi">
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-box"></i> Mahsulot turlari</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ products|length }}">{{ products|length }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>filtrlangan ro'yxatda</span></div>
+        </article>
+
+        <article class="dash-kpi" data-tone="success">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-check2-circle"></i> Zaxirada bor</span>
+            </div>
+            <div class="dash-kpi__value" style="color: var(--srt-success);">
+                <span>{{ products|in_stock_count }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>qoldiq &gt; 0</span></div>
+        </article>
+
+        <article class="dash-kpi" data-tone="amber">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-exclamation-triangle"></i> Past zaxira</span>
+            </div>
+            <div class="dash-kpi__value" style="color: var(--srt-warning);">
+                <span>{{ products|low_stock_count }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>1–3 dona qolgan</span></div>
+        </article>
+
+        <article class="dash-kpi" data-tone="danger">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-x-octagon"></i> Tugagan</span>
+            </div>
+            <div class="dash-kpi__value" style="color: var(--srt-danger);">
+                <span>{{ products|out_of_stock_count }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>qoldiq = 0</span></div>
+        </article>
+    </section>
+    {% endif %}
+
     <!-- Filtrlar -->
     <form method="get" class="card p-3 mb-3">
         <div class="row g-2">
