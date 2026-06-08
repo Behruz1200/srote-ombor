@@ -996,6 +996,91 @@
         return new Intl.NumberFormat('uz-UZ').format(n || 0) + " so'm";
     }
 
+    /* ───────── Executive Liquid Glass chart helpers ─────────────────
+       Gradient + soft-shadow + glass-tooltip preset used by every chart
+       below to lift Chart.js out of its default flat look. */
+    function vGradient(ctx, area, color) {
+        if (!area) return color;
+        const g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+        g.addColorStop(0,   hexToRgba(color, 0.95));
+        g.addColorStop(0.7, hexToRgba(color, 0.65));
+        g.addColorStop(1,   hexToRgba(color, 0.30));
+        return g;
+    }
+    function hGradient(ctx, area, color) {
+        if (!area) return color;
+        const g = ctx.createLinearGradient(area.left, 0, area.right, 0);
+        g.addColorStop(0, hexToRgba(color, 0.92));
+        g.addColorStop(1, hexToRgba(color, 0.55));
+        return g;
+    }
+    function areaFill(ctx, area, color) {
+        if (!area) return hexToRgba(color, 0.10);
+        const g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+        g.addColorStop(0,    hexToRgba(color, 0.34));
+        g.addColorStop(0.55, hexToRgba(color, 0.10));
+        g.addColorStop(1,    hexToRgba(color, 0));
+        return g;
+    }
+
+    /* Glass tooltip preset — applies to every chart for consistency */
+    const glassTooltip = {
+        backgroundColor: isDark ? 'rgba(15,18,28,0.94)' : 'rgba(11,13,18,0.94)',
+        titleColor: '#FFFFFF',
+        bodyColor:  '#FFFFFF',
+        borderColor: 'rgba(255,255,255,0.08)',
+        borderWidth: 1,
+        padding: 12, boxPadding: 6,
+        cornerRadius: 12, displayColors: true,
+        boxWidth: 8, boxHeight: 8, useBorderRadius: true, boxBorderRadius: 3,
+        titleFont: { family: 'Fira Sans', weight: 700, size: 12 },
+        bodyFont:  { family: 'Fira Code', size: 12 },
+    };
+
+    /* Dataset-scoped drop-shadow plugin — opt-in via
+       options.plugins.dropShadow = { 0: { color, blur, offsetY } }   */
+    const dropShadow = {
+        id: 'dropShadow',
+        beforeDatasetDraw(chart, args, opts) {
+            const cfg = opts && opts[args.index];
+            if (!cfg) return;
+            const { ctx } = chart;
+            ctx.save();
+            ctx.shadowColor   = cfg.color   || 'rgba(0,0,0,0.18)';
+            ctx.shadowBlur    = cfg.blur    || 10;
+            ctx.shadowOffsetY = cfg.offsetY || 4;
+        },
+        afterDatasetDraw(chart, args, opts) {
+            if (opts && opts[args.index]) chart.ctx.restore();
+        }
+    };
+
+    /* Center-text plugin for doughnut — shows total + label */
+    const centerText = {
+        id: 'centerText',
+        afterDraw(chart, args, opts) {
+            if (!opts || !opts.text) return;
+            const { ctx, chartArea: a } = chart;
+            if (!a) return;
+            const cx = (a.left + a.right) / 2;
+            const cy = (a.top + a.bottom) / 2;
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = opts.titleFont || '700 22px "Fira Code"';
+            ctx.fillStyle = opts.color || fg;
+            ctx.fillText(opts.text, cx, cy - 9);
+            if (opts.subtext) {
+                ctx.font = opts.subFont || '500 11px "Fira Sans"';
+                ctx.fillStyle = opts.subColor || muted;
+                ctx.fillText(opts.subtext, cx, cy + 12);
+            }
+            ctx.restore();
+        }
+    };
+
+    Chart.register(dropShadow, centerText);
+
     /* ──────────── Forecast (line, actual + dashed predicted) ──────── */
     (function() {
         const el = document.getElementById('forecastChart');
@@ -1013,12 +1098,23 @@
             type: 'line',
             data: { labels, datasets: [
                 {label: 'Haqiqiy (90 kun)', data: actualSeries,
-                 borderColor: success, backgroundColor: hexToRgba(success, 0.10),
-                 tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2,
+                 borderColor: success,
+                 backgroundColor: ctx => areaFill(ctx.chart.ctx, ctx.chart.chartArea, success),
+                 tension: 0.4, fill: true,
+                 pointRadius: 0, pointHoverRadius: 6,
+                 pointHoverBackgroundColor: '#FFFFFF',
+                 pointHoverBorderColor: success,
+                 pointHoverBorderWidth: 3,
+                 borderWidth: 2.5,
                  datalabels: { display: false }},
                 {label: 'Bashorat (30 kun)', data: forecastSeries,
-                 borderColor: danger, borderDash: [6, 4], tension: 0.3,
-                 fill: false, pointRadius: 0, borderWidth: 2,
+                 borderColor: danger, borderDash: [6, 4], tension: 0.4,
+                 fill: false,
+                 pointRadius: 0, pointHoverRadius: 5,
+                 pointHoverBackgroundColor: '#FFFFFF',
+                 pointHoverBorderColor: danger,
+                 pointHoverBorderWidth: 3,
+                 borderWidth: 2,
                  datalabels: {
                     display: ctx => {
                         const v = ctx.dataset.data[ctx.dataIndex];
@@ -1028,24 +1124,43 @@
                         // First forecast point, the last, and every 10th in between
                         return idx === last || idx === actualValues.length || idx % 10 === 0;
                     },
-                    align: 'top', anchor: 'end', offset: 4,
+                    align: 'top', anchor: 'end', offset: 6,
                     color: danger,
-                    backgroundColor: isDark ? 'rgba(20,25,38,0.7)' : 'rgba(255,255,255,0.85)',
-                    borderRadius: 3, padding: { top: 1, bottom: 1, left: 4, right: 4 },
+                    backgroundColor: isDark ? 'rgba(20,25,38,0.78)' : 'rgba(255,255,255,0.94)',
+                    borderRadius: 6, padding: { top: 3, bottom: 3, left: 6, right: 6 },
+                    font: { family: 'Fira Code', size: 10, weight: 600 },
                     formatter: shortNum
                  }},
             ]},
             options: {
                 responsive: true, maintainAspectRatio: false,
-                layout: { padding: { top: 18 } },
+                layout: { padding: { top: 22, bottom: 4 } },
                 interaction: { mode: 'index', intersect: false },
                 scales: {
-                    y: gridScale({ ticks: { color: muted, callback: somTickCb } }),
-                    x: gridScale({ ticks: { color: muted, maxTicksLimit: 12 } })
+                    y: Object.assign(gridScale(), {
+                        border: { display: false },
+                        ticks: { color: muted, callback: somTickCb,
+                                 font: { family: 'Fira Code', size: 10 } }
+                    }),
+                    x: Object.assign(gridScale(), {
+                        border: { display: false },
+                        grid: { color: gridColor, drawTicks: false },
+                        ticks: { color: muted, maxTicksLimit: 12, maxRotation: 0,
+                                 font: { family: 'Fira Code', size: 10 } }
+                    })
                 },
-                plugins: { tooltip: { callbacks: {
-                    label: c => c.raw == null ? null : c.dataset.label + ': ' + fmtSom(c.raw)
-                } } }
+                plugins: {
+                    legend: { labels: { usePointStyle: true, boxWidth: 8, padding: 14 } },
+                    dropShadow: {
+                        0: { color: hexToRgba(success, 0.28), blur: 14, offsetY: 6 }
+                    },
+                    tooltip: Object.assign({}, glassTooltip, {
+                        callbacks: {
+                            label: c => c.raw == null ? null
+                                : c.dataset.label + ': ' + fmtSom(c.raw)
+                        }
+                    })
+                }
             }
         });
     })();
@@ -1062,33 +1177,74 @@
                     label: "Daromad (so'm)",
                     data: {{ daily_revenue|safe }},
                     borderColor: primary,
-                    backgroundColor: hexToRgba(primary, 0.10),
-                    fill: true, tension: 0.3, yAxisID: 'y',
-                    pointRadius: 0, borderWidth: 2,
+                    backgroundColor: ctx => areaFill(ctx.chart.ctx, ctx.chart.chartArea, primary),
+                    fill: true, tension: 0.4, yAxisID: 'y',
+                    pointRadius: 0, pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#FFFFFF',
+                    pointHoverBorderColor: primary,
+                    pointHoverBorderWidth: 3,
+                    borderWidth: 2.5,
                     datalabels: {
-                        display: 'auto', align: 'top', anchor: 'end', offset: 4,
-                        color: primary, formatter: shortNum
+                        display: 'auto', align: 'top', anchor: 'end', offset: 6,
+                        color: primary,
+                        backgroundColor: isDark ? 'rgba(20,25,38,0.78)' : 'rgba(255,255,255,0.94)',
+                        borderRadius: 6,
+                        padding: { top: 3, bottom: 3, left: 6, right: 6 },
+                        font: { family: 'Fira Code', size: 10, weight: 600 },
+                        formatter: shortNum
                     }
                 }, {
                     label: 'Sotilgan dona',
                     data: {{ daily_qty|safe }},
-                    borderColor: accent, tension: 0.3, yAxisID: 'y1',
-                    pointRadius: 0, borderWidth: 2,
+                    borderColor: accent, tension: 0.4, yAxisID: 'y1',
+                    backgroundColor: hexToRgba(accent, 0.06),
+                    pointRadius: 0, pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#FFFFFF',
+                    pointHoverBorderColor: accent,
+                    pointHoverBorderWidth: 3,
+                    borderWidth: 2,
+                    borderDash: [4, 4],
                     datalabels: { display: false }
                 }],
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
-                layout: { padding: { top: 18 } },
+                layout: { padding: { top: 26, bottom: 4 } },
+                plugins: {
+                    tooltip: Object.assign({}, glassTooltip, {
+                        callbacks: {
+                            label: c => c.dataset.yAxisID === 'y1'
+                                ? c.dataset.label + ': ' + c.parsed.y + ' dona'
+                                : c.dataset.label + ': ' + fmtSom(c.parsed.y)
+                        }
+                    }),
+                    legend: { labels: { usePointStyle: true, boxWidth: 8, padding: 14 } },
+                    dropShadow: {
+                        0: { color: hexToRgba(primary, 0.28), blur: 14, offsetY: 6 }
+                    },
+                },
                 scales: {
                     y:  Object.assign(gridScale(), { position: 'left',
-                        ticks: { color: muted, callback: somTickCb },
-                        title: { display: true, text: "so'm", color: muted } }),
-                    y1: { position: 'right', grid: { drawOnChartArea: false },
-                        ticks: { color: muted },
-                        title: { display: true, text: 'dona', color: muted } },
-                    x:  gridScale()
+                        border: { display: false },
+                        ticks: { color: muted, callback: somTickCb,
+                                 font: { family: 'Fira Code', size: 10 } },
+                        title: { display: true, text: "so'm", color: muted,
+                                 font: { family: 'Fira Sans', size: 11 } } }),
+                    y1: { position: 'right',
+                        grid: { drawOnChartArea: false },
+                        border: { display: false },
+                        ticks: { color: muted,
+                                 font: { family: 'Fira Code', size: 10 } },
+                        title: { display: true, text: 'dona', color: muted,
+                                 font: { family: 'Fira Sans', size: 11 } } },
+                    x:  Object.assign(gridScale(), {
+                        border: { display: false },
+                        grid: { color: gridColor, drawTicks: false },
+                        ticks: { color: muted, maxRotation: 0, autoSkip: true,
+                                 autoSkipPadding: 12,
+                                 font: { family: 'Fira Code', size: 10 } }
+                    })
                 },
             },
         });
@@ -1098,39 +1254,68 @@
     (function() {
         const el = document.getElementById('branchChart');
         if (!el) return;
+        const labels = [{% for b in by_branch %}"{{ b.branch__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+        const values = [{% for b in by_branch %}{{ b.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}];
+        const total  = values.reduce((s, v) => s + (v||0), 0);
         new Chart(el, {
             type: 'doughnut',
             data: {
-                labels: [{% for b in by_branch %}"{{ b.branch__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                labels,
                 datasets: [{
-                    data: [{% for b in by_branch %}{{ b.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    data: values,
                     backgroundColor: PALETTE,
+                    hoverBackgroundColor: PALETTE.map(c => hexToRgba(c, 0.92)),
                     borderColor: isDark ? '#151A26' : '#FFFFFF',
-                    borderWidth: 2,
+                    borderWidth: 3,
+                    borderRadius: 6,
+                    spacing: 4,
+                    hoverOffset: 12,
+                    offset: 2,
                 }],
             },
-            options: { responsive: true, maintainAspectRatio: false,
-                cutout: '55%',
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                cutout: '68%',
+                layout: { padding: 12 },
                 plugins: {
-                    tooltip: { callbacks: { label: c => c.label + ': ' + fmtSom(c.parsed) } },
+                    tooltip: Object.assign({}, glassTooltip, {
+                        callbacks: {
+                            label: c => {
+                                const pct = total ? (c.parsed/total*100).toFixed(1) : 0;
+                                return c.label + ': ' + fmtSom(c.parsed) + '  (' + pct + '%)';
+                            }
+                        }
+                    }),
+                    legend: {
+                        position: 'bottom',
+                        labels: { usePointStyle: true, boxWidth: 8, padding: 14,
+                                  color: muted, font: { family: 'Fira Sans', size: 11 } }
+                    },
+                    centerText: {
+                        text: shortNum(total),
+                        subtext: "jami so'm",
+                        titleFont: '700 22px "Fira Code"',
+                        subFont:   '500 10px "Fira Sans"',
+                        color: fg, subColor: muted
+                    },
+                    dropShadow: {
+                        0: { color: 'rgba(11,13,18,0.18)', blur: 14, offsetY: 6 }
+                    },
                     datalabels: {
-                        // Inside-slice labels — only 3 branches, no overlap risk.
+                        // Inside-slice labels — only show for slices ≥8%.
                         display: ctx => {
                             const v = ctx.dataset.data[ctx.dataIndex] || 0;
-                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
                             return total > 0 && (v / total) >= 0.08;
                         },
                         anchor: 'center', align: 'center',
                         color: '#FFFFFF',
                         textStrokeColor: 'rgba(0,0,0,0.45)',
-                        textStrokeWidth: 2,
+                        textStrokeWidth: 3,
                         font: { family: 'Fira Code', size: 13, weight: 700 },
                         textAlign: 'center',
-                        formatter: (v, ctx) => {
-                            const val = v || 0;
-                            const total = ctx.dataset.data.reduce((a,b) => a + (b||0), 0);
-                            const pct = total ? Math.round(val/total*100) : 0;
-                            return shortNum(val) + '\n' + pct + '%';
+                        formatter: (v) => {
+                            const pct = total ? Math.round(v/total*100) : 0;
+                            return pct + '%';
                         },
                     }
                 }
@@ -1146,22 +1331,46 @@
             type: 'bar',
             data: {
                 labels: [...Array(24).keys()].map(h => h + ':00'),
-                datasets: [{ label: 'Sotilgan dona',
+                datasets: [{
+                    label: 'Sotilgan dona',
                     data: {{ hour_buckets|safe }},
-                    backgroundColor: primary,
-                    borderRadius: 4, maxBarThickness: 22 }],
+                    backgroundColor: ctx => vGradient(ctx.chart.ctx, ctx.chart.chartArea, primary),
+                    hoverBackgroundColor: ctx => vGradient(ctx.chart.ctx, ctx.chart.chartArea, '#7C7CE6'),
+                    borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 2, bottomRight: 2 },
+                    borderSkipped: false,
+                    maxBarThickness: 22,
+                }],
             },
-            options: { responsive: true, maintainAspectRatio: false,
-                layout: { padding: { top: 18 } },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                layout: { padding: { top: 22, bottom: 4 } },
                 plugins: {
                     legend: { display: false },
+                    tooltip: Object.assign({}, glassTooltip, {
+                        callbacks: { label: c => c.parsed.y + ' dona' }
+                    }),
+                    dropShadow: {
+                        0: { color: hexToRgba(primary, 0.30), blur: 10, offsetY: 4 }
+                    },
                     datalabels: {
                         display: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) > 0,
-                        anchor: 'end', align: 'top', offset: 2,
-                        color: muted, formatter: shortNum
+                        anchor: 'end', align: 'top', offset: 4,
+                        color: fg,
+                        font: { family: 'Fira Code', size: 10, weight: 600 },
+                        formatter: shortNum
                     }
                 },
-                scales: { x: gridScale(), y: gridScale() }
+                scales: {
+                    x: Object.assign(gridScale(), {
+                        grid: { display: false },
+                        border: { display: false },
+                        ticks: { color: muted, font: { family: 'Fira Code', size: 10 } }
+                    }),
+                    y: Object.assign(gridScale(), {
+                        border: { display: false },
+                        ticks: { color: muted, font: { family: 'Fira Code', size: 10 } }
+                    })
+                }
             }
         });
     })();
@@ -1174,22 +1383,46 @@
             type: 'bar',
             data: {
                 labels: {{ weekday_labels|safe }},
-                datasets: [{ label: 'Sotilgan dona',
+                datasets: [{
+                    label: 'Sotilgan dona',
                     data: {{ weekday_buckets|safe }},
-                    backgroundColor: accent,
-                    borderRadius: 4, maxBarThickness: 32 }],
+                    backgroundColor: ctx => vGradient(ctx.chart.ctx, ctx.chart.chartArea, accent),
+                    hoverBackgroundColor: ctx => vGradient(ctx.chart.ctx, ctx.chart.chartArea, '#F59E0B'),
+                    borderRadius: { topLeft: 10, topRight: 10, bottomLeft: 2, bottomRight: 2 },
+                    borderSkipped: false,
+                    maxBarThickness: 38,
+                }],
             },
-            options: { responsive: true, maintainAspectRatio: false,
-                layout: { padding: { top: 18 } },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                layout: { padding: { top: 22, bottom: 4 } },
                 plugins: {
                     legend: { display: false },
+                    tooltip: Object.assign({}, glassTooltip, {
+                        callbacks: { label: c => c.parsed.y + ' dona' }
+                    }),
+                    dropShadow: {
+                        0: { color: hexToRgba(accent, 0.30), blur: 10, offsetY: 4 }
+                    },
                     datalabels: {
                         display: ctx => (ctx.dataset.data[ctx.dataIndex] || 0) > 0,
-                        anchor: 'end', align: 'top', offset: 2,
-                        color: muted, formatter: shortNum
+                        anchor: 'end', align: 'top', offset: 4,
+                        color: fg,
+                        font: { family: 'Fira Code', size: 11, weight: 600 },
+                        formatter: shortNum
                     }
                 },
-                scales: { x: gridScale(), y: gridScale() }
+                scales: {
+                    x: Object.assign(gridScale(), {
+                        grid: { display: false },
+                        border: { display: false },
+                        ticks: { color: muted, font: { family: 'Fira Sans', size: 11, weight: 500 } }
+                    }),
+                    y: Object.assign(gridScale(), {
+                        border: { display: false },
+                        ticks: { color: muted, font: { family: 'Fira Code', size: 10 } }
+                    })
+                }
             }
         });
     })();
@@ -1205,6 +1438,7 @@
                             .sort((a, b) => b.v - a.v)
                             .slice(0, 10);
         const total = pairs.reduce((s, p) => s + p.v, 0);
+        const colors = pairs.map((_, i) => PALETTE[i % PALETTE.length]);
         new Chart(el, {
             type: 'bar',
             data: {
@@ -1212,27 +1446,41 @@
                 datasets: [{
                     label: 'Daromad',
                     data: pairs.map(p => p.v),
-                    backgroundColor: pairs.map((_, i) => PALETTE[i % PALETTE.length]),
-                    borderRadius: 4,
-                    maxBarThickness: 22,
+                    backgroundColor: ctx => {
+                        const c = colors[ctx.dataIndex] || primary;
+                        return hGradient(ctx.chart.ctx, ctx.chart.chartArea, c);
+                    },
+                    hoverBackgroundColor: ctx => {
+                        const c = colors[ctx.dataIndex] || primary;
+                        return hexToRgba(c, 0.95);
+                    },
+                    borderRadius: { topRight: 8, bottomRight: 8, topLeft: 2, bottomLeft: 2 },
+                    borderSkipped: false,
+                    maxBarThickness: 26,
                 }],
             },
             options: {
                 indexAxis: 'y',
                 responsive: true, maintainAspectRatio: false,
-                layout: { padding: { right: 90 } },  // room for end labels
+                layout: { padding: { right: 110, top: 4, bottom: 4 } },
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
+                    tooltip: Object.assign({}, glassTooltip, {
                         callbacks: {
-                            label: c => fmtSom(c.raw) + ' (' + (total
-                                ? Math.round(c.raw/total*100) : 0) + '%)'
+                            label: c => fmtSom(c.raw) + '  ('
+                                + (total ? Math.round(c.raw/total*100) : 0) + '%)'
                         }
+                    }),
+                    dropShadow: {
+                        0: { color: 'rgba(11,13,18,0.18)', blur: 10, offsetY: 4 }
                     },
                     datalabels: {
-                        anchor: 'end', align: 'end', offset: 6,
+                        anchor: 'end', align: 'end', offset: 8,
                         clip: false,
                         color: fg,
+                        backgroundColor: isDark ? 'rgba(20,25,38,0.0)' : 'rgba(255,255,255,0.0)',
+                        borderRadius: 6,
+                        padding: { top: 2, bottom: 2, left: 6, right: 6 },
                         font: { family: 'Fira Code', size: 11, weight: 600 },
                         formatter: v => {
                             const val = v || 0;
@@ -1243,11 +1491,15 @@
                 },
                 scales: {
                     x: Object.assign(gridScale(), {
-                        ticks: { color: muted, callback: somTickCb }
+                        border: { display: false },
+                        grid: { color: gridColor, drawTicks: false },
+                        ticks: { color: muted, callback: somTickCb,
+                                 font: { family: 'Fira Code', size: 10 } }
                     }),
                     y: { grid: { display: false },
-                         ticks: { color: muted, autoSkip: false,
-                                  font: { family: 'Fira Sans' } } }
+                         border: { display: false },
+                         ticks: { color: fg, autoSkip: false,
+                                  font: { family: 'Fira Sans', size: 12, weight: 500 } } }
                 }
             }
         });
