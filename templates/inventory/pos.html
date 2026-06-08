@@ -194,10 +194,119 @@
     outline: 2px solid var(--srt-primary);
     outline-offset: 2px;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   POS header collapse — saves vertical real-estate for cashiers
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Position the collapse chevron inside the aurora hero */
+.pos-header { position: relative; }
+
+/* Floating chevron toggle, shared style for both states */
+.pos-header-toggle {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.55rem;
+    z-index: 5;
+    width: 30px; height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--srt-radius-pill);
+    border: 1px solid var(--srt-border);
+    background: rgba(255,255,255,0.6);
+    color: var(--srt-fg-muted);
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: background var(--srt-trans-fast),
+                color var(--srt-trans-fast),
+                transform var(--srt-trans-fast);
+}
+.pos-header-toggle:hover {
+    background: var(--srt-surface);
+    color: var(--srt-primary);
+    transform: translateY(-1px);
+}
+.pos-header-toggle:active { transform: scale(0.92); }
+[data-bs-theme="dark"] .pos-header-toggle {
+    background: rgba(20,25,38,0.55);
+    color: var(--srt-fg-muted);
+}
+
+/* ── Slim rail shown when header is collapsed ── */
+.pos-header-rail {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0.95rem;
+    margin-bottom: 0.85rem;
+    border-radius: var(--srt-radius-pill);
+    background: var(--srt-surface);
+    border: 1px solid var(--srt-border);
+    box-shadow: var(--srt-shadow-xs);
+    font-size: 0.86rem;
+    color: var(--srt-fg);
+    min-height: 42px;
+}
+.pos-header-rail__main {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.pos-header-rail__main strong { font-weight: 600; }
+.pos-header-rail__sep { opacity: 0.4; }
+.pos-header-rail__clock {
+    font-family: var(--srt-font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--srt-fg-muted);
+}
+.pos-header-rail .dash-pulse { animation-duration: 2.4s; }
+
+/* Toggle on the rail uses static position (no absolute) */
+.pos-header-rail .pos-header-toggle {
+    position: static;
+    background: var(--srt-surface-2);
+}
+
+/* Collapsed state: hide hero, show rail */
+.pos-page-collapsed .pos-header { display: none; }
+.pos-page-collapsed .pos-header-rail { display: flex; }
 </style>
 
 <div class="container-fluid px-3 dash-page">
-    <header class="dash-hero" style="margin-bottom: 1rem;">
+    <!-- Collapsed header rail — visible only when posHeader is collapsed.
+         Keeps essential context (POS · branch · shift · clock) on a slim
+         bar and exposes the expand chevron. -->
+    <div class="pos-header-rail" id="posHeaderRail" role="region" aria-label="POS xulosa">
+        <div class="pos-header-rail__main">
+            <span class="dash-pulse"></span>
+            <strong><i class="bi bi-upc-scan"></i>&nbsp; POS</strong>
+            <span class="pos-header-rail__sep">·</span>
+            <span><i class="bi bi-building"></i> {{ branch.name }}</span>
+            {% if shift %}
+                <span class="pos-header-rail__sep">·</span>
+                <span class="dash-pill dash-pill--success" style="padding: 0.12rem 0.45rem;">
+                    <i class="bi bi-circle-fill"></i>&nbsp; #{{ shift.pk }}
+                </span>
+            {% endif %}
+            <span class="pos-header-rail__sep">·</span>
+            <span class="pos-header-rail__clock" id="posClockRail">--:--</span>
+        </div>
+        <button type="button" class="pos-header-toggle" id="posHeaderExpand"
+                title="Sarlavhani ko'rsatish (Alt+H)" aria-label="Sarlavhani ko'rsatish">
+            <i class="bi bi-chevron-down"></i>
+        </button>
+    </div>
+
+    <header class="dash-hero pos-header" id="posHeader" style="margin-bottom: 1rem;">
+        <button type="button" class="pos-header-toggle pos-header-toggle--collapse" id="posHeaderCollapse"
+                title="Sarlavhani yashirish (Alt+H)" aria-label="Sarlavhani yashirish">
+            <i class="bi bi-chevron-up"></i>
+        </button>
         <div class="dash-hero__glow"></div>
         <div class="dash-hero__inner" style="padding: 1rem 1.25rem; align-items: center;">
             <div class="dash-hero__heading">
@@ -2268,13 +2377,48 @@ if (drawerBtn) {
     window.addEventListener('srote:lock-now', lock);
 })();
 
-// Clock
+// Clock — updates both the hero clock and the collapsed-rail clock
 function tickClock() {
     const d = new Date();
-    document.getElementById('posClock').textContent =
-        `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const hero = document.getElementById('posClock');
+    const rail = document.getElementById('posClockRail');
+    if (hero) hero.textContent = t;
+    if (rail) rail.textContent = t;
 }
 setInterval(tickClock, 30000); tickClock();
+
+// ── POS header collapse toggle ────────────────────────────────────
+// Cashiers can hide the page header to gain vertical space for cart /
+// payment. State persists in localStorage; Alt+H is the keyboard
+// shortcut. Collapsed view keeps essential context on a slim rail.
+(function() {
+    const KEY = 'srote_pos_header_collapsed';
+    const root = document.documentElement;
+    const setCollapsed = (on, persist) => {
+        document.body.classList.toggle('pos-page-collapsed', !!on);
+        if (persist !== false) {
+            try { localStorage.setItem(KEY, on ? '1' : '0'); } catch(e) {}
+        }
+    };
+    // Apply saved state on load
+    try {
+        if (localStorage.getItem(KEY) === '1') setCollapsed(true, false);
+    } catch(e) {}
+
+    const collapseBtn = document.getElementById('posHeaderCollapse');
+    const expandBtn   = document.getElementById('posHeaderExpand');
+    if (collapseBtn) collapseBtn.addEventListener('click', () => setCollapsed(true));
+    if (expandBtn)   expandBtn.addEventListener('click',   () => setCollapsed(false));
+
+    // Alt+H shortcut — toggle
+    document.addEventListener('keydown', (e) => {
+        if (e.altKey && (e.key === 'h' || e.key === 'H')) {
+            e.preventDefault();
+            setCollapsed(!document.body.classList.contains('pos-page-collapsed'));
+        }
+    });
+})();
 
 // Restore saved cart from localStorage (H4 fix)
 if (Object.keys(cart).length > 0) {
