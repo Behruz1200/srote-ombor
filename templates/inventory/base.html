@@ -2470,6 +2470,180 @@
         .progress-bar.bg-warning { background: linear-gradient(90deg, #D97706, #F59E0B); }
         .progress-bar.bg-danger  { background: linear-gradient(90deg, #B91C1C, #EF4444); }
         .progress-bar.bg-info    { background: linear-gradient(90deg, #0284C7, #38BDF8); }
+
+        /* ════════════════════════════════════════════════════════════
+           DASH BRIDGE — apply executive Liquid Glass treatment to the
+           legacy .srt-* components inside any .dash-page container.
+           Lets a page opt into the dashboard's visual language by just
+           adding `dash-page` to its outer wrapper, without rewriting
+           markup. Bumps surface radius, softens borders, adds the
+           lifted KPI hover, gives the section heads the dash-card
+           rhythm and gradient-tints the first KPI as the "lead".
+           ════════════════════════════════════════════════════════════ */
+
+        /* Page header gets an Aurora glow strip behind it. */
+        .dash-page > .srt-page-header,
+        .dash-page > .srt-page-header-stack {
+            position: relative;
+            isolation: isolate;
+            background: var(--srt-surface);
+            border: 1px solid var(--srt-border);
+            border-radius: 16px;
+            padding: 1.25rem 1.4rem;
+            margin-bottom: 1.25rem;
+            overflow: hidden;
+        }
+        .dash-page > .srt-page-header::before,
+        .dash-page > .srt-page-header-stack::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: var(--dash-grad-aurora, radial-gradient(
+                ellipse at top left, rgba(91,91,214,0.16), transparent 55%),
+                radial-gradient(ellipse at top right, rgba(34,197,94,0.12), transparent 50%),
+                radial-gradient(ellipse at bottom, rgba(245,158,11,0.08), transparent 60%));
+            z-index: -1; pointer-events: none;
+        }
+        .dash-page > .srt-page-header .srt-h1,
+        .dash-page > .srt-page-header-stack .srt-h1 {
+            font-size: clamp(1.5rem, 2.4vw, 1.95rem);
+            letter-spacing: -0.02em;
+            font-weight: 700;
+        }
+
+        /* KPI grid → dash-kpis spacing + first card as the gradient lead */
+        .dash-page .srt-kpi-grid {
+            display: grid;
+            grid-template-columns: 1.6fr 1fr 1fr 1fr;
+            gap: 0.85rem;
+            margin-bottom: 1.4rem;
+        }
+        @media (max-width: 1100px) {
+            .dash-page .srt-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .dash-page .srt-kpi-grid > .srt-kpi:first-child { grid-column: 1 / -1; }
+        }
+        @media (max-width: 600px) {
+            .dash-page .srt-kpi-grid { grid-template-columns: 1fr; }
+            .dash-page .srt-kpi-grid > .srt-kpi:first-child { grid-column: auto; }
+        }
+        .dash-page .srt-kpi {
+            border-radius: 16px;
+            padding: 1.05rem 1.15rem;
+            border: 1px solid var(--srt-border);
+            box-shadow: 0 1px 2px rgba(11,13,18,0.04);
+            transition: transform 220ms cubic-bezier(0.22,1,0.36,1),
+                        box-shadow 220ms cubic-bezier(0.22,1,0.36,1);
+            overflow: hidden;
+            position: relative;
+            isolation: isolate;
+        }
+        .dash-page .srt-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 28px -10px rgba(11,13,18,0.18);
+        }
+        .dash-page .srt-kpi-value {
+            font-size: 1.7rem;
+            letter-spacing: -0.015em;
+        }
+        /* Subtle tone tint per position (parallels dashboard satellites) */
+        .dash-page .srt-kpi-grid > .srt-kpi:nth-child(2)::before,
+        .dash-page .srt-kpi-grid > .srt-kpi:nth-child(3)::before,
+        .dash-page .srt-kpi-grid > .srt-kpi:nth-child(4)::before {
+            content: ''; position: absolute; inset: 0; border-radius: inherit;
+            opacity: 0.45; z-index: -1; pointer-events: none;
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:nth-child(2)::before {
+            background: linear-gradient(160deg, rgba(91,91,214,0.10), transparent 60%);
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:nth-child(3)::before {
+            background: linear-gradient(160deg, rgba(245,158,11,0.10), transparent 60%);
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:nth-child(4)::before {
+            background: linear-gradient(160deg, rgba(100,116,139,0.08), transparent 60%);
+        }
+        /* Lead KPI — the first card becomes a gradient hero */
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child {
+            background: linear-gradient(135deg, #5B5BD6 0%, #8B5CF6 50%, #EC4899 100%);
+            color: #FFFFFF;
+            border-color: transparent;
+            box-shadow: 0 14px 44px -14px rgba(91,91,214,0.55);
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child::before { display: none; }
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child .srt-kpi-label,
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child .srt-kpi-meta {
+            color: rgba(255,255,255,0.88);
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child .srt-kpi-value {
+            color: #FFFFFF;
+            font-size: 2.1rem;
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child .srt-num,
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child strong {
+            color: #FFFFFF;
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child .srt-delta {
+            background: rgba(255,255,255,0.22) !important;
+            color: #FFFFFF !important;
+        }
+        .dash-page .srt-kpi-grid > .srt-kpi:first-child .srt-delta i { color: #FFFFFF; }
+
+        /* Sections → dash-card rhythm */
+        .dash-page .srt-section {
+            border-radius: 16px;
+            border: 1px solid var(--srt-border);
+            box-shadow: 0 1px 2px rgba(11,13,18,0.04);
+            background: var(--srt-surface);
+            overflow: hidden;
+            transition: box-shadow 220ms cubic-bezier(0.22,1,0.36,1);
+        }
+        .dash-page .srt-section:hover {
+            box-shadow: 0 6px 24px -10px rgba(11,13,18,0.12);
+        }
+        .dash-page .srt-section-head {
+            background: transparent;
+            border-bottom: 1px solid var(--srt-border);
+            padding: 1rem 1.15rem 0.9rem;
+        }
+        .dash-page .srt-section-head h2,
+        .dash-page .srt-section-head .srt-h2 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: -0.005em;
+        }
+        .dash-page .srt-section-head .srt-sub {
+            font-size: 0.82rem;
+            color: var(--srt-fg-muted);
+        }
+        .dash-page .srt-section-body { padding: 1.05rem 1.15rem 1.15rem; }
+        .dash-page .srt-section-body.flush { padding: 0; }
+
+        /* Data tables inside dash-page get a quieter, more readable look */
+        .dash-page .srt-data-table thead th {
+            font-size: 0.7rem;
+            letter-spacing: 0.06em;
+            padding: 0.6rem 0.95rem;
+        }
+        .dash-page .srt-data-table tbody td {
+            padding: 0.7rem 0.95rem;
+        }
+        .dash-page .srt-data-table tbody tr:hover {
+            background: var(--srt-surface-2);
+        }
+
+        /* Tag pills (period chips, filter labels) get the brighter
+           Linear-style active state on dash pages. */
+        .dash-page .srt-period-chips .btn-primary {
+            background: var(--srt-fg);
+            color: var(--srt-surface);
+            border-color: var(--srt-fg);
+        }
+        [data-bs-theme="dark"] .dash-page .srt-period-chips .btn-primary {
+            background: var(--srt-primary);
+            color: var(--srt-on-primary);
+            border-color: var(--srt-primary);
+        }
+
+        /* Section grids spacing — keep matching dash-page rhythm */
+        .dash-page .row.g-3 { --bs-gutter-y: 1rem; }
     </style>
 </head>
 <body>
