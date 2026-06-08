@@ -17,34 +17,39 @@
     </header>
     <div class="row justify-content-center">
         <div class="col-lg-6">
-            <div class="card p-4">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="alert alert-info py-2">
-                        <i class="bi bi-info-circle"></i>
-                        Boshlanganda tizim joriy ombor holatini snapshot oladi.
-                        Keyin har bir variant uchun sanab chiqilgan miqdorni kiritasiz.
-                        Tasdiqlasangiz, BranchStock yangilanadi.
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Filial</label>
-                        <select name="branch" class="form-select" required>
-                            <option value="">— tanlang —</option>
-                            {% for b in branches %}
-                                <option value="{{ b.id }}">{{ b.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Izoh (ixtiyoriy)</label>
-                        <input type="text" name="note" class="form-control"
-                               placeholder="Masalan: oylik inventarizatsiya">
-                    </div>
-                    <button type="submit" class="btn btn-success btn-lg w-100">
-                        <i class="bi bi-play-circle"></i> Boshlash
-                    </button>
-                </form>
-            </div>
+            <article class="dash-card">
+                <div class="dash-card__body dash-card__body--padded">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="dash-alert dash-alert--info mb-3" style="padding: 0.7rem 0.85rem;">
+                            <span class="dash-alert__icon"><i class="bi bi-info-circle"></i></span>
+                            <span class="dash-alert__text">
+                                <strong>Sessiya boshlanganda</strong>
+                                <small>Tizim joriy ombor holatini snapshot oladi. Keyin har bir variant uchun sanab chiqilgan miqdorni kiritasiz. Tasdiqlasangiz, BranchStock yangilanadi.</small>
+                            </span>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">Filial</label>
+                            <select name="branch" class="form-select" required>
+                                <option value="">— tanlang —</option>
+                                {% for b in branches %}
+                                    <option value="{{ b.id }}">{{ b.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
+                                Izoh <span style="color: var(--srt-fg-muted); font-weight: 400;">(ixtiyoriy)</span>
+                            </label>
+                            <input type="text" name="note" class="form-control"
+                                   placeholder="Masalan: oylik inventarizatsiya">
+                        </div>
+                        <button type="submit" class="dash-btn dash-btn--primary w-100" style="padding: 0.95rem; font-size: 1rem; justify-content: center;">
+                            <i class="bi bi-play-circle"></i> <span>Sessiyani boshlash</span>
+                        </button>
+                    </form>
+                </div>
+            </article>
         </div>
     </div>
 </div>

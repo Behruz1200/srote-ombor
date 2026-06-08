@@ -35,19 +35,24 @@
 
     <div class="row g-3">
         <div class="col-md-5">
-            <div class="card p-3">
-                <h5 class="mb-2">CSV faylni yuklash</h5>
+            <article class="dash-card">
+                <header class="dash-card__head">
+                    <h2 class="dash-card__title"><i class="bi bi-cloud-upload"></i> CSV faylni yuklash</h2>
+                </header>
+                <div class="dash-card__body dash-card__body--padded">
                 <form method="post" enctype="multipart/form-data" id="importForm">
                     {% csrf_token %}
                     <input type="hidden" name="entity" value="{{ entity }}">
                     <div class="mb-3">
-                        <label class="form-label">Fayl (.csv, UTF-8)</label>
+                        <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
+                            Fayl <span style="color: var(--srt-fg-muted); font-weight: 400;">(.csv, UTF-8)</span>
+                        </label>
                         <input type="file" name="csv_file" id="csvFile"
                                class="form-control" accept=".csv" required>
                         <small class="text-muted" id="fileMeta"></small>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100" id="submitBtn">
-                        <i class="bi bi-upload"></i> Import qilish
+                    <button type="submit" class="dash-btn dash-btn--primary w-100" id="submitBtn" style="padding: 0.85rem; justify-content: center;">
+                        <i class="bi bi-upload"></i> <span>Import qilish</span>
                     </button>
                 </form>
                 <div id="importProgress" class="alert alert-info mt-3 d-none">
@@ -90,12 +95,16 @@
                     <i class="bi bi-info-circle"></i> Birinchi qator — sarlavhalar.
                     Vergul (,) yoki nuqtali vergul (;) ishlatishi mumkin.
                 </small>
-            </div>
+                </div>
+            </article>
         </div>
 
         <div class="col-md-7">
-            <div class="card p-3">
-                <h5 class="mb-2">Format va misol</h5>
+            <article class="dash-card">
+                <header class="dash-card__head">
+                    <h2 class="dash-card__title"><i class="bi bi-file-text"></i> Format va misol</h2>
+                </header>
+                <div class="dash-card__body dash-card__body--padded">
 
                 {% if entity == 'products' %}
                 <p class="small text-muted">
@@ -147,18 +156,24 @@ KOY-0005,Sergeli Filiali,—,—,50,15000,25000</pre>
                     <i class="bi bi-download"></i> Bo'sh shablon yuklab olish
                 </a>
                 {% endif %}
-            </div>
+                </div>
+            </article>
         </div>
     </div>
 
-    <div class="card p-3 mt-3">
-        <h6 class="text-muted text-uppercase small mb-2">Maslahatlar</h6>
+    <article class="dash-card mt-3">
+        <header class="dash-card__head">
+            <h2 class="dash-card__title"><i class="bi bi-lightbulb"></i> Maslahatlar</h2>
+        </header>
+        <div class="dash-card__body dash-card__body--padded">
+        <h6 class="text-muted text-uppercase small mb-2" style="display:none;">Maslahatlar</h6>
         <ul class="small mb-0">
             <li>Excel'dan CSV'ga eksport qilganda <strong>UTF-8</strong>'ni tanlang (BOM bilan ham ishlaydi).</li>
             <li>Sonlarda <strong>vergul (,) o'rniga nuqta (.)</strong> ishlatiladi: <code>10.5</code>, <code>850000</code>.</li>
             <li>Kategoriya nomi mavjud bo'lmasa avtomatik yaratiladi.</li>
             <li>Sotuv shablon: <a href="{% url 'sales_list' %}?export=csv">/sales/?export=csv</a> dan tushirish va format namunasini ko'rish.</li>
         </ul>
-    </div>
+        </div>
+    </article>
 </div>
 {% endblock %}
