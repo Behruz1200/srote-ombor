@@ -210,6 +210,30 @@ DATABASES = {
     )
 }
 
+# SQLite has a single global write lock. Without a busy timeout, any
+# concurrent writer immediately raises "database is locked". A 20s
+# timeout lets requests queue gracefully — the same behaviour Postgres
+# gives us natively via row-level locks. Production runs Postgres so
+# this only affects local dev.
+if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+    DATABASES['default'].setdefault('OPTIONS', {})
+    DATABASES['default']['OPTIONS'].setdefault('timeout', 20)
+
+
+# ---------- Cache ----------
+# Per-process local memory cache. Each Gunicorn worker keeps its own copy —
+# acceptable here because we cache short-TTL aggregates (60s) where slight
+# drift between workers is fine. If we move to multi-host Render we should
+# switch to a shared backend (Redis / memcached / DB cache).
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'srote-default',
+        'TIMEOUT': 60,
+        'OPTIONS': {'MAX_ENTRIES': 5000},
+    }
+}
+
 
 AUTH_USER_MODEL = 'inventory.User'
 

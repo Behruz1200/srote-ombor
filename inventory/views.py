@@ -10,6 +10,7 @@ from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.core.cache import cache
 import json as _json
 from django.utils import timezone
 from datetime import timedelta, datetime, date
@@ -254,16 +255,24 @@ def lookup(request):
 
 # ---------- DASHBOARD ----------
 
-@admin_required
-def dashboard(request):
+DASHBOARD_CACHE_KEY = 'dashboard:hq:v1'
+DASHBOARD_CACHE_TTL = 60  # seconds — heavy aggregates only; recent_sales stays live
+
+
+def _dashboard_aggregates():
+    """Compute the cacheable, expensive part of the dashboard.
+
+    Returned dict is JSON-serializable (Branch model is keyed by id, looked up
+    on render). TTL is short (60s) so per-shift drift is invisible to users.
+    Invalidated explicitly when a SaleTransaction is saved (see signals.py).
+    """
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)
 
     def _day_range(d):
         tz = timezone.get_current_timezone()
         start = datetime.combine(d, datetime.min.time()).replace(tzinfo=tz)
-        end = start + timedelta(days=1)
-        return start, end
+        return start, start + timedelta(days=1)
 
     today_start, today_end = _day_range(today)
     yesterday_start, yesterday_end = _day_range(yesterday)
@@ -298,6 +307,92 @@ def dashboard(request):
     today_stats = _agg(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
     yesterday_stats = _agg(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
 
+    # 7-day trend — single annotated query
+    week_start = today_start - timedelta(days=6)
+    trend_qs = (
+        Sale.objects.filter(sold_at__gte=week_start, sold_at__lt=today_end)
+        .annotate(day=TruncDate('sold_at'))
+        .values('day')
+        .annotate(rev=Sum(revenue_expr), q=Sum('quantity'))
+    )
+    day_map = {r['day']: r for r in trend_qs}
+    trend_labels, trend_revenue, trend_qty = [], [], []
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        r = day_map.get(d) or {}
+        trend_labels.append(d.strftime('%a %d'))
+        trend_revenue.append(float(r.get('rev') or 0))
+        trend_qty.append(r.get('q') or 0)
+
+    # Inventory snapshot — one aggregate covers stock count + value
+    inv_totals = BranchStock.objects.aggregate(
+        s=Sum('stock_count'),
+        v=Sum(ExpressionWrapper(F('stock_count') * F('cost_price'),
+                                output_field=DecimalField(max_digits=14, decimal_places=2))),
+    )
+    total_stock = inv_totals['s'] or 0
+    stock_value = float(inv_totals['v'] or 0)
+
+    # Per-branch today — 2 aggregated queries, independent of branch count
+    rev_by_branch = {
+        r['branch_id']: r for r in
+        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)
+        .values('branch_id')
+        .annotate(
+            revenue=Sum(revenue_expr),
+            qty=Sum('quantity'),
+            txns=Count('transaction', distinct=True),
+        )
+    }
+    stock_by_branch = {
+        r['branch_id']: r['stock_count__sum']
+        for r in BranchStock.objects.values('branch_id').annotate(stock_count__sum=Sum('stock_count'))
+    }
+
+    branch_today_raw = [
+        {
+            'branch_id': bid,
+            'revenue': float((rev_by_branch.get(bid) or {}).get('revenue') or 0),
+            'qty': (rev_by_branch.get(bid) or {}).get('qty') or 0,
+            'txns': (rev_by_branch.get(bid) or {}).get('txns') or 0,
+            'stock': stock_by_branch.get(bid, 0),
+        }
+        for bid in Branch.objects.filter(is_active=True).values_list('id', flat=True)
+    ]
+
+    top_today = list(
+        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)
+        .values('variant__product__code', 'variant__product__name')
+        .annotate(qty=Sum('quantity'), revenue=Sum(revenue_expr))
+        .order_by('-qty')[:5]
+    )
+    for r in top_today:
+        r['revenue'] = float(r['revenue'] or 0)
+
+    return {
+        'today_iso': today.isoformat(),
+        'yesterday_iso': yesterday.isoformat(),
+        'today_stats': today_stats,
+        'yesterday_stats': yesterday_stats,
+        'trend_labels': trend_labels,
+        'trend_revenue': trend_revenue,
+        'trend_qty': trend_qty,
+        'total_stock': total_stock,
+        'stock_value': stock_value,
+        'branch_today_raw': branch_today_raw,
+        'top_today': top_today,
+    }
+
+
+@admin_required
+def dashboard(request):
+    agg = cache.get_or_set(DASHBOARD_CACHE_KEY, _dashboard_aggregates, DASHBOARD_CACHE_TTL)
+
+    today = date.fromisoformat(agg['today_iso'])
+    yesterday = date.fromisoformat(agg['yesterday_iso'])
+    today_stats = agg['today_stats']
+    yesterday_stats = agg['yesterday_stats']
+
     def _delta(now, prev):
         if not prev: return None
         return (now - prev) / prev * 100
@@ -309,54 +404,26 @@ def dashboard(request):
         'profit': _delta(today_stats['profit'], yesterday_stats['profit']),
     }
 
-    # 7-day trend chart
-    trend_labels = []
-    trend_revenue = []
-    trend_qty = []
-    for i in range(6, -1, -1):
-        d = today - timedelta(days=i)
-        ds, de = _day_range(d)
-        a = Sale.objects.filter(sold_at__gte=ds, sold_at__lt=de).aggregate(
-            r=Sum(revenue_expr), q=Sum('quantity'),
-        )
-        trend_labels.append(d.strftime('%a %d'))
-        trend_revenue.append(float(a['r'] or 0))
-        trend_qty.append(a['q'] or 0)
-
-    # Inventory snapshot
-    stocks = BranchStock.objects.all()
-    total_stock = stocks.aggregate(s=Sum('stock_count'))['s'] or 0
-    stock_value = stocks.aggregate(
-        v=Sum(ExpressionWrapper(F('stock_count') * F('cost_price'),
-                                output_field=DecimalField(max_digits=14, decimal_places=2)))
-    )['v'] or 0
-    total_products = Product.objects.count()
-    total_branches = Branch.objects.filter(is_active=True).count()
-
-    # Per-branch summary for today
+    # Hydrate branch_today_raw with live Branch objects (Branch model not cached
+    # in case is_active toggles during the 60s window)
+    active_branches = {b.id: b for b in Branch.objects.filter(is_active=True)}
     branch_today = []
-    for br in Branch.objects.filter(is_active=True):
-        b_sales = Sale.objects.filter(branch=br, sold_at__gte=today_start, sold_at__lt=today_end)
-        a = b_sales.aggregate(
-            r=Sum(revenue_expr), q=Sum('quantity'),
-            txns=Count('transaction', distinct=True),
-        )
-        b_stock = BranchStock.objects.filter(branch=br).aggregate(s=Sum('stock_count'))['s'] or 0
+    for row in agg['branch_today_raw']:
+        br = active_branches.get(row['branch_id'])
+        if not br:
+            continue
         branch_today.append({
             'branch': br,
-            'revenue': float(a['r'] or 0),
-            'qty': a['q'] or 0,
-            'txns': a['txns'] or 0,
-            'stock': b_stock,
+            'revenue': row['revenue'],
+            'qty': row['qty'],
+            'txns': row['txns'],
+            'stock': row['stock'],
         })
 
-    # Top 5 selling products today
-    top_today = list(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)
-        .values('variant__product__code', 'variant__product__name')
-        .annotate(qty=Sum('quantity'), revenue=Sum(revenue_expr))
-        .order_by('-qty')[:5])
+    total_products = Product.objects.count()
+    total_branches = len(active_branches)
 
-    # Attention widgets
+    # ---- Live (uncached) data: attention widgets + recent activity ----
     low_stock_count = BranchStock.objects.filter(stock_count__lte=3).count()
     low_stock_preview = list(BranchStock.objects.filter(stock_count__lte=3)
                              .select_related('variant__product', 'branch')
@@ -380,15 +447,15 @@ def dashboard(request):
         'today_stats': today_stats,
         'yesterday_stats': yesterday_stats,
         'deltas': deltas,
-        'trend_labels': trend_labels,
-        'trend_revenue': trend_revenue,
-        'trend_qty': trend_qty,
+        'trend_labels': agg['trend_labels'],
+        'trend_revenue': agg['trend_revenue'],
+        'trend_qty': agg['trend_qty'],
         'total_products': total_products,
         'total_branches': total_branches,
-        'total_stock': total_stock,
-        'stock_value': stock_value,
+        'total_stock': agg['total_stock'],
+        'stock_value': agg['stock_value'],
         'branch_today': branch_today,
-        'top_today': top_today,
+        'top_today': agg['top_today'],
         'low_stock_count': low_stock_count,
         'low_stock_preview': low_stock_preview,
         'out_of_stock_count': out_of_stock_count,
@@ -694,7 +761,14 @@ def product_detail(request, code):
     rev_30d = float(agg['rev'] or 0)
     txns_30d = agg['txns'] or 0
     daily_avg = sold_30d / 30 if sold_30d else 0
-    total_stock = product.total_stock() if callable(getattr(product, 'total_stock', None)) else 0
+    # Single aggregate covers both total stock + total inventory value (was 2 separate queries)
+    inv_agg = BranchStock.objects.filter(variant__product=product).aggregate(
+        s=Sum('stock_count'),
+        v=Sum(ExpressionWrapper(F('stock_count') * F('cost_price'),
+                                output_field=DecimalField(max_digits=14, decimal_places=2))),
+    )
+    total_stock = inv_agg['s'] or 0
+    total_value = float(inv_agg['v'] or 0)
     days_left = (total_stock / daily_avg) if daily_avg else None
 
     # Daily chart data
@@ -729,7 +803,7 @@ def product_detail(request, code):
 
     product_kpis = {
         'total_stock': total_stock,
-        'total_value': float(product.total_value()) if callable(getattr(product, 'total_value', None)) else 0,
+        'total_value': total_value,
         'sold_30d': sold_30d,
         'rev_30d': rev_30d,
         'txns_30d': txns_30d,
@@ -2593,8 +2667,11 @@ def pos_checkout(request):
         order_discount = 0
     discount_reason = (data.get('discount_reason') or '').strip()[:200]
 
-    # Validate stock + collect resolved BranchStock objects
-    resolved = []
+    # Parse line shape without touching the DB (input validation only).
+    # The stock check that *can* race is done inside the atomic block below
+    # with select_for_update, so two concurrent kassirs cannot both pass
+    # the qty check against the same row.
+    parsed_lines = []
     for ln in lines:
         try:
             sid = int(ln['stock_id'])
@@ -2605,38 +2682,7 @@ def pos_checkout(request):
             return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
         if qty <= 0 or price < 0:
             return JsonResponse({'ok': False, 'error': 'qty/narx noto\'g\'ri'}, status=400)
-        stock = BranchStock.objects.select_related('variant__product', 'branch') \
-            .filter(pk=sid, branch=branch).first()
-        if not stock:
-            return JsonResponse({'ok': False, 'error': f'stock {sid} topilmadi'}, status=400)
-        if qty > stock.stock_count:
-            err = (f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
-                   f"omborda faqat {stock.stock_count} ta bor, soʻrov {qty}")
-            # C2 fix: if this is an offline-queue replay, alert admin via Telegram
-            # and log to AuditLog — kassir's offline sale was rejected at sync time.
-            if data.get('is_offline_replay'):
-                try:
-                    from .notifications import send_telegram
-                    send_telegram(
-                        f"⚠️ <b>Offline sotuv konflikti</b>\n"
-                        f"Filial: {branch.name}\n"
-                        f"Kassir: {request.user.username}\n"
-                        f"Mahsulot: {stock.variant.product.code} "
-                        f"{stock.variant.size}/{stock.variant.color}\n"
-                        f"Soʻrov: {qty} dona · Omborda: {stock.stock_count}\n"
-                        f"Pul allaqachon kassada bo'lishi mumkin — manual reconcile kerak."
-                    )
-                    AuditLog.objects.create(
-                        user=request.user,
-                        username_snapshot=request.user.username,
-                        action=AuditLog.Action.UPDATE,
-                        model_name='OfflineConflict',
-                        object_repr=err[:200],
-                    )
-                except Exception:
-                    pass  # don't fail the response because of alert error
-            return JsonResponse({'ok': False, 'error': err}, status=400)
-        resolved.append((stock, qty, price, line_discount))
+        parsed_lines.append({'sid': sid, 'qty': qty, 'price': price, 'ld': line_discount})
 
     # Resolve / auto-create Customer by phone (most reliable key)
     customer = None
@@ -2670,32 +2716,88 @@ def pos_checkout(request):
     if payment_method == 'mixed' and not clean_breakdown:
         payment_method = 'cash'
 
-    with transaction.atomic():
-        txn = SaleTransaction.objects.create(
-            branch=branch,
-            sold_by=request.user,
-            payment_method=payment_method,
-            payment_breakdown=clean_breakdown,
-            customer=customer,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            note=note,
-            order_discount=order_discount,
-            discount_reason=discount_reason,
-            shift=open_shift,
-        )
-        for stock, qty, price, ld in resolved:
-            stock.stock_count = F('stock_count') - qty
-            stock.save()
-            Sale.objects.create(
-                transaction=txn,
-                variant=stock.variant, branch=stock.branch,
-                quantity=qty,
-                sale_price=price,
-                cost_at_sale=stock.cost_price,
-                line_discount=ld,
+    class _CheckoutAbort(Exception):
+        def __init__(self, payload, status=400):
+            self.payload = payload
+            self.status = status
+
+    try:
+        with transaction.atomic():
+            # Lock all referenced stocks first (sort by pk to avoid deadlocks
+            # when two checkouts overlap on the same items in different order).
+            sids = sorted({l['sid'] for l in parsed_lines})
+            locked = {
+                s.pk: s
+                for s in BranchStock.objects
+                    .select_for_update()
+                    .select_related('variant__product', 'branch')
+                    .filter(pk__in=sids, branch=branch)
+            }
+            for sid in sids:
+                if sid not in locked:
+                    raise _CheckoutAbort({'ok': False, 'error': f'stock {sid} topilmadi'})
+
+            # Re-validate quantities against the FRESHLY locked stock_count.
+            # No concurrent checkout can change it between this check and the
+            # F() deduction below — they queue on the row lock instead.
+            for ln in parsed_lines:
+                stock = locked[ln['sid']]
+                if ln['qty'] > stock.stock_count:
+                    err = (f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
+                           f"omborda faqat {stock.stock_count} ta bor, soʻrov {ln['qty']}")
+                    # C2: if this is an offline-queue replay, alert admin via Telegram
+                    # and log to AuditLog — kassir's offline sale was rejected at sync time.
+                    if data.get('is_offline_replay'):
+                        try:
+                            from .notifications import send_telegram
+                            send_telegram(
+                                f"⚠️ <b>Offline sotuv konflikti</b>\n"
+                                f"Filial: {branch.name}\n"
+                                f"Kassir: {request.user.username}\n"
+                                f"Mahsulot: {stock.variant.product.code} "
+                                f"{stock.variant.size}/{stock.variant.color}\n"
+                                f"Soʻrov: {ln['qty']} dona · Omborda: {stock.stock_count}\n"
+                                f"Pul allaqachon kassada bo'lishi mumkin — manual reconcile kerak."
+                            )
+                            AuditLog.objects.create(
+                                user=request.user,
+                                username_snapshot=request.user.username,
+                                action=AuditLog.Action.UPDATE,
+                                model_name='OfflineConflict',
+                                object_repr=err[:200],
+                            )
+                        except Exception:
+                            pass
+                    raise _CheckoutAbort({'ok': False, 'error': err})
+
+            txn = SaleTransaction.objects.create(
+                branch=branch,
                 sold_by=request.user,
+                payment_method=payment_method,
+                payment_breakdown=clean_breakdown,
+                customer=customer,
+                customer_name=customer_name,
+                customer_phone=customer_phone,
+                note=note,
+                order_discount=order_discount,
+                discount_reason=discount_reason,
+                shift=open_shift,
             )
+            for ln in parsed_lines:
+                stock = locked[ln['sid']]
+                stock.stock_count = F('stock_count') - ln['qty']
+                stock.save()
+                Sale.objects.create(
+                    transaction=txn,
+                    variant=stock.variant, branch=stock.branch,
+                    quantity=ln['qty'],
+                    sale_price=ln['price'],
+                    cost_at_sale=stock.cost_price,
+                    line_discount=ln['ld'],
+                    sold_by=request.user,
+                )
+    except _CheckoutAbort as e:
+        return JsonResponse(e.payload, status=e.status)
 
     # Best-effort fiscal (noop unless provider configured)
     from .fiscal import submit_for_transaction

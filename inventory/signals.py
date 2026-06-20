@@ -15,7 +15,7 @@ from django.db.models.fields.files import FieldFile
 
 from .models import (
     AuditLog, Product, ProductVariant, BranchStock, Intake, Sale,
-    Branch, Category, User,
+    SaleTransaction, Transfer, Branch, Category, User,
 )
 from .middleware import get_current_user, get_current_ip
 
@@ -114,6 +114,16 @@ def post_save_handler(sender, instance, created, **kwargs):
             # Never let a notification failure break the request
             import logging
             logging.getLogger(__name__).warning('Low-stock alert failed: %s', e)
+
+    # Invalidate HQ dashboard cache on any sale-shaped activity so the next
+    # admin hit recomputes immediately instead of waiting up to 60s.
+    if sender in (SaleTransaction, Sale, BranchStock, Transfer):
+        try:
+            from django.core.cache import cache
+            from .views import DASHBOARD_CACHE_KEY
+            cache.delete(DASHBOARD_CACHE_KEY)
+        except Exception:
+            pass
 
 
 def post_delete_handler(sender, instance, **kwargs):

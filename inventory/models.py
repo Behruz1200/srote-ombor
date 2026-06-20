@@ -157,13 +157,19 @@ class Product(models.Model):
         return f'{prefix}-{(max_n + 1):04d}'
 
     def total_stock(self):
-        return sum(bs.stock_count for bs in BranchStock.objects.filter(variant__product=self))
+        from django.db.models import Sum
+        return BranchStock.objects.filter(variant__product=self).aggregate(
+            s=Sum('stock_count')
+        )['s'] or 0
 
     def total_value(self):
-        return sum(
-            bs.stock_count * bs.cost_price
-            for bs in BranchStock.objects.filter(variant__product=self)
-        )
+        from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+        return BranchStock.objects.filter(variant__product=self).aggregate(
+            v=Sum(ExpressionWrapper(
+                F('stock_count') * F('cost_price'),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )),
+        )['v'] or 0
 
 
 class ProductVariant(models.Model):
@@ -471,6 +477,12 @@ class SaleTransaction(models.Model):
         verbose_name = 'Sotuv chek'
         verbose_name_plural = 'Sotuv cheklari'
         ordering = ['-sold_at']
+        indexes = [
+            models.Index(fields=['sold_at'], name='saletxn_soldat_idx'),
+            models.Index(fields=['branch', '-sold_at'], name='saletxn_branch_soldat_idx'),
+            models.Index(fields=['sold_by', '-sold_at'], name='saletxn_seller_soldat_idx'),
+            models.Index(fields=['payment_method', '-sold_at'], name='saletxn_pay_soldat_idx'),
+        ]
 
     def __str__(self):
         return f'#{self.pk} — {self.branch.name} ({self.sold_at:%d.%m.%Y %H:%M})'
@@ -582,6 +594,11 @@ class Transfer(models.Model):
         verbose_name = 'Tovar ko\'chirish'
         verbose_name_plural = "Tovar ko'chirishlar"
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'dispatched_at'], name='transfer_status_disp_idx'),
+            models.Index(fields=['from_branch', 'status'], name='transfer_from_status_idx'),
+            models.Index(fields=['to_branch', 'status'], name='transfer_to_status_idx'),
+        ]
 
     def __str__(self):
         return f'#{self.pk}: {self.from_branch.name} → {self.to_branch.name}'
@@ -643,6 +660,10 @@ class Shift(models.Model):
                 fields=['branch'], condition=models.Q(status='open'),
                 name='one_open_shift_per_branch'
             ),
+        ]
+        indexes = [
+            models.Index(fields=['branch', '-opened_at'], name='shift_branch_opened_idx'),
+            models.Index(fields=['status', '-opened_at'], name='shift_status_opened_idx'),
         ]
 
     def __str__(self):
@@ -706,6 +727,13 @@ class Sale(models.Model):
         verbose_name = 'Sotuv'
         verbose_name_plural = 'Sotuvlar'
         ordering = ['-sold_at']
+        indexes = [
+            models.Index(fields=['sold_at'], name='sale_soldat_idx'),
+            models.Index(fields=['branch', '-sold_at'], name='sale_branch_soldat_idx'),
+            models.Index(fields=['variant', '-sold_at'], name='sale_variant_soldat_idx'),
+            models.Index(fields=['sold_by', '-sold_at'], name='sale_seller_soldat_idx'),
+            models.Index(fields=['transaction', 'sold_at'], name='sale_txn_soldat_idx'),
+        ]
 
     @property
     def gross(self):
