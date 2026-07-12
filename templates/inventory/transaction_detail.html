@@ -232,21 +232,30 @@ POS terminal devices (Android):
     #receipt h4 { font-size: 14pt; font-weight: 700; margin: 0 0 1mm 0; letter-spacing: 1px; }
     #receipt h5 { font-size: 11pt; margin: 1mm 0; }
     #receipt hr { border: 0; border-top: 1px dashed #000; margin: 1.5mm 0; }
-    #receipt .small { font-size: 9pt; }
+    #receipt .small { font-size: 9.5pt; }
     #receipt .fs-4 { font-size: 13pt !important; font-weight: 700; }
 
     #receipt table { width: 100%; border-collapse: collapse; }
     #receipt th, #receipt td {
         padding: 1mm 0.5mm !important;
-        font-size: 9pt;
+        font-size: 9.5pt;
         vertical-align: top;
         border: none !important;
     }
-    #receipt thead th { border-bottom: 1px solid #000 !important; font-weight: 700; }
+    /* Ustun nomlari — termalda aniq chiqishi uchun kattaroq va qalinroq */
+    #receipt thead th {
+        border-bottom: 1.5px solid #000 !important;
+        font-weight: 800;
+        font-size: 10pt !important;
+    }
     #receipt tfoot th { border-top: 1px solid #000 !important; font-size: 11pt !important; }
     #receipt .text-end { text-align: right; }
     #receipt .text-center { text-align: center; }
-    #receipt .text-muted { color: #444 !important; }
+    /* Termal printer kulrangni xira nuqtalar bilan bosadi — chekda
+       hamma matn TO'Q QORA bo'lishi shart (filial nomi, izohlar ham) */
+    #receipt, #receipt * { color: #000 !important; }
+    #receipt .text-muted { font-weight: 600; }
+    #receipt .text-danger { font-weight: 700; }
     #receipt code, #receipt strong { font-weight: 700; }
 }
 </style>
