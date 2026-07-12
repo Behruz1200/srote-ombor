@@ -29,12 +29,15 @@
     <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Katalog xulosasi">
         <article class="dash-kpi" data-tone="indigo">
             <div class="dash-kpi__head">
-                <span class="dash-kpi__label"><i class="bi bi-box"></i> Mahsulot turlari</span>
+                <span class="dash-kpi__label"><i class="bi bi-box"></i> Mahsulot</span>
             </div>
             <div class="dash-kpi__value">
                 <span data-countup="{{ products|length }}">{{ products|length }}</span>
             </div>
-            <div class="dash-kpi__footer"><span>filtrlangan ro'yxatda</span></div>
+            <div class="dash-kpi__footer">
+                <span><strong>{{ list_totals.variants }}</strong> tur ·
+                      <strong>{{ list_totals.units|som }}</strong> dona</span>
+            </div>
         </article>
 
         <article class="dash-kpi" data-tone="success">
@@ -161,6 +164,7 @@
                                 <a href="{% url 'product_detail' p.code %}">
                                     <strong>{{ p.name|truncatechars:35 }}</strong>
                                 </a>
+                                <small class="text-muted text-nowrap">{{ p.variants_count }} tur</small>
                                 {% if p.variant_colors %}
                                     <span class="ms-1">
                                     {% for c in p.variant_colors|slice:":4" %}

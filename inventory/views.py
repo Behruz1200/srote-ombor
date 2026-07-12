@@ -604,6 +604,7 @@ def product_list(request):
         output_field=DecimalField(max_digits=16, decimal_places=2))
     products = products.annotate(
         total_stock=Coalesce(Sum('variants__branch_stocks__stock_count'), 0),
+        variants_count=Count('variants', distinct=True),
         price_min=Min('variants__branch_stocks__sale_price'),
         price_max=Max('variants__branch_stocks__sale_price'),
         sale_val=Sum(_val),
@@ -630,6 +631,10 @@ def product_list(request):
 
     products = list(products[:200])
     _pids = [p.id for p in products]
+    list_totals = {
+        'variants': sum(p.variants_count for p in products),
+        'units': sum(p.total_stock for p in products),
+    }
 
     # 30/365 kunlik sotuvlar — faqat ko'rsatiladigan mahsulotlar bo'yicha
     since_30d = timezone.now() - timedelta(days=30)
@@ -694,6 +699,7 @@ def product_list(request):
 
     return render(request, 'inventory/product_list.html', {
         'products': products,
+        'list_totals': list_totals,
         'q': q,
         'category_id': category_id,
         'stock_filter': stock_filter,
