@@ -186,9 +186,8 @@
     </form>
 </div>
 
-<datalist id="colorOptions">
-    {% for c in color_options %}<option value="{{ c }}">{% endfor %}
-</datalist>
+<datalist id="colorOptions"></datalist>
+{{ color_options|json_script:"colorWords" }}
 
 <template id="rowTpl">
     <tr>
@@ -403,6 +402,36 @@
         }
         return false;
     }
+
+    // ---------- Rang: so'zma-so'z taklif ----------
+    // "Cleaning Anti Micro" katalogda bo'lsa, "cl" yozganda faqat
+    // "Cleaning" so'zi taklif qilinadi; keyingi so'zni yozishda esa
+    // yozilgan qism saqlanib, navbatdagi so'z to'ldiriladi.
+    const colorWords = JSON.parse(
+        document.getElementById('colorWords').textContent || '[]');
+    const colorDatalist = document.getElementById('colorOptions');
+    function updateColorOptions(input) {
+        const val = input.value;
+        const lastSpace = val.lastIndexOf(' ');
+        const prefix = lastSpace >= 0 ? val.slice(0, lastSpace + 1) : '';
+        const cur = val.slice(lastSpace + 1).toLowerCase();
+        if (!cur) { colorDatalist.replaceChildren(); return; }
+        const opts = [];
+        for (const w of colorWords) {
+            const lw = w.toLowerCase();
+            if (lw.startsWith(cur) && lw !== cur) {
+                const o = document.createElement('option');
+                o.value = prefix + w;
+                opts.push(o);
+                if (opts.length >= 10) break;
+            }
+        }
+        colorDatalist.replaceChildren(...opts);
+    }
+    rowsBody.addEventListener('input', (e) => {
+        if (e.target && e.target.name === 'row_color')
+            updateColorOptions(e.target);
+    });
 
     // ---------- Skaner aniqlash ----------
     // Skaner belgilarni juda tez yuboradi (<90ms oraliq) va oxirida Enter.

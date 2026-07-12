@@ -1713,9 +1713,15 @@ def intake_variants(request):
                 f"jami {total_qty} dona ({branch.name}).")
             return redirect('product_detail', code=product.code)
 
-    color_options = (ProductVariant.objects.exclude(color='')
-                     .values_list('color', flat=True)
-                     .distinct().order_by('color')[:500])
+    # Rang nomlaridagi YAKKA so'zlar — so'zma-so'z taklif uchun
+    # ("Cleaning Anti Micro" -> Cleaning, Anti, Micro)
+    _color_words = set()
+    for _c in (ProductVariant.objects.exclude(color='')
+               .values_list('color', flat=True).distinct()):
+        for _w in _c.split():
+            if len(_w) > 1:
+                _color_words.add(_w)
+    color_options = sorted(_color_words)[:800]
     return render(request, 'inventory/intake_variants.html', {
         'categories': categories,
         'branches': branches,
