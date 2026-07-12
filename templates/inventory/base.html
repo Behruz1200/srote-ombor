@@ -3429,7 +3429,9 @@
         hydrateCountUps(root) {
             root = root || document;
             root.querySelectorAll('[data-countup]').forEach(el => {
-                const final = parseFloat(el.dataset.countup);
+                // '5,922,000.0' / '5 922 000' kabi lokalizatsiya qilingan
+                // qiymatlar ham to'g'ri o'qilsin (parseFloat vergulda to'xtaydi)
+                const final = parseFloat(String(el.dataset.countup).replace(/[^0-9eE.+-]/g, ''));
                 if (Number.isFinite(final)) {
                     el.classList.add('yrt-count');
                     this.countUp(el, final);

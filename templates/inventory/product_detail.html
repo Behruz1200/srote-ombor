@@ -58,7 +58,7 @@
             <div style="text-align: right; flex-shrink: 0;">
                 <div style="font-size: 0.74rem; color: var(--yrt-fg-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Sotuv narxi</div>
                 <div style="font-family: var(--yrt-font-mono); font-size: 1.75rem; font-weight: 700; color: var(--yrt-primary); line-height: 1.1;">
-                    {{ product.default_sale_price|som }}
+                    {% if price_min and price_max and price_min != price_max %}{{ price_min|som }} – {{ price_max|som }}{% elif price_min %}{{ price_min|som }}{% else %}{{ product.default_sale_price|som }}{% endif %}
                 </div>
                 <small style="color: var(--yrt-fg-muted);">so'm · Markup: {{ product.markup_percent }}%</small>
                 <div style="margin-top: 0.7rem;">
@@ -190,6 +190,55 @@
     </div>
 
     <!-- Per-branch breakdown -->
+    {% if variant_rows %}
+    <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong><i class="bi bi-list-ol"></i> Turlar ro'yxati
+                <span class="badge bg-light text-dark border">{{ variant_rows|length }}</span>
+            </strong>
+            <a href="{% url 'product_variants_edit' product.code %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-pencil"></i> Tahrirlash
+            </a>
+        </div>
+        <div class="table-responsive" style="max-height: 420px; overflow:auto;">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light" style="position: sticky; top: 0;">
+                    <tr>
+                        <th>Rang / Tur</th>
+                        <th>O'lcham</th>
+                        <th>Shtrix-kod</th>
+                        <th class="text-end">Narx</th>
+                        <th class="text-end">Ombor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in variant_rows %}
+                    <tr>
+                        <td>{{ r.variant.color|default:'—' }}</td>
+                        <td>{{ r.variant.size|default:'—' }}</td>
+                        <td>
+                            {% if r.variant.barcode %}
+                                <code class="small"><i class="bi bi-upc"></i> {{ r.variant.barcode }}</code>
+                            {% else %}<span class="text-muted small">—</span>{% endif %}
+                        </td>
+                        <td class="text-end text-nowrap">
+                            {% if r.price_min %}
+                                {% if r.price_min != r.price_max %}{{ r.price_min|som }}–{{ r.price_max|som }}{% else %}{{ r.price_min|som }}{% endif %}
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if r.stock_total == 0 %}<span class="badge bg-danger">0</span>
+                            {% elif r.stock_total <= 3 %}<span class="badge bg-warning text-dark">{{ r.stock_total }}</span>
+                            {% else %}{{ r.stock_total }}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     {% for bd in branches_data %}
     <div class="card p-3 mb-3">
         <div class="d-flex justify-content-between mb-2 align-items-center flex-wrap gap-2">

@@ -592,9 +592,22 @@ def product_list(request):
         except ValueError:
             category_id = ''
 
-    # Annotate aggregate stock per product
+    # Annotate aggregate stock per product (+ narx diapazoni va real marja
+    # uchun qiymatlar — bitta JOIN, qo'shimcha so'rovsiz)
+    _val = ExpressionWrapper(
+        F('variants__branch_stocks__stock_count') *
+        F('variants__branch_stocks__sale_price'),
+        output_field=DecimalField(max_digits=16, decimal_places=2))
+    _cost = ExpressionWrapper(
+        F('variants__branch_stocks__stock_count') *
+        F('variants__branch_stocks__cost_price'),
+        output_field=DecimalField(max_digits=16, decimal_places=2))
     products = products.annotate(
         total_stock=Coalesce(Sum('variants__branch_stocks__stock_count'), 0),
+        price_min=Min('variants__branch_stocks__sale_price'),
+        price_max=Max('variants__branch_stocks__sale_price'),
+        sale_val=Sum(_val),
+        cost_val=Sum(_cost),
     )
 
     if stock_filter == 'zero':
@@ -603,21 +616,6 @@ def product_list(request):
         products = products.filter(total_stock__gt=0, total_stock__lte=3)
     elif stock_filter == 'in_stock':
         products = products.filter(total_stock__gt=0)
-
-    # 30 kunlik sotuvlar (velocity) + 365 kunlik turnover
-    since_30d = timezone.now() - timedelta(days=30)
-    sold_30d = (Sale.objects.filter(sold_at__gte=since_30d)
-                .values('variant__product_id')
-                .annotate(qty=Sum('quantity')))
-    sold_map = {r['variant__product_id']: r['qty'] for r in sold_30d}
-
-    # Annual turnover: annual_sales / avg_stock
-    # Approx: 12 × (30-day sold) / current_stock
-    since_365d = timezone.now() - timedelta(days=365)
-    sold_365d = (Sale.objects.filter(sold_at__gte=since_365d)
-                 .values('variant__product_id')
-                 .annotate(qty=Sum('quantity')))
-    sold_365_map = {r['variant__product_id']: r['qty'] for r in sold_365d}
 
     # Sort
     allowed_sorts = {
@@ -631,6 +629,19 @@ def product_list(request):
     products = products.order_by(allowed_sorts.get(sort, '-created_at'))
 
     products = list(products[:200])
+    _pids = [p.id for p in products]
+
+    # 30/365 kunlik sotuvlar — faqat ko'rsatiladigan mahsulotlar bo'yicha
+    since_30d = timezone.now() - timedelta(days=30)
+    sold_map = {r['variant__product_id']: r['qty'] for r in (
+        Sale.objects.filter(sold_at__gte=since_30d,
+                            variant__product_id__in=_pids)
+        .values('variant__product_id').annotate(qty=Sum('quantity')))}
+    since_365d = timezone.now() - timedelta(days=365)
+    sold_365_map = {r['variant__product_id']: r['qty'] for r in (
+        Sale.objects.filter(sold_at__gte=since_365d,
+                            variant__product_id__in=_pids)
+        .values('variant__product_id').annotate(qty=Sum('quantity')))}
 
     # Har mahsulotning tur ranglari (nomi yonida ko'rsatish uchun)
     color_rows = (ProductVariant.objects
@@ -656,18 +667,25 @@ def product_list(request):
             p.turnover = annual_sold / p.total_stock
         else:
             p.turnover = None
-        # Profit estimate (avg margin from default_sale_price vs implied cost)
-        # We don't have actual cost on product level; use markup_percent to back into cost.
+        # Real marja — ombordagi haqiqiy tannarx/narxdan (og'irlikli):
+        # marja% = (sotuv qiymati − tannarx qiymati) / tannarx qiymati
         try:
-            m = float(p.markup_percent or 0)
-            if m > 0:
-                cost = float(p.default_sale_price) / (1 + m/100)
-                p.unit_profit = float(p.default_sale_price) - cost
-                p.margin_percent = (p.unit_profit / float(p.default_sale_price) * 100
-                                    if p.default_sale_price else 0)
+            cost_val = float(p.cost_val or 0)
+            sale_val = float(p.sale_val or 0)
+            if cost_val > 0:
+                p.unit_profit = sale_val - cost_val
+                p.margin_percent = (sale_val - cost_val) / cost_val * 100
             else:
-                p.unit_profit = 0
-                p.margin_percent = 0
+                # fallback: eski markup asosidagi taxmin
+                m = float(p.markup_percent or 0)
+                if m > 0 and p.default_sale_price:
+                    cost = float(p.default_sale_price) / (1 + m / 100)
+                    p.unit_profit = float(p.default_sale_price) - cost
+                    p.margin_percent = (p.unit_profit /
+                                        float(p.default_sale_price) * 100)
+                else:
+                    p.unit_profit = 0
+                    p.margin_percent = 0
         except Exception:
             p.unit_profit = 0
             p.margin_percent = 0
@@ -888,17 +906,41 @@ def product_detail(request, code):
     sizes = sorted({v.size for v in variants}, key=lambda s: (len(s), s))
     colors = sorted({v.color for v in variants})
 
+    # Bitta so'rov — barcha filial zaxiralari (filial boshiga alohida
+    # so'rov o'rniga; 20 filialda 20 -> 1 query)
+    all_stocks = list(BranchStock.objects.filter(variant__product=product)
+                      .select_related('variant', 'branch'))
+    stocks_by_branch = {}
+    for st in all_stocks:
+        stocks_by_branch.setdefault(st.branch_id, []).append(st)
+
     branches_data = []
     for br in Branch.objects.filter(is_active=True):
-        stocks = BranchStock.objects.filter(
-            variant__product=product, branch=br
-        ).select_related('variant')
+        stocks = stocks_by_branch.get(br.id, [])
         matrix = {(s.variant.size, s.variant.color): s for s in stocks}
         total = sum(s.stock_count for s in stocks)
         branches_data.append({
             'branch': br, 'matrix': matrix,
             'sizes': sizes, 'colors': colors, 'total': total,
         })
+
+    # Yassi turlar ro'yxati (shtrix-kod + narx + jami ombor)
+    stocks_by_variant = {}
+    for st in all_stocks:
+        stocks_by_variant.setdefault(st.variant_id, []).append(st)
+    variant_rows = []
+    for v in variants:
+        sts = stocks_by_variant.get(v.pk, [])
+        prices = [st.sale_price for st in sts if st.sale_price]
+        variant_rows.append({
+            'variant': v,
+            'stock_total': sum(st.stock_count for st in sts),
+            'price_min': min(prices) if prices else None,
+            'price_max': max(prices) if prices else None,
+        })
+    _all_prices = [st.sale_price for st in all_stocks if st.sale_price]
+    price_min = min(_all_prices) if _all_prices else None
+    price_max = max(_all_prices) if _all_prices else None
 
     recent_intakes = Intake.objects.filter(variant__product=product) \
         .select_related('variant', 'branch', 'received_by').order_by('-received_at')[:20]
@@ -1019,6 +1061,9 @@ def product_detail(request, code):
         'product': product, 'branches_data': branches_data,
         'recent_intakes': recent_intakes,
         'product_kpis': product_kpis,
+        'variant_rows': variant_rows,
+        'price_min': price_min,
+        'price_max': price_max,
         'chart_labels': chart_labels,
         'chart_qty': chart_qty,
         'cross_sell': cross_sell,

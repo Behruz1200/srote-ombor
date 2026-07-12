@@ -198,14 +198,20 @@
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
                             <td class="text-end small">
-                                {% if p.turnover is not None %}
+                                {% if p.turnover %}
                                     <span class="text-{% if p.turnover < 1 %}danger{% elif p.turnover < 4 %}warning{% else %}success{% endif %}"
                                           title="Yiliga {{ p.turnover|floatformat:1 }} marta aylanadi">
                                         {{ p.turnover|floatformat:1 }}×
                                     </span>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
-                            <td class="text-end">{{ p.default_sale_price|som }}</td>
+                            <td class="text-end text-nowrap">
+                                {% if p.price_min and p.price_max %}
+                                    {% if p.price_min != p.price_max %}
+                                        <span title="Turlar narxi oralig'i">{{ p.price_min|som }}–{{ p.price_max|som }}</span>
+                                    {% else %}{{ p.price_min|som }}{% endif %}
+                                {% else %}{{ p.default_sale_price|som }}{% endif %}
+                            </td>
                             <td class="text-end small">
                                 {% if p.margin_percent %}
                                     <span class="text-{% if p.margin_percent < 10 %}danger{% elif p.margin_percent < 25 %}warning{% else %}success{% endif %}">
