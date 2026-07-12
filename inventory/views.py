@@ -606,8 +606,21 @@ def product_list(request):
     products = products.order_by(allowed_sorts.get(sort, '-created_at'))
 
     products = list(products[:200])
+
+    # Har mahsulotning tur ranglari (nomi yonida ko'rsatish uchun)
+    color_rows = (ProductVariant.objects
+                  .filter(product__in=products)
+                  .exclude(color='')
+                  .order_by('color')
+                  .values_list('product_id', 'color')
+                  .distinct())
+    colors_map = {}
+    for pid, color in color_rows:
+        colors_map.setdefault(pid, []).append(color)
+
     # Attach velocity + days_left + turnover
     for p in products:
+        p.variant_colors = colors_map.get(p.id, [])
         sold = sold_map.get(p.id, 0)
         p.sold_30d = sold
         daily_avg = sold / 30 if sold else 0

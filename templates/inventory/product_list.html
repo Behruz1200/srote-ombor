@@ -161,6 +161,17 @@
                                 <a href="{% url 'product_detail' p.code %}">
                                     <strong>{{ p.name|truncatechars:35 }}</strong>
                                 </a>
+                                {% if p.variant_colors %}
+                                    <span class="ms-1">
+                                    {% for c in p.variant_colors|slice:":4" %}
+                                        <span class="badge rounded-pill bg-secondary-subtle text-secondary border">{{ c }}</span>
+                                    {% endfor %}
+                                    {% if p.variant_colors|length > 4 %}
+                                        <span class="badge rounded-pill bg-light text-muted border"
+                                              title="{{ p.variant_colors|join:', ' }}">+{{ p.variant_colors|length|add:"-4" }}</span>
+                                    {% endif %}
+                                    </span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if p.category %}
