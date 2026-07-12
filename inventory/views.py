@@ -1304,14 +1304,20 @@ def product_variants_edit(request, code):
         seen_pairs, seen_barcodes = set(), set()
         for i in range(len(ids)):
             get = lambda lst: (lst[i] if i < len(lst) else '') or ''
-            try:
-                vid = int(ids[i])
-                variant = variants[vid]
-            except (ValueError, KeyError):
-                continue
+            raw_id = (ids[i] or '').strip()
             color = smart_title(get(colors))
             size = smart_title(get(sizes))
             barcode = get(barcodes).strip() or None
+            if raw_id:
+                try:
+                    variant = variants[int(raw_id)]
+                except (ValueError, KeyError):
+                    continue
+            else:
+                # Yangi tur qatori — bo'sh bo'lsa jim o'tkazib yuboramiz
+                if not (color or size or barcode):
+                    continue
+                variant = None
             try:
                 cost = _dec(get(costs))
                 sale = _dec(get(sales))
@@ -1334,9 +1340,10 @@ def product_variants_edit(request, code):
                     errors.append(f"{i + 1}-qator: shtrix-kod jadvalda takror.")
                     continue
                 seen_barcodes.add(barcode)
-                v_clash = (ProductVariant.objects.filter(barcode=barcode)
-                           .exclude(pk=variant.pk)
-                           .select_related('product').first())
+                v_clash = ProductVariant.objects.filter(barcode=barcode)
+                if variant is not None:
+                    v_clash = v_clash.exclude(pk=variant.pk)
+                v_clash = v_clash.select_related('product').first()
                 if v_clash:
                     errors.append(
                         f"Shtrix-kod {barcode} band: {v_clash.product.name} "
@@ -1352,11 +1359,13 @@ def product_variants_edit(request, code):
                          'wholesale': wholesale, 'stock': stock_new})
 
         # DB darajasida ham juftlik boshqa variant bilan to'qnashmasin
+        _form_pks = {x['variant'].pk for x in rows if x['variant'] is not None}
         for r in rows:
-            clash = (product.variants
-                     .filter(size=r['size'], color=r['color'])
-                     .exclude(pk=r['variant'].pk).first())
-            if clash and clash.pk not in {x['variant'].pk for x in rows}:
+            clash_qs = product.variants.filter(size=r['size'], color=r['color'])
+            if r['variant'] is not None:
+                clash_qs = clash_qs.exclude(pk=r['variant'].pk)
+            clash = clash_qs.first()
+            if clash and clash.pk not in _form_pks:
                 errors.append(
                     f"{r['size'] or '—'} / {r['color'] or '—'} allaqachon mavjud.")
 
@@ -1368,6 +1377,25 @@ def product_variants_edit(request, code):
             with transaction.atomic():
                 for r in rows:
                     v = r['variant']
+                    if v is None:
+                        v = ProductVariant.objects.create(
+                            product=product, size=r['size'],
+                            color=r['color'], barcode=r['barcode'])
+                        stock = BranchStock.objects.create(
+                            variant=v, branch=branch,
+                            cost_price=r['cost'], sale_price=r['sale'],
+                            wholesale_price=r['wholesale'],
+                            stock_count=r['stock'])
+                        if r['stock'] > 0:
+                            Intake.objects.create(
+                                variant=v, branch=branch,
+                                quantity=r['stock'],
+                                cost_per_unit=r['cost'],
+                                note="Yangi tur (tahrirlash sahifasidan)",
+                                received_by=request.user)
+                        changed.append(
+                            f"+ yangi: {v.size or '—'}/{v.color or '—'}")
+                        continue
                     v_fields = []
                     if v.color != r['color']:
                         v_fields.append(f"rang {v.color}→{r['color']}")

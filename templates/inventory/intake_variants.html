@@ -310,8 +310,10 @@
             if (selectAll && input.select) input.select();
         };
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-            const target = e.key === 'ArrowUp'
+            let target = e.key === 'ArrowUp'
                 ? tr.previousElementSibling : tr.nextElementSibling;
+            // Oxirgi qatorda pastga strelka -> yangi qator ochiladi
+            if (!target && e.key === 'ArrowDown') target = addRow(false);
             if (target) {
                 const ti = target.querySelectorAll('input')[col];
                 if (ti) go(ti, true);

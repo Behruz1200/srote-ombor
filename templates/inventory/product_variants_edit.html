@@ -56,7 +56,7 @@
                             <th style="min-width:80px">Ombor</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="editRows">
                         {% for r in rows %}
                         <tr>
                             <input type="hidden" name="v_id" value="{{ r.variant.id }}">
@@ -72,9 +72,14 @@
                     </tbody>
                 </table>
             </div>
-            <div class="small text-muted">
-                <i class="bi bi-info-circle"></i>
-                Ombor soni o'zgartirilsa, farq "qo'lda tuzatish" sifatida qabul tarixiga yoziladi.
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="addNewRowBtn">
+                    <i class="bi bi-plus-lg"></i> Yangi tur qo'shish
+                </button>
+                <div class="small text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    Ombor soni o'zgartirilsa, farq "qo'lda tuzatish" sifatida qabul tarixiga yoziladi.
+                </div>
             </div>
         </div>
         <div class="d-flex gap-2 mb-4">
@@ -92,7 +97,39 @@
     {% endif %}
 </div>
 
+<template id="newRowTpl">
+    <tr class="table-success-subtle">
+        <input type="hidden" name="v_id" value="">
+        <td><input type="text" name="v_color" class="form-control form-control-sm" placeholder="Yangi rang/tur"></td>
+        <td><input type="text" name="v_size" class="form-control form-control-sm" placeholder="O'lcham"></td>
+        <td><input type="text" name="v_barcode" class="form-control form-control-sm" placeholder="Skanerlang"></td>
+        <td><input type="text" name="v_cost" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" placeholder="0"></td>
+    </tr>
+</template>
+
 <script>
+// Yangi tur qatori qo'shish
+(function () {
+    const btn = document.getElementById('addNewRowBtn');
+    const body = document.getElementById('editRows');
+    const tpl = document.getElementById('newRowTpl');
+    window.yuritAddEditRow = function () {
+        if (!body || !tpl) return null;
+        const tr = tpl.content.firstElementChild.cloneNode(true);
+        body.appendChild(tr);
+        return tr;
+    };
+    if (btn && body && tpl) {
+        btn.addEventListener('click', () => {
+            const tr = window.yuritAddEditRow();
+            if (tr) tr.querySelector('input[name="v_color"]').focus();
+        });
+    }
+})();
+
 // Enter = keyingi katak; strelkalar = Excel kabi katakma-katak yurish
 document.getElementById('editForm') && document.getElementById('editForm')
     .addEventListener('keydown', (e) => {
@@ -106,8 +143,11 @@ document.getElementById('editForm') && document.getElementById('editForm')
             if (col < 0) return;
             const go = (input) => { e.preventDefault(); input.focus(); input.select && input.select(); };
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                const target = e.key === 'ArrowUp'
+                let target = e.key === 'ArrowUp'
                     ? tr.previousElementSibling : tr.nextElementSibling;
+                // Oxirgi qatorda pastga strelka -> yangi tur qatori
+                if (!target && e.key === 'ArrowDown' && window.yuritAddEditRow)
+                    target = window.yuritAddEditRow();
                 if (target) {
                     const ti = target.querySelectorAll('input:not([type=hidden])')[col];
                     if (ti) go(ti);
