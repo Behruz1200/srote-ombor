@@ -72,6 +72,19 @@
     </section>
     {% endif %}
 
+    {% if dup_groups %}
+    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span>Bir xil nomli mahsulotlar bor:</span>
+        {% for g in dup_groups %}
+            <a href="{% url 'product_merge' %}?ids={{ g.ids }}"
+               class="btn btn-sm btn-outline-warning">
+                {{ g.name }} ({{ g.count }} ta) — birlashtirish
+            </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- Filtrlar -->
     <form method="get" class="card p-3 mb-3">
         <div class="row g-2">

@@ -721,8 +721,20 @@ def product_list(request):
 
     categories = Category.objects.order_by('name')
 
+    # Dublikat nomli mahsulotlar (birlashtirish tavsiyasi uchun)
+    dup_groups = []
+    _name_map = {}
+    for pid, pname in Product.objects.values_list('id', 'name'):
+        _name_map.setdefault(pname.strip().lower(), []).append(pid)
+    for _n, _ids in _name_map.items():
+        if len(_ids) > 1:
+            dup_groups.append({'name': _n.title(), 'count': len(_ids),
+                               'ids': ','.join(map(str, _ids))})
+    dup_groups = dup_groups[:5]
+
     return render(request, 'inventory/product_list.html', {
         'products': products,
+        'dup_groups': dup_groups,
         'list_totals': list_totals,
         'q': q,
         'category_id': category_id,
@@ -737,7 +749,19 @@ def product_create(request):
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES)
         if form.is_valid():
-            product = form.save()
+            # Dublikat oldini olish: shu nomli mahsulot bo'lsa, yangisini
+            # yaratmasdan mavjudiga tur qo'shishga yo'naltiramiz
+            _name = smart_title(form.cleaned_data.get('name'))
+            existing = Product.objects.filter(name__iexact=_name).first()
+            if existing:
+                messages.info(
+                    request,
+                    f"'{existing.name}' ({existing.code}) allaqachon mavjud — "
+                    f"yangi mahsulot yaratilmadi. Unga tur qo'shishingiz mumkin.")
+                return redirect(f"{reverse('intake_variants')}?code={existing.code}")
+            product = form.save(commit=False)
+            product.name = _name
+            product.save()
             messages.success(request, f"Mahsulot yaratildi. Kod: {product.code}")
             return redirect('product_detail', code=product.code)
     else:

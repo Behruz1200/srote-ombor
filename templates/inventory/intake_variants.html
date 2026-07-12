@@ -123,6 +123,7 @@
                 <table class="table table-sm align-middle" id="rowsTable">
                     <thead class="table-light">
                         <tr>
+                            <th style="width:44px" class="text-muted">#</th>
                             <th style="min-width:110px">Rang</th>
                             <th style="min-width:100px">O'lcham</th>
                             <th style="min-width:160px">Shtrix-kod</th>
@@ -135,6 +136,7 @@
                         {% if post_back.rows %}
                             {% for r in post_back.rows %}
                             <tr>
+                                <td class="row-num text-muted small text-center align-middle">{{ forloop.counter }}</td>
                                 <td><input type="text" name="row_color" class="form-control form-control-sm" value="{{ r.color }}"></td>
                                 <td><input type="text" name="row_size" class="form-control form-control-sm" value="{{ r.size }}"></td>
                                 <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" value="{{ r.barcode }}"></td>
@@ -169,6 +171,7 @@
 
 <template id="rowTpl">
     <tr>
+        <td class="row-num text-muted small text-center align-middle"></td>
         <td><input type="text" name="row_color" class="form-control form-control-sm" placeholder="Oq"></td>
         <td><input type="text" name="row_size" class="form-control form-control-sm" placeholder="400ml"></td>
         <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" placeholder="Skanerlang"></td>
@@ -274,6 +277,11 @@
     });
 
     function recount() {
+        let n = 1;
+        for (const tr of rowsBody.querySelectorAll('tr')) {
+            const numCell = tr.querySelector('.row-num');
+            if (numCell) numCell.textContent = n++;
+        }
         let rows = 0, qty = 0;
         for (const tr of rowsBody.querySelectorAll('tr')) {
             const inputs = tr.querySelectorAll('input');
