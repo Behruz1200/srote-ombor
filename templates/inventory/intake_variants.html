@@ -404,16 +404,67 @@
         return false;
     }
 
+    // ---------- Skaner aniqlash ----------
+    // Skaner belgilarni juda tez yuboradi (<90ms oraliq) va oxirida Enter.
+    // Shunday "portlash" aniqlansa, kod qaysi katakda turganingizdan
+    // qat'i nazar shtrix-kod ustunidagi keyingi BO'SH katakka yoziladi —
+    // siz boshqa katakda ishlashda davom etaverasiz.
+    const SCAN_GAP = 90;   // ms
+    const SCAN_MIN = 8;    // kamida shuncha belgi (EAN-8..13)
+    let scanBuf = [], lastKeyTs = 0;
+
+    function nextEmptyBarcodeCell() {
+        for (const i of rowsBody.querySelectorAll('input.row-barcode')) {
+            if (!i.value.trim()) return i;
+        }
+        const tr = addRow(false);
+        return tr.querySelector('input.row-barcode');
+    }
+
     // Enter = submit emas: keyingi katakka o'tish (skaner ham Enter yuboradi)
     form.addEventListener('keydown', (e) => {
         const t = e.target;
-        if (t.tagName !== 'INPUT') return;
+        const now = Date.now();
+        if (e.key.length === 1) {
+            if (now - lastKeyTs > SCAN_GAP) scanBuf = [];
+            scanBuf.push(e.key);
+            lastKeyTs = now;
+        }
+        if (t.tagName !== 'INPUT') { if (e.key === 'Enter') scanBuf = []; return; }
         if (e.key.startsWith('Arrow')) { arrowNav(e, t); return; }
         if (e.key !== 'Enter') return;
         e.preventDefault();
+
+        // Skaner "portlashi"mi?
+        const isScan = scanBuf.length >= SCAN_MIN &&
+                       (now - lastKeyTs) <= SCAN_GAP;
+        const code = scanBuf.join('');
+        scanBuf = [];
+        if (isScan) {
+            if (t.classList.contains('row-barcode')) {
+                // Shtrix katakning o'zida — toza yozib, keyingisiga o'tamiz
+                t.value = code;
+                let tr = t.closest('tr').nextElementSibling;
+                if (!tr) tr = addRow(false);
+                const bc = tr.querySelector('.row-barcode');
+                if (bc) { bc.focus(); bc.select && bc.select(); }
+            } else {
+                // Boshqa katakda ishlayotgan edingiz — skaner yozgan
+                // belgilarni o'sha katakdan olib tashlaymiz...
+                if (t.value.endsWith(code))
+                    t.value = t.value.slice(0, t.value.length - code.length);
+                // ...kod esa shtrix ustunidagi keyingi bo'sh katakka tushadi
+                const cell = nextEmptyBarcodeCell();
+                if (cell) cell.value = code;
+                // fokus joyida qoladi — ishingiz bo'linmaydi
+            }
+            recount();
+            return;
+        }
+
         const inputs = [...form.querySelectorAll('input:not([type=hidden]):not([type=radio])')]
             .filter(i => i.offsetParent !== null);
-        // Shtrix-kod katagida Enter (skaner) -> keyingi qator shtrix-kodi
+        // Shtrix-kod katagida Enter (qo'lda) -> keyingi qator shtrix-kodi
         if (t.classList.contains('row-barcode')) {
             let tr = t.closest('tr').nextElementSibling;
             if (!tr) tr = addRow(false);
