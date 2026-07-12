@@ -37,6 +37,27 @@ from .models import (
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession,
 )
+def parse_dec(raw):
+    """Foydalanuvchi kiritgan pul/son matnini Decimal'ga aylantiradi.
+
+    "3 000", "3\u00a0000", "30,000", "30000,50", "30'000" — barchasi ishlaydi.
+    Bo'sh bo'lsa 0.
+    """
+    from decimal import Decimal
+    raw = (raw or '').strip()
+    for ch in (' ', '\u00a0', '\u202f', "'"):
+        raw = raw.replace(ch, '')
+    if ',' in raw and '.' in raw:
+        raw = raw.replace(',', '')          # 1,234.56 -> 1234.56
+    elif ',' in raw:
+        head, _, tail = raw.rpartition(',')
+        if head and len(tail) in (1, 2) and ',' not in head:
+            raw = head + '.' + tail          # 30000,5 -> 30000.5
+        else:
+            raw = raw.replace(',', '')       # 30,000 -> 30000
+    return Decimal(raw) if raw else Decimal('0')
+
+
 from .forms import (
     LoginForm, BranchForm, ProductForm, CategoryForm,
     IntakeForm, SaleForm, UserCreateForm, UserEditForm, ReportForm,
@@ -1047,9 +1068,7 @@ def product_variants_edit(request, code):
         messages.error(request, "Faol filial yo'q.")
         return redirect('product_detail', code=product.code)
 
-    def _dec(raw):
-        raw = (raw or '').strip().replace(' ', '')
-        return Decimal(raw) if raw else Decimal('0')
+    _dec = parse_dec
 
     if request.method == 'POST':
         errors = []
@@ -1079,7 +1098,7 @@ def product_variants_edit(request, code):
                 cost = _dec(get(costs))
                 sale = _dec(get(sales))
                 wholesale = _dec(get(wholesales))
-                stock_new = int((get(stocks) or '').strip() or 0)
+                stock_new = int(_dec(get(stocks)))
             except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"{i + 1}-qator: raqam maydonlari noto'g'ri.")
                 continue
@@ -1259,11 +1278,7 @@ def intake_variants(request):
         prices = request.POST.getlist('row_price')
         qtys = request.POST.getlist('row_qty')
 
-        def _dec(raw):
-            raw = (raw or '').strip().replace(' ', '')
-            if not raw:
-                return Decimal('0')
-            return Decimal(raw)
+        _dec = parse_dec
 
         # Marja % (default 0): tannarx = sotuv narx / (1 + marja/100)
         try:
@@ -1288,7 +1303,7 @@ def intake_variants(request):
                              'price': price_raw, 'qty': qty_raw})
             try:
                 price = _dec(price_raw)
-                qty = int((qty_raw or '').strip() or 0)
+                qty = int(_dec(qty_raw))
             except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"{i + 1}-qator: narx yoki miqdor noto'g'ri.")
                 continue

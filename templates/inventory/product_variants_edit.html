@@ -1,5 +1,5 @@
 {% extends 'inventory/base.html' %}
-{% load yurit_extras %}
+{% load yurit_extras l10n %}
 
 {% block title %}Turlarni tahrirlash — {{ product.name }}{% endblock %}
 
@@ -63,10 +63,10 @@
                             <td><input type="text" name="v_color" class="form-control form-control-sm" value="{{ r.variant.color }}"></td>
                             <td><input type="text" name="v_size" class="form-control form-control-sm" value="{{ r.variant.size }}"></td>
                             <td><input type="text" name="v_barcode" class="form-control form-control-sm" value="{{ r.variant.barcode|default:'' }}" placeholder="—"></td>
-                            <td><input type="text" name="v_cost" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.cost|floatformat:'0' }}"></td>
-                            <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.sale|floatformat:'0' }}"></td>
-                            <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.wholesale|floatformat:'0' }}"></td>
-                            <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" value="{{ r.stock }}"></td>
+                            <td><input type="text" name="v_cost" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.cost|floatformat:'0u' }}"></td>
+                            <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.sale|floatformat:'0u' }}"></td>
+                            <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.wholesale|floatformat:'0u' }}"></td>
+                            <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" value="{{ r.stock|unlocalize }}"></td>
                         </tr>
                         {% endfor %}
                     </tbody>
