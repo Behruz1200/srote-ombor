@@ -125,9 +125,21 @@
                         <tr>
                             <th style="width:44px" class="text-muted">#</th>
                             <th style="min-width:110px">Rang</th>
-                            <th style="min-width:100px">O'lcham</th>
+                            <th style="min-width:100px">O'lcham
+                                <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                        data-col="row_size" tabindex="-1"
+                                        title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                    <i class="bi bi-arrow-down-square"></i>
+                                </button>
+                            </th>
                             <th style="min-width:160px">Shtrix-kod</th>
-                            <th style="min-width:110px">Sotuv narx</th>
+                            <th style="min-width:110px">Sotuv narx
+                                <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                        data-col="row_price" tabindex="-1"
+                                        title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                    <i class="bi bi-arrow-down-square"></i>
+                                </button>
+                            </th>
                             <th style="min-width:80px">Miqdor</th>
                             <th style="width:36px"></th>
                         </tr>
@@ -294,6 +306,18 @@
         document.getElementById('sumQty').textContent = qty;
     }
     rowsBody.addEventListener('input', recount);
+
+    // "Hammasiga qo'llash": birinchi to'ldirilgan qiymatni ustun bo'ylab nusxalash
+    document.querySelectorAll('.col-fill').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const col = btn.dataset.col;
+            const inputs = [...rowsBody.querySelectorAll(`input[name="${col}"]`)];
+            const src = inputs.find(i => i.value.trim());
+            if (!src) return;
+            for (const i of inputs) i.value = src.value.trim();
+            recount();
+        });
+    });
 
     // Jadval ichida strelkalar bilan yurish (Excel kabi):
     // yuqori/past — shu ustunda qator almashtiradi; chap/o'ng — kursor
