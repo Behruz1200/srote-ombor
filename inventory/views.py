@@ -1026,6 +1026,190 @@ def intake_for_product(request, code):
 
 
 @admin_required
+def product_variants_edit(request, code):
+    """Mahsulot turlarini jadvalda tahrirlash — hamma maydon bir joyda.
+
+    Variant maydonlari (rang, o'lcham, shtrix-kod) filialdan mustaqil;
+    narxlar va ombor soni tanlangan filial bo'yicha (BranchStock).
+    Ombor soni o'zgartirilsa — farq Intake yozuvi sifatida saqlanadi
+    (qo'lda tuzatish) va AuditLog'ga tushadi.
+    """
+    from decimal import Decimal, InvalidOperation
+
+    product = get_object_or_404(Product, code=normalize_code(code))
+    branches = Branch.objects.filter(is_active=True)
+    try:
+        branch = branches.get(pk=int(request.GET.get('branch')
+                                     or request.POST.get('branch') or 0))
+    except (Branch.DoesNotExist, ValueError, TypeError):
+        branch = branches.first()
+    if branch is None:
+        messages.error(request, "Faol filial yo'q.")
+        return redirect('product_detail', code=product.code)
+
+    def _dec(raw):
+        raw = (raw or '').strip().replace(' ', '')
+        return Decimal(raw) if raw else Decimal('0')
+
+    if request.method == 'POST':
+        errors = []
+        ids = request.POST.getlist('v_id')
+        colors = request.POST.getlist('v_color')
+        sizes = request.POST.getlist('v_size')
+        barcodes = request.POST.getlist('v_barcode')
+        costs = request.POST.getlist('v_cost')
+        sales = request.POST.getlist('v_sale')
+        wholesales = request.POST.getlist('v_wholesale')
+        stocks = request.POST.getlist('v_stock')
+
+        variants = {v.pk: v for v in product.variants.all()}
+        rows = []
+        seen_pairs, seen_barcodes = set(), set()
+        for i in range(len(ids)):
+            get = lambda lst: (lst[i] if i < len(lst) else '') or ''
+            try:
+                vid = int(ids[i])
+                variant = variants[vid]
+            except (ValueError, KeyError):
+                continue
+            color = get(colors).strip()
+            size = get(sizes).strip()
+            barcode = get(barcodes).strip() or None
+            try:
+                cost = _dec(get(costs))
+                sale = _dec(get(sales))
+                wholesale = _dec(get(wholesales))
+                stock_new = int((get(stocks) or '').strip() or 0)
+            except (InvalidOperation, ValueError, TypeError):
+                errors.append(f"{i + 1}-qator: raqam maydonlari noto'g'ri.")
+                continue
+            if min(cost, sale, wholesale) < 0 or stock_new < 0:
+                errors.append(f"{i + 1}-qator: manfiy qiymat kiritilmaydi.")
+                continue
+            pair = (size, color)
+            if pair in seen_pairs:
+                errors.append(
+                    f"{i + 1}-qator: {size or '—'} / {color or '—'} takrorlangan.")
+                continue
+            seen_pairs.add(pair)
+            if barcode:
+                if barcode in seen_barcodes:
+                    errors.append(f"{i + 1}-qator: shtrix-kod jadvalda takror.")
+                    continue
+                seen_barcodes.add(barcode)
+                v_clash = (ProductVariant.objects.filter(barcode=barcode)
+                           .exclude(pk=variant.pk)
+                           .select_related('product').first())
+                if v_clash:
+                    errors.append(
+                        f"Shtrix-kod {barcode} band: {v_clash.product.name} "
+                        f"({v_clash.size or '—'}/{v_clash.color or '—'}).")
+                p_clash = Product.objects.filter(
+                    external_barcode=barcode).first()
+                if p_clash:
+                    errors.append(
+                        f"Shtrix-kod {barcode} '{p_clash.name}' "
+                        f"mahsulotiga biriktirilgan.")
+            rows.append({'variant': variant, 'color': color, 'size': size,
+                         'barcode': barcode, 'cost': cost, 'sale': sale,
+                         'wholesale': wholesale, 'stock': stock_new})
+
+        # DB darajasida ham juftlik boshqa variant bilan to'qnashmasin
+        for r in rows:
+            clash = (product.variants
+                     .filter(size=r['size'], color=r['color'])
+                     .exclude(pk=r['variant'].pk).first())
+            if clash and clash.pk not in {x['variant'].pk for x in rows}:
+                errors.append(
+                    f"{r['size'] or '—'} / {r['color'] or '—'} allaqachon mavjud.")
+
+        if errors:
+            for e in errors[:8]:
+                messages.error(request, e)
+        else:
+            changed = []
+            with transaction.atomic():
+                for r in rows:
+                    v = r['variant']
+                    v_fields = []
+                    if v.color != r['color']:
+                        v_fields.append(f"rang {v.color}→{r['color']}")
+                        v.color = r['color']
+                    if v.size != r['size']:
+                        v_fields.append(f"o'lcham {v.size}→{r['size']}")
+                        v.size = r['size']
+                    if (v.barcode or None) != r['barcode']:
+                        v_fields.append(f"shtrix {v.barcode or '—'}→{r['barcode'] or '—'}")
+                        v.barcode = r['barcode']
+                    if v_fields:
+                        v.save()
+                    stock, _ = BranchStock.objects.select_for_update().get_or_create(
+                        variant=v, branch=branch)
+                    s_fields = []
+                    if stock.cost_price != r['cost']:
+                        s_fields.append(f"tannarx {stock.cost_price}→{r['cost']}")
+                        stock.cost_price = r['cost']
+                    if stock.sale_price != r['sale']:
+                        s_fields.append(f"narx {stock.sale_price}→{r['sale']}")
+                        stock.sale_price = r['sale']
+                    if stock.wholesale_price != r['wholesale']:
+                        s_fields.append(
+                            f"ulgurji {stock.wholesale_price}→{r['wholesale']}")
+                        stock.wholesale_price = r['wholesale']
+                    delta = r['stock'] - stock.stock_count
+                    if delta:
+                        s_fields.append(
+                            f"ombor {stock.stock_count}→{r['stock']}")
+                        stock.stock_count = r['stock']
+                        Intake.objects.create(
+                            variant=v, branch=branch, quantity=delta,
+                            cost_per_unit=stock.cost_price,
+                            note="Qo'lda tuzatish (turlarni tahrirlash)",
+                            received_by=request.user)
+                    if s_fields:
+                        stock.save()
+                    if v_fields or s_fields:
+                        changed.append(
+                            f"{v.size or '—'}/{v.color or '—'}: "
+                            + ', '.join(v_fields + s_fields))
+                if changed:
+                    AuditLog.objects.create(
+                        user=request.user,
+                        username_snapshot=request.user.username,
+                        action=AuditLog.Action.UPDATE,
+                        model_name='ProductVariant',
+                        object_id=str(product.pk),
+                        object_repr=(f"{product.code} ({branch.name}): "
+                                     + ' | '.join(changed))[:300],
+                    )
+            if changed:
+                messages.success(
+                    request, f"Saqlandi: {len(changed)} ta tur yangilandi "
+                             f"({branch.name}).")
+            else:
+                messages.info(request, "O'zgarish yo'q.")
+            return redirect('product_detail', code=product.code)
+
+    # GET (yoki xatodan keyin) — joriy holatni chizamiz
+    stocks = {st.variant_id: st for st in BranchStock.objects.filter(
+        variant__product=product, branch=branch)}
+    rows = []
+    for v in product.variants.all():
+        st = stocks.get(v.pk)
+        rows.append({
+            'variant': v,
+            'cost': st.cost_price if st else '',
+            'sale': st.sale_price if st else '',
+            'wholesale': st.wholesale_price if st else '',
+            'stock': st.stock_count if st else 0,
+        })
+    return render(request, 'inventory/product_variants_edit.html', {
+        'product': product, 'branch': branch, 'branches': branches,
+        'rows': rows,
+    })
+
+
+@admin_required
 def intake_variants(request):
     """Jadval usulida qabul — bitta sahifada mahsulot + bir nechta tur.
 

@@ -39,6 +39,9 @@
                         <a href="{% url 'product_edit' product.code %}" class="dash-btn dash-btn--ghost dash-btn--sm">
                             <i class="bi bi-pencil"></i> <span>Tahrirlash</span>
                         </a>
+                        <a href="{% url 'product_variants_edit' product.code %}" class="dash-btn dash-btn--ghost dash-btn--sm">
+                            <i class="bi bi-table"></i> <span>Turlarni tahrirlash</span>
+                        </a>
                         <a href="{% url 'intake_for_product' product.code %}" class="dash-btn dash-btn--primary dash-btn--sm">
                             <i class="bi bi-box-arrow-in-down"></i> <span>Qabul</span>
                         </a>

@@ -1,0 +1,106 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Turlarni tahrirlash — {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Turlarni tahrirlash</span>
+                <h1 class="dash-hero__title"><i class="bi bi-table"></i> {{ product.name }}</h1>
+                <p class="dash-hero__sub">
+                    <span class="code-pill">{{ product.code }}</span>
+                    <span>·</span>
+                    <span>Rang, o'lcham, shtrix-kod — umumiy; narx va ombor — filial bo'yicha</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'product_detail' product.code %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-arrow-left"></i> <span>Mahsulotga qaytish</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="card p-3 mb-3">
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
+            <label class="form-label mb-0"><i class="bi bi-shop"></i> Filial:</label>
+            <select name="branch" class="form-select form-select-sm" style="max-width:260px"
+                    onchange="this.form.submit()">
+                {% for b in branches %}
+                    <option value="{{ b.id }}" {% if b.id == branch.id %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            <span class="small text-muted">Filial almashtirilsa saqlanmagan o'zgarishlar yo'qoladi</span>
+        </form>
+    </div>
+
+    {% if rows %}
+    <form method="post" id="editForm" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="branch" value="{{ branch.id }}">
+        <div class="card p-3 mb-3">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="min-width:110px">Rang</th>
+                            <th style="min-width:100px">O'lcham</th>
+                            <th style="min-width:160px">Shtrix-kod</th>
+                            <th style="min-width:100px">Tannarx</th>
+                            <th style="min-width:100px">Sotuv narx</th>
+                            <th style="min-width:100px">Ulgurji</th>
+                            <th style="min-width:80px">Ombor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in rows %}
+                        <tr>
+                            <input type="hidden" name="v_id" value="{{ r.variant.id }}">
+                            <td><input type="text" name="v_color" class="form-control form-control-sm" value="{{ r.variant.color }}"></td>
+                            <td><input type="text" name="v_size" class="form-control form-control-sm" value="{{ r.variant.size }}"></td>
+                            <td><input type="text" name="v_barcode" class="form-control form-control-sm" value="{{ r.variant.barcode|default:'' }}" placeholder="—"></td>
+                            <td><input type="text" name="v_cost" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.cost|floatformat:'0' }}"></td>
+                            <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.sale|floatformat:'0' }}"></td>
+                            <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.wholesale|floatformat:'0' }}"></td>
+                            <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" value="{{ r.stock }}"></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-muted">
+                <i class="bi bi-info-circle"></i>
+                Ombor soni o'zgartirilsa, farq "qo'lda tuzatish" sifatida qabul tarixiga yoziladi.
+            </div>
+        </div>
+        <div class="d-flex gap-2 mb-4">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-check2-circle"></i> Saqlash
+            </button>
+            <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-secondary btn-lg">Bekor qilish</a>
+        </div>
+    </form>
+    {% else %}
+    <div class="card p-4 text-center text-muted">
+        Bu mahsulotda hali tur yo'q.
+        <a href="{% url 'intake_variants' %}?code={{ product.code }}">Turlar jadvali orqali qo'shing →</a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Enter = keyingi katak (submit emas)
+document.getElementById('editForm') && document.getElementById('editForm')
+    .addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+        e.preventDefault();
+        const inputs = [...e.currentTarget.querySelectorAll('input:not([type=hidden])')];
+        const idx = inputs.indexOf(e.target);
+        if (idx >= 0 && idx + 1 < inputs.length) inputs[idx + 1].focus();
+    });
+</script>
+{% endblock %}
