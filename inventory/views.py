@@ -1677,12 +1677,16 @@ def intake_variants(request):
                 f"jami {total_qty} dona ({branch.name}).")
             return redirect('product_detail', code=product.code)
 
+    color_options = (ProductVariant.objects.exclude(color='')
+                     .values_list('color', flat=True)
+                     .distinct().order_by('color')[:500])
     return render(request, 'inventory/intake_variants.html', {
         'categories': categories,
         'branches': branches,
         'suppliers': suppliers,
         'prefill_product': prefill_product,
         'post_back': post_back,
+        'color_options': color_options,
     })
 
 

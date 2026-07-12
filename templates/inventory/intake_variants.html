@@ -154,7 +154,7 @@
                             {% for r in post_back.rows %}
                             <tr>
                                 <td class="row-num text-muted small text-center align-middle">{{ forloop.counter }}</td>
-                                <td><input type="text" name="row_color" class="form-control form-control-sm" value="{{ r.color }}"></td>
+                                <td><input type="text" name="row_color" class="form-control form-control-sm" value="{{ r.color }}" list="colorOptions" autocomplete="off"></td>
                                 <td><input type="text" name="row_size" class="form-control form-control-sm" value="{{ r.size }}"></td>
                                 <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" value="{{ r.barcode }}"></td>
                                 <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.price }}"></td>
@@ -186,10 +186,14 @@
     </form>
 </div>
 
+<datalist id="colorOptions">
+    {% for c in color_options %}<option value="{{ c }}">{% endfor %}
+</datalist>
+
 <template id="rowTpl">
     <tr>
         <td class="row-num text-muted small text-center align-middle"></td>
-        <td><input type="text" name="row_color" class="form-control form-control-sm" placeholder="Oq"></td>
+        <td><input type="text" name="row_color" class="form-control form-control-sm" placeholder="Oq" list="colorOptions" autocomplete="off"></td>
         <td><input type="text" name="row_size" class="form-control form-control-sm" placeholder="400ml"></td>
         <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" placeholder="Skanerlang"></td>
         <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
