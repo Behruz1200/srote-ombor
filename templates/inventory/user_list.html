@@ -1,17 +1,17 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Foydalanuvchilar — Srote{% endblock %}
+{% block title %}Foydalanuvchilar — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
 
-    <div class="srt-page-header srt-page-header-stack">
+    <div class="yrt-page-header yrt-page-header-stack">
         <!-- Row 1: identity + primary action -->
-        <div class="srt-page-title-row">
+        <div class="yrt-page-title-row">
             <div>
-                <h1 class="srt-h1"><i class="bi bi-people me-1 text-primary"></i> Foydalanuvchilar</h1>
-                <div class="srt-sub">
+                <h1 class="yrt-h1"><i class="bi bi-people me-1 text-primary"></i> Foydalanuvchilar</h1>
+                <div class="yrt-sub">
                     Adminlar, sotuvchilar va ularning 30 kunlik samaradorligi
                 </div>
             </div>
@@ -22,13 +22,13 @@
         </div>
 
         <!-- Row 2: filter toolbar -->
-        <form method="get" class="srt-page-filter-row">
+        <form method="get" class="yrt-page-filter-row">
             <!-- Role chips -->
-            <div class="srt-filter-group">
-                <span class="srt-filter-label" aria-hidden="true">
+            <div class="yrt-filter-group">
+                <span class="yrt-filter-label" aria-hidden="true">
                     <i class="bi bi-person-badge"></i> Rol
                 </span>
-                <div class="btn-group btn-group-sm srt-period-chips" role="group" aria-label="Rol">
+                <div class="btn-group btn-group-sm yrt-period-chips" role="group" aria-label="Rol">
                     <button type="submit" name="role" value=""
                             class="btn {% if not role_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}">
                         Hammasi
@@ -45,11 +45,11 @@
             <input type="hidden" name="role" value="{{ role_filter }}">
 
             <!-- Branch dropdown -->
-            <div class="srt-filter-group">
-                <span class="srt-filter-label" aria-hidden="true">
+            <div class="yrt-filter-group">
+                <span class="yrt-filter-label" aria-hidden="true">
                     <i class="bi bi-building"></i> Filial
                 </span>
-                <select name="branch" class="form-select form-select-sm srt-branch-filter"
+                <select name="branch" class="form-select form-select-sm yrt-branch-filter"
                         onchange="this.form.submit()" aria-label="Filial">
                     <option value="">Hammasi</option>
                     {% for b in branches %}
@@ -62,7 +62,7 @@
             </div>
 
             <!-- Active toggle -->
-            <div class="srt-filter-group">
+            <div class="yrt-filter-group">
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox"
                            name="active" value="1" id="onlyActive"
@@ -83,14 +83,14 @@
         </form>
     </div>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Foydalanuvchilar</h2>
-            <span class="srt-tag">Statistika so'nggi 30 kun</span>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-list-ul text-primary"></i> Foydalanuvchilar</h2>
+            <span class="yrt-tag">Statistika so'nggi 30 kun</span>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead>
                         <tr>
                             <th>Foydalanuvchi</th>
@@ -113,14 +113,14 @@
                                     <div class="small text-muted">{{ u.first_name }} {{ u.last_name }}</div>
                                 {% endif %}
                                 {% if u.is_superuser %}
-                                    <span class="srt-tag">superuser</span>
+                                    <span class="yrt-tag">superuser</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if u.role == 'admin' %}
-                                    <span class="srt-tag danger">Admin</span>
+                                    <span class="yrt-tag danger">Admin</span>
                                 {% else %}
-                                    <span class="srt-tag primary">Sotuvchi</span>
+                                    <span class="yrt-tag primary">Sotuvchi</span>
                                 {% endif %}
                                 {% if u.branch %}
                                     <div class="small text-muted mt-1">
@@ -130,7 +130,7 @@
                             </td>
                             <td>
                                 {% if u.commission_percent %}
-                                    <span class="srt-tag success">{{ u.commission_percent }}%</span>
+                                    <span class="yrt-tag success">{{ u.commission_percent }}%</span>
                                 {% else %}
                                     <span class="text-muted small">—</span>
                                 {% endif %}
@@ -151,15 +151,15 @@
                             </td>
                             <td>
                                 {% if u.last_login %}
-                                    <small class="srt-num">{{ u.last_login|date:"d.m H:i" }}</small>
+                                    <small class="yrt-num">{{ u.last_login|date:"d.m H:i" }}</small>
                                     <div class="small text-muted">{{ u.last_login|timesince }} oldin</div>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
                             <td>
                                 {% if u.is_active %}
-                                    <span class="srt-tag success">Faol</span>
+                                    <span class="yrt-tag success">Faol</span>
                                 {% else %}
-                                    <span class="srt-tag">O'chirilgan</span>
+                                    <span class="yrt-tag">O'chirilgan</span>
                                 {% endif %}
                             </td>
                             <td>

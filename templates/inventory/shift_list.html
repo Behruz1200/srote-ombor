@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Smenlar — Srote{% endblock %}
+{% block title %}Smenlar — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
@@ -26,16 +26,16 @@
     <article class="dash-card mb-3">
         <header class="dash-card__head">
             <h2 class="dash-card__title">
-                <span class="srt-pulse" style="margin-right: 0.45rem;"></span>
+                <span class="yrt-pulse" style="margin-right: 0.45rem;"></span>
                 Hozir ochiq smenlar
                 <span class="dash-pill dash-pill--success" style="margin-left: 0.4rem;">{{ open_shifts|length }}</span>
             </h2>
             <p class="dash-card__sub">Hozir kassada ishlayotgan sotuvchilar</p>
         </header>
         <div class="dash-card__body">
-            <div class="shift-open-grid srt-stagger">
+            <div class="shift-open-grid yrt-stagger">
                 {% for s in open_shifts %}
-                    <a href="{% url 'shift_detail' s.pk %}" class="shift-open-card srt-hover-lift">
+                    <a href="{% url 'shift_detail' s.pk %}" class="shift-open-card yrt-hover-lift">
                         <div class="shift-open-card__avatar">
                             {{ s.opened_by.username|slice:":1"|upper }}
                         </div>
@@ -58,12 +58,12 @@
 
     <!-- Variance statistika -->
     {% if shifts %}
-    <section class="dash-kpis dash-kpis--three srt-stagger" aria-label="Smen variance xulosasi">
+    <section class="dash-kpis dash-kpis--three yrt-stagger" aria-label="Smen variance xulosasi">
         <article class="dash-kpi" data-tone="success">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-arrow-up-circle"></i> Ortiqcha</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-success);">
+            <div class="dash-kpi__value" style="color: var(--yrt-success);">
                 +<span data-countup="{{ variance_positive|default:0 }}">{{ variance_positive|som }}</span>
             </div>
             <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
@@ -72,7 +72,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-arrow-down-circle"></i> Yetishmagan</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-danger);">
+            <div class="dash-kpi__value" style="color: var(--yrt-danger);">
                 <span data-countup="{{ variance_negative|default:0 }}">{{ variance_negative|som }}</span>
             </div>
             <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
@@ -81,7 +81,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-bar-chart-line"></i> O'rtacha farq</span>
             </div>
-            <div class="dash-kpi__value" style="color: {% if avg_variance < 0 %}var(--srt-danger){% elif avg_variance > 0 %}var(--srt-success){% else %}var(--srt-fg){% endif %};">
+            <div class="dash-kpi__value" style="color: {% if avg_variance < 0 %}var(--yrt-danger){% elif avg_variance > 0 %}var(--yrt-success){% else %}var(--yrt-fg){% endif %};">
                 <span>{{ avg_variance|som }}</span>
             </div>
             <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm / smen</span></div>
@@ -101,21 +101,21 @@
             gap: 0.85rem;
             align-items: center;
             padding: 0.85rem;
-            border-radius: var(--srt-radius);
-            background: var(--srt-success-tint);
+            border-radius: var(--yrt-radius);
+            background: var(--yrt-success-tint);
             border: 1px solid rgba(34,197,94,0.18);
             text-decoration: none;
-            color: var(--srt-fg);
+            color: var(--yrt-fg);
         }
-        .shift-open-card:hover { color: var(--srt-fg); }
+        .shift-open-card:hover { color: var(--yrt-fg); }
         .shift-open-card__avatar {
             width: 38px; height: 38px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--srt-success), #22C55E);
+            background: linear-gradient(135deg, var(--yrt-success), #22C55E);
             color: #FFFFFF;
             display: inline-flex; align-items: center; justify-content: center;
             font-weight: 700; font-size: 0.95rem;
-            box-shadow: var(--srt-shadow-green);
+            box-shadow: var(--yrt-shadow-green);
         }
         .shift-open-card__body {
             display: flex; flex-direction: column;
@@ -123,18 +123,18 @@
         }
         .shift-open-card__body strong {
             font-size: 0.92rem;
-            color: var(--srt-fg);
+            color: var(--yrt-fg);
         }
         .shift-open-card__body small {
             font-size: 0.74rem;
-            color: var(--srt-fg-muted);
+            color: var(--yrt-fg-muted);
         }
         .shift-open-card__body small i { margin-right: 0.25rem; opacity: 0.7; }
         .shift-open-card__arrow {
-            color: var(--srt-success);
+            color: var(--yrt-success);
             font-size: 1.1rem;
             opacity: 0.6;
-            transition: transform var(--srt-trans-fast), opacity var(--srt-trans-fast);
+            transition: transform var(--yrt-trans-fast), opacity var(--yrt-trans-fast);
         }
         .shift-open-card:hover .shift-open-card__arrow {
             opacity: 1;

@@ -1,7 +1,7 @@
 {
-  "name": "Srote — Ombor Boshqaruvi",
-  "short_name": "Srote",
-  "description": "Ko'p filialli ombor va sotuv boshqaruv tizimi",
+  "name": "yurit",
+  "short_name": "yurit",
+  "description": "Savdo va ombor boshqaruv tizimi",
   "start_url": "/lookup/",
   "scope": "/",
   "display": "standalone",

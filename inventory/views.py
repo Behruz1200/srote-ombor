@@ -2423,7 +2423,7 @@ def pos_customer_display(request):
     branch = _user_branch_or_403(request)
     return render(request, 'inventory/pos_display.html', {
         'branch': branch,
-        'shop_name': 'Srote',  # TODO: shop name from settings/branding
+        'shop_name': 'yurit',  # TODO: shop name from settings/branding
     })
 
 
@@ -5492,7 +5492,7 @@ def _insights_csv(ctx):
     response.write('﻿')
     w = csv.writer(response)
     branch_str = ctx['selected_branch'].name if ctx['selected_branch'] else 'Barcha filiallar'
-    w.writerow([f"Srote — Biznes tahlili"])
+    w.writerow([f"yurit — Biznes tahlili"])
     w.writerow([f"Davr: {ctx['d_start']} — {ctx['d_end']}  ({ctx['days']} kun)"])
     w.writerow([f"Filial: {branch_str}"])
     w.writerow([])
@@ -5593,7 +5593,7 @@ def _insights_pdf(ctx):
 
     branch_str = ctx['selected_branch'].name if ctx['selected_branch'] else 'Barcha filiallar'
     elements = [
-        Paragraph("Srote — Biznes tahlili", h1),
+        Paragraph("yurit — Biznes tahlili", h1),
         Paragraph(f"Davr: <b>{ctx['d_start']} — {ctx['d_end']}</b> ({ctx['days']} kun) &nbsp; | &nbsp; "
                   f"Filial: <b>{branch_str}</b> &nbsp; | &nbsp; "
                   f"Yaratildi: {timezone.localtime().strftime('%Y-%m-%d %H:%M')}", meta),
@@ -5697,7 +5697,7 @@ def _insights_pdf(ctx):
         canvas.setFont('Helvetica', 8)
         canvas.setFillColor(colors.HexColor('#999'))
         canvas.drawRightString(doc_obj.pagesize[0] - 15*mm, 8*mm,
-                               f"Srote — bet {doc_obj.page}")
+                               f"yurit — bet {doc_obj.page}")
         canvas.restoreState()
 
     doc.build(elements, onFirstPage=_footer, onLaterPages=_footer)
@@ -5820,7 +5820,7 @@ def _pdf_response(title, headers, rows, summary, d_start, d_end, branch):
         canvas.setFillColor(colors.HexColor('#999'))
         canvas.drawRightString(
             doc_obj.pagesize[0] - 12*mm, 8*mm,
-            f"Srote Ombor Boshqaruv  -  bet {doc_obj.page}"
+            f"yurit Ombor Boshqaruv  -  bet {doc_obj.page}"
         )
         canvas.restoreState()
 

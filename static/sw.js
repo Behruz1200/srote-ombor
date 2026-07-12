@@ -1,10 +1,10 @@
-// Srote — Service Worker
+// yurit — Service Worker
 // Strategy:
 //   - Static assets (CSS, JS, fonts, icons from CDN + our static/): cache-first
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'srote-v22-perf';
+const CACHE_NAME = 'yurit-v1';
 const STATIC_ASSETS = [
   '/static/img/icon-192.png',
   '/static/img/icon-512.png',

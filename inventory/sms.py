@@ -75,7 +75,7 @@ def format_receipt_sms(txn: 'SaleTransaction') -> str:
     extended set). Keep it under ~140 chars for two-part max."""
     total = int(txn.total)
     return (
-        f"Srote: chek #{txn.pk}. "
+        f"yurit: chek #{txn.pk}. "
         f"Summa: {total:,} so'm. "
         f"Filial: {txn.branch.name}. "
         f"Rahmat!"

@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Chek #{{ txn.pk }} — Srote{% endblock %}
+{% block title %}Chek #{{ txn.pk }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -28,7 +28,7 @@
     </header>
 
     <!-- Tezkor xulosa (chop etishda yashiriladi) -->
-    <section class="dash-kpis dash-kpis--four srt-stagger d-print-none" aria-label="Chek xulosasi">
+    <section class="dash-kpis dash-kpis--four yrt-stagger d-print-none" aria-label="Chek xulosasi">
         <article class="dash-kpi dash-kpi--lead">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami summa</span>
@@ -56,7 +56,7 @@
             </div>
             <div class="dash-kpi__footer">
                 {% if txn.discount_total > 0 %}
-                    <span style="color: var(--srt-warning);">−{{ txn.discount_total|som }} chegirma</span>
+                    <span style="color: var(--yrt-warning);">−{{ txn.discount_total|som }} chegirma</span>
                 {% else %}
                     <span>chegirma yo'q</span>
                 {% endif %}
@@ -70,7 +70,7 @@
                 {% if txn.customer_name %}
                     {{ txn.customer_name|truncatechars:16 }}
                 {% else %}
-                    <span style="color: var(--srt-fg-muted);">anonim</span>
+                    <span style="color: var(--yrt-fg-muted);">anonim</span>
                 {% endif %}
             </div>
             <div class="dash-kpi__footer">
@@ -85,7 +85,7 @@
 
     <div class="card p-4" id="receipt">
         <div class="text-center mb-3">
-            <h4 class="mb-0">SROTE</h4>
+            <h4 class="mb-0">YURIT</h4>
             <div class="text-muted small">{{ txn.branch.name }}</div>
             <div class="text-muted small">{{ txn.branch.address }}</div>
             {% if txn.branch.inn %}
@@ -192,7 +192,7 @@ printing on a dedicated cashier workstation:
 
 Chrome / Edge:
   Launch the browser with `--kiosk-printing` flag, e.g.:
-    chrome --kiosk-printing --app=https://srote-web.onrender.com/pos/
+    chrome --kiosk-printing --app=https://yurit-web.onrender.com/pos/
   The "default printer" set in OS print settings will be used directly,
   no dialog shown.
 

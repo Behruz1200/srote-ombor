@@ -60,7 +60,7 @@ for username, fn, ln, branch in seller_data:
         username=username,
         defaults={'role': User.Role.SOTUVCHI, 'branch': branch,
                   'first_name': fn, 'last_name': ln,
-                  'email': f'{username}@srote.local'}
+                  'email': f'{username}@yurit.local'}
     )
     if created:
         s.set_password('sotuvchi123')

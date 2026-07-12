@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Qidirish — Srote{% endblock %}
+{% block title %}Qidirish — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -40,7 +40,7 @@
             <div id="recentSearches" class="d-flex flex-wrap gap-1 mt-3" style="display:none;"></div>
 
             {% if not user.is_admin and user.branch %}
-                <div class="mt-3" style="font-size: 0.82rem; color: var(--srt-fg-muted);">
+                <div class="mt-3" style="font-size: 0.82rem; color: var(--yrt-fg-muted);">
                     <i class="bi bi-building"></i> Sizning filialingiz: <strong>{{ user.branch.name }}</strong>
                 </div>
             {% elif not user.is_admin %}
@@ -61,10 +61,10 @@
             </h2>
         </header>
         <div class="dash-card__body dash-card__body--flush">
-            <ul class="lookup-suggest srt-stagger">
+            <ul class="lookup-suggest yrt-stagger">
                 {% for p in suggestions %}
                     <li>
-                        <a href="?code={{ p.code }}" class="lookup-suggest__item srt-hover-lift">
+                        <a href="?code={{ p.code }}" class="lookup-suggest__item yrt-hover-lift">
                             <div class="lookup-suggest__main">
                                 <strong>{{ p.name }}</strong>
                                 <span class="lookup-suggest__meta">
@@ -89,20 +89,20 @@
         <article class="dash-card">
             <header class="dash-card__head">
                 <h2 class="dash-card__title">
-                    <i class="bi bi-fire" style="color: var(--srt-danger);"></i>
+                    <i class="bi bi-fire" style="color: var(--yrt-danger);"></i>
                     Eng ko'p sotilgan
                 </h2>
                 <p class="dash-card__sub">So'nggi 30 kun</p>
             </header>
             <div class="dash-card__body">
-                <div class="lookup-grid srt-stagger">
+                <div class="lookup-grid yrt-stagger">
                     {% for item in popular_products %}
-                        <a href="?code={{ item.p.code }}" class="lookup-tile srt-hover-lift">
+                        <a href="?code={{ item.p.code }}" class="lookup-tile yrt-hover-lift">
                             <span class="code-pill">{{ item.p.code }}</span>
                             <div class="lookup-tile__name">{{ item.p.name|truncatechars:30 }}</div>
                             <div class="lookup-tile__foot">
                                 <span class="lookup-tile__price">{{ item.p.default_sale_price|som }} <small>so'm</small></span>
-                                <span class="srt-tile" data-tone="success" style="padding: 0.2rem 0.5rem;">
+                                <span class="yrt-tile" data-tone="success" style="padding: 0.2rem 0.5rem;">
                                     <strong>{{ item.qty }}</strong>&nbsp;dona
                                 </span>
                             </div>
@@ -502,14 +502,14 @@
     min-width: 0;
     font-size: 1.1rem;
     padding: 0.75rem 1.05rem;
-    border-radius: var(--srt-radius) !important;
-    border: 1px solid var(--srt-border);
-    background: var(--srt-surface);
-    color: var(--srt-fg);
-    transition: border-color var(--srt-trans), box-shadow var(--srt-trans);
+    border-radius: var(--yrt-radius) !important;
+    border: 1px solid var(--yrt-border);
+    background: var(--yrt-surface);
+    color: var(--yrt-fg);
+    transition: border-color var(--yrt-trans), box-shadow var(--yrt-trans);
 }
 .lookup-search__input:focus {
-    border-color: var(--srt-primary);
+    border-color: var(--yrt-primary);
     box-shadow: 0 0 0 4px rgba(91,91,214,0.15);
     outline: none;
 }
@@ -517,7 +517,7 @@
     flex: 0 0 auto;
     padding: 0.75rem 1.2rem;
     font-size: 1rem;
-    border-radius: var(--srt-radius) !important;
+    border-radius: var(--yrt-radius) !important;
     min-height: 52px;
     display: inline-flex; align-items: center; justify-content: center;
     gap: 0.45rem;
@@ -542,28 +542,28 @@
     align-items: center;
     gap: 1rem;
     padding: 0.75rem 0.9rem;
-    border-radius: var(--srt-radius);
-    color: var(--srt-fg);
+    border-radius: var(--yrt-radius);
+    color: var(--yrt-fg);
     text-decoration: none;
-    transition: background var(--srt-trans-fast);
+    transition: background var(--yrt-trans-fast);
 }
-.lookup-suggest__item:hover { background: var(--srt-surface-2); color: var(--srt-fg); }
+.lookup-suggest__item:hover { background: var(--yrt-surface-2); color: var(--yrt-fg); }
 .lookup-suggest__main { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
 .lookup-suggest__main strong { font-size: 0.95rem; font-weight: 600; }
 .lookup-suggest__meta {
     display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center;
 }
 .lookup-suggest__price {
-    font-family: var(--srt-font-mono);
+    font-family: var(--yrt-font-mono);
     font-variant-numeric: tabular-nums;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--srt-primary);
+    color: var(--yrt-primary);
     white-space: nowrap;
 }
 .lookup-suggest__price small {
     font-size: 0.7rem;
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-left: 0.2rem;
@@ -580,25 +580,25 @@
     display: flex; flex-direction: column;
     gap: 0.4rem;
     padding: 0.85rem 0.95rem;
-    border-radius: var(--srt-radius);
-    background: var(--srt-surface);
-    border: 1px solid var(--srt-border);
-    color: var(--srt-fg);
+    border-radius: var(--yrt-radius);
+    background: var(--yrt-surface);
+    border: 1px solid var(--yrt-border);
+    color: var(--yrt-fg);
     text-decoration: none;
-    transition: transform var(--srt-trans-fast), box-shadow var(--srt-trans-fast);
+    transition: transform var(--yrt-trans-fast), box-shadow var(--yrt-trans-fast);
 }
 .lookup-tile:hover {
-    color: var(--srt-fg);
+    color: var(--yrt-fg);
     transform: translateY(-2px);
-    box-shadow: var(--srt-shadow-md);
-    border-color: var(--srt-primary-soft);
+    box-shadow: var(--yrt-shadow-md);
+    border-color: var(--yrt-primary-soft);
 }
 .lookup-tile__name {
     font-weight: 600;
     font-size: 0.9rem;
     line-height: 1.25;
     min-height: 2.2em;
-    color: var(--srt-fg);
+    color: var(--yrt-fg);
 }
 .lookup-tile__foot {
     display: flex; justify-content: space-between; align-items: center;
@@ -606,15 +606,15 @@
     gap: 0.4rem;
 }
 .lookup-tile__price {
-    font-family: var(--srt-font-mono);
+    font-family: var(--yrt-font-mono);
     font-variant-numeric: tabular-nums;
     font-size: 0.92rem;
     font-weight: 600;
-    color: var(--srt-primary);
+    color: var(--yrt-primary);
 }
 .lookup-tile__price small {
     font-size: 0.68rem;
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-left: 0.15rem;
@@ -628,44 +628,44 @@
 .lookup-cat {
     display: inline-flex; align-items: center; gap: 0.45rem;
     padding: 0.45rem 0.85rem;
-    border-radius: var(--srt-radius-pill);
-    background: var(--srt-surface-2);
-    border: 1px solid var(--srt-border);
-    color: var(--srt-fg);
+    border-radius: var(--yrt-radius-pill);
+    background: var(--yrt-surface-2);
+    border: 1px solid var(--yrt-border);
+    color: var(--yrt-fg);
     font-size: 0.85rem;
     font-weight: 500;
     text-decoration: none;
-    transition: all var(--srt-trans-fast);
+    transition: all var(--yrt-trans-fast);
 }
 .lookup-cat:hover {
-    color: var(--srt-primary);
-    background: var(--srt-surface);
-    border-color: var(--srt-primary-soft);
+    color: var(--yrt-primary);
+    background: var(--yrt-surface);
+    border-color: var(--yrt-primary-soft);
     transform: translateY(-1px);
 }
 .lookup-cat__count {
-    font-family: var(--srt-font-mono);
+    font-family: var(--yrt-font-mono);
     font-variant-numeric: tabular-nums;
     padding: 0.1rem 0.45rem;
-    border-radius: var(--srt-radius-pill);
-    background: var(--srt-surface-3);
+    border-radius: var(--yrt-radius-pill);
+    background: var(--yrt-surface-3);
     font-size: 0.74rem;
     font-weight: 600;
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
 }
 .lookup-cat:hover .lookup-cat__count {
-    background: var(--srt-primary);
+    background: var(--yrt-primary);
     color: #FFFFFF;
 }
 
 /* Legacy lookup-hero (still referenced in places) */
 .lookup-hero {
-    background: var(--srt-surface);
-    border: 1px solid var(--srt-border);
+    background: var(--yrt-surface);
+    border: 1px solid var(--yrt-border);
 }
-.hover-shadow { transition: box-shadow var(--srt-trans-fast), transform var(--srt-trans-fast); }
+.hover-shadow { transition: box-shadow var(--yrt-trans-fast), transform var(--yrt-trans-fast); }
 .hover-shadow:hover {
-    box-shadow: var(--srt-shadow-md);
+    box-shadow: var(--yrt-shadow-md);
     transform: translateY(-2px);
 }
 </style>
@@ -674,7 +674,7 @@
 <script>
 (function() {
     // ---- Recent searches (localStorage) ----
-    const RS_KEY = 'srote_recent_searches';
+    const RS_KEY = 'yurit_recent_searches';
     const codeInput = document.getElementById('lookupCode');
     const recentBox = document.getElementById('recentSearches');
 

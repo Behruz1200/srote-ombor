@@ -1,4 +1,4 @@
-/* Srote — multi-language transliteration
+/* yurit — multi-language transliteration
  * - UZ Latin ↔ UZ Cyrillic: deterministic transliteration on page load.
  * - DOM walk via TreeWalker, with MutationObserver for dynamic content.
  * - Skips <code>, <pre>, <script>, <style>, <input>, and elements with
@@ -182,15 +182,15 @@
 
     // Initial application based on saved preference
     function getLang() {
-        return localStorage.getItem('srote_lang') || 'lat';
+        return localStorage.getItem('yurit_lang') || 'lat';
     }
 
     function setLang(lang) {
-        localStorage.setItem('srote_lang', lang);
+        localStorage.setItem('yurit_lang', lang);
         if (lang === 'ru') {
             alert('Ruscha tarjima keyingi yangilanishda qo\'shiladi.\n\n' +
                   'Russian translation coming soon.');
-            localStorage.setItem('srote_lang', 'lat');
+            localStorage.setItem('yurit_lang', 'lat');
             return;
         }
         // Reload page to apply cleanly (avoids re-translit edge cases)
@@ -223,5 +223,5 @@
     });
 
     // Expose API
-    window.SroteI18n = { setLang, getLang, latToCyr, cyrToLat };
+    window.yuritI18n = { setLang, getLang, latToCyr, cyrToLat };
 })();

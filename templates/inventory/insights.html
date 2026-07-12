@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras l10n %}
+{% load yurit_extras l10n %}
 
-{% block title %}Tahlil — Srote{% endblock %}
+{% block title %}Tahlil — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
@@ -155,20 +155,20 @@
     </section>
 
     <!-- ── Growth comparison strip ───────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-arrow-left-right text-primary"></i> Oldingi davr bilan taqqoslash</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-arrow-left-right text-primary"></i> Oldingi davr bilan taqqoslash</h2>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
             <div class="row g-3">
                 <div class="col-md-4">
                     <div class="text-muted small mb-1">Daromad</div>
                     <div class="d-flex align-items-baseline gap-2 flex-wrap">
-                        <span class="srt-num text-muted">{{ prev_revenue|som }}</span>
+                        <span class="yrt-num text-muted">{{ prev_revenue|som }}</span>
                         <i class="bi bi-arrow-right text-muted"></i>
-                        <strong class="srt-num">{{ revenue|som }}</strong>
+                        <strong class="yrt-num">{{ revenue|som }}</strong>
                         {% if rev_growth is not None %}
-                            <span class="srt-delta {% if rev_growth > 0 %}up{% elif rev_growth < 0 %}down{% else %}flat{% endif %}">
+                            <span class="yrt-delta {% if rev_growth > 0 %}up{% elif rev_growth < 0 %}down{% else %}flat{% endif %}">
                                 {{ rev_growth|floatformat:1 }}%
                             </span>
                         {% endif %}
@@ -177,11 +177,11 @@
                 <div class="col-md-4">
                     <div class="text-muted small mb-1">Sotuvlar</div>
                     <div class="d-flex align-items-baseline gap-2 flex-wrap">
-                        <span class="srt-num text-muted">{{ prev_n }}</span>
+                        <span class="yrt-num text-muted">{{ prev_n }}</span>
                         <i class="bi bi-arrow-right text-muted"></i>
-                        <strong class="srt-num">{{ sales_count }}</strong>
+                        <strong class="yrt-num">{{ sales_count }}</strong>
                         {% if sales_growth is not None %}
-                            <span class="srt-delta {% if sales_growth > 0 %}up{% elif sales_growth < 0 %}down{% else %}flat{% endif %}">
+                            <span class="yrt-delta {% if sales_growth > 0 %}up{% elif sales_growth < 0 %}down{% else %}flat{% endif %}">
                                 {{ sales_growth|floatformat:1 }}%
                             </span>
                         {% endif %}
@@ -190,11 +190,11 @@
                 <div class="col-md-4">
                     <div class="text-muted small mb-1">Sotilgan dona</div>
                     <div class="d-flex align-items-baseline gap-2 flex-wrap">
-                        <span class="srt-num text-muted">{{ prev_qty }}</span>
+                        <span class="yrt-num text-muted">{{ prev_qty }}</span>
                         <i class="bi bi-arrow-right text-muted"></i>
-                        <strong class="srt-num">{{ qty }}</strong>
+                        <strong class="yrt-num">{{ qty }}</strong>
                         {% if qty_growth is not None %}
-                            <span class="srt-delta {% if qty_growth > 0 %}up{% elif qty_growth < 0 %}down{% else %}flat{% endif %}">
+                            <span class="yrt-delta {% if qty_growth > 0 %}up{% elif qty_growth < 0 %}down{% else %}flat{% endif %}">
                                 {{ qty_growth|floatformat:1 }}%
                             </span>
                         {% endif %}
@@ -205,25 +205,25 @@
     </div>
 
     <!-- ── Daily trend chart ─────────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-activity text-primary"></i> Kunlik sotuv trendi</h2>
-            <span class="srt-tag">Daromad va dona</span>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-activity text-primary"></i> Kunlik sotuv trendi</h2>
+            <span class="yrt-tag">Daromad va dona</span>
         </div>
-        <div class="srt-section-body">
-            <div class="srt-chart-box"><canvas id="trendChart"></canvas></div>
+        <div class="yrt-section-body">
+            <div class="yrt-chart-box"><canvas id="trendChart"></canvas></div>
         </div>
     </div>
 
     <!-- ── Branch P&L ────────────────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-building text-primary"></i> Filiallar P&amp;L</h2>
-            <span class="srt-tag">Sof foyda = Daromad − COGS − Qat'iy</span>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-building text-primary"></i> Filiallar P&amp;L</h2>
+            <span class="yrt-tag">Sof foyda = Daromad − COGS − Qat'iy</span>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead><tr>
                         <th>Filial</th>
                         <th class="num">Daromad</th>
@@ -252,7 +252,7 @@
                                 </strong>
                             </td>
                             <td class="num">
-                                <span class="srt-tag {% if b.net_margin < 0 %}danger{% elif b.net_margin < 10 %}accent{% else %}success{% endif %}">
+                                <span class="yrt-tag {% if b.net_margin < 0 %}danger{% elif b.net_margin < 10 %}accent{% else %}success{% endif %}">
                                     {{ b.net_margin|floatformat:1 }}%
                                 </span>
                             </td>
@@ -271,13 +271,13 @@
     <!-- ── Top by revenue + Top by profit ────────────────────────────── -->
     <div class="row g-3">
         <div class="col-lg-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-trophy text-warning"></i> TOP-10 daromad</h2>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-trophy text-warning"></i> TOP-10 daromad</h2>
                 </div>
-                <div class="srt-section-body flush">
+                <div class="yrt-section-body flush">
                     <div class="table-responsive">
-                        <table class="srt-data-table">
+                        <table class="yrt-data-table">
                             <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th class="num">Dona</th><th class="num">Daromad</th></tr></thead>
                             <tbody>
                             {% for p in top_products %}
@@ -299,14 +299,14 @@
             </div>
         </div>
         <div class="col-lg-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-cash-stack text-success"></i> TOP-10 sof foyda</h2>
-                    <span class="srt-tag">Daromad − tannarx</span>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-cash-stack text-success"></i> TOP-10 sof foyda</h2>
+                    <span class="yrt-tag">Daromad − tannarx</span>
                 </div>
-                <div class="srt-section-body flush">
+                <div class="yrt-section-body flush">
                     <div class="table-responsive">
-                        <table class="srt-data-table">
+                        <table class="yrt-data-table">
                             <thead><tr><th>#</th><th>Kod</th><th>Mahsulot</th><th class="num">Foyda</th><th class="num">Marja</th></tr></thead>
                             <tbody>
                             {% for p in top_profit %}
@@ -332,14 +332,14 @@
     <!-- ── Slow movers + Turnover ─────────────────────────────────────── -->
     <div class="row g-3">
         <div class="col-lg-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-snow text-info"></i> Sotilmayotgan</h2>
-                    <span class="srt-tag">Davrda umuman sotilmagan</span>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-snow text-info"></i> Sotilmayotgan</h2>
+                    <span class="yrt-tag">Davrda umuman sotilmagan</span>
                 </div>
-                <div class="srt-section-body flush">
+                <div class="yrt-section-body flush">
                     <div class="table-responsive">
-                        <table class="srt-data-table">
+                        <table class="yrt-data-table">
                             <thead><tr><th>Kod</th><th>Mahsulot</th><th>Kategoriya</th><th class="num">Omborda</th></tr></thead>
                             <tbody>
                             {% for p in slow_products %}
@@ -359,14 +359,14 @@
             </div>
         </div>
         <div class="col-lg-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-arrow-repeat text-warning"></i> Tovar aylanmasi</h2>
-                    <span class="srt-tag">Hozirgi sur'atda qancha kun yetadi</span>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-arrow-repeat text-warning"></i> Tovar aylanmasi</h2>
+                    <span class="yrt-tag">Hozirgi sur'atda qancha kun yetadi</span>
                 </div>
-                <div class="srt-section-body flush">
+                <div class="yrt-section-body flush">
                     <div class="table-responsive">
-                        <table class="srt-data-table">
+                        <table class="yrt-data-table">
                             <thead><tr><th>Kod</th><th>Mahsulot</th><th class="num">Kunlik o'rt.</th><th class="num">Omborda</th><th class="num">Yetadi</th></tr></thead>
                             <tbody>
                             {% for t in turnover %}
@@ -377,7 +377,7 @@
                                     <td class="num">{{ t.stock }}</td>
                                     <td class="num">
                                         {% if t.days_left is not None %}
-                                            <span class="srt-tag {% if t.days_left < 7 %}danger{% elif t.days_left < 14 %}accent{% else %}success{% endif %}">
+                                            <span class="yrt-tag {% if t.days_left < 7 %}danger{% elif t.days_left < 14 %}accent{% else %}success{% endif %}">
                                                 {{ t.days_left|floatformat:0 }} kun
                                             </span>
                                         {% else %}—{% endif %}
@@ -397,13 +397,13 @@
     <!-- ── Top sellers + Branch donut ─────────────────────────────────── -->
     <div class="row g-3">
         <div class="col-lg-7">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-person-check text-success"></i> Eng yaxshi sotuvchilar</h2>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-person-check text-success"></i> Eng yaxshi sotuvchilar</h2>
                 </div>
-                <div class="srt-section-body flush">
+                <div class="yrt-section-body flush">
                     <div class="table-responsive">
-                        <table class="srt-data-table">
+                        <table class="yrt-data-table">
                             <thead><tr><th>#</th><th>Sotuvchi</th><th>Filial</th><th class="num">Sotuvlar</th><th class="num">Dona</th><th class="num">Daromad</th><th class="num">Komissiya</th></tr></thead>
                             <tbody>
                             {% for s in top_sellers %}
@@ -436,12 +436,12 @@
             </div>
         </div>
         <div class="col-lg-5">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-pie-chart text-primary"></i> Filial bo'yicha ulush</h2>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-pie-chart text-primary"></i> Filial bo'yicha ulush</h2>
                 </div>
-                <div class="srt-section-body">
-                    <div class="srt-chart-box" style="height: 320px;"><canvas id="branchChart"></canvas></div>
+                <div class="yrt-section-body">
+                    <div class="yrt-chart-box" style="height: 320px;"><canvas id="branchChart"></canvas></div>
                 </div>
             </div>
         </div>
@@ -450,24 +450,24 @@
     <!-- ── Hour + Weekday ─────────────────────────────────────────────── -->
     <div class="row g-3">
         <div class="col-md-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-clock text-primary"></i> Soatlar bo'yicha</h2>
-                    <span class="srt-tag">dona</span>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-clock text-primary"></i> Soatlar bo'yicha</h2>
+                    <span class="yrt-tag">dona</span>
                 </div>
-                <div class="srt-section-body">
-                    <div class="srt-chart-box short"><canvas id="hourChart"></canvas></div>
+                <div class="yrt-section-body">
+                    <div class="yrt-chart-box short"><canvas id="hourChart"></canvas></div>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-calendar-week text-primary"></i> Hafta kunlari</h2>
-                    <span class="srt-tag">dona</span>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-calendar-week text-primary"></i> Hafta kunlari</h2>
+                    <span class="yrt-tag">dona</span>
                 </div>
-                <div class="srt-section-body">
-                    <div class="srt-chart-box short"><canvas id="weekdayChart"></canvas></div>
+                <div class="yrt-section-body">
+                    <div class="yrt-chart-box short"><canvas id="weekdayChart"></canvas></div>
                 </div>
             </div>
         </div>
@@ -476,23 +476,23 @@
     <!-- ── Category + Out of stock ────────────────────────────────────── -->
     <div class="row g-3">
         <div class="col-md-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-tags text-primary"></i> Kategoriya bo'yicha</h2>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-tags text-primary"></i> Kategoriya bo'yicha</h2>
                 </div>
-                <div class="srt-section-body">
-                    <div class="srt-chart-box" style="height: 340px;"><canvas id="categoryChart"></canvas></div>
+                <div class="yrt-section-body">
+                    <div class="yrt-chart-box" style="height: 340px;"><canvas id="categoryChart"></canvas></div>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-x-octagon text-danger"></i> Omborda tugagan</h2>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-x-octagon text-danger"></i> Omborda tugagan</h2>
                 </div>
-                <div class="srt-section-body flush">
+                <div class="yrt-section-body flush">
                     <div class="table-responsive">
-                        <table class="srt-data-table">
+                        <table class="yrt-data-table">
                             <thead><tr><th>Filial</th><th>Kod</th><th>O'lcham / Rang</th></tr></thead>
                             <tbody>
                             {% for bs in out_of_stock %}
@@ -513,11 +513,11 @@
     </div>
 
     <!-- ── Forecast ──────────────────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-graph-up-arrow text-primary"></i> Sotuv bashorati</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-graph-up-arrow text-primary"></i> Sotuv bashorati</h2>
             <div class="d-flex align-items-center gap-2">
-                <span class="srt-tag {% if fc_trend_direction == 'up' %}success{% elif fc_trend_direction == 'down' %}danger{% else %}primary{% endif %}">
+                <span class="yrt-tag {% if fc_trend_direction == 'up' %}success{% elif fc_trend_direction == 'down' %}danger{% else %}primary{% endif %}">
                     {% if fc_trend_direction == 'up' %}<i class="bi bi-arrow-up-short"></i> O'sib bormoqda
                     {% elif fc_trend_direction == 'down' %}<i class="bi bi-arrow-down-short"></i> Pasayib bormoqda
                     {% else %}<i class="bi bi-dash"></i> Barqaror{% endif %}
@@ -525,8 +525,8 @@
                 <span class="small text-muted">Kelgusi 30 kun: <strong>{{ fc_total_30d|som }}</strong></span>
             </div>
         </div>
-        <div class="srt-section-body">
-            <div class="srt-chart-box"><canvas id="forecastChart"></canvas></div>
+        <div class="yrt-section-body">
+            <div class="yrt-chart-box"><canvas id="forecastChart"></canvas></div>
             <div class="small text-muted mt-2">
                 <i class="bi bi-info-circle"></i>
                 Yashil — haqiqiy 90 kun, qizil chiziq — bashorat 30 kun.
@@ -537,18 +537,18 @@
 
     <!-- ── Cohort retention ──────────────────────────────────────────── -->
     {% if cohort_rows|length > 0 %}
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-people-fill text-info"></i> Mijoz qaytib kelish (cohort)</h2>
-            <span class="srt-tag">6 oy</span>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-people-fill text-info"></i> Mijoz qaytib kelish (cohort)</h2>
+            <span class="yrt-tag">6 oy</span>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
             <div class="small text-muted mb-2">
                 Har qator — birinchi xarid qilgan oy. Hujayralar — keyingi oylarda
                 qaytib kelganlar foizi. Qancha to'q yashil bo'lsa, mijozlar shuncha sodiq.
             </div>
             <div class="table-responsive">
-                <table class="srt-data-table" style="min-width: 600px;">
+                <table class="yrt-data-table" style="min-width: 600px;">
                     <thead>
                         <tr>
                             <th style="width: 110px;">Birinchi xarid</th>
@@ -564,9 +564,9 @@
                             {% for cell in r.cells %}
                                 <td class="text-center p-1" style="width: 60px;">
                                     {% if cell %}
-                                        <div class="srt-heatmap-cell"
+                                        <div class="yrt-heatmap-cell"
                                              style="background: rgba(21, 128, 61, {{ cell.pct|div:100 }});
-                                                    color: {% if cell.pct > 50 %}#fff{% else %}var(--srt-fg){% endif %};"
+                                                    color: {% if cell.pct > 50 %}#fff{% else %}var(--yrt-fg){% endif %};"
                                              title="{{ cell.count }} mijoz / {{ r.size }}">
                                             {% if cell.pct > 0 %}{{ cell.pct|floatformat:0 }}%{% endif %}
                                         </div>
@@ -585,57 +585,57 @@
     {% endif %}
 
     <!-- ── YoY ───────────────────────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-calendar-event text-primary"></i> O'tgan yil bilan taqqoslash</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-calendar-event text-primary"></i> O'tgan yil bilan taqqoslash</h2>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
             {% if not ly_revenue and not ly_qty and not ly_txns %}
-                <div class="srt-empty" style="border:none;">
-                    <i class="bi bi-info-circle srt-empty-icon"></i>
+                <div class="yrt-empty" style="border:none;">
+                    <i class="bi bi-info-circle yrt-empty-icon"></i>
                     O'tgan yil shu davrda sotuvlar yo'q edi — biznes 1 yildan kam yoshda bo'lishi mumkin.
                 </div>
             {% else %}
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <div class="srt-kpi">
-                            <div class="srt-kpi-label">Tushum</div>
-                            <div class="srt-kpi-value">{{ revenue|som }}</div>
-                            <div class="srt-kpi-meta">
-                                <span>O'tgan yil: <span class="srt-num">{{ ly_revenue|som }}</span></span>
+                        <div class="yrt-kpi">
+                            <div class="yrt-kpi-label">Tushum</div>
+                            <div class="yrt-kpi-value">{{ revenue|som }}</div>
+                            <div class="yrt-kpi-meta">
+                                <span>O'tgan yil: <span class="yrt-num">{{ ly_revenue|som }}</span></span>
                                 {% if yoy_revenue_delta is not None %}
-                                    <span class="srt-delta {% if yoy_revenue_delta > 0 %}up{% elif yoy_revenue_delta < 0 %}down{% else %}flat{% endif %}">
+                                    <span class="yrt-delta {% if yoy_revenue_delta > 0 %}up{% elif yoy_revenue_delta < 0 %}down{% else %}flat{% endif %}">
                                         {{ yoy_revenue_delta|floatformat:0 }}%
                                     </span>
-                                {% elif ly_revenue == 0 %}<span class="srt-tag">Birinchi marta</span>{% endif %}
+                                {% elif ly_revenue == 0 %}<span class="yrt-tag">Birinchi marta</span>{% endif %}
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="srt-kpi">
-                            <div class="srt-kpi-label">Sotilgan dona</div>
-                            <div class="srt-kpi-value">{{ qty }}</div>
-                            <div class="srt-kpi-meta">
-                                <span>O'tgan yil: <span class="srt-num">{{ ly_qty }}</span></span>
+                        <div class="yrt-kpi">
+                            <div class="yrt-kpi-label">Sotilgan dona</div>
+                            <div class="yrt-kpi-value">{{ qty }}</div>
+                            <div class="yrt-kpi-meta">
+                                <span>O'tgan yil: <span class="yrt-num">{{ ly_qty }}</span></span>
                                 {% if yoy_qty_delta is not None %}
-                                    <span class="srt-delta {% if yoy_qty_delta > 0 %}up{% elif yoy_qty_delta < 0 %}down{% else %}flat{% endif %}">
+                                    <span class="yrt-delta {% if yoy_qty_delta > 0 %}up{% elif yoy_qty_delta < 0 %}down{% else %}flat{% endif %}">
                                         {{ yoy_qty_delta|floatformat:0 }}%
                                     </span>
-                                {% elif ly_qty == 0 %}<span class="srt-tag">Birinchi marta</span>{% endif %}
+                                {% elif ly_qty == 0 %}<span class="yrt-tag">Birinchi marta</span>{% endif %}
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="srt-kpi">
-                            <div class="srt-kpi-label">Cheklar</div>
-                            <div class="srt-kpi-value">{{ sales_count }}</div>
-                            <div class="srt-kpi-meta">
-                                <span>O'tgan yil: <span class="srt-num">{{ ly_txns }}</span></span>
+                        <div class="yrt-kpi">
+                            <div class="yrt-kpi-label">Cheklar</div>
+                            <div class="yrt-kpi-value">{{ sales_count }}</div>
+                            <div class="yrt-kpi-meta">
+                                <span>O'tgan yil: <span class="yrt-num">{{ ly_txns }}</span></span>
                                 {% if yoy_txns_delta is not None %}
-                                    <span class="srt-delta {% if yoy_txns_delta > 0 %}up{% elif yoy_txns_delta < 0 %}down{% else %}flat{% endif %}">
+                                    <span class="yrt-delta {% if yoy_txns_delta > 0 %}up{% elif yoy_txns_delta < 0 %}down{% else %}flat{% endif %}">
                                         {{ yoy_txns_delta|floatformat:0 }}%
                                     </span>
-                                {% elif ly_txns == 0 %}<span class="srt-tag">Birinchi marta</span>{% endif %}
+                                {% elif ly_txns == 0 %}<span class="yrt-tag">Birinchi marta</span>{% endif %}
                             </div>
                         </div>
                     </div>
@@ -645,14 +645,14 @@
     </div>
 
     <!-- ── Hour × Weekday heatmap ────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-grid-3x3-gap text-primary"></i> Soat × Hafta kuni tushumi</h2>
-            <span class="srt-tag d-md-none d-inline">← chap-o'ng siljiting</span>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-grid-3x3-gap text-primary"></i> Soat × Hafta kuni tushumi</h2>
+            <span class="yrt-tag d-md-none d-inline">← chap-o'ng siljiting</span>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
             <div class="table-responsive" style="-webkit-overflow-scrolling: touch;">
-                <table class="srt-data-table" style="font-size: 0.7rem; min-width: 600px;">
+                <table class="yrt-data-table" style="font-size: 0.7rem; min-width: 600px;">
                     <thead>
                         <tr>
                             <th style="width: 50px;"></th>
@@ -667,9 +667,9 @@
                                 {% with intensity=cell|div:heatmap_max %}
                                 <td class="text-center p-0" style="height: 26px;">
                                     {% if cell > 0 %}
-                                        <div class="srt-heatmap-cell"
+                                        <div class="yrt-heatmap-cell"
                                              style="background: rgba(59, 130, 246, {{ intensity }});
-                                                    color: {% if intensity > 0.5 %}#fff{% else %}var(--srt-fg){% endif %};"
+                                                    color: {% if intensity > 0.5 %}#fff{% else %}var(--yrt-fg){% endif %};"
                                              title="{{ day }} {{ forloop.counter0 }}:00 — {{ cell|floatformat:0 }} so'm">
                                             {% if intensity > 0.3 %}{{ cell|som }}{% endif %}
                                         </div>
@@ -689,41 +689,41 @@
     <!-- ── ABC + Dead stock ──────────────────────────────────────────── -->
     <div class="row g-3">
         <div class="col-lg-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-bar-chart-steps text-primary"></i> ABC tahlili</h2>
-                    <span class="srt-tag">mahsulot ulushi</span>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-bar-chart-steps text-primary"></i> ABC tahlili</h2>
+                    <span class="yrt-tag">mahsulot ulushi</span>
                 </div>
-                <div class="srt-section-body">
+                <div class="yrt-section-body">
                     <div class="row g-2 mb-3">
                         <div class="col-4">
-                            <div class="srt-kpi accent-success" style="padding: 0.7rem;">
+                            <div class="yrt-kpi accent-success" style="padding: 0.7rem;">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="srt-tag success">A</span>
+                                    <span class="yrt-tag success">A</span>
                                     <span class="small text-muted">~80%</span>
                                 </div>
-                                <div class="srt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.A|som }}</div>
-                                <div class="srt-kpi-meta"><span class="srt-num">{{ abc_count.A }}</span> mahsulot</div>
+                                <div class="yrt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.A|som }}</div>
+                                <div class="yrt-kpi-meta"><span class="yrt-num">{{ abc_count.A }}</span> mahsulot</div>
                             </div>
                         </div>
                         <div class="col-4">
-                            <div class="srt-kpi accent-amber" style="padding: 0.7rem;">
+                            <div class="yrt-kpi accent-amber" style="padding: 0.7rem;">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="srt-tag accent">B</span>
+                                    <span class="yrt-tag accent">B</span>
                                     <span class="small text-muted">~15%</span>
                                 </div>
-                                <div class="srt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.B|som }}</div>
-                                <div class="srt-kpi-meta"><span class="srt-num">{{ abc_count.B }}</span> mahsulot</div>
+                                <div class="yrt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.B|som }}</div>
+                                <div class="yrt-kpi-meta"><span class="yrt-num">{{ abc_count.B }}</span> mahsulot</div>
                             </div>
                         </div>
                         <div class="col-4">
-                            <div class="srt-kpi" style="padding: 0.7rem;">
+                            <div class="yrt-kpi" style="padding: 0.7rem;">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="srt-tag">C</span>
+                                    <span class="yrt-tag">C</span>
                                     <span class="small text-muted">~5%</span>
                                 </div>
-                                <div class="srt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.C|som }}</div>
-                                <div class="srt-kpi-meta"><span class="srt-num">{{ abc_count.C }}</span> mahsulot</div>
+                                <div class="yrt-kpi-value" style="font-size: 1.2rem;">{{ abc_summary.C|som }}</div>
+                                <div class="yrt-kpi-meta"><span class="yrt-num">{{ abc_count.C }}</span> mahsulot</div>
                             </div>
                         </div>
                     </div>
@@ -735,7 +735,7 @@
                             <span>
                                 <a href="{% url 'product_detail' p.code %}">{{ p.name|truncatechars:30 }}</a>
                             </span>
-                            <strong class="srt-num">{{ p.revenue|som }}</strong>
+                            <strong class="yrt-num">{{ p.revenue|som }}</strong>
                         </div>
                     {% endfor %}
                 </div>
@@ -743,19 +743,19 @@
         </div>
 
         <div class="col-lg-6">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-snow text-info"></i> Dead stock</h2>
-                    <span class="srt-tag">90+ kun sotilmagan</span>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-snow text-info"></i> Dead stock</h2>
+                    <span class="yrt-tag">90+ kun sotilmagan</span>
                 </div>
-                <div class="srt-section-body flush">
+                <div class="yrt-section-body flush">
                     {% if dead_products %}
                         <div class="px-3 pt-2 small text-warning">
                             <i class="bi bi-exclamation-triangle"></i>
                             Jami <strong>{{ dead_count }}</strong> ta mahsulot 90 kundan beri sotilmagan
                         </div>
                         <div class="table-responsive">
-                            <table class="srt-data-table">
+                            <table class="yrt-data-table">
                                 <thead><tr><th>Mahsulot</th><th class="num">Zaxira</th><th class="num">Qiymat</th></tr></thead>
                                 <tbody>
                                 {% for p in dead_products %}
@@ -772,8 +772,8 @@
                             </table>
                         </div>
                     {% else %}
-                        <div class="srt-empty" style="border:none;">
-                            <i class="bi bi-check-circle-fill srt-empty-icon text-success"></i>
+                        <div class="yrt-empty" style="border:none;">
+                            <i class="bi bi-check-circle-fill yrt-empty-icon text-success"></i>
                             Dead stock yo'q
                         </div>
                     {% endif %}
@@ -784,16 +784,16 @@
 
     <!-- ── Margin alerts ─────────────────────────────────────────────── -->
     {% if margin_alerts %}
-    <div class="srt-section" style="border-color: var(--srt-danger);">
-        <div class="srt-section-head" style="background: rgba(185, 28, 28, 0.06);">
-            <h2 class="srt-h2 text-danger">
+    <div class="yrt-section" style="border-color: var(--yrt-danger);">
+        <div class="yrt-section-head" style="background: rgba(185, 28, 28, 0.06);">
+            <h2 class="yrt-h2 text-danger">
                 <i class="bi bi-exclamation-octagon-fill"></i> Margin ogohlantirish
             </h2>
-            <span class="srt-tag danger">Tannarxdan past sotilgan</span>
+            <span class="yrt-tag danger">Tannarxdan past sotilgan</span>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead><tr><th>Mahsulot</th><th>Filial</th><th>Sana</th>
                         <th class="num">Sotuv</th><th class="num">Tannarx</th>
                         <th class="num">Zarar</th></tr></thead>
@@ -805,7 +805,7 @@
                                 <div class="small text-muted"><code>{{ a.product.code }}</code></div>
                             </td>
                             <td><small>{{ a.branch }}</small></td>
-                            <td><small class="srt-num">{{ a.date|date:"d.m.Y H:i" }}</small></td>
+                            <td><small class="yrt-num">{{ a.date|date:"d.m.Y H:i" }}</small></td>
                             <td class="num">{{ a.sale_price|som }}</td>
                             <td class="num">{{ a.cost|som }}</td>
                             <td class="num text-danger"><strong>−{{ a.loss|som }}</strong></td>
@@ -819,27 +819,27 @@
     {% endif %}
 
     <!-- ── Returns ──────────────────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-arrow-counterclockwise text-warning"></i> Qaytarilishlar</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-arrow-counterclockwise text-warning"></i> Qaytarilishlar</h2>
             <div class="text-end">
                 <div class="small text-muted">Jami qaytarilgan</div>
                 <div>
-                    <strong class="srt-num">{{ returns_total_qty }}</strong> dona
+                    <strong class="yrt-num">{{ returns_total_qty }}</strong> dona
                     {% if returns_total_amount %}
-                        · <strong class="srt-num">{{ returns_total_amount|som }}</strong> so'm
+                        · <strong class="yrt-num">{{ returns_total_amount|som }}</strong> so'm
                     {% endif %}
                     {% if return_rate %}
-                        · <span class="srt-tag {% if return_rate > 5 %}danger{% elif return_rate > 2 %}accent{% else %}success{% endif %}">
+                        · <span class="yrt-tag {% if return_rate > 5 %}danger{% elif return_rate > 2 %}accent{% else %}success{% endif %}">
                             {{ return_rate|floatformat:1 }}% sotuvlardan
                         </span>
                     {% endif %}
                 </div>
             </div>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead>
                         <tr>
                             <th>Kod</th>
@@ -859,14 +859,14 @@
                             <td class="num text-muted">{{ r.sold }}</td>
                             <td class="num">
                                 {% if r.sold %}
-                                    <span class="srt-tag {% if r.rate > 20 %}danger{% elif r.rate > 10 %}accent{% else %}primary{% endif %}">
+                                    <span class="yrt-tag {% if r.rate > 20 %}danger{% elif r.rate > 10 %}accent{% else %}primary{% endif %}">
                                         {{ r.rate|floatformat:1 }}%
                                     </span>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
                             <td>
                                 {% for reason in r.reasons %}
-                                    <span class="srt-tag">{{ reason|truncatechars:30 }}</span>
+                                    <span class="yrt-tag">{{ reason|truncatechars:30 }}</span>
                                 {% empty %}
                                     <span class="text-muted small">sabab kiritilmagan</span>
                                 {% endfor %}
@@ -884,23 +884,23 @@
     </div>
 
     <!-- ── High markup ──────────────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-percent text-success"></i> Eng yuqori markup'li mahsulotlar</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-percent text-success"></i> Eng yuqori markup'li mahsulotlar</h2>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
             <div class="row g-2">
             {% for p in high_margin %}
                 <div class="col-6 col-md-3">
-                    <div class="srt-kpi accent-success" style="padding: 0.7rem;">
+                    <div class="yrt-kpi accent-success" style="padding: 0.7rem;">
                         <div class="small text-muted">{{ p.code }}</div>
                         <div style="font-size: 0.9rem; line-height: 1.2; min-height: 2.4em;">
                             {{ p.name|truncatechars:25 }}
                         </div>
-                        <div class="srt-kpi-value" style="font-size: 1.35rem;">
+                        <div class="yrt-kpi-value" style="font-size: 1.35rem;">
                             <span class="text-success">{{ p.markup_percent }}%</span>
                         </div>
-                        <div class="srt-kpi-meta">markup</div>
+                        <div class="yrt-kpi-meta">markup</div>
                     </div>
                 </div>
             {% endfor %}
@@ -934,12 +934,12 @@
         return `rgba(${r}, ${g}, ${b}, ${a})`;
     }
     const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-    const primary = css('--srt-primary', '#1E40AF');
-    const accent  = css('--srt-accent',  '#D97706');
-    const success = css('--srt-success', '#15803D');
-    const danger  = css('--srt-danger',  '#B91C1C');
-    const fg      = css('--srt-fg',      '#0F172A');
-    const muted   = css('--srt-fg-muted','#475569');
+    const primary = css('--yrt-primary', '#1E40AF');
+    const accent  = css('--yrt-accent',  '#D97706');
+    const success = css('--yrt-success', '#15803D');
+    const danger  = css('--yrt-danger',  '#B91C1C');
+    const fg      = css('--yrt-fg',      '#0F172A');
+    const muted   = css('--yrt-fg-muted','#475569');
     const gridColor = isDark ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.06)';
 
     /* Palette for multi-series charts */

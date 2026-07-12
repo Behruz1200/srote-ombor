@@ -1,17 +1,17 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Yetkazib beruvchilar — Srote{% endblock %}
+{% block title %}Yetkazib beruvchilar — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
 
-    <div class="srt-page-header">
+    <div class="yrt-page-header">
         <div>
-            <h1 class="srt-h1"><i class="bi bi-truck me-1 text-primary"></i> Yetkazib beruvchilar</h1>
-            <div class="srt-sub">Tovar yetkazib beruvchi kompaniyalar va shaxslar</div>
+            <h1 class="yrt-h1"><i class="bi bi-truck me-1 text-primary"></i> Yetkazib beruvchilar</h1>
+            <div class="yrt-sub">Tovar yetkazib beruvchi kompaniyalar va shaxslar</div>
         </div>
-        <div class="srt-actions">
+        <div class="yrt-actions">
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#supplierModal"
                     onclick="resetSupplierForm()">
                 <i class="bi bi-plus-circle"></i> <span class="btn-text">Yangi yetkazib beruvchi</span>
@@ -19,13 +19,13 @@
         </div>
     </div>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Ro'yxat</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-list-ul text-primary"></i> Ro'yxat</h2>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead>
                         <tr>
                             <th>Nom</th>
@@ -56,7 +56,7 @@
                             </td>
                             <td>
                                 {% if s.last_intake %}
-                                    <div class="srt-num">{{ s.last_intake.received_at|date:"d.m.Y" }}</div>
+                                    <div class="yrt-num">{{ s.last_intake.received_at|date:"d.m.Y" }}</div>
                                     <div class="small text-muted">
                                         {{ s.last_intake.branch.name }}
                                     </div>
@@ -66,9 +66,9 @@
                             </td>
                             <td>
                                 {% if s.is_active %}
-                                    <span class="srt-tag success">Faol</span>
+                                    <span class="yrt-tag success">Faol</span>
                                 {% else %}
-                                    <span class="srt-tag">Nofaol</span>
+                                    <span class="yrt-tag">Nofaol</span>
                                 {% endif %}
                             </td>
                             <td>

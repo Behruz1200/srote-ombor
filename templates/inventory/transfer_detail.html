@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Ko'chirish #{{ transfer.pk }} — Srote{% endblock %}
+{% block title %}Ko'chirish #{{ transfer.pk }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -38,28 +38,28 @@
     <!-- Status stepper — 3 steps with gradient connector -->
     <article class="dash-card mb-3">
         <div class="dash-card__body dash-card__body--padded">
-            <ol class="srt-stepper" data-current="{% if transfer.status == 'received' %}3{% elif transfer.status == 'in_transit' %}2{% elif transfer.status == 'cancelled' %}-1{% else %}1{% endif %}">
+            <ol class="yrt-stepper" data-current="{% if transfer.status == 'received' %}3{% elif transfer.status == 'in_transit' %}2{% elif transfer.status == 'cancelled' %}-1{% else %}1{% endif %}">
                 <!-- Step 1: Created -->
-                <li class="srt-step is-done">
-                    <span class="srt-step__circle" data-tone="success">
+                <li class="yrt-step is-done">
+                    <span class="yrt-step__circle" data-tone="success">
                         <i class="bi bi-file-earmark-text"></i>
                     </span>
-                    <span class="srt-step__body">
+                    <span class="yrt-step__body">
                         <strong>Yaratilgan</strong>
                         <small>{{ transfer.created_at|date:"d.m H:i" }} · {{ transfer.created_by.username }}</small>
                     </span>
                 </li>
                 <!-- Step 2: In Transit -->
-                <li class="srt-step {% if transfer.dispatched_at %}is-done{% endif %} {% if transfer.status == 'in_transit' %}is-active{% endif %}">
-                    <span class="srt-step__circle" data-tone="{% if transfer.dispatched_at %}amber{% else %}neutral{% endif %}">
+                <li class="yrt-step {% if transfer.dispatched_at %}is-done{% endif %} {% if transfer.status == 'in_transit' %}is-active{% endif %}">
+                    <span class="yrt-step__circle" data-tone="{% if transfer.dispatched_at %}amber{% else %}neutral{% endif %}">
                         <i class="bi bi-truck"></i>
                     </span>
-                    <span class="srt-step__body">
+                    <span class="yrt-step__body">
                         <strong>Yo'lda</strong>
                         {% if transfer.dispatched_at %}
                             <small>{{ transfer.dispatched_at|date:"d.m H:i" }}</small>
                             {% if transfer.status == 'in_transit' %}
-                                <small style="color: var(--srt-warning);">{{ transfer.dispatched_at|timesince }} oldin</small>
+                                <small style="color: var(--yrt-warning);">{{ transfer.dispatched_at|timesince }} oldin</small>
                             {% endif %}
                         {% else %}
                             <small>kutilmoqda</small>
@@ -67,16 +67,16 @@
                     </span>
                 </li>
                 <!-- Step 3: Received / Cancelled -->
-                <li class="srt-step {% if transfer.status == 'received' or transfer.status == 'cancelled' %}is-done{% endif %}">
-                    <span class="srt-step__circle" data-tone="{% if transfer.status == 'received' %}success{% elif transfer.status == 'cancelled' %}danger{% else %}neutral{% endif %}">
+                <li class="yrt-step {% if transfer.status == 'received' or transfer.status == 'cancelled' %}is-done{% endif %}">
+                    <span class="yrt-step__circle" data-tone="{% if transfer.status == 'received' %}success{% elif transfer.status == 'cancelled' %}danger{% else %}neutral{% endif %}">
                         <i class="bi {% if transfer.status == 'cancelled' %}bi-x-lg{% else %}bi-check-lg{% endif %}"></i>
                     </span>
-                    <span class="srt-step__body">
+                    <span class="yrt-step__body">
                         <strong>{% if transfer.status == 'cancelled' %}Bekor qilingan{% else %}Qabul qilingan{% endif %}</strong>
                         {% if transfer.received_at %}
                             <small>{{ transfer.received_at|date:"d.m H:i" }} · {{ transfer.received_by.username }}</small>
                             {% if transfer.dispatched_at %}
-                                <small style="color: var(--srt-success);">
+                                <small style="color: var(--yrt-success);">
                                     ⏱ {{ transfer.received_at|timesince:transfer.dispatched_at }}
                                 </small>
                             {% endif %}
@@ -90,7 +90,7 @@
     </article>
 
     <style>
-        .srt-stepper {
+        .yrt-stepper {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 0;
@@ -99,7 +99,7 @@
             margin: 0;
             position: relative;
         }
-        .srt-step {
+        .yrt-step {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -108,24 +108,24 @@
             position: relative;
         }
         /* Connector lines between steps */
-        .srt-step::before,
-        .srt-step::after {
+        .yrt-step::before,
+        .yrt-step::after {
             content: '';
             position: absolute;
             top: 24px;
             height: 2px;
-            background: var(--srt-border);
+            background: var(--yrt-border);
             z-index: 0;
         }
-        .srt-step::before { left: 0; right: 50%; }
-        .srt-step::after  { left: 50%; right: 0; }
-        .srt-step:first-child::before,
-        .srt-step:last-child::after { display: none; }
-        .srt-step.is-done::before,
-        .srt-step.is-done + .srt-step::before { background: var(--srt-success); }
-        .srt-step:has(+ .is-done)::after { background: var(--srt-success); }
+        .yrt-step::before { left: 0; right: 50%; }
+        .yrt-step::after  { left: 50%; right: 0; }
+        .yrt-step:first-child::before,
+        .yrt-step:last-child::after { display: none; }
+        .yrt-step.is-done::before,
+        .yrt-step.is-done + .yrt-step::before { background: var(--yrt-success); }
+        .yrt-step:has(+ .is-done)::after { background: var(--yrt-success); }
 
-        .srt-step__circle {
+        .yrt-step__circle {
             position: relative;
             z-index: 1;
             width: 48px;
@@ -134,45 +134,45 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: var(--srt-surface);
-            border: 2px solid var(--srt-border);
-            color: var(--srt-fg-muted);
+            background: var(--yrt-surface);
+            border: 2px solid var(--yrt-border);
+            color: var(--yrt-fg-muted);
             font-size: 1.15rem;
-            transition: all var(--srt-trans);
+            transition: all var(--yrt-trans);
         }
-        .srt-step__circle[data-tone="success"] {
-            background: linear-gradient(135deg, var(--srt-success), #22C55E);
+        .yrt-step__circle[data-tone="success"] {
+            background: linear-gradient(135deg, var(--yrt-success), #22C55E);
             color: #FFFFFF;
             border-color: transparent;
-            box-shadow: var(--srt-shadow-green);
+            box-shadow: var(--yrt-shadow-green);
         }
-        .srt-step__circle[data-tone="amber"] {
-            background: linear-gradient(135deg, var(--srt-warning), var(--srt-accent-soft));
+        .yrt-step__circle[data-tone="amber"] {
+            background: linear-gradient(135deg, var(--yrt-warning), var(--yrt-accent-soft));
             color: #FFFFFF;
             border-color: transparent;
-            box-shadow: var(--srt-shadow-amber);
+            box-shadow: var(--yrt-shadow-amber);
         }
-        .srt-step__circle[data-tone="danger"] {
-            background: linear-gradient(135deg, var(--srt-danger), #EF4444);
+        .yrt-step__circle[data-tone="danger"] {
+            background: linear-gradient(135deg, var(--yrt-danger), #EF4444);
             color: #FFFFFF;
             border-color: transparent;
         }
-        .srt-step.is-active .srt-step__circle {
-            animation: srtPulse 2.4s var(--srt-ease) infinite;
+        .yrt-step.is-active .yrt-step__circle {
+            animation: srtPulse 2.4s var(--yrt-ease) infinite;
             color: rgba(245,158,11,0.55);
         }
-        .srt-step__body {
+        .yrt-step__body {
             display: flex;
             flex-direction: column;
             gap: 0.1rem;
         }
-        .srt-step__body strong {
+        .yrt-step__body strong {
             font-size: 0.9rem;
-            color: var(--srt-fg);
+            color: var(--yrt-fg);
         }
-        .srt-step__body small {
+        .yrt-step__body small {
             font-size: 0.74rem;
-            color: var(--srt-fg-muted);
+            color: var(--yrt-fg-muted);
         }
     </style>
 

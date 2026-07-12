@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Qaytarish — Srote{% endblock %}
+{% block title %}Qaytarish — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -19,7 +19,7 @@
         <div class="col-lg-6">
 
             <!-- Asl sotuv ma'lumoti -->
-            <article class="dash-card mb-3 srt-glass">
+            <article class="dash-card mb-3 yrt-glass">
                 <div class="dash-card__body dash-card__body--padded">
                     <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap mb-2">
                         <div>
@@ -29,11 +29,11 @@
                                 <span class="dash-pill ms-1"><i class="bi bi-building"></i>&nbsp; {{ sale.branch.name }}</span>
                             </div>
                         </div>
-                        <span class="srt-tile" data-tone="warning">
+                        <span class="yrt-tile" data-tone="warning">
                             <strong>{{ max_returnable }}</strong>&nbsp; qaytarish mumkin
                         </span>
                     </div>
-                    <div style="font-size: 0.86rem; color: var(--srt-fg-muted); margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.86rem; color: var(--yrt-fg-muted); margin-bottom: 0.5rem;">
                         O'lcham: <strong>{{ sale.variant.size }}</strong> · Rang: <strong>{{ sale.variant.color }}</strong>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
@@ -41,7 +41,7 @@
                         <span class="dash-pill dash-pill--warn">Qaytarilgan: <strong>{{ sale.returned_qty }}</strong></span>
                         <span class="dash-pill dash-pill--info">{{ sale.sale_price|som }} so'm/dona</span>
                     </div>
-                    <div style="margin-top: 0.65rem; font-size: 0.78rem; color: var(--srt-fg-muted);">
+                    <div style="margin-top: 0.65rem; font-size: 0.78rem; color: var(--yrt-fg-muted);">
                         {{ sale.sold_at|date:"d.m.Y H:i" }} · {{ sale.sold_by.username }}
                     </div>
                 </div>
@@ -71,7 +71,7 @@
                         </div>
                         <div class="d-flex gap-2 justify-content-end">
                             <a href="{% url 'sales_list' %}" class="dash-btn dash-btn--ghost">Bekor qilish</a>
-                            <button type="submit" class="dash-btn dash-btn--primary" style="background: linear-gradient(135deg, #D97706, #F59E0B); box-shadow: var(--srt-shadow-amber);">
+                            <button type="submit" class="dash-btn dash-btn--primary" style="background: linear-gradient(135deg, #D97706, #F59E0B); box-shadow: var(--yrt-shadow-amber);">
                                 <i class="bi bi-arrow-counterclockwise"></i> <span>Qaytarishni tasdiqlash</span>
                             </button>
                         </div>

@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Mahsulotlar — Srote{% endblock %}
+{% block title %}Mahsulotlar — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
@@ -26,7 +26,7 @@
 
     <!-- Katalog xulosasi (filtrlangan ro'yxat asosida) -->
     {% if products %}
-    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Katalog xulosasi">
+    <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Katalog xulosasi">
         <article class="dash-kpi" data-tone="indigo">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-box"></i> Mahsulot turlari</span>
@@ -41,7 +41,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-check2-circle"></i> Zaxirada bor</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-success);">
+            <div class="dash-kpi__value" style="color: var(--yrt-success);">
                 <span>{{ products|in_stock_count }}</span>
             </div>
             <div class="dash-kpi__footer"><span>qoldiq &gt; 0</span></div>
@@ -51,7 +51,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-exclamation-triangle"></i> Past zaxira</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-warning);">
+            <div class="dash-kpi__value" style="color: var(--yrt-warning);">
                 <span>{{ products|low_stock_count }}</span>
             </div>
             <div class="dash-kpi__footer"><span>1–3 dona qolgan</span></div>
@@ -61,7 +61,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-x-octagon"></i> Tugagan</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-danger);">
+            <div class="dash-kpi__value" style="color: var(--yrt-danger);">
                 <span>{{ products|out_of_stock_count }}</span>
             </div>
             <div class="dash-kpi__footer"><span>qoldiq = 0</span></div>

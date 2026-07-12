@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** Srote
+**Project:** yurit
 **Generated:** 2026-06-08 06:52:08
 **Category:** E-commerce Luxury
 

@@ -1,4 +1,4 @@
-"""Maxsus template filterlar — Srote uchun."""
+"""Maxsus template filterlar — yurit uchun."""
 from django import template
 
 register = template.Library()

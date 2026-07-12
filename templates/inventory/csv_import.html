@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}CSV import — Srote{% endblock %}
+{% block title %}CSV import — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -45,7 +45,7 @@
                     <input type="hidden" name="entity" value="{{ entity }}">
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
-                            Fayl <span style="color: var(--srt-fg-muted); font-weight: 400;">(.csv, UTF-8)</span>
+                            Fayl <span style="color: var(--yrt-fg-muted); font-weight: 400;">(.csv, UTF-8)</span>
                         </label>
                         <input type="file" name="csv_file" id="csvFile"
                                class="form-control" accept=".csv" required>

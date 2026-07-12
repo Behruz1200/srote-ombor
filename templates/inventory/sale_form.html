@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Sotuv — Srote{% endblock %}
+{% block title %}Sotuv — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -19,7 +19,7 @@
         <div class="col-lg-6">
 
             <!-- Mahsulot xulosa kartochkasi -->
-            <article class="dash-card mb-3 srt-glass">
+            <article class="dash-card mb-3 yrt-glass">
                 <div class="dash-card__body dash-card__body--padded">
                     <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap mb-2">
                         <div>
@@ -29,11 +29,11 @@
                                 <span class="dash-pill ms-1"><i class="bi bi-building"></i>&nbsp; {{ stock.branch.name }}</span>
                             </div>
                         </div>
-                        <span class="srt-tile" data-tone="success">
+                        <span class="yrt-tile" data-tone="success">
                             <strong>{{ stock.stock_count }}</strong>&nbsp; omborda
                         </span>
                     </div>
-                    <div style="font-size: 0.86rem; color: var(--srt-fg-muted); margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.86rem; color: var(--yrt-fg-muted); margin-bottom: 0.5rem;">
                         O'lcham: <strong>{{ stock.variant.size }}</strong> · Rang: <strong>{{ stock.variant.color }}</strong>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">

@@ -7,7 +7,7 @@ Usage:
 
 Schedule with launchd (macOS) or cron (Linux). Example crontab line
 to send every day at 20:00:
-    0 20 * * *  cd /path/to/srote && ./venv/bin/python manage.py send_daily_summary
+    0 20 * * *  cd /path/to/yurit && ./venv/bin/python manage.py send_daily_summary
 """
 from datetime import datetime
 from django.core.management.base import BaseCommand

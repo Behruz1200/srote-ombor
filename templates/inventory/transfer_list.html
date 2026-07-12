@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Tovar ko'chirish — Srote{% endblock %}
+{% block title %}Tovar ko'chirish — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
@@ -39,11 +39,11 @@
     {% endif %}
 
     <!-- Status counts — bento KPI strip with click-to-filter -->
-    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Holat bo'yicha xulosa">
+    <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Holat bo'yicha xulosa">
         {% for s, label in status_choices %}
             {% if s == 'draft' %}{% with tone='slate' icon='bi-file-earmark' %}
                 <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
-                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--yrt-primary), var(--yrt-shadow-md);{% endif %}">
                     <div class="dash-kpi__head">
                         <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
                     </div>
@@ -54,7 +54,7 @@
             {% endwith %}
             {% elif s == 'in_transit' %}{% with tone='amber' icon='bi-truck' %}
                 <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
-                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--yrt-primary), var(--yrt-shadow-md);{% endif %}">
                     <div class="dash-kpi__head">
                         <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
                     </div>
@@ -65,22 +65,22 @@
             {% endwith %}
             {% elif s == 'received' %}{% with tone='success' icon='bi-check-circle' %}
                 <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
-                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--yrt-primary), var(--yrt-shadow-md);{% endif %}">
                     <div class="dash-kpi__head">
                         <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
                     </div>
-                    <div class="dash-kpi__value" style="color: var(--srt-success);">
+                    <div class="dash-kpi__value" style="color: var(--yrt-success);">
                         <span data-countup="{{ counts|get_item:s|default:0 }}">{{ counts|get_item:s|default:0 }}</span>
                     </div>
                 </a>
             {% endwith %}
             {% else %}{% with tone='danger' icon='bi-x-circle' %}
                 <a href="?status={{ s }}" class="dash-kpi" data-tone="{{ tone }}"
-                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--srt-primary), var(--srt-shadow-md);{% endif %}">
+                   style="text-decoration: none; {% if status == s %}box-shadow: 0 0 0 2px var(--yrt-primary), var(--yrt-shadow-md);{% endif %}">
                     <div class="dash-kpi__head">
                         <span class="dash-kpi__label"><i class="bi {{ icon }}"></i> {{ label }}</span>
                     </div>
-                    <div class="dash-kpi__value" style="color: var(--srt-danger);">
+                    <div class="dash-kpi__value" style="color: var(--yrt-danger);">
                         <span data-countup="{{ counts|get_item:s|default:0 }}">{{ counts|get_item:s|default:0 }}</span>
                     </div>
                 </a>

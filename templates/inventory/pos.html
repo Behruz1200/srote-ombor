@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}POS — Srote{% endblock %}
+{% block title %}POS — yurit{% endblock %}
 
 {% block content %}
 <style>
@@ -10,9 +10,9 @@
    Compact right column, touch-friendly action grid, glass cards.
    ════════════════════════════════════════════════════════════════════ */
 .pos-side .card {
-    border-radius: var(--srt-radius-lg);
-    border-color: var(--srt-border);
-    box-shadow: var(--srt-shadow-sm);
+    border-radius: var(--yrt-radius-lg);
+    border-color: var(--yrt-border);
+    box-shadow: var(--yrt-shadow-sm);
 }
 .pos-side .form-label {
     margin-bottom: 0.3rem;
@@ -20,11 +20,11 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
 }
 .pos-side hr {
     margin: 0.55rem 0;
-    border-color: var(--srt-border);
+    border-color: var(--yrt-border);
     opacity: 0.7;
 }
 
@@ -34,19 +34,19 @@
     font-size: 0.86rem;
     font-weight: 500;
     min-height: 48px;
-    border-radius: var(--srt-radius);
-    transition: transform var(--srt-trans-fast), box-shadow var(--srt-trans-fast),
-                background var(--srt-trans-fast);
+    border-radius: var(--yrt-radius);
+    transition: transform var(--yrt-trans-fast), box-shadow var(--yrt-trans-fast),
+                background var(--yrt-trans-fast);
 }
 .pos-side .payment-btn:hover { transform: translateY(-1px); }
 .pos-side .payment-btn:active { transform: scale(0.97); transition-duration: 80ms; }
 .pos-side .payment-btn i { font-size: 1rem; }
 .pos-side .payment-btn.btn-primary,
 .pos-side .payment-btn.active {
-    background: linear-gradient(135deg, var(--srt-primary), var(--srt-primary-soft));
+    background: linear-gradient(135deg, var(--yrt-primary), var(--yrt-primary-soft));
     border-color: transparent;
     color: #FFFFFF;
-    box-shadow: var(--srt-shadow-indigo);
+    box-shadow: var(--yrt-shadow-indigo);
 }
 
 /* QR / Muddatli provider buttons — extra touch padding, glass surface */
@@ -55,29 +55,29 @@
     padding: 0.7rem 0.85rem !important;
     min-height: 52px;
     font-weight: 500;
-    border-radius: var(--srt-radius);
-    background: var(--srt-surface);
-    border: 1px solid var(--srt-border);
-    transition: transform var(--srt-trans-fast), box-shadow var(--srt-trans-fast),
-                background var(--srt-trans-fast);
+    border-radius: var(--yrt-radius);
+    background: var(--yrt-surface);
+    border: 1px solid var(--yrt-border);
+    transition: transform var(--yrt-trans-fast), box-shadow var(--yrt-trans-fast),
+                background var(--yrt-trans-fast);
 }
 .pos-side .qr-provider-btn:hover {
     transform: translateY(-1px);
-    background: var(--srt-surface-2);
-    box-shadow: var(--srt-shadow-md);
+    background: var(--yrt-surface-2);
+    box-shadow: var(--yrt-shadow-md);
 }
 .pos-side .qr-provider-btn:active { transform: scale(0.97); transition-duration: 80ms; }
-.pos-side .qr-provider-btn i { font-size: 1.1rem; margin-right: 0.3rem; color: var(--srt-primary); }
+.pos-side .qr-provider-btn i { font-size: 1.1rem; margin-right: 0.3rem; color: var(--yrt-primary); }
 #qrProviders { gap: 0.5rem !important; }
 
 /* Big numeric — mijoz to'laydi / oraliq */
 .pos-side .display-6 {
     font-size: 1.9rem;
     line-height: 1;
-    font-family: var(--srt-font-mono);
+    font-family: var(--yrt-font-mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.025em;
-    color: var(--srt-fg);
+    color: var(--yrt-fg);
     font-weight: 600;
 }
 
@@ -88,8 +88,8 @@
     z-index: 10;
     background: linear-gradient(180deg,
         rgba(246,247,251,0) 0%,
-        var(--srt-bg) 30%,
-        var(--srt-bg) 100%);
+        var(--yrt-bg) 30%,
+        var(--yrt-bg) 100%);
     padding: 0.85rem 0 0.5rem;
     margin-bottom: 0.5rem;
 }
@@ -98,52 +98,52 @@
     padding: 1rem;
     font-size: 1.05rem;
     font-weight: 600;
-    box-shadow: var(--srt-shadow-green);
+    box-shadow: var(--yrt-shadow-green);
     letter-spacing: 0.01em;
 }
 [data-bs-theme="dark"] .pos-checkout-sticky {
-    background: linear-gradient(180deg, rgba(11,15,26,0) 0%, var(--srt-bg) 30%);
+    background: linear-gradient(180deg, rgba(11,15,26,0) 0%, var(--yrt-bg) 30%);
 }
 
 /* Scan input — extra prominence */
 #scanInput {
     font-size: 1.1rem;
     padding: 0.75rem 1rem;
-    border-radius: var(--srt-radius);
-    border-color: var(--srt-border);
-    background: var(--srt-surface);
-    transition: border-color var(--srt-trans), box-shadow var(--srt-trans);
+    border-radius: var(--yrt-radius);
+    border-color: var(--yrt-border);
+    background: var(--yrt-surface);
+    transition: border-color var(--yrt-trans), box-shadow var(--yrt-trans);
 }
 #scanInput:focus {
-    border-color: var(--srt-primary);
+    border-color: var(--yrt-primary);
     box-shadow: 0 0 0 4px rgba(91,91,214,0.15);
 }
 
 /* Cart line items — denser, hover row */
 .cart-items .cart-row {
     padding: 0.55rem 0.7rem;
-    border-radius: var(--srt-radius-sm);
-    transition: background var(--srt-trans-fast);
+    border-radius: var(--yrt-radius-sm);
+    transition: background var(--yrt-trans-fast);
 }
-.cart-items .cart-row:hover { background: var(--srt-surface-2); }
+.cart-items .cart-row:hover { background: var(--yrt-surface-2); }
 
 /* Section chips — chakana/ulgurji segmented control */
 .pos-side .btn-group .btn {
     padding: 0.55rem 0.85rem;
     font-weight: 500;
-    border-radius: var(--srt-radius);
+    border-radius: var(--yrt-radius);
 }
 
 /* Discount quick-pick chips */
 .pos-side .discount-chip {
     padding: 0.25rem 0.6rem;
     font-size: 0.78rem;
-    border-radius: var(--srt-radius-pill);
-    background: var(--srt-warning-tint);
-    color: var(--srt-warning);
+    border-radius: var(--yrt-radius-pill);
+    background: var(--yrt-warning-tint);
+    color: var(--yrt-warning);
     border: none;
     cursor: pointer;
-    transition: transform var(--srt-trans-fast);
+    transition: transform var(--yrt-trans-fast);
 }
 .pos-side .discount-chip:hover { transform: translateY(-1px); }
 
@@ -155,9 +155,9 @@
     grid-template-columns: 1fr 1fr;
     gap: 4px;
     padding: 4px;
-    background: var(--srt-surface-2);
-    border: 1px solid var(--srt-border);
-    border-radius: var(--srt-radius-pill);
+    background: var(--yrt-surface-2);
+    border: 1px solid var(--yrt-border);
+    border-radius: var(--yrt-radius-pill);
     width: 100%;
 }
 .pos-tier__opt {
@@ -166,32 +166,32 @@
     justify-content: center;
     gap: 0.4rem;
     padding: 0.55rem 0.85rem;
-    border-radius: var(--srt-radius-pill);
+    border-radius: var(--yrt-radius-pill);
     font-size: 0.92rem;
     font-weight: 600;
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
     background: transparent;
     border: none;
     cursor: pointer;
     margin: 0;
-    transition: background var(--srt-trans-fast),
-                color var(--srt-trans-fast),
-                box-shadow var(--srt-trans-fast),
-                transform var(--srt-trans-fast);
+    transition: background var(--yrt-trans-fast),
+                color var(--yrt-trans-fast),
+                box-shadow var(--yrt-trans-fast),
+                transform var(--yrt-trans-fast);
 }
 .pos-tier__opt i { font-size: 1rem; opacity: 0.8; }
-.pos-tier__opt:hover { color: var(--srt-fg); }
+.pos-tier__opt:hover { color: var(--yrt-fg); }
 .pos-tier__opt:active { transform: scale(0.97); transition-duration: 80ms; }
 
 /* Active state — keyed to the hidden btn-check just before each label */
 .pos-tier .btn-check:checked + .pos-tier__opt {
-    background: linear-gradient(135deg, var(--srt-primary), var(--srt-primary-soft));
+    background: linear-gradient(135deg, var(--yrt-primary), var(--yrt-primary-soft));
     color: #FFFFFF;
-    box-shadow: var(--srt-shadow-indigo);
+    box-shadow: var(--yrt-shadow-indigo);
 }
 .pos-tier .btn-check:checked + .pos-tier__opt i { opacity: 1; }
 .pos-tier .btn-check:focus-visible + .pos-tier__opt {
-    outline: 2px solid var(--srt-primary);
+    outline: 2px solid var(--yrt-primary);
     outline-offset: 2px;
 }
 
@@ -212,26 +212,26 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--srt-radius-pill);
-    border: 1px solid var(--srt-border);
+    border-radius: var(--yrt-radius-pill);
+    border: 1px solid var(--yrt-border);
     background: rgba(255,255,255,0.6);
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
     cursor: pointer;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    transition: background var(--srt-trans-fast),
-                color var(--srt-trans-fast),
-                transform var(--srt-trans-fast);
+    transition: background var(--yrt-trans-fast),
+                color var(--yrt-trans-fast),
+                transform var(--yrt-trans-fast);
 }
 .pos-header-toggle:hover {
-    background: var(--srt-surface);
-    color: var(--srt-primary);
+    background: var(--yrt-surface);
+    color: var(--yrt-primary);
     transform: translateY(-1px);
 }
 .pos-header-toggle:active { transform: scale(0.92); }
 [data-bs-theme="dark"] .pos-header-toggle {
     background: rgba(20,25,38,0.55);
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
 }
 
 /* ── Slim rail shown when header is collapsed ── */
@@ -242,12 +242,12 @@
     gap: 0.75rem;
     padding: 0.45rem 0.95rem;
     margin-bottom: 0.85rem;
-    border-radius: var(--srt-radius-pill);
-    background: var(--srt-surface);
-    border: 1px solid var(--srt-border);
-    box-shadow: var(--srt-shadow-xs);
+    border-radius: var(--yrt-radius-pill);
+    background: var(--yrt-surface);
+    border: 1px solid var(--yrt-border);
+    box-shadow: var(--yrt-shadow-xs);
     font-size: 0.86rem;
-    color: var(--srt-fg);
+    color: var(--yrt-fg);
     min-height: 42px;
 }
 .pos-header-rail__main {
@@ -260,16 +260,16 @@
 .pos-header-rail__main strong { font-weight: 600; }
 .pos-header-rail__sep { opacity: 0.4; }
 .pos-header-rail__clock {
-    font-family: var(--srt-font-mono);
+    font-family: var(--yrt-font-mono);
     font-variant-numeric: tabular-nums;
-    color: var(--srt-fg-muted);
+    color: var(--yrt-fg-muted);
 }
 .pos-header-rail .dash-pulse { animation-duration: 2.4s; }
 
 /* Toggle on the rail uses static position (no absolute) */
 .pos-header-rail .pos-header-toggle {
     position: static;
-    background: var(--srt-surface-2);
+    background: var(--yrt-surface-2);
 }
 
 /* Collapsed state: hide hero, show rail */
@@ -292,28 +292,28 @@
     gap: 0.5rem;
     padding: 0.25rem 0.1rem;
     user-select: none;
-    transition: color var(--srt-trans-fast);
+    transition: color var(--yrt-trans-fast);
 }
 .pos-collapse > summary::-webkit-details-marker { display: none; }
-.pos-collapse > summary:hover { color: var(--srt-primary); }
+.pos-collapse > summary:hover { color: var(--yrt-primary); }
 .pos-collapse__count {
     margin-left: 0.4rem;
     padding: 0.05rem 0.4rem;
-    background: var(--srt-surface-2);
-    border-radius: var(--srt-radius-pill);
-    color: var(--srt-fg-muted);
+    background: var(--yrt-surface-2);
+    border-radius: var(--yrt-radius-pill);
+    color: var(--yrt-fg-muted);
     font-size: 0.66rem;
     font-weight: 600;
 }
 .pos-collapse__chev {
-    transition: transform var(--srt-trans);
-    color: var(--srt-fg-muted);
+    transition: transform var(--yrt-trans);
+    color: var(--yrt-fg-muted);
     font-size: 0.9rem;
 }
 .pos-collapse[open] > summary .pos-collapse__chev { transform: rotate(180deg); }
 .pos-collapse__body {
     padding-top: 0.45rem;
-    animation: posCollapseSlide 220ms var(--srt-ease) both;
+    animation: posCollapseSlide 220ms var(--yrt-ease) both;
 }
 @keyframes posCollapseSlide {
     from { opacity: 0; transform: translateY(-4px); }
@@ -387,7 +387,7 @@
                 </p>
             </div>
             <div class="dash-hero__actions" style="align-items: center;">
-                <div style="font-size: 0.82rem; color: var(--srt-fg-muted); font-family: var(--srt-font-mono); font-variant-numeric: tabular-nums;">
+                <div style="font-size: 0.82rem; color: var(--yrt-fg-muted); font-family: var(--yrt-font-mono); font-variant-numeric: tabular-nums;">
                     <i class="bi bi-clock"></i>
                     <span id="posClock"></span>
                 </div>
@@ -923,11 +923,11 @@
         </ol>
         <div class="bg-dark text-light p-2 rounded small mb-2" style="font-family: monospace;">
             <strong>macOS:</strong><br>
-            open -a "Google Chrome" --args --kiosk-printing --app=https://srote-web.onrender.com/pos/
+            open -a "Google Chrome" --args --kiosk-printing --app=https://yurit-web.onrender.com/pos/
         </div>
         <div class="bg-dark text-light p-2 rounded small mb-2" style="font-family: monospace;">
             <strong>Windows:</strong><br>
-            chrome.exe --kiosk-printing --app=https://srote-web.onrender.com/pos/
+            chrome.exe --kiosk-printing --app=https://yurit-web.onrender.com/pos/
         </div>
         <div class="small text-muted mb-3">
             OS sozlamalarida default printer'ni 80mm thermal printer'ga qo'ying — Chrome o'shaga
@@ -1062,7 +1062,7 @@ const parkedList     = document.getElementById('parkedList');
 // ---- Customer display broadcaster ----
 // Send cart/qr/paid events to /pos/display/ via BroadcastChannel.
 let _displayChannel = null;
-try { _displayChannel = new BroadcastChannel('srote-pos'); } catch (e) {}
+try { _displayChannel = new BroadcastChannel('yurit-pos'); } catch (e) {}
 function broadcastDisplay(payload) {
     if (_displayChannel) {
         try { _displayChannel.postMessage(payload); } catch (e) {}
@@ -1086,7 +1086,7 @@ function broadcastCart() {
 // cart state: stockId -> { stock_id, product_code, product_name, size, color, qty, sale_price, max }
 // Persisted to localStorage on every change so idle-lock unlock / accidental
 // refresh doesn't lose work in progress.
-const CART_LS_KEY = 'srote_pos_cart';
+const CART_LS_KEY = 'yurit_pos_cart';
 function loadCart() {
     try {
         const raw = localStorage.getItem(CART_LS_KEY);
@@ -1758,7 +1758,7 @@ scanInput.addEventListener('input', () => {
 // ---- Offline checkout queue (IndexedDB) ----
 // When the browser is offline (or the network call throws), we stash the
 // checkout payload locally and replay it as soon as we're online again.
-const QUEUE_DB = 'srote-pos';
+const QUEUE_DB = 'yurit-pos';
 const QUEUE_STORE = 'checkout-queue';
 
 function openQueueDB() {
@@ -1800,7 +1800,7 @@ async function queueDelete(id) {
 }
 async function broadcastQueueCount() {
     const items = await queueList().catch(() => []);
-    window.dispatchEvent(new CustomEvent('srote:queue-changed',
+    window.dispatchEvent(new CustomEvent('yurit:queue-changed',
         {detail: {count: items.length}}));
     return items.length;
 }
@@ -2299,7 +2299,7 @@ if (lockNowBtn) {
     lockNowBtn.addEventListener('click', () => {
         // Trigger manual lock by dispatching a custom event the idle-lock
         // module listens for.
-        window.dispatchEvent(new CustomEvent('srote:lock-now'));
+        window.dispatchEvent(new CustomEvent('yurit:lock-now'));
     });
 }
 
@@ -2430,7 +2430,7 @@ if (drawerBtn) {
     });
 
     // Header dropdown dan "Ekranni hozir qulflash" tugmasi
-    window.addEventListener('srote:lock-now', lock);
+    window.addEventListener('yurit:lock-now', lock);
 })();
 
 // Clock — updates both the hero clock and the collapsed-rail clock
@@ -2449,7 +2449,7 @@ setInterval(tickClock, 30000); tickClock();
 // payment. State persists in localStorage; Alt+H is the keyboard
 // shortcut. Collapsed view keeps essential context on a slim rail.
 (function() {
-    const KEY = 'srote_pos_header_collapsed';
+    const KEY = 'yurit_pos_header_collapsed';
     const root = document.documentElement;
     const setCollapsed = (on, persist) => {
         document.body.classList.toggle('pos-page-collapsed', !!on);
@@ -2481,7 +2481,7 @@ setInterval(tickClock, 30000); tickClock();
 // so cashiers don't have to re-collapse the QR providers every page
 // load. Apply state BEFORE first paint to avoid a flash of open content.
 (function() {
-    const PREFIX = 'srote_pos_coll_';
+    const PREFIX = 'yurit_pos_coll_';
     document.querySelectorAll('details.pos-collapse[id]').forEach(d => {
         const key = PREFIX + d.id;
         try {
@@ -2566,6 +2566,6 @@ document.addEventListener('keydown', (e) => {
 </div>
 <script>
 // stub continuation script (so previous script tag closes cleanly)
-console.log('Srote POS shortcuts ready');
+console.log('yurit POS shortcuts ready');
 </script>
 {% endblock %}

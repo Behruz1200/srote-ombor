@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Smen #{{ shift.pk }} — Srote{% endblock %}
+{% block title %}Smen #{{ shift.pk }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -57,7 +57,7 @@
     </div>
 
     <!-- Cash KPI strip -->
-    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Naqd kassa xulosasi">
+    <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Naqd kassa xulosasi">
         <article class="dash-kpi" data-tone="slate">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cash"></i> Boshlang'ich</span>
@@ -72,7 +72,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-plus-circle"></i> Naqd sotuvlar</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-success);">
+            <div class="dash-kpi__value" style="color: var(--yrt-success);">
                 +<span data-countup="{{ cash_sales|default:0 }}">{{ cash_sales|som }}</span>
             </div>
             <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
@@ -82,7 +82,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-calculator"></i> Kutilgan</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-primary);">
+            <div class="dash-kpi__value" style="color: var(--yrt-primary);">
                 <span data-countup="{{ expected|default:0 }}">{{ expected|som }}</span>
             </div>
             <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span></div>
@@ -93,20 +93,20 @@
                 <span class="dash-kpi__label"><i class="bi bi-clipboard-check"></i> Sanalgan</span>
             </div>
             {% if shift.counted_cash is not None %}
-                <div class="dash-kpi__value" style="color: {% if variance_value == 0 %}var(--srt-success){% elif variance_value > 0 %}var(--srt-info){% else %}var(--srt-danger){% endif %};">
+                <div class="dash-kpi__value" style="color: {% if variance_value == 0 %}var(--yrt-success){% elif variance_value > 0 %}var(--yrt-info){% else %}var(--yrt-danger){% endif %};">
                     <span data-countup="{{ shift.counted_cash|default:0 }}">{{ shift.counted_cash|som }}</span>
                 </div>
                 <div class="dash-kpi__footer">
                     {% if variance_value == 0 %}
-                        <span style="color: var(--srt-success);"><i class="bi bi-check2-circle"></i>&nbsp; Aniq mos</span>
+                        <span style="color: var(--yrt-success);"><i class="bi bi-check2-circle"></i>&nbsp; Aniq mos</span>
                     {% elif variance_value > 0 %}
-                        <span style="color: var(--srt-info);">+{{ variance_value|som }} ortiqcha</span>
+                        <span style="color: var(--yrt-info);">+{{ variance_value|som }} ortiqcha</span>
                     {% else %}
-                        <span style="color: var(--srt-danger);">{{ variance_value|som }} yetishmadi</span>
+                        <span style="color: var(--yrt-danger);">{{ variance_value|som }} yetishmadi</span>
                     {% endif %}
                 </div>
             {% else %}
-                <div class="dash-kpi__value" style="color: var(--srt-fg-muted);">—</div>
+                <div class="dash-kpi__value" style="color: var(--yrt-fg-muted);">—</div>
                 <div class="dash-kpi__footer"><span>sanalmagan</span></div>
             {% endif %}
         </article>

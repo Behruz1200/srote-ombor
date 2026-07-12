@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}{{ customer.name|default:"Mijoz" }} — Srote{% endblock %}
+{% block title %}{{ customer.name|default:"Mijoz" }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -37,14 +37,14 @@
                     </div>
                 {% endif %}
                 {% if customer.note %}
-                    <p class="mt-2 mb-0" style="color: var(--srt-fg-muted); font-size: 0.85rem;">{{ customer.note }}</p>
+                    <p class="mt-2 mb-0" style="color: var(--yrt-fg-muted); font-size: 0.85rem;">{{ customer.note }}</p>
                 {% endif %}
             </div>
         </div>
     </header>
 
     <!-- Mijoz KPI strip -->
-    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Mijoz xulosasi">
+    <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Mijoz xulosasi">
         <article class="dash-kpi dash-kpi--lead">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami sarflagan</span>
@@ -80,7 +80,7 @@
                 <div class="dash-kpi__value" style="font-size: 1.15rem; line-height: 1.3;">{{ last_visit|date:"d.m.Y" }}</div>
                 <div class="dash-kpi__footer"><span>{{ last_visit|timesince }} oldin</span></div>
             {% else %}
-                <div class="dash-kpi__value" style="color: var(--srt-fg-muted);">—</div>
+                <div class="dash-kpi__value" style="color: var(--yrt-fg-muted);">—</div>
                 <div class="dash-kpi__footer"><span>tashrif yo'q</span></div>
             {% endif %}
         </article>

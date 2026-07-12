@@ -1,4 +1,7 @@
-# Render Infrastructure-as-Code blueprint for Srote.
+# Render Infrastructure-as-Code blueprint for yurit (Render service names
+# kept as `srote-*` to preserve the existing production deployment at
+# srote-web.onrender.com — renaming the service in the blueprint would
+# make Render treat it as a brand-new resource and abandon the live one).
 # Docs: https://render.com/docs/blueprint-spec
 #
 # What this provisions:

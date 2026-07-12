@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Yakunlash — Srote{% endblock %}
+{% block title %}Yakunlash — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -47,10 +47,10 @@
                         {% endfor %}
                         </tbody>
                         <tfoot>
-                            <tr style="background: var(--srt-surface-2);">
+                            <tr style="background: var(--yrt-surface-2);">
                                 <th colspan="2" class="text-end" style="text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.05em;">Jami:</th>
-                                <th class="text-end" style="font-family: var(--srt-font-mono); font-size: 1.25rem; font-weight: 600; color: var(--srt-primary);">
-                                    {{ total|som }} <small style="font-size: 0.65rem; color: var(--srt-fg-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">so'm</small>
+                                <th class="text-end" style="font-family: var(--yrt-font-mono); font-size: 1.25rem; font-weight: 600; color: var(--yrt-primary);">
+                                    {{ total|som }} <small style="font-size: 0.65rem; color: var(--yrt-fg-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">so'm</small>
                                 </th>
                             </tr>
                         </tfoot>
@@ -77,7 +77,7 @@
                             </select>
                         </div>
 
-                        <div class="mb-2 mt-4" style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--srt-fg-muted); font-weight: 600;">
+                        <div class="mb-2 mt-4" style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--yrt-fg-muted); font-weight: 600;">
                             <i class="bi bi-person"></i> Mijoz (ixtiyoriy)
                         </div>
                         <div class="mb-2">

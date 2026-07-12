@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Smen ochish — Srote{% endblock %}
+{% block title %}Smen ochish — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -27,13 +27,13 @@
                         {% csrf_token %}
                         <div class="mb-3">
                             <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
-                                Boshlang'ich naqd <span style="color: var(--srt-fg-muted); font-weight: 400;">(kassada hozir qancha pul bor?)</span>
+                                Boshlang'ich naqd <span style="color: var(--yrt-fg-muted); font-weight: 400;">(kassada hozir qancha pul bor?)</span>
                             </label>
                             <input type="number" name="opening_cash" min="0" step="1000"
                                    class="form-control form-control-lg"
                                    value="{{ last_closed.counted_cash|default:0|floatformat:0 }}"
                                    required autofocus
-                                   style="font-family: var(--srt-font-mono); font-variant-numeric: tabular-nums;">
+                                   style="font-family: var(--yrt-font-mono); font-variant-numeric: tabular-nums;">
                             <small class="text-muted">
                                 Smen yopilganda tizim shu summaga sotuvlarni qo'shib, kassa farqini ko'rsatadi.
                             </small>
@@ -52,7 +52,7 @@
                         </div>
                         <div class="mb-4">
                             <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
-                                Izoh <span style="color: var(--srt-fg-muted); font-weight: 400;">(ixtiyoriy)</span>
+                                Izoh <span style="color: var(--yrt-fg-muted); font-weight: 400;">(ixtiyoriy)</span>
                             </label>
                             <input type="text" name="note" class="form-control"
                                    placeholder="Masalan: ertalabki smen">

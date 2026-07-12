@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Smen yopish — Srote{% endblock %}
+{% block title %}Smen yopish — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -19,7 +19,7 @@
         <div class="col-lg-6">
 
             <!-- Naqd kassa xulosasi -->
-            <section class="dash-kpis dash-kpis--three srt-stagger mb-3" aria-label="Smen naqd xulosasi">
+            <section class="dash-kpis dash-kpis--three yrt-stagger mb-3" aria-label="Smen naqd xulosasi">
                 <article class="dash-kpi" data-tone="slate">
                     <div class="dash-kpi__head">
                         <span class="dash-kpi__label"><i class="bi bi-cash"></i> Boshlang'ich</span>
@@ -33,7 +33,7 @@
                     <div class="dash-kpi__head">
                         <span class="dash-kpi__label"><i class="bi bi-plus-circle"></i> Naqd sotuvlar</span>
                     </div>
-                    <div class="dash-kpi__value" style="color: var(--srt-success);">
+                    <div class="dash-kpi__value" style="color: var(--yrt-success);">
                         +<span data-countup="{{ cash_sales|default:0 }}">{{ cash_sales|som }}</span>
                     </div>
                     <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
@@ -42,13 +42,13 @@
                     <div class="dash-kpi__head">
                         <span class="dash-kpi__label"><i class="bi bi-calculator"></i> Kutilgan</span>
                     </div>
-                    <div class="dash-kpi__value" style="color: var(--srt-primary);">
+                    <div class="dash-kpi__value" style="color: var(--yrt-primary);">
                         <span data-countup="{{ expected|default:0 }}">{{ expected|som }}</span>
                     </div>
                     <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span></div>
                 </article>
             </section>
-            <div class="text-center mb-3" style="font-size: 0.78rem; color: var(--srt-fg-muted);">
+            <div class="text-center mb-3" style="font-size: 0.78rem; color: var(--yrt-fg-muted);">
                 Smen ochildi: <strong>{{ shift.opened_at|date:"d.m.Y H:i" }}</strong> · {{ shift.opened_by.username }}
             </div>
 
@@ -67,14 +67,14 @@
                             <input type="number" name="counted_cash" min="0" step="1000"
                                    class="form-control form-control-lg" required autofocus
                                    placeholder="masalan: {{ expected|floatformat:0 }}"
-                                   style="font-family: var(--srt-font-mono); font-variant-numeric: tabular-nums;">
+                                   style="font-family: var(--yrt-font-mono); font-variant-numeric: tabular-nums;">
                             <small class="text-muted">
                                 Tizim shu summani kutilgan naqd bilan taqqoslab, kassa farqini ko'rsatadi.
                             </small>
                         </div>
                         <div class="mb-4">
                             <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
-                                Izoh <span style="color: var(--srt-fg-muted); font-weight: 400;">(ixtiyoriy)</span>
+                                Izoh <span style="color: var(--yrt-fg-muted); font-weight: 400;">(ixtiyoriy)</span>
                             </label>
                             <input type="text" name="note" class="form-control"
                                    placeholder="Tushuntirish bo'lsa yozing">

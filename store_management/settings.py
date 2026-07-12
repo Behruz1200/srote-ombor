@@ -1,5 +1,5 @@
 """
-Django settings for Srote.
+Django settings for yurit.
 
 Two modes, controlled by environment variables (loaded from .env or
 the host platform):
@@ -228,7 +228,7 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'srote-default',
+        'LOCATION': 'yurit-default',
         'TIMEOUT': 60,
         'OPTIONS': {'MAX_ENTRIES': 5000},
     }

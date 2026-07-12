@@ -1,4 +1,4 @@
-# Srote — Ombor boshqaruv tizimi
+# yurit — Ombor boshqaruv tizimi
 
 Ko'p filialli do'kon uchun ombor va sotuv boshqaruv tizimi. Django + SQLite + Bootstrap.
 

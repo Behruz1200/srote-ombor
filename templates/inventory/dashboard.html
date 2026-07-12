@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Boshqaruv — Srote{% endblock %}
+{% block title %}Boshqaruv — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
@@ -44,7 +44,7 @@
     </header>
 
     <!-- ── KPI hero strip (lead + 3 satellites) ─────────────────────────── -->
-    <section class="dash-kpis srt-stagger" role="group" aria-label="Bugungi asosiy ko'rsatkichlar">
+    <section class="dash-kpis yrt-stagger" role="group" aria-label="Bugungi asosiy ko'rsatkichlar">
         <article class="dash-kpi dash-kpi--lead">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label">
@@ -460,7 +460,7 @@
         return `rgba(${r}, ${g}, ${b}, ${a})`;
     }
     const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-    const primary   = srtCss('--srt-primary', '#5B5BD6');
+    const primary   = srtCss('--yrt-primary', '#5B5BD6');
     const gridColor = isDark ? 'rgba(148,163,184,0.10)' : 'rgba(15,23,42,0.05)';
     const labelColor = isDark ? '#94A3B8' : '#5C6470';
 

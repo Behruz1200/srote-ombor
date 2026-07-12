@@ -1,17 +1,17 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Smart Reorder — Srote{% endblock %}
+{% block title %}Smart Reorder — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
 
-    <div class="srt-page-header srt-page-header-stack">
+    <div class="yrt-page-header yrt-page-header-stack">
         <!-- Row 1: identity + primary action -->
-        <div class="srt-page-title-row">
+        <div class="yrt-page-title-row">
             <div>
-                <h1 class="srt-h1"><i class="bi bi-arrow-clockwise me-1 text-primary"></i> Smart buyurtma</h1>
-                <div class="srt-sub">
+                <h1 class="yrt-h1"><i class="bi bi-arrow-clockwise me-1 text-primary"></i> Smart buyurtma</h1>
+                <div class="yrt-sub">
                     Past zaxira + avto-hisoblangan taklif (velocity × buffer)
                 </div>
             </div>
@@ -22,12 +22,12 @@
         </div>
 
         <!-- Row 2: filter toolbar -->
-        <form method="get" class="srt-page-filter-row">
-            <div class="srt-filter-group">
-                <span class="srt-filter-label" aria-hidden="true">
+        <form method="get" class="yrt-page-filter-row">
+            <div class="yrt-filter-group">
+                <span class="yrt-filter-label" aria-hidden="true">
                     <i class="bi bi-building"></i> Filial
                 </span>
-                <select name="branch" class="form-select form-select-sm srt-branch-filter"
+                <select name="branch" class="form-select form-select-sm yrt-branch-filter"
                         onchange="this.form.submit()" aria-label="Filial">
                     <option value="">Barcha filiallar</option>
                     {% for b in branches %}
@@ -39,8 +39,8 @@
                 </select>
             </div>
 
-            <div class="srt-filter-group">
-                <span class="srt-filter-label" aria-hidden="true"
+            <div class="yrt-filter-group">
+                <span class="yrt-filter-label" aria-hidden="true"
                       title="Shu sondan kam qolgan zaxiralar ko'rsatiladi">
                     <i class="bi bi-exclamation-circle"></i> Past zaxira ≤
                 </span>
@@ -50,8 +50,8 @@
                        aria-label="Past zaxira limiti">
             </div>
 
-            <div class="srt-filter-group">
-                <span class="srt-filter-label" aria-hidden="true"
+            <div class="yrt-filter-group">
+                <span class="yrt-filter-label" aria-hidden="true"
                       title="Kerakli zaxira shu kunlarga yetadi">
                     <i class="bi bi-calendar3"></i> Buffer
                 </span>
@@ -62,7 +62,7 @@
                 <span class="text-muted small">kun</span>
             </div>
 
-            <div class="srt-filter-group">
+            <div class="yrt-filter-group">
                 <button type="submit" class="btn btn-primary btn-sm">
                     <i class="bi bi-funnel"></i> Qo'llash
                 </button>
@@ -76,27 +76,27 @@
         </form>
     </div>
 
-    <div class="srt-kpi-grid">
-        <div class="srt-kpi accent-amber">
-            <div class="srt-kpi-label"><i class="bi bi-exclamation-circle"></i> Buyurtma kerak</div>
-            <div class="srt-kpi-value text-warning">{{ total_items }}</div>
-            <div class="srt-kpi-meta">ta variant</div>
+    <div class="yrt-kpi-grid">
+        <div class="yrt-kpi accent-amber">
+            <div class="yrt-kpi-label"><i class="bi bi-exclamation-circle"></i> Buyurtma kerak</div>
+            <div class="yrt-kpi-value text-warning">{{ total_items }}</div>
+            <div class="yrt-kpi-meta">ta variant</div>
         </div>
-        <div class="srt-kpi accent">
-            <div class="srt-kpi-label"><i class="bi bi-truck"></i> Yetkazib beruvchilar</div>
-            <div class="srt-kpi-value">{{ by_supplier|length }}</div>
-            <div class="srt-kpi-meta">ta turli</div>
+        <div class="yrt-kpi accent">
+            <div class="yrt-kpi-label"><i class="bi bi-truck"></i> Yetkazib beruvchilar</div>
+            <div class="yrt-kpi-value">{{ by_supplier|length }}</div>
+            <div class="yrt-kpi-meta">ta turli</div>
         </div>
-        <div class="srt-kpi accent-success">
-            <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> Taklif etilgan jami</div>
-            <div class="srt-kpi-value">{{ total_suggested_value|som }}</div>
-            <div class="srt-kpi-meta">so'm (tannarx)</div>
+        <div class="yrt-kpi accent-success">
+            <div class="yrt-kpi-label"><i class="bi bi-cash-coin"></i> Taklif etilgan jami</div>
+            <div class="yrt-kpi-value">{{ total_suggested_value|som }}</div>
+            <div class="yrt-kpi-meta">so'm (tannarx)</div>
         </div>
     </div>
 
     {% if not items %}
-        <div class="srt-empty">
-            <i class="bi bi-check-circle-fill srt-empty-icon text-success"></i>
+        <div class="yrt-empty">
+            <i class="bi bi-check-circle-fill yrt-empty-icon text-success"></i>
             <h5 class="mt-2">Hammasi yaxshi</h5>
             <p class="mb-0">Belgilangan limitdan past zaxiralar topilmadi.</p>
         </div>
@@ -113,14 +113,14 @@
         </div>
 
         {% if view_mode == 'product' %}
-        <div class="srt-section">
-            <div class="srt-section-head">
-                <h2 class="srt-h2"><i class="bi bi-box-seam text-primary"></i> Mahsulot bo'yicha jami</h2>
-                <span class="srt-tag">{{ products_grouped|length }} ta</span>
+        <div class="yrt-section">
+            <div class="yrt-section-head">
+                <h2 class="yrt-h2"><i class="bi bi-box-seam text-primary"></i> Mahsulot bo'yicha jami</h2>
+                <span class="yrt-tag">{{ products_grouped|length }} ta</span>
             </div>
-            <div class="srt-section-body flush">
+            <div class="yrt-section-body flush">
                 <div class="table-responsive">
-                    <table class="srt-data-table">
+                    <table class="yrt-data-table">
                         <thead>
                             <tr>
                                 <th>Mahsulot</th>
@@ -145,7 +145,7 @@
                                     {{ p.branches|length }} ta: {{ p.branches|join:", "|truncatechars:30 }}
                                 </small></td>
                                 <td class="num">
-                                    <span class="srt-tag accent">{{ p.stock_total }}</span>
+                                    <span class="yrt-tag accent">{{ p.stock_total }}</span>
                                 </td>
                                 <td class="num">{{ p.sold_30d_total }}</td>
                                 <td class="num">
@@ -162,25 +162,25 @@
         </div>
         {% else %}
         {% for supplier_name, supplier_items in by_supplier %}
-        <div class="srt-section">
-            <div class="srt-section-head">
-                <h2 class="srt-h2">
+        <div class="yrt-section">
+            <div class="yrt-section-head">
+                <h2 class="yrt-h2">
                     <i class="bi bi-truck text-primary"></i> {{ supplier_name }}
-                    <span class="srt-tag ms-2">{{ supplier_items|length }} variant</span>
+                    <span class="yrt-tag ms-2">{{ supplier_items|length }} variant</span>
                 </h2>
                 {% with sup_total=0 %}
                     {% for it in supplier_items %}
                         {% with sup_total=sup_total|add:it.estimated_cost %}
                             {% if forloop.last %}
-                                <strong class="text-success srt-num">{{ sup_total|som }} so'm</strong>
+                                <strong class="text-success yrt-num">{{ sup_total|som }} so'm</strong>
                             {% endif %}
                         {% endwith %}
                     {% endfor %}
                 {% endwith %}
             </div>
-            <div class="srt-section-body flush">
+            <div class="yrt-section-body flush">
                 <div class="table-responsive">
-                    <table class="srt-data-table">
+                    <table class="yrt-data-table">
                         <thead>
                             <tr>
                                 <th>Mahsulot</th>
@@ -205,7 +205,7 @@
                                 <td><small>{{ it.variant.size }} / {{ it.variant.color }}</small></td>
                                 <td><small>{{ it.branch.name }}</small></td>
                                 <td class="num">
-                                    <span class="srt-tag {% if it.stock.stock_count == 0 %}danger{% elif it.stock.stock_count <= 3 %}accent{% endif %}">
+                                    <span class="yrt-tag {% if it.stock.stock_count == 0 %}danger{% elif it.stock.stock_count <= 3 %}accent{% endif %}">
                                         {{ it.stock.stock_count }}
                                     </span>
                                 </td>
@@ -219,7 +219,7 @@
                                 </td>
                                 <td class="num">
                                     {% if it.days_left is not None %}
-                                        <span class="srt-tag {% if it.days_left < 7 %}danger{% elif it.days_left < 14 %}accent{% endif %}">
+                                        <span class="yrt-tag {% if it.days_left < 7 %}danger{% elif it.days_left < 14 %}accent{% endif %}">
                                             {{ it.days_left|floatformat:0 }} kun
                                         </span>
                                     {% else %}<span class="text-muted">—</span>{% endif %}

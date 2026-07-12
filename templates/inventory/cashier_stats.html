@@ -1,5 +1,5 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
 {% block title %}{{ seller.username }} — Performans{% endblock %}
 
@@ -10,17 +10,17 @@
     </a>
 
     <!-- ── Profile header ───────────────────────────────────────────── -->
-    <div class="srt-section">
-        <div class="srt-section-body">
+    <div class="yrt-section">
+        <div class="yrt-section-body">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div class="d-flex gap-3 align-items-center">
-                    <div class="srote-avatar" style="width:56px; height:56px; font-size:1.5rem;">
+                    <div class="yurit-avatar" style="width:56px; height:56px; font-size:1.5rem;">
                         {{ seller.username|slice:":1"|upper }}
                     </div>
                     <div>
-                        <h1 class="srt-h1 mb-1">
+                        <h1 class="yrt-h1 mb-1">
                             {{ seller.username }}
-                            <span class="srt-tag {% if seller.role == 'admin' %}danger{% else %}primary{% endif %} ms-1">
+                            <span class="yrt-tag {% if seller.role == 'admin' %}danger{% else %}primary{% endif %} ms-1">
                                 {{ seller.get_role_display }}
                             </span>
                         </h1>
@@ -36,12 +36,12 @@
                 </div>
                 <div class="text-end">
                     {% if commission_pct %}
-                        <span class="srt-tag success" style="font-size: 0.95rem; padding: 0.3rem 0.7rem;">
+                        <span class="yrt-tag success" style="font-size: 0.95rem; padding: 0.3rem 0.7rem;">
                             Komissiya: {{ commission_pct }}%
                         </span>
                     {% endif %}
                     <div class="small text-muted mt-1">
-                        Faol kunlar: <strong class="srt-num">{{ active_days }}</strong> / 30
+                        Faol kunlar: <strong class="yrt-num">{{ active_days }}</strong> / 30
                     </div>
                 </div>
             </div>
@@ -49,68 +49,68 @@
     </div>
 
     <!-- ── Primary KPIs ─────────────────────────────────────────────── -->
-    <div class="srt-kpi-grid">
-        <div class="srt-kpi accent-success">
-            <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> 30 kunlik tushum</div>
-            <div class="srt-kpi-value">{{ revenue|som }}</div>
-            <div class="srt-kpi-meta"><span class="srt-num">{{ txns }}</span> chek</div>
+    <div class="yrt-kpi-grid">
+        <div class="yrt-kpi accent-success">
+            <div class="yrt-kpi-label"><i class="bi bi-cash-coin"></i> 30 kunlik tushum</div>
+            <div class="yrt-kpi-value">{{ revenue|som }}</div>
+            <div class="yrt-kpi-meta"><span class="yrt-num">{{ txns }}</span> chek</div>
         </div>
-        <div class="srt-kpi accent">
-            <div class="srt-kpi-label"><i class="bi bi-graph-up-arrow"></i> Sof foyda</div>
-            <div class="srt-kpi-value">{{ profit|som }}</div>
-            <div class="srt-kpi-meta">tannarx ayirilgan</div>
+        <div class="yrt-kpi accent">
+            <div class="yrt-kpi-label"><i class="bi bi-graph-up-arrow"></i> Sof foyda</div>
+            <div class="yrt-kpi-value">{{ profit|som }}</div>
+            <div class="yrt-kpi-meta">tannarx ayirilgan</div>
         </div>
-        <div class="srt-kpi accent-amber">
-            <div class="srt-kpi-label"><i class="bi bi-cart-check"></i> O'rtacha chek</div>
-            <div class="srt-kpi-value">{{ avg_ticket|som }}</div>
-            <div class="srt-kpi-meta">so'm</div>
+        <div class="yrt-kpi accent-amber">
+            <div class="yrt-kpi-label"><i class="bi bi-cart-check"></i> O'rtacha chek</div>
+            <div class="yrt-kpi-value">{{ avg_ticket|som }}</div>
+            <div class="yrt-kpi-meta">so'm</div>
         </div>
-        <div class="srt-kpi {% if commission_pct %}accent-success{% endif %}">
-            <div class="srt-kpi-label"><i class="bi bi-coin"></i> Komissiya</div>
+        <div class="yrt-kpi {% if commission_pct %}accent-success{% endif %}">
+            <div class="yrt-kpi-label"><i class="bi bi-coin"></i> Komissiya</div>
             {% if commission_pct %}
-                <div class="srt-kpi-value text-success">{{ commission|som }}</div>
-                <div class="srt-kpi-meta">so'm topgan</div>
+                <div class="yrt-kpi-value text-success">{{ commission|som }}</div>
+                <div class="yrt-kpi-meta">so'm topgan</div>
             {% else %}
-                <div class="srt-kpi-value text-muted">—</div>
-                <div class="srt-kpi-meta">qo'shilmagan</div>
+                <div class="yrt-kpi-value text-muted">—</div>
+                <div class="yrt-kpi-meta">qo'shilmagan</div>
             {% endif %}
         </div>
     </div>
 
     <!-- ── Secondary KPIs ───────────────────────────────────────────── -->
-    <div class="srt-kpi-grid">
-        <div class="srt-kpi">
-            <div class="srt-kpi-label"><i class="bi bi-box-seam"></i> Sotilgan dona</div>
-            <div class="srt-kpi-value">{{ qty }}</div>
+    <div class="yrt-kpi-grid">
+        <div class="yrt-kpi">
+            <div class="yrt-kpi-label"><i class="bi bi-box-seam"></i> Sotilgan dona</div>
+            <div class="yrt-kpi-value">{{ qty }}</div>
         </div>
-        <div class="srt-kpi">
-            <div class="srt-kpi-label"><i class="bi bi-calendar"></i> Kuniga sotuv</div>
-            <div class="srt-kpi-value">{{ sales_per_day|floatformat:1 }}</div>
-            <div class="srt-kpi-meta">chek/kun</div>
+        <div class="yrt-kpi">
+            <div class="yrt-kpi-label"><i class="bi bi-calendar"></i> Kuniga sotuv</div>
+            <div class="yrt-kpi-value">{{ sales_per_day|floatformat:1 }}</div>
+            <div class="yrt-kpi-meta">chek/kun</div>
         </div>
-        <div class="srt-kpi {% if refund_rate > 5 %}accent-danger{% endif %}">
-            <div class="srt-kpi-label"><i class="bi bi-arrow-counterclockwise"></i> Qaytarish %</div>
-            <div class="srt-kpi-value {% if refund_rate > 5 %}text-danger{% endif %}">{{ refund_rate|floatformat:1 }}%</div>
-            <div class="srt-kpi-meta"><span class="srt-num">{{ refund_qty }}</span> / {{ qty }}</div>
+        <div class="yrt-kpi {% if refund_rate > 5 %}accent-danger{% endif %}">
+            <div class="yrt-kpi-label"><i class="bi bi-arrow-counterclockwise"></i> Qaytarish %</div>
+            <div class="yrt-kpi-value {% if refund_rate > 5 %}text-danger{% endif %}">{{ refund_rate|floatformat:1 }}%</div>
+            <div class="yrt-kpi-meta"><span class="yrt-num">{{ refund_qty }}</span> / {{ qty }}</div>
         </div>
-        <div class="srt-kpi">
-            <div class="srt-kpi-label"><i class="bi bi-arrow-counterclockwise"></i> Qaytarish soni</div>
-            <div class="srt-kpi-value">{{ refund_count }}</div>
-            <div class="srt-kpi-meta">marta</div>
+        <div class="yrt-kpi">
+            <div class="yrt-kpi-label"><i class="bi bi-arrow-counterclockwise"></i> Qaytarish soni</div>
+            <div class="yrt-kpi-value">{{ refund_count }}</div>
+            <div class="yrt-kpi-meta">marta</div>
         </div>
     </div>
 
     {% if anomalies %}
-    <div class="srt-section" style="border-color: var(--srt-warning);">
-        <div class="srt-section-head" style="background: rgba(180, 83, 9, 0.06);">
-            <h2 class="srt-h2"><i class="bi bi-search text-warning"></i> Hamkasblar bilan taqqoslash</h2>
-            <span class="srt-tag">{{ peer_count }} ta hamkasb</span>
+    <div class="yrt-section" style="border-color: var(--yrt-warning);">
+        <div class="yrt-section-head" style="background: rgba(180, 83, 9, 0.06);">
+            <h2 class="yrt-h2"><i class="bi bi-search text-warning"></i> Hamkasblar bilan taqqoslash</h2>
+            <span class="yrt-tag">{{ peer_count }} ta hamkasb</span>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
             <div class="list-group list-group-flush">
                 {% for a in anomalies %}
                     <div class="list-group-item border-0 px-0 py-2">
-                        <span class="srt-tag {{ a.level }} me-2"><i class="bi bi-{{ a.icon }}"></i></span>
+                        <span class="yrt-tag {{ a.level }} me-2"><i class="bi bi-{{ a.icon }}"></i></span>
                         <strong>{{ a.title }}</strong>
                         <div class="small text-muted ms-4">{{ a.detail }}</div>
                     </div>
@@ -120,32 +120,32 @@
     </div>
     {% endif %}
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-graph-up text-primary"></i> Kunlik tushum tarixi</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-graph-up text-primary"></i> Kunlik tushum tarixi</h2>
         </div>
-        <div class="srt-section-body">
-            <div class="srt-chart-box short"><canvas id="dailyChart"></canvas></div>
+        <div class="yrt-section-body">
+            <div class="yrt-chart-box short"><canvas id="dailyChart"></canvas></div>
         </div>
     </div>
 
     <div class="row g-3">
         <div class="col-lg-7">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-clock text-primary"></i> Soat bo'yicha aktivlik</h2>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-clock text-primary"></i> Soat bo'yicha aktivlik</h2>
                 </div>
-                <div class="srt-section-body">
-                    <div class="srt-chart-box short"><canvas id="hourlyChart"></canvas></div>
+                <div class="yrt-section-body">
+                    <div class="yrt-chart-box short"><canvas id="hourlyChart"></canvas></div>
                 </div>
             </div>
         </div>
         <div class="col-lg-5">
-            <div class="srt-section">
-                <div class="srt-section-head">
-                    <h2 class="srt-h2"><i class="bi bi-trophy text-warning"></i> Top mahsulotlar</h2>
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-trophy text-warning"></i> Top mahsulotlar</h2>
                 </div>
-                <div class="srt-section-body">
+                <div class="yrt-section-body">
                     {% if top_products %}
                         <ol class="ps-3 mb-0">
                             {% for p in top_products %}
@@ -154,15 +154,15 @@
                                     {{ p.variant__product__name|truncatechars:28 }}
                                 </a>
                                 <div class="small text-muted">
-                                    <span class="srt-num">{{ p.qty }}</span> dona ·
-                                    <span class="srt-num">{{ p.revenue|som }}</span> so'm
+                                    <span class="yrt-num">{{ p.qty }}</span> dona ·
+                                    <span class="yrt-num">{{ p.revenue|som }}</span> so'm
                                 </div>
                             </li>
                             {% endfor %}
                         </ol>
                     {% else %}
-                        <div class="srt-empty" style="border:none;">
-                            <i class="bi bi-inbox srt-empty-icon"></i>
+                        <div class="yrt-empty" style="border:none;">
+                            <i class="bi bi-inbox yrt-empty-icon"></i>
                             Hali sotuv yo'q
                         </div>
                     {% endif %}
@@ -207,10 +207,10 @@
         return `rgba(${r}, ${g}, ${b}, ${a})`;
     }
     const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-    const primary = css('--srt-primary', '#1E40AF');
-    const success = css('--srt-success', '#15803D');
-    const muted   = css('--srt-fg-muted', '#475569');
-    const fg      = css('--srt-fg', '#0F172A');
+    const primary = css('--yrt-primary', '#1E40AF');
+    const success = css('--yrt-success', '#15803D');
+    const muted   = css('--yrt-fg-muted', '#475569');
+    const fg      = css('--yrt-fg', '#0F172A');
     const grid    = isDark ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.06)';
 
     Chart.defaults.font.family = 'Fira Sans';

@@ -310,7 +310,7 @@
     </div>
 
     <div class="display-footer">
-        Aloqada bo'lganingiz uchun rahmat · Powered by Srote POS
+        Aloqada bo'lganingiz uchun rahmat · Powered by yurit POS
     </div>
 </div>
 
@@ -364,7 +364,7 @@ function renderCart(items) {
 // BroadcastChannel for same-browser sync (POS + display tabs)
 let bc = null;
 try {
-    bc = new BroadcastChannel('srote-pos');
+    bc = new BroadcastChannel('yurit-pos');
 } catch (e) {}
 
 if (bc) {

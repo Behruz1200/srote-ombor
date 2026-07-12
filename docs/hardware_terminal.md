@@ -1,6 +1,6 @@
 # Hardware POS terminal integratsiyasi (UzCard / Humo)
 
-Bu doc UzCard yoki Humo fizik POS terminalini Srote tizimiga ulashning
+Bu doc UzCard yoki Humo fizik POS terminalini yurit tizimiga ulashning
 amaliy yo'lini tasvirlaydi. **Hozir kod yo'q** — chunki bu integratsiyaning
 har bir bosqichi real apparat va vendor SDK'ga bog'liq. Bu fayl
 boshlash uchun yo'l xaritasi.

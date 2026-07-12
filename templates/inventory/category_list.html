@@ -1,48 +1,48 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Kategoriyalar — Srote{% endblock %}
+{% block title %}Kategoriyalar — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
 
-    <div class="srt-page-header">
+    <div class="yrt-page-header">
         <div>
-            <h1 class="srt-h1"><i class="bi bi-tags me-1 text-primary"></i> Kategoriyalar</h1>
-            <div class="srt-sub">Mahsulot kategoriyalari va ularning 30 kunlik performansi</div>
+            <h1 class="yrt-h1"><i class="bi bi-tags me-1 text-primary"></i> Kategoriyalar</h1>
+            <div class="yrt-sub">Mahsulot kategoriyalari va ularning 30 kunlik performansi</div>
         </div>
-        <div class="srt-actions">
+        <div class="yrt-actions">
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newCatModal">
                 <i class="bi bi-plus-circle"></i> <span class="btn-text">Yangi kategoriya</span>
             </button>
         </div>
     </div>
 
-    <div class="srt-kpi-grid">
-        <div class="srt-kpi accent">
-            <div class="srt-kpi-label"><i class="bi bi-tags"></i> Jami kategoriya</div>
-            <div class="srt-kpi-value">{{ total_categories }}</div>
+    <div class="yrt-kpi-grid">
+        <div class="yrt-kpi accent">
+            <div class="yrt-kpi-label"><i class="bi bi-tags"></i> Jami kategoriya</div>
+            <div class="yrt-kpi-value">{{ total_categories }}</div>
         </div>
-        <div class="srt-kpi {% if no_category_count %}accent-amber{% endif %}">
-            <div class="srt-kpi-label"><i class="bi bi-question-octagon"></i> Kategoriyasiz mahsulot</div>
-            <div class="srt-kpi-value {% if no_category_count %}text-warning{% endif %}">{{ no_category_count }}</div>
+        <div class="yrt-kpi {% if no_category_count %}accent-amber{% endif %}">
+            <div class="yrt-kpi-label"><i class="bi bi-question-octagon"></i> Kategoriyasiz mahsulot</div>
+            <div class="yrt-kpi-value {% if no_category_count %}text-warning{% endif %}">{{ no_category_count }}</div>
         </div>
-        <div class="srt-kpi accent-success">
-            <div class="srt-kpi-label"><i class="bi bi-trophy"></i> Top kategoriya (30 kun)</div>
+        <div class="yrt-kpi accent-success">
+            <div class="yrt-kpi-label"><i class="bi bi-trophy"></i> Top kategoriya (30 kun)</div>
             {% if top_cat and top_cat.s_rev %}
-                <div class="srt-kpi-value" style="font-size: 1.3rem;">{{ top_cat.name }}</div>
-                <div class="srt-kpi-meta"><span class="srt-num">{{ top_cat.s_rev|som }}</span> so'm</div>
+                <div class="yrt-kpi-value" style="font-size: 1.3rem;">{{ top_cat.name }}</div>
+                <div class="yrt-kpi-meta"><span class="yrt-num">{{ top_cat.s_rev|som }}</span> so'm</div>
             {% else %}
-                <div class="srt-kpi-value text-muted">—</div>
+                <div class="yrt-kpi-value text-muted">—</div>
             {% endif %}
         </div>
     </div>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-search text-primary"></i> Qidiruv</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-search text-primary"></i> Qidiruv</h2>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
             <form method="get">
                 <div class="row g-2">
                     <div class="col-md-9">
@@ -62,14 +62,14 @@
         </div>
     </div>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Kategoriyalar</h2>
-            <span class="srt-tag">Sotuv statistikasi so'nggi 30 kun</span>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-list-ul text-primary"></i> Kategoriyalar</h2>
+            <span class="yrt-tag">Sotuv statistikasi so'nggi 30 kun</span>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead>
                         <tr>
                             <th>Nomi</th>
@@ -93,7 +93,7 @@
                             <td class="num">
                                 {% if c.product_count %}
                                     <a href="{% url 'product_list' %}?category={{ c.id }}"
-                                       class="srt-tag primary text-decoration-none">
+                                       class="yrt-tag primary text-decoration-none">
                                         {{ c.product_count }}
                                     </a>
                                 {% else %}
@@ -110,7 +110,7 @@
                             </td>
                             <td class="num">
                                 {% if c.s_margin %}
-                                    <span class="srt-tag {% if c.s_margin < 10 %}danger{% elif c.s_margin < 25 %}accent{% else %}success{% endif %}">
+                                    <span class="yrt-tag {% if c.s_margin < 10 %}danger{% elif c.s_margin < 25 %}accent{% else %}success{% endif %}">
                                         {{ c.s_margin|floatformat:0 }}%
                                     </span>
                                 {% else %}<span class="text-muted">—</span>{% endif %}

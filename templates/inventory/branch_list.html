@@ -1,46 +1,46 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Filiallar — Srote{% endblock %}
+{% block title %}Filiallar — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
 
-    <div class="srt-page-header">
+    <div class="yrt-page-header">
         <div>
-            <h1 class="srt-h1"><i class="bi bi-building me-1 text-primary"></i> Filiallar</h1>
-            <div class="srt-sub">Filiallar va ularning 30 kunlik P&amp;L</div>
+            <h1 class="yrt-h1"><i class="bi bi-building me-1 text-primary"></i> Filiallar</h1>
+            <div class="yrt-sub">Filiallar va ularning 30 kunlik P&amp;L</div>
         </div>
-        <div class="srt-actions">
+        <div class="yrt-actions">
             <a href="{% url 'branch_create' %}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> <span class="btn-text">Yangi filial</span>
             </a>
         </div>
     </div>
 
-    <div class="srt-kpi-grid">
-        <div class="srt-kpi accent">
-            <div class="srt-kpi-label"><i class="bi bi-building"></i> Faol filiallar</div>
-            <div class="srt-kpi-value">{{ total_branches }}</div>
+    <div class="yrt-kpi-grid">
+        <div class="yrt-kpi accent">
+            <div class="yrt-kpi-label"><i class="bi bi-building"></i> Faol filiallar</div>
+            <div class="yrt-kpi-value">{{ total_branches }}</div>
         </div>
-        <div class="srt-kpi accent-success">
-            <div class="srt-kpi-label"><i class="bi bi-cash-coin"></i> 30 kunlik tushum</div>
-            <div class="srt-kpi-value">{{ total_revenue|som }}</div>
+        <div class="yrt-kpi accent-success">
+            <div class="yrt-kpi-label"><i class="bi bi-cash-coin"></i> 30 kunlik tushum</div>
+            <div class="yrt-kpi-value">{{ total_revenue|som }}</div>
         </div>
-        <div class="srt-kpi accent-amber">
-            <div class="srt-kpi-label"><i class="bi bi-archive"></i> Zaxira qiymati</div>
-            <div class="srt-kpi-value">{{ total_stock_value|som }}</div>
+        <div class="yrt-kpi accent-amber">
+            <div class="yrt-kpi-label"><i class="bi bi-archive"></i> Zaxira qiymati</div>
+            <div class="yrt-kpi-value">{{ total_stock_value|som }}</div>
         </div>
     </div>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Filiallar ro'yxati</h2>
-            <span class="srt-tag">Statistika so'nggi 30 kun</span>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-list-ul text-primary"></i> Filiallar ro'yxati</h2>
+            <span class="yrt-tag">Statistika so'nggi 30 kun</span>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead>
                         <tr>
                             <th>Filial</th>
@@ -96,9 +96,9 @@
                             </td>
                             <td>
                                 {% if b.is_active %}
-                                    <span class="srt-tag success">Faol</span>
+                                    <span class="yrt-tag success">Faol</span>
                                 {% else %}
-                                    <span class="srt-tag">Nofaol</span>
+                                    <span class="yrt-tag">Nofaol</span>
                                 {% endif %}
                             </td>
                             <td>

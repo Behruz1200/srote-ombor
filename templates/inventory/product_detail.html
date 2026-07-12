@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}{{ product.name }} — Srote{% endblock %}
+{% block title %}{{ product.name }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -15,7 +15,7 @@
                 {% if product.image %}
                 <a href="{{ product.image.url }}" target="_blank" style="flex-shrink: 0;">
                     <img src="{{ product.image.url }}" alt="{{ product.name }}"
-                         class="rounded" style="width: 130px; height: 130px; object-fit: cover; border: 1px solid var(--srt-border);">
+                         class="rounded" style="width: 130px; height: 130px; object-fit: cover; border: 1px solid var(--yrt-border);">
                 </a>
                 {% endif %}
                 <div style="min-width: 0;">
@@ -31,7 +31,7 @@
                         {% endif %}
                     </p>
                     {% if product.description %}
-                        <p style="margin-top: 0.5rem; color: var(--srt-fg-muted); font-size: 0.88rem; margin-bottom: 0;">
+                        <p style="margin-top: 0.5rem; color: var(--yrt-fg-muted); font-size: 0.88rem; margin-bottom: 0;">
                             {{ product.description }}
                         </p>
                     {% endif %}
@@ -53,26 +53,26 @@
                 </div>
             </div>
             <div style="text-align: right; flex-shrink: 0;">
-                <div style="font-size: 0.74rem; color: var(--srt-fg-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Sotuv narxi</div>
-                <div style="font-family: var(--srt-font-mono); font-size: 1.75rem; font-weight: 700; color: var(--srt-primary); line-height: 1.1;">
+                <div style="font-size: 0.74rem; color: var(--yrt-fg-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Sotuv narxi</div>
+                <div style="font-family: var(--yrt-font-mono); font-size: 1.75rem; font-weight: 700; color: var(--yrt-primary); line-height: 1.1;">
                     {{ product.default_sale_price|som }}
                 </div>
-                <small style="color: var(--srt-fg-muted);">so'm · Markup: {{ product.markup_percent }}%</small>
+                <small style="color: var(--yrt-fg-muted);">so'm · Markup: {{ product.markup_percent }}%</small>
                 <div style="margin-top: 0.7rem;">
                     <img src="{% url 'qr_image' product.code %}" alt="QR"
-                         style="width: 120px; height: 120px; image-rendering: pixelated; background: #FFFFFF; padding: 4px; border-radius: 8px; border: 1px solid var(--srt-border);">
+                         style="width: 120px; height: 120px; image-rendering: pixelated; background: #FFFFFF; padding: 4px; border-radius: 8px; border: 1px solid var(--yrt-border);">
                 </div>
             </div>
         </div>
     </header>
 
     <!-- KPI strip -->
-    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Mahsulot ko'rsatkichlari">
+    <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Mahsulot ko'rsatkichlari">
         <article class="dash-kpi" data-tone="{% if product_kpis.total_stock == 0 %}danger{% else %}indigo{% endif %}">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-archive"></i> Jami zaxira</span>
             </div>
-            <div class="dash-kpi__value" style="{% if product_kpis.total_stock == 0 %}color: var(--srt-danger);{% endif %}">
+            <div class="dash-kpi__value" style="{% if product_kpis.total_stock == 0 %}color: var(--yrt-danger);{% endif %}">
                 <span data-countup="{{ product_kpis.total_stock|default:0 }}">{{ product_kpis.total_stock }}</span>
             </div>
             <div class="dash-kpi__footer">
@@ -96,7 +96,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cart-check"></i> 30 kun sotilgan</span>
             </div>
-            <div class="dash-kpi__value" style="color: var(--srt-success);">
+            <div class="dash-kpi__value" style="color: var(--yrt-success);">
                 <span data-countup="{{ product_kpis.sold_30d|default:0 }}">{{ product_kpis.sold_30d }}</span>
             </div>
             <div class="dash-kpi__footer">
@@ -109,14 +109,14 @@
                 <span class="dash-kpi__label"><i class="bi bi-hourglass-split"></i> Yetadigan kun</span>
             </div>
             {% if product_kpis.days_left is not None %}
-                <div class="dash-kpi__value" style="color: {% if product_kpis.days_left < 7 %}var(--srt-danger){% elif product_kpis.days_left < 14 %}var(--srt-warning){% else %}var(--srt-success){% endif %};">
+                <div class="dash-kpi__value" style="color: {% if product_kpis.days_left < 7 %}var(--yrt-danger){% elif product_kpis.days_left < 14 %}var(--yrt-warning){% else %}var(--yrt-success){% endif %};">
                     <span data-countup="{{ product_kpis.days_left|floatformat:0 }}">{{ product_kpis.days_left|floatformat:0 }}</span>
                 </div>
                 <div class="dash-kpi__footer">
                     <span class="dash-kpi__unit">kun</span>
                 </div>
             {% else %}
-                <div class="dash-kpi__value" style="color: var(--srt-fg-muted);">—</div>
+                <div class="dash-kpi__value" style="color: var(--yrt-fg-muted);">—</div>
                 <div class="dash-kpi__footer"><span>sotilmagan</span></div>
             {% endif %}
         </article>

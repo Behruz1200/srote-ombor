@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Inv #{{ session.pk }} — Srote{% endblock %}
+{% block title %}Inv #{{ session.pk }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -28,7 +28,7 @@
     </header>
 
     <!-- Sessiya xulosasi — KPI strip -->
-    <section class="dash-kpis dash-kpis--four srt-stagger" aria-label="Sessiya xulosasi">
+    <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Sessiya xulosasi">
         <article class="dash-kpi" data-tone="indigo">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-building"></i> Filial</span>
@@ -56,7 +56,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-exclamation-diamond"></i> Farqlar</span>
             </div>
-            <div class="dash-kpi__value" style="color: {% if diff_count > 0 %}var(--srt-danger){% else %}var(--srt-success){% endif %};">
+            <div class="dash-kpi__value" style="color: {% if diff_count > 0 %}var(--yrt-danger){% else %}var(--yrt-success){% endif %};">
                 <span data-countup="{{ diff_count|default:0 }}">{{ diff_count }}</span>
             </div>
             <div class="dash-kpi__footer">

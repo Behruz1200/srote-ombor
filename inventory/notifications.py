@@ -233,7 +233,7 @@ def stock_text(code):
 # ---------- Command dispatcher (used by telegram_polling) ----------
 
 HELP_TEXT = (
-    "<b>Srote bot — komandalar</b>\n\n"
+    "<b>yurit bot — komandalar</b>\n\n"
     "/stock KOD — mahsulot zaxirasi\n"
     "  Misol: <code>/stock OYO-0001</code>\n"
     "  Yoki: <code>/stock nike</code>\n\n"
@@ -249,7 +249,7 @@ def handle_command(chat_id, text):
         return
 
     if text.startswith('/start'):
-        send_telegram("Salom! Srote bot.\n\n" + HELP_TEXT, chat_id=chat_id)
+        send_telegram("Salom! yurit bot.\n\n" + HELP_TEXT, chat_id=chat_id)
         return
 
     if text.startswith('/help'):

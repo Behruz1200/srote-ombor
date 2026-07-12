@@ -1,4 +1,4 @@
-"""Generate PWA icons for Srote.
+"""Generate PWA icons for yurit.
 
 Produces:
 - static/img/icon-192.png   (Android home screen)

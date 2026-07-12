@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Savat — Srote{% endblock %}
+{% block title %}Savat — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -89,7 +89,7 @@
 
     <div class="mt-3 d-flex justify-content-between flex-wrap gap-2">
         <a href="{% url 'cart_clear' %}" class="dash-btn dash-btn--ghost"
-           style="color: var(--srt-danger); border-color: rgba(239,68,68,0.18); background: var(--srt-danger-tint);"
+           style="color: var(--yrt-danger); border-color: rgba(239,68,68,0.18); background: var(--yrt-danger-tint);"
            onclick="return confirm('Savatni bo\'shatishni tasdiqlaysizmi?')">
             <i class="bi bi-x-circle"></i> <span>Savatni bo'shatish</span>
         </a>

@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
-{% load srote_extras %}
+{% load yurit_extras %}
 
-{% block title %}Audit log — Srote{% endblock %}
+{% block title %}Audit log — yurit{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 dash-page">
@@ -25,11 +25,11 @@
         </div>
     </header>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-funnel text-primary"></i> Filtrlar</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-funnel text-primary"></i> Filtrlar</h2>
         </div>
-        <div class="srt-section-body">
+        <div class="yrt-section-body">
         <form method="get" class="row g-2">
             <div class="col-md-3">
                 <label class="form-label small mb-1">Qidiruv</label>
@@ -84,13 +84,13 @@
         </div>
     </div>
 
-    <div class="srt-section">
-        <div class="srt-section-head">
-            <h2 class="srt-h2"><i class="bi bi-list-ul text-primary"></i> Yozuvlar</h2>
+    <div class="yrt-section">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-list-ul text-primary"></i> Yozuvlar</h2>
         </div>
-        <div class="srt-section-body flush">
+        <div class="yrt-section-body flush">
             <div class="table-responsive">
-                <table class="srt-data-table">
+                <table class="yrt-data-table">
                     <thead>
                         <tr>
                             <th>Sana</th>
@@ -104,23 +104,23 @@
                     <tbody>
                     {% for log in page %}
                         <tr>
-                            <td><small class="srt-num">{{ log.created_at|date:"d.m.Y H:i:s" }}</small></td>
+                            <td><small class="yrt-num">{{ log.created_at|date:"d.m.Y H:i:s" }}</small></td>
                             <td>
                                 <strong>{{ log.username_snapshot|default:"—" }}</strong>
                             </td>
                             <td>
                                 {% if log.action == 'create' %}
-                                    <span class="srt-tag success">{{ log.get_action_display }}</span>
+                                    <span class="yrt-tag success">{{ log.get_action_display }}</span>
                                 {% elif log.action == 'update' %}
-                                    <span class="srt-tag accent">{{ log.get_action_display }}</span>
+                                    <span class="yrt-tag accent">{{ log.get_action_display }}</span>
                                 {% elif log.action == 'delete' %}
-                                    <span class="srt-tag danger">{{ log.get_action_display }}</span>
+                                    <span class="yrt-tag danger">{{ log.get_action_display }}</span>
                                 {% elif log.action == 'login' %}
-                                    <span class="srt-tag primary">{{ log.get_action_display }}</span>
+                                    <span class="yrt-tag primary">{{ log.get_action_display }}</span>
                                 {% elif log.action == 'login_failed' %}
-                                    <span class="srt-tag">{{ log.get_action_display }}</span>
+                                    <span class="yrt-tag">{{ log.get_action_display }}</span>
                                 {% else %}
-                                    <span class="srt-tag">{{ log.get_action_display }}</span>
+                                    <span class="yrt-tag">{{ log.get_action_display }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -150,7 +150,7 @@
                                     <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
-                            <td><small class="text-muted srt-num">{{ log.ip|default:"—" }}</small></td>
+                            <td><small class="text-muted yrt-num">{{ log.ip|default:"—" }}</small></td>
                         </tr>
                     {% empty %}
                         <tr><td colspan="6" class="text-center text-muted py-4">
