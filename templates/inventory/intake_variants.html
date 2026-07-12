@@ -292,6 +292,14 @@
         e.preventDefault();
         const inputs = [...form.querySelectorAll('input:not([type=hidden]):not([type=radio])')]
             .filter(i => i.offsetParent !== null);
+        // Shtrix-kod katagida Enter (skaner) -> keyingi qator shtrix-kodi
+        if (t.classList.contains('row-barcode')) {
+            let tr = t.closest('tr').nextElementSibling;
+            if (!tr) tr = addRow(false);
+            const bc = tr.querySelector('.row-barcode');
+            if (bc) { bc.focus(); bc.select && bc.select(); }
+            return;
+        }
         const idx = inputs.indexOf(t);
         // Oxirgi qatorning miqdor katagida Enter -> yangi qator
         if (t.classList.contains('row-qty') &&
