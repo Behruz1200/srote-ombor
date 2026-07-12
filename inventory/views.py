@@ -570,8 +570,14 @@ def product_bulk_update(request):
             except (ValueError, TypeError):
                 pass
         elif op == 'delete':
-            p.delete()
-            n += 1
+            from django.db.models import ProtectedError
+            try:
+                p.delete()
+                n += 1
+            except ProtectedError:
+                messages.warning(
+                    request,
+                    f"'{p.name}' ({p.code}) o'chirilmadi — sotuv tarixi bor.")
 
     # M9: audit the bulk operation as a single summary row
     if n > 0:
@@ -775,6 +781,36 @@ def product_create(request):
     return render(request, 'inventory/product_form.html', {
         'form': form, 'title': "Yangi mahsulot qo'shish",
     })
+
+
+@admin_required
+def product_delete(request, code):
+    """Mahsulotni o'chirish (POST). Sotuv tarixi bo'lsa DB himoya qiladi
+    (PROTECT) — aniq xabar bilan rad etiladi."""
+    from django.db.models import ProtectedError
+    if request.method != 'POST':
+        return redirect('product_list')
+    product = get_object_or_404(Product, code=normalize_code(code))
+    name, pk = product.name, product.pk
+    try:
+        product.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            f"'{name}' o'chirilmadi: sotuv/transfer tarixi bor. Tarix "
+            f"saqlanishi shart — o'rniga zaxirani 0 ga tushiring yoki "
+            f"boshqa mahsulotga birlashtiring.")
+        return redirect('product_list')
+    AuditLog.objects.create(
+        user=request.user,
+        username_snapshot=request.user.username,
+        action=AuditLog.Action.DELETE,
+        model_name='Product',
+        object_id=str(pk),
+        object_repr=f'{code} — {name}',
+    )
+    messages.success(request, f"O'chirildi: {name} ({code}).")
+    return redirect('product_list')
 
 
 @admin_required

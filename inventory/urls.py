@@ -61,6 +61,8 @@ urlpatterns = [
          name='product_attach_barcode'),
     path('products/<str:code>/', views.product_detail, name='product_detail'),
     path('products/<str:code>/edit/', views.product_edit, name='product_edit'),
+    path('products/<str:code>/delete/', views.product_delete,
+         name='product_delete'),
     path('products/<str:code>/variants/edit/', views.product_variants_edit,
          name='product_variants_edit'),
     path('products/<str:code>/intake/', views.intake_for_product, name='intake_for_product'),
