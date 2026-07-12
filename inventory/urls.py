@@ -67,6 +67,9 @@ urlpatterns = [
 
     path('intake/', views.intake_new, name='intake_new'),
     path('intake/variants/', views.intake_variants, name='intake_variants'),
+    path('intake/import/', views.intake_import, name='intake_import'),
+    path('intake/import/template/', views.intake_import_template,
+         name='intake_import_template'),
     path('intake/quick/', views.intake_quick, name='intake_quick'),
     path('intake/quick/save/', views.intake_quick_save, name='intake_quick_save'),
     path('intake/lookup/', views.intake_lookup, name='intake_lookup'),

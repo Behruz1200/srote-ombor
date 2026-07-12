@@ -1,0 +1,75 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Excel import — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page" style="max-width: 760px;">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Excel import</span>
+                <h1 class="dash-hero__title"><i class="bi bi-file-earmark-spreadsheet"></i> Ommaviy qabul (xlsx)</h1>
+                <p class="dash-hero__sub">
+                    <span>Shablonni to'ldiring — mahsulot, turlar, shtrix-kodlar bir yuklashda kiradi</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-arrow-left"></i> <span>Qabulga qaytish</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="card p-3 mb-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <strong><i class="bi bi-1-circle"></i> Shablonni yuklab oling</strong>
+                <div class="small text-muted">
+                    Ichida: import varag'i (namuna qatorlar bilan), joriy katalogingiz
+                    va mashhur brendlar ro'yxati.
+                </div>
+            </div>
+            <a href="{% url 'intake_import_template' %}" class="btn btn-outline-primary">
+                <i class="bi bi-download"></i> yurit-import.xlsx
+            </a>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="card p-3 mb-4">
+        {% csrf_token %}
+        <strong class="mb-2"><i class="bi bi-2-circle"></i> To'ldirilgan faylni yuklang</strong>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Filial <span class="text-danger">*</span></label>
+                <select name="branch" class="form-select" required>
+                    <option value="">— tanlang —</option>
+                    {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Marja %</label>
+                <input type="text" name="marja" class="form-control" value="0" inputmode="decimal"
+                       title="Tannarx = sotuv narx / (1 + marja/100)">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Fayl (.xlsx) <span class="text-danger">*</span></label>
+                <input type="file" name="file" class="form-control" accept=".xlsx" required>
+            </div>
+        </div>
+        <div class="small text-muted mt-2">
+            <i class="bi bi-shield-check"></i>
+            Bironta qatorda xato bo'lsa <strong>hech narsa saqlanmaydi</strong> —
+            xatolar ro'yxati ko'rsatiladi, faylni tuzatib qayta yuklaysiz.
+            "NAMUNA" bilan boshlangan qatorlar e'tiborga olinmaydi.
+        </div>
+        <div class="mt-3">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-upload"></i> Import qilish
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

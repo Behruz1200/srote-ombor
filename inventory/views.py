@@ -1549,6 +1549,284 @@ def intake_variants(request):
     })
 
 
+PARFUM_BRANDS = [
+    # Parfyumeriya
+    'Chanel', 'Dior', 'Lancome', 'Guerlain', 'Yves Saint Laurent',
+    'Giorgio Armani', 'Versace', 'Dolce & Gabbana', 'Gucci', 'Burberry',
+    'Hugo Boss', 'Calvin Klein', 'Paco Rabanne', 'Carolina Herrera',
+    'Givenchy', 'Hermes', 'Tom Ford', 'Montale', 'Mancera', 'Ajmal',
+    'Lattafa', 'Armaf', 'Rasasi', 'Swiss Arabian', 'Al Haramain',
+    # Soch/tana parvarishi
+    'Head and Shoulders', 'Pantene', 'Gliss Kur', 'Schwarzkopf', 'Syoss',
+    "L'Oreal", 'Garnier', 'Nivea', 'Dove', 'Rexona', 'Old Spice', 'AXE',
+    'Palmolive', 'Le Petit Marseillais', 'Fa', 'Camay', 'Safeguard',
+    # Koreys kosmetikasi
+    'The Face Shop', 'Missha', 'Etude House', 'Innisfree', 'Laneige',
+    'COSRX', 'Some By Mi', 'Holika Holika', 'Tony Moly', "It's Skin",
+    '3W Clinic', 'FarmStay', 'Ekel', 'Jigott', 'Deoproce', 'Lebelage',
+    'Enough', 'Esfolio', 'Eunyul', 'Mizon', 'SNP', 'Dr.Jart+',
+    'Beauty of Joseon', 'Round Lab', 'Anua', 'Medicube', 'Skin1004',
+    # Maishiy
+    'Colgate', 'Oral-B', 'Sensodyne', 'Fairy', 'Ariel', 'Tide', 'Persil',
+]
+
+IMPORT_HEADERS = ['Mahsulot', 'Rang/Tur', "O'lcham", 'Shtrix-kod',
+                  'Sotuv narx', 'Miqdor']
+
+
+@admin_required
+def intake_import_template(request):
+    """yurit-import.xlsx shablonini yaratib beradi.
+
+    1-varaq: import shabloni (+2 namuna qator)
+    2-varaq: joriy katalog (faqat ma'lumot uchun — import o'qimaydi)
+    3-varaq: mashhur brendlar ro'yxati (ma'lumot uchun)
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    head_font = Font(bold=True, color='FFFFFF')
+    head_fill = PatternFill('solid', fgColor='4472C4')
+
+    ws = wb.active
+    ws.title = 'Import'
+    ws.append(IMPORT_HEADERS)
+    for c in ws[1]:
+        c.font = head_font
+        c.fill = head_fill
+    ws.append(['NAMUNA: Chanel Bleu de Chanel', 'EDP', '100ml',
+               '3145891073607', '1500000', '2'])
+    ws.append(['NAMUNA: Head and Shoulders', 'Mentol', '400',
+               '5000174896190', '45000', '10'])
+    note = ("Eslatma: NAMUNA qatorlarini o'chirib, o'z tovarlaringizni "
+            "yozing. Bir mahsulotning har bir turi alohida qator. "
+            "Import faqat shu varaqni o'qiydi.")
+    ws.append([])
+    ws.append([note])
+    widths = [34, 22, 12, 18, 14, 10]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws2 = wb.create_sheet('Katalogim')
+    ws2.append(['Mahsulot', 'Rang/Tur', "O'lcham", 'Shtrix-kod'])
+    for c in ws2[1]:
+        c.font = head_font
+        c.fill = head_fill
+    for v in (ProductVariant.objects.select_related('product')
+              .order_by('product__name', 'size', 'color')[:2000]):
+        ws2.append([v.product.name, v.color, v.size, v.barcode or
+                    v.product.external_barcode or ''])
+    for i, w in enumerate([34, 26, 12, 18], 1):
+        ws2.column_dimensions[get_column_letter(i)].width = w
+
+    ws3 = wb.create_sheet('Brendlar')
+    ws3.append(['Mashhur brendlar (ma\'lumot uchun)'])
+    ws3[1][0].font = head_font
+    ws3[1][0].fill = head_fill
+    for b in PARFUM_BRANDS:
+        ws3.append([b])
+    ws3.column_dimensions['A'].width = 30
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    resp = HttpResponse(
+        buf.read(),
+        content_type='application/vnd.openxmlformats-officedocument.'
+                     'spreadsheetml.sheet')
+    resp['Content-Disposition'] = 'attachment; filename="yurit-import.xlsx"'
+    return resp
+
+
+@admin_required
+def intake_import(request):
+    """Excel (xlsx) orqali ommaviy qabul: mahsulot + turlar + shtrix-kodlar.
+
+    Hammasi-yoki-hech-narsa: bironta qatorda xato bo'lsa, hech nima
+    saqlanmaydi (qayta yuklashda ikki marta qo'shilib ketmasligi uchun).
+    """
+    from decimal import Decimal
+
+    branches = Branch.objects.filter(is_active=True)
+
+    if request.method == 'POST' and request.FILES.get('file'):
+        from openpyxl import load_workbook
+
+        branch = Branch.objects.filter(
+            pk=request.POST.get('branch') or 0, is_active=True).first()
+        if not branch:
+            messages.error(request, "Filial tanlang.")
+            return redirect('intake_import')
+        try:
+            marja = parse_dec(request.POST.get('marja'))
+        except Exception:
+            marja = Decimal('0')
+        if marja < 0:
+            marja = Decimal('0')
+
+        try:
+            wb = load_workbook(request.FILES['file'], read_only=True,
+                               data_only=True)
+        except Exception:
+            messages.error(request, "Fayl o'qilmadi — .xlsx formatda yuklang.")
+            return redirect('intake_import')
+        ws = wb['Import'] if 'Import' in wb.sheetnames else wb.worksheets[0]
+
+        errors, rows = [], []
+        seen_barcodes = {}
+        for idx, raw in enumerate(ws.iter_rows(min_row=2, values_only=True),
+                                  start=2):
+            vals = [(str(x).strip() if x is not None else '')
+                    for x in (list(raw) + [''] * 6)[:6]]
+            name, color, size, barcode, price_raw, qty_raw = vals
+            if not any(vals):
+                continue
+            if name.upper().startswith('NAMUNA'):
+                continue
+            if not name:
+                errors.append(f"{idx}-qator: mahsulot nomi bo'sh.")
+                continue
+            if not (color or size or barcode):
+                errors.append(f"{idx}-qator: tur ma'lumoti yo'q.")
+                continue
+            try:
+                price = parse_dec(price_raw)
+                qty = int(parse_dec(qty_raw))
+            except Exception:
+                errors.append(f"{idx}-qator: narx/miqdor noto'g'ri "
+                              f"({price_raw!r}, {qty_raw!r}).")
+                continue
+            if price < 0 or qty < 0:
+                errors.append(f"{idx}-qator: manfiy qiymat.")
+                continue
+            barcode = barcode or None
+            if barcode:
+                if barcode in seen_barcodes:
+                    errors.append(
+                        f"{idx}-qator: shtrix-kod {barcode} faylda takror "
+                        f"({seen_barcodes[barcode]}-qatorda ham).")
+                    continue
+                seen_barcodes[barcode] = idx
+            rows.append({'line': idx, 'name': name, 'color': color,
+                         'size': size, 'barcode': barcode,
+                         'price': price, 'qty': qty})
+
+        if not rows and not errors:
+            errors.append("Faylda import qilinadigan qator topilmadi.")
+
+        # nom -> mavjud mahsulot (bir nechta bo'lsa xato)
+        products_cache = {}
+        for r in rows:
+            key = r['name'].lower()
+            if key in products_cache:
+                continue
+            qs = list(Product.objects.filter(name__iexact=r['name'])[:2])
+            if len(qs) > 1:
+                errors.append(
+                    f"'{r['name']}' nomida bir nechta mahsulot bor — avval "
+                    f"birlashtiring (Mahsulotlar → Birlashtirish).")
+                products_cache[key] = None
+            else:
+                products_cache[key] = qs[0] if qs else None
+
+        # shtrix-kod bazada bandmi?
+        for r in rows:
+            if not r['barcode']:
+                continue
+            existing_product = products_cache.get(r['name'].lower())
+            v_clash = ProductVariant.objects.filter(barcode=r['barcode'])
+            if existing_product:
+                v_clash = v_clash.exclude(product=existing_product,
+                                          size=r['size'], color=r['color'])
+            v_clash = v_clash.select_related('product').first()
+            if v_clash:
+                errors.append(
+                    f"{r['line']}-qator: shtrix-kod {r['barcode']} band — "
+                    f"{v_clash.product.name} "
+                    f"({v_clash.size or '—'}/{v_clash.color or '—'}).")
+            p_clash = Product.objects.filter(
+                external_barcode=r['barcode']).first()
+            if p_clash and (not existing_product
+                            or p_clash.pk != existing_product.pk):
+                errors.append(
+                    f"{r['line']}-qator: shtrix-kod {r['barcode']} "
+                    f"'{p_clash.name}' mahsulotida.")
+
+        if errors:
+            for e in errors[:12]:
+                messages.error(request, e)
+            if len(errors) > 12:
+                messages.warning(request,
+                                 f"... yana {len(errors) - 12} ta xato.")
+            messages.warning(request,
+                             "Hech narsa saqlanmadi — faylni tuzatib "
+                             "qayta yuklang.")
+        else:
+            created_products = 0
+            total_qty = 0
+            with transaction.atomic():
+                session = None
+                if any(r['qty'] > 0 for r in rows):
+                    session = IntakeSession.objects.create(
+                        branch=branch, received_by=request.user,
+                        note="Excel import")
+                for r in rows:
+                    key = r['name'].lower()
+                    product = products_cache.get(key)
+                    if product is None:
+                        product = Product.objects.create(name=r['name'])
+                        products_cache[key] = product
+                        created_products += 1
+                    variant, _ = ProductVariant.objects.get_or_create(
+                        product=product, size=r['size'], color=r['color'])
+                    if r['barcode'] and variant.barcode != r['barcode']:
+                        variant.barcode = r['barcode']
+                        variant.save(update_fields=['barcode'])
+                    cost = (r['price'] / (Decimal('1') + marja /
+                            Decimal('100'))).quantize(Decimal('0.01')) \
+                        if r['price'] > 0 else Decimal('0')
+                    stock, _ = BranchStock.objects.get_or_create(
+                        variant=variant, branch=branch,
+                        defaults={'cost_price': cost,
+                                  'sale_price': r['price']})
+                    stock.cost_price = cost
+                    if r['price'] > 0:
+                        stock.sale_price = r['price']
+                    if r['qty'] > 0:
+                        stock.stock_count = F('stock_count') + r['qty']
+                    stock.save()
+                    if r['qty'] > 0:
+                        Intake.objects.create(
+                            session=session, variant=variant, branch=branch,
+                            quantity=r['qty'], cost_per_unit=cost,
+                            note="Excel import", received_by=request.user)
+                        total_qty += r['qty']
+                    if product.default_sale_price == 0 and r['price'] > 0:
+                        product.default_sale_price = r['price']
+                        product.save(update_fields=['default_sale_price'])
+                AuditLog.objects.create(
+                    user=request.user,
+                    username_snapshot=request.user.username,
+                    action=AuditLog.Action.CREATE,
+                    model_name='Product',
+                    object_id='',
+                    object_repr=(f"Excel import: {len(rows)} qator, "
+                                 f"{created_products} yangi mahsulot, "
+                                 f"{total_qty} dona ({branch.name})")[:300],
+                )
+            messages.success(
+                request,
+                f"Import tayyor: {len(rows)} qator — {created_products} ta "
+                f"yangi mahsulot, jami {total_qty} dona ({branch.name}).")
+            return redirect('product_list')
+
+    return render(request, 'inventory/intake_import.html', {
+        'branches': branches,
+    })
+
+
 @admin_required
 def intake_new(request):
     """Qabul dashboard'i: 3 ta kirish nuqtasi + so'nggi sessiyalar + low-stock."""
