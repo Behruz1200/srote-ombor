@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -506,6 +507,9 @@ def product_bulk_update(request):
         messages.warning(request, "Bironta ham mahsulot tanlanmagan.")
         return redirect('product_list')
     op = request.POST.get('op') or ''
+    if op == 'merge':
+        clean_ids = ','.join(str(int(i)) for i in ids if str(i).isdigit())
+        return redirect(f"{reverse('product_merge')}?ids={clean_ids}")
     from decimal import Decimal
     try:
         value = Decimal(request.POST.get('value') or '0')
@@ -698,6 +702,121 @@ def product_create(request):
         form = ProductForm(initial=initial)
     return render(request, 'inventory/product_form.html', {
         'form': form, 'title': "Yangi mahsulot qo'shish",
+    })
+
+
+@admin_required
+def product_merge(request):
+    """Bir nechta mahsulotni bittasiga birlashtirish.
+
+    Tanlanganlarning variantlari, ombor qoldiqlari, sotuv/qabul/transfer
+    tarixi asosiy (target) mahsulotga ko'chadi. Manba mahsulotning
+    external_barcode'i (agar bitta varianti bo'lsa) o'sha variantning
+    shtrix-kodiga aylanadi — skanerlash ishlashda davom etadi.
+    """
+    ids_raw = (request.GET.get('ids') or request.POST.get('ids') or '')
+    ids = [int(i) for i in ids_raw.split(',') if i.strip().isdigit()]
+    products = list(Product.objects.filter(id__in=ids)
+                    .prefetch_related('variants'))
+    if len(products) < 2:
+        messages.warning(request, "Birlashtirish uchun kamida 2 ta mahsulot tanlang.")
+        return redirect('product_list')
+
+    # Variantlari eng ko'p mahsulot — default target
+    products.sort(key=lambda p: (-p.variants.count(), p.created_at))
+    default_target = products[0]
+
+    if request.method == 'POST' and request.POST.get('confirm') == '1':
+        try:
+            target = next(p for p in products
+                          if str(p.pk) == request.POST.get('target'))
+        except StopIteration:
+            messages.error(request, "Asosiy mahsulot noto'g'ri tanlangan.")
+            return redirect('product_list')
+        sources = [p for p in products if p.pk != target.pk]
+
+        moved_variants = 0
+        with transaction.atomic():
+            for src in sources:
+                src_variants = list(src.variants.all())
+                single = len(src_variants) == 1
+                for v in src_variants:
+                    tv = target.variants.filter(
+                        size=v.size, color=v.color).first()
+                    if tv:
+                        # Bir xil tur — variant darajasida birlashtiramiz
+                        for bs in list(v.branch_stocks.all()):
+                            tbs = BranchStock.objects.filter(
+                                variant=tv, branch=bs.branch).first()
+                            if tbs:
+                                tbs.stock_count += bs.stock_count
+                                if not tbs.sale_price:
+                                    tbs.sale_price = bs.sale_price
+                                if not tbs.cost_price:
+                                    tbs.cost_price = bs.cost_price
+                                if not tbs.wholesale_price:
+                                    tbs.wholesale_price = bs.wholesale_price
+                                tbs.save()
+                                bs.delete()
+                            else:
+                                bs.variant = tv
+                                bs.save(update_fields=['variant'])
+                        Sale.objects.filter(variant=v).update(variant=tv)
+                        Intake.objects.filter(variant=v).update(variant=tv)
+                        TransferLine.objects.filter(variant=v).update(variant=tv)
+                        StocktakeCount.objects.filter(variant=v).update(variant=tv)
+                        if v.barcode and not tv.barcode:
+                            bc = v.barcode
+                            v.barcode = None
+                            v.save(update_fields=['barcode'])
+                            tv.barcode = bc
+                            tv.save(update_fields=['barcode'])
+                        v.delete()
+                    else:
+                        v.product = target
+                        if (single and src.external_barcode and not v.barcode
+                                and not ProductVariant.objects.filter(
+                                    barcode=src.external_barcode).exists()):
+                            v.barcode = src.external_barcode
+                        v.save()
+                    moved_variants += 1
+                if target.external_barcode is None and src.external_barcode \
+                        and not single:
+                    # ko'p variantli manba barcode'i variantga bog'lanmadi —
+                    # yo'qolmasligi uchun targetga o'tkazamiz
+                    bc = src.external_barcode
+                    src.external_barcode = None
+                    src.save(update_fields=['external_barcode'])
+                    target.external_barcode = bc
+                    target.save(update_fields=['external_barcode'])
+                src.delete()
+            AuditLog.objects.create(
+                user=request.user,
+                username_snapshot=request.user.username,
+                action=AuditLog.Action.UPDATE,
+                model_name='Product',
+                object_id=str(target.pk),
+                object_repr=(f"Birlashtirildi -> {target.code}: "
+                             + ', '.join(x.code for x in sources))[:300],
+            )
+        messages.success(
+            request,
+            f"{len(sources)} ta mahsulot '{target.name}' ({target.code}) ga "
+            f"birlashtirildi — {moved_variants} ta tur ko'chdi.")
+        return redirect('product_detail', code=target.code)
+
+    # Confirm sahifasi
+    rows = []
+    for p in products:
+        rows.append({
+            'product': p,
+            'variants_count': p.variants.count(),
+            'stock': p.total_stock(),
+        })
+    return render(request, 'inventory/product_merge.html', {
+        'rows': rows,
+        'ids': ','.join(str(p.pk) for p in products),
+        'default_target': default_target,
     })
 
 

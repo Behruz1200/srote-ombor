@@ -261,6 +261,7 @@
               <option value="multiply_price">Joriy narxni X% ga ko'paytirish (masalan 110 = +10%)</option>
               <option value="set_markup">Markup foizini X% ga belgilash</option>
               <option value="change_category">Kategoriyani o'zgartirish</option>
+              <option value="merge">Birlashtirish — bitta mahsulotga</option>
               <option value="delete">O'chirish (extreme!)</option>
             </select>
           </div>
@@ -354,6 +355,8 @@
         } else if (op === 'change_category') {
             bulkValueWrap.classList.add('d-none');
             bulkCatWrap.classList.remove('d-none');
+        } else if (op === 'merge') {
+            bulkValueWrap.classList.add('d-none');
         } else if (op === 'delete') {
             bulkValueWrap.classList.add('d-none');
             bulkDeleteWarn.style.display = '';
