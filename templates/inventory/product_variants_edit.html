@@ -93,10 +93,35 @@
 </div>
 
 <script>
-// Enter = keyingi katak (submit emas)
+// Enter = keyingi katak; strelkalar = Excel kabi katakma-katak yurish
 document.getElementById('editForm') && document.getElementById('editForm')
     .addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+        const t = e.target;
+        if (t.tagName !== 'INPUT') return;
+        if (e.key.startsWith('Arrow')) {
+            const tr = t.closest('tbody tr');
+            if (!tr) return;
+            const rowInputs = [...tr.querySelectorAll('input:not([type=hidden])')];
+            const col = rowInputs.indexOf(t);
+            if (col < 0) return;
+            const go = (input) => { e.preventDefault(); input.focus(); input.select && input.select(); };
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                const target = e.key === 'ArrowUp'
+                    ? tr.previousElementSibling : tr.nextElementSibling;
+                if (target) {
+                    const ti = target.querySelectorAll('input:not([type=hidden])')[col];
+                    if (ti) go(ti);
+                }
+                return;
+            }
+            const len = (t.value || '').length;
+            const atStart = t.selectionStart === 0 && t.selectionEnd === 0;
+            const atEnd = t.selectionStart === len && t.selectionEnd === len;
+            if (e.key === 'ArrowLeft' && atStart && col > 0) go(rowInputs[col - 1]);
+            else if (e.key === 'ArrowRight' && atEnd && col + 1 < rowInputs.length) go(rowInputs[col + 1]);
+            return;
+        }
+        if (e.key !== 'Enter') return;
         e.preventDefault();
         const inputs = [...e.currentTarget.querySelectorAll('input:not([type=hidden])')];
         const idx = inputs.indexOf(e.target);

@@ -295,11 +295,49 @@
     }
     rowsBody.addEventListener('input', recount);
 
+    // Jadval ichida strelkalar bilan yurish (Excel kabi):
+    // yuqori/past — shu ustunda qator almashtiradi; chap/o'ng — kursor
+    // matn chetida bo'lsa qo'shni katakka o'tadi.
+    function arrowNav(e, t) {
+        const tr = t.closest('#rowsBody tr');
+        if (!tr) return false;
+        const rowInputs = [...tr.querySelectorAll('input')];
+        const col = rowInputs.indexOf(t);
+        if (col < 0) return false;
+        const go = (input, selectAll) => {
+            e.preventDefault();
+            input.focus();
+            if (selectAll && input.select) input.select();
+        };
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            const target = e.key === 'ArrowUp'
+                ? tr.previousElementSibling : tr.nextElementSibling;
+            if (target) {
+                const ti = target.querySelectorAll('input')[col];
+                if (ti) go(ti, true);
+            }
+            return true;
+        }
+        const len = (t.value || '').length;
+        const atStart = t.selectionStart === 0 && t.selectionEnd === 0;
+        const atEnd = t.selectionStart === len && t.selectionEnd === len;
+        if (e.key === 'ArrowLeft' && atStart && col > 0) {
+            go(rowInputs[col - 1], true);
+            return true;
+        }
+        if (e.key === 'ArrowRight' && atEnd && col + 1 < rowInputs.length) {
+            go(rowInputs[col + 1], true);
+            return true;
+        }
+        return false;
+    }
+
     // Enter = submit emas: keyingi katakka o'tish (skaner ham Enter yuboradi)
     form.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
         const t = e.target;
         if (t.tagName !== 'INPUT') return;
+        if (e.key.startsWith('Arrow')) { arrowNav(e, t); return; }
+        if (e.key !== 'Enter') return;
         e.preventDefault();
         const inputs = [...form.querySelectorAll('input:not([type=hidden]):not([type=radio])')]
             .filter(i => i.offsetParent !== null);
