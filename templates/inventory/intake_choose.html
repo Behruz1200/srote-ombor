@@ -23,7 +23,7 @@
 
     <!-- 3 ta kirish nuqtasi -->
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <a href="{% url 'intake_quick' %}" class="card text-decoration-none h-100 p-4 border-success
                                                       hover-shadow">
                 <div class="d-flex align-items-center mb-2">
@@ -41,7 +41,24 @@
                 </p>
             </a>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <a href="{% url 'intake_variants' %}" class="card text-decoration-none h-100 p-4 hover-shadow">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-info bg-opacity-10 rounded p-2 me-3">
+                        <i class="bi bi-table text-info" style="font-size: 1.8rem;"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0 text-dark">Turlar jadvali</h5>
+                        <small class="text-muted">har turga shtrix-kod</small>
+                    </div>
+                </div>
+                <p class="small text-muted mb-0">
+                    Bitta sahifada mahsulot + turlari: rang, o'lcham,
+                    shtrix-kod, narx, miqdor — qatorlab kiritiladi.
+                </p>
+            </a>
+        </div>
+        <div class="col-md-3">
             <div class="card h-100 p-4">
                 <div class="d-flex align-items-center mb-2">
                     <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
@@ -64,7 +81,7 @@
                 </form>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <a href="{% url 'product_create' %}" class="card text-decoration-none h-100 p-4 hover-shadow">
                 <div class="d-flex align-items-center mb-2">
                     <div class="bg-warning bg-opacity-10 rounded p-2 me-3">

@@ -1199,6 +1199,20 @@ async function search(q) {
             setStatus(msg + '.', 'error');
             return;
         }
+        // Tur shtrix-kodi skanerlandi -> aynan shu turni savatga qo'shamiz
+        if (data.matched_variant_id) {
+            const mv = inStock.find(v => v.variant_id === data.matched_variant_id);
+            if (mv) {
+                addToCart(product, mv);
+                setStatus(`\u2713 Qo'shildi: ${product.name} ${mv.size}/${mv.color}`, 'success');
+                scanInput.value = '';
+                refocus();
+                return;
+            }
+            setStatus(`${product.name} — skanerlangan tur bu filialda omborda yo'q.`, 'error');
+            refocus();
+            return;
+        }
         if (inStock.length === 1) {
             // Single variant -> add directly
             addToCart(product, inStock[0]);

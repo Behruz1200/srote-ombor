@@ -1,0 +1,318 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Turlar bilan qabul — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Jadval qabul</span>
+                <h1 class="dash-hero__title"><i class="bi bi-table"></i> Turlar bilan qabul</h1>
+                <p class="dash-hero__sub">
+                    <span>Bitta mahsulot — bir nechta tur: rang, o'lcham, shtrix-kod, narx, miqdor</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-arrow-left"></i> <span>Qabulga qaytish</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <form method="post" id="variantIntakeForm" autocomplete="off">
+        {% csrf_token %}
+
+        <!-- ============ 1. Mahsulot ============ -->
+        <div class="card p-3 mb-3">
+            <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+                <strong><i class="bi bi-box-seam"></i> Mahsulot</strong>
+                <div class="btn-group btn-group-sm" role="group">
+                    <input type="radio" class="btn-check" name="productMode" id="modeNew" value="new"
+                           {% if not prefill_product and not post_back.product_code %}checked{% endif %}>
+                    <label class="btn btn-outline-primary" for="modeNew">Yangi mahsulot</label>
+                    <input type="radio" class="btn-check" name="productMode" id="modeExisting" value="existing"
+                           {% if prefill_product or post_back.product_code %}checked{% endif %}>
+                    <label class="btn btn-outline-primary" for="modeExisting">Mavjud mahsulot</label>
+                </div>
+            </div>
+
+            <div id="newProductBox" class="row g-3">
+                <div class="col-md-7">
+                    <label class="form-label">Nomi <span class="text-danger">*</span></label>
+                    <input type="text" name="new_name" id="newName" class="form-control"
+                           placeholder="Masalan: Head & Shoulders shampun"
+                           value="{{ post_back.new_name|default:'' }}">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Kategoriya</label>
+                    <select name="category" class="form-select">
+                        <option value="">— tanlanmagan —</option>
+                        {% for c in categories %}
+                            <option value="{{ c.id }}" {% if post_back.category == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div id="existingProductBox" style="display:none">
+                <label class="form-label">Mahsulot qidirish (nomi yoki kodi)</label>
+                <div class="position-relative">
+                    <input type="text" id="productSearch" class="form-control"
+                           placeholder="Kamida 2 harf yozing...">
+                    <div id="productSuggest" class="list-group position-absolute w-100 shadow"
+                         style="z-index:1050; display:none; max-height:260px; overflow:auto"></div>
+                </div>
+                <div id="pickedProduct" class="mt-2" style="display:none">
+                    <span class="badge bg-success-subtle text-success border border-success fs-6">
+                        <i class="bi bi-check-circle"></i>
+                        <span id="pickedLabel"></span>
+                        <a href="#" id="pickedClear" class="ms-2 text-danger text-decoration-none">✕</a>
+                    </span>
+                </div>
+                <input type="hidden" name="product_code" id="productCode"
+                       value="{% if prefill_product %}{{ prefill_product.code }}{% elif post_back %}{{ post_back.product_code }}{% endif %}">
+            </div>
+        </div>
+
+        <!-- ============ 2. Qabul ma'lumotlari ============ -->
+        <div class="card p-3 mb-3">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Filial <span class="text-danger">*</span></label>
+                    <select name="branch" class="form-select" required>
+                        <option value="">— tanlang —</option>
+                        {% for b in branches %}
+                            <option value="{{ b.id }}" {% if post_back.branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Yetkazib beruvchi</label>
+                    <input type="text" name="supplier" class="form-control" list="supplierList"
+                           placeholder="Ixtiyoriy" value="{{ post_back.supplier|default:'' }}">
+                    <datalist id="supplierList">
+                        {% for sp in suppliers %}<option value="{{ sp.name }}">{% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Izoh</label>
+                    <input type="text" name="note" class="form-control"
+                           placeholder="Ixtiyoriy" value="{{ post_back.note|default:'' }}">
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ 3. Turlar jadvali ============ -->
+        <div class="card p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong><i class="bi bi-list-ol"></i> Turlar</strong>
+                <span class="small text-muted">Shtrix-kodni skaner bilan ham o'qitsa bo'ladi —
+                    kursorni katakka qo'yib skanerlang</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle" id="rowsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="min-width:110px">Rang</th>
+                            <th style="min-width:100px">O'lcham</th>
+                            <th style="min-width:160px">Shtrix-kod</th>
+                            <th style="min-width:110px">Tannarx</th>
+                            <th style="min-width:110px">Sotuv narx</th>
+                            <th style="min-width:80px">Miqdor</th>
+                            <th style="width:36px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="rowsBody">
+                        {% if post_back.rows %}
+                            {% for r in post_back.rows %}
+                            <tr>
+                                <td><input type="text" name="row_color" class="form-control form-control-sm" value="{{ r.color }}"></td>
+                                <td><input type="text" name="row_size" class="form-control form-control-sm" value="{{ r.size }}"></td>
+                                <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" value="{{ r.barcode }}"></td>
+                                <td><input type="text" name="row_cost" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.cost }}"></td>
+                                <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.price }}"></td>
+                                <td><input type="text" name="row_qty" class="form-control form-control-sm text-end row-qty" inputmode="numeric" value="{{ r.qty }}"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
+                            </tr>
+                            {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="addRowBtn">
+                    <i class="bi bi-plus-lg"></i> Qator qo'shish
+                </button>
+                <div class="small text-muted">
+                    Jami: <strong id="sumRows">0</strong> tur ·
+                    <strong id="sumQty">0</strong> dona
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-4">
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="bi bi-check2-circle"></i> Saqlash
+            </button>
+            <a href="{% url 'intake_new' %}" class="btn btn-outline-secondary btn-lg">Bekor qilish</a>
+        </div>
+    </form>
+</div>
+
+<template id="rowTpl">
+    <tr>
+        <td><input type="text" name="row_color" class="form-control form-control-sm" placeholder="Oq"></td>
+        <td><input type="text" name="row_size" class="form-control form-control-sm" placeholder="400ml"></td>
+        <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" placeholder="Skanerlang"></td>
+        <td><input type="text" name="row_cost" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="row_qty" class="form-control form-control-sm text-end row-qty" inputmode="numeric" placeholder="0"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
+    </tr>
+</template>
+
+<script>
+(function () {
+    const form = document.getElementById('variantIntakeForm');
+    const rowsBody = document.getElementById('rowsBody');
+    const rowTpl = document.getElementById('rowTpl');
+    const addRowBtn = document.getElementById('addRowBtn');
+
+    // ---------- rejim almashish ----------
+    const newBox = document.getElementById('newProductBox');
+    const existBox = document.getElementById('existingProductBox');
+    const newName = document.getElementById('newName');
+    const productCode = document.getElementById('productCode');
+
+    function applyMode() {
+        const isNew = document.getElementById('modeNew').checked;
+        newBox.style.display = isNew ? '' : 'none';
+        existBox.style.display = isNew ? 'none' : '';
+        if (isNew) { productCode.value = ''; showPicked(null); }
+        else { newName.value = ''; }
+    }
+    document.getElementById('modeNew').addEventListener('change', applyMode);
+    document.getElementById('modeExisting').addEventListener('change', applyMode);
+
+    // ---------- mavjud mahsulot qidirish ----------
+    const searchInput = document.getElementById('productSearch');
+    const suggestBox = document.getElementById('productSuggest');
+    const picked = document.getElementById('pickedProduct');
+    const pickedLabel = document.getElementById('pickedLabel');
+    let searchTimer = null;
+
+    function showPicked(item) {
+        if (item) {
+            pickedLabel.textContent = `${item.code} — ${item.name}`;
+            picked.style.display = '';
+            productCode.value = item.code;
+        } else {
+            picked.style.display = 'none';
+        }
+    }
+    document.getElementById('pickedClear').addEventListener('click', (e) => {
+        e.preventDefault();
+        productCode.value = '';
+        showPicked(null);
+        searchInput.focus();
+    });
+
+    searchInput && searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        const q = searchInput.value.trim();
+        if (q.length < 2) { suggestBox.style.display = 'none'; return; }
+        searchTimer = setTimeout(async () => {
+            try {
+                const r = await fetch(`{% url 'product_search_for_attach' %}?q=${encodeURIComponent(q)}`);
+                const data = await r.json();
+                suggestBox.innerHTML = '';
+                for (const it of (data.results || [])) {
+                    const a = document.createElement('button');
+                    a.type = 'button';
+                    a.className = 'list-group-item list-group-item-action';
+                    a.innerHTML = `<code>${it.code}</code> ${it.name}` +
+                        (it.category ? ` <small class="text-muted">· ${it.category}</small>` : '');
+                    a.addEventListener('click', () => {
+                        showPicked(it);
+                        suggestBox.style.display = 'none';
+                        searchInput.value = '';
+                    });
+                    suggestBox.appendChild(a);
+                }
+                suggestBox.style.display = data.results && data.results.length ? '' : 'none';
+            } catch (e) { /* jim */ }
+        }, 250);
+    });
+    document.addEventListener('click', (e) => {
+        if (!suggestBox.contains(e.target) && e.target !== searchInput)
+            suggestBox.style.display = 'none';
+    });
+
+    // ---------- qatorlar ----------
+    function addRow(focus) {
+        const tr = rowTpl.content.firstElementChild.cloneNode(true);
+        rowsBody.appendChild(tr);
+        if (focus) tr.querySelector('input').focus();
+        recount();
+        return tr;
+    }
+    addRowBtn.addEventListener('click', () => addRow(true));
+
+    rowsBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('.row-del');
+        if (!btn) return;
+        btn.closest('tr').remove();
+        if (!rowsBody.children.length) addRow(false);
+        recount();
+    });
+
+    function recount() {
+        let rows = 0, qty = 0;
+        for (const tr of rowsBody.querySelectorAll('tr')) {
+            const inputs = tr.querySelectorAll('input');
+            const hasData = [...inputs].some(i => i.value.trim());
+            if (hasData) rows++;
+            const q = parseInt(tr.querySelector('.row-qty').value, 10);
+            if (q > 0) qty += q;
+        }
+        document.getElementById('sumRows').textContent = rows;
+        document.getElementById('sumQty').textContent = qty;
+    }
+    rowsBody.addEventListener('input', recount);
+
+    // Enter = submit emas: keyingi katakka o'tish (skaner ham Enter yuboradi)
+    form.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const t = e.target;
+        if (t.tagName !== 'INPUT') return;
+        e.preventDefault();
+        const inputs = [...form.querySelectorAll('input:not([type=hidden]):not([type=radio])')]
+            .filter(i => i.offsetParent !== null);
+        const idx = inputs.indexOf(t);
+        // Oxirgi qatorning miqdor katagida Enter -> yangi qator
+        if (t.classList.contains('row-qty') &&
+            t.closest('tr') === rowsBody.lastElementChild) {
+            addRow(true);
+            return;
+        }
+        if (idx >= 0 && idx + 1 < inputs.length) inputs[idx + 1].focus();
+    });
+
+    // Boshlang'ich qatorlar
+    if (!rowsBody.children.length) { addRow(false); addRow(false); addRow(false); }
+    applyMode();
+    {% if prefill_product %}
+    showPicked({code: '{{ prefill_product.code|escapejs }}',
+                name: '{{ prefill_product.name|escapejs }}'});
+    {% elif post_back.product_code %}
+    showPicked({code: '{{ post_back.product_code|escapejs }}',
+                name: '{{ post_back.product_name|escapejs }}'});
+    {% endif %}
+    recount();
+})();
+</script>
+{% endblock %}

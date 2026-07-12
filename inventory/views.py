@@ -146,6 +146,11 @@ def lookup(request):
         product = Product.objects.filter(
             Q(code=code) | Q(external_barcode=raw_query)
         ).first()
+        if not product:
+            _vm = (ProductVariant.objects.filter(barcode=raw_query)
+                   .select_related('product').first())
+            if _vm:
+                product = _vm.product
 
         # If no code match, fall back to name / category / description search
         if not product:
@@ -1008,6 +1013,199 @@ def intake_for_product(request, code):
 
 
 @admin_required
+def intake_variants(request):
+    """Jadval usulida qabul — bitta sahifada mahsulot + bir nechta tur.
+
+    Har qator = tur: rang, o'lcham, shtrix-kod (har turga alohida),
+    tannarx, sotuv narx, miqdor. Mahsulot yangi yaratiladi yoki
+    mavjudlardan tanlanadi (?code= bilan prefill ham mumkin).
+    """
+    from decimal import Decimal, InvalidOperation
+
+    categories = Category.objects.order_by('name')
+    branches = Branch.objects.filter(is_active=True)
+    suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+
+    prefill_product = None
+    if request.method == 'GET' and request.GET.get('code'):
+        prefill_product = Product.objects.filter(
+            code=normalize_code(request.GET['code'].upper())).first()
+
+    post_back = None
+    if request.method == 'POST':
+        errors = []
+
+        # ---------- mahsulot: mavjud yoki yangi ----------
+        product = None
+        product_code = (request.POST.get('product_code') or '').strip()
+        new_name = (request.POST.get('new_name') or '').strip()
+        if product_code:
+            product = Product.objects.filter(
+                code=normalize_code(product_code.upper())).first()
+            if not product:
+                errors.append(f"Mahsulot topilmadi: {product_code}")
+        elif not new_name:
+            errors.append("Mahsulot tanlang yoki yangi mahsulot nomini kiriting.")
+
+        branch = Branch.objects.filter(
+            pk=request.POST.get('branch') or 0, is_active=True).first()
+        if not branch:
+            errors.append("Filial tanlang.")
+
+        supplier_text = (request.POST.get('supplier') or '').strip()
+        note = (request.POST.get('note') or '').strip()
+
+        # ---------- qatorlar ----------
+        colors = request.POST.getlist('row_color')
+        sizes = request.POST.getlist('row_size')
+        barcodes = request.POST.getlist('row_barcode')
+        costs = request.POST.getlist('row_cost')
+        prices = request.POST.getlist('row_price')
+        qtys = request.POST.getlist('row_qty')
+
+        def _dec(raw):
+            raw = (raw or '').strip().replace(' ', '')
+            if not raw:
+                return Decimal('0')
+            return Decimal(raw)
+
+        rows, raw_rows = [], []
+        seen_pairs, seen_barcodes = set(), set()
+        for i in range(len(colors)):
+            get = lambda lst: (lst[i] if i < len(lst) else '') or ''
+            color = get(colors).strip()
+            size = get(sizes).strip()
+            barcode = get(barcodes).strip() or None
+            cost_raw, price_raw, qty_raw = get(costs), get(prices), get(qtys)
+            if not (color or size or barcode or qty_raw.strip()):
+                continue  # butunlay bo'sh qator
+            raw_rows.append({'color': color, 'size': size,
+                             'barcode': barcode or '', 'cost': cost_raw,
+                             'price': price_raw, 'qty': qty_raw})
+            try:
+                cost = _dec(cost_raw)
+                price = _dec(price_raw)
+                qty = int((qty_raw or '').strip() or 0)
+            except (InvalidOperation, ValueError, TypeError):
+                errors.append(f"{i + 1}-qator: narx yoki miqdor noto'g'ri.")
+                continue
+            if qty < 0 or cost < 0 or price < 0:
+                errors.append(f"{i + 1}-qator: manfiy qiymat kiritilmaydi.")
+                continue
+            pair = (size, color)
+            if pair in seen_pairs:
+                errors.append(
+                    f"{i + 1}-qator: {size or '—'} / {color or '—'} takrorlangan.")
+                continue
+            seen_pairs.add(pair)
+            if barcode:
+                if barcode in seen_barcodes:
+                    errors.append(f"{i + 1}-qator: shtrix-kod jadvalda takror.")
+                    continue
+                seen_barcodes.add(barcode)
+            rows.append({'color': color, 'size': size, 'barcode': barcode,
+                         'cost': cost, 'price': price, 'qty': qty})
+
+        if not rows and not errors:
+            errors.append("Kamida bitta tur qatorini kiriting.")
+
+        # Shtrix-kod bazadagi boshqa yozuvlar bilan to'qnashmasin
+        for r in rows:
+            if not r['barcode']:
+                continue
+            v_clash = ProductVariant.objects.filter(barcode=r['barcode'])
+            if product:
+                v_clash = v_clash.exclude(
+                    product=product, size=r['size'], color=r['color'])
+            v_clash = v_clash.select_related('product').first()
+            if v_clash:
+                errors.append(
+                    f"Shtrix-kod {r['barcode']} band: {v_clash.product.name} "
+                    f"({v_clash.size or '—'}/{v_clash.color or '—'}).")
+            p_clash = Product.objects.filter(
+                external_barcode=r['barcode']).first()
+            if p_clash:
+                errors.append(
+                    f"Shtrix-kod {r['barcode']} '{p_clash.name}' "
+                    f"mahsulotiga biriktirilgan.")
+
+        if errors:
+            for e in errors[:8]:
+                messages.error(request, e)
+            post_back = {
+                'product_code': product_code,
+                'product_name': product.name if product else '',
+                'new_name': new_name,
+                'category': request.POST.get('category') or '',
+                'branch': request.POST.get('branch') or '',
+                'supplier': supplier_text,
+                'note': note,
+                'rows': raw_rows,
+            }
+        else:
+            total_qty = 0
+            with transaction.atomic():
+                if product is None:
+                    category = Category.objects.filter(
+                        pk=request.POST.get('category') or 0).first()
+                    product = Product.objects.create(
+                        name=new_name, category=category)
+                supplier_obj = None
+                if supplier_text:
+                    supplier_obj = Supplier.objects.filter(
+                        name__iexact=supplier_text).first()
+                session = None
+                if any(r['qty'] > 0 for r in rows):
+                    session = IntakeSession.objects.create(
+                        branch=branch, supplier=supplier_obj,
+                        supplier_text='' if supplier_obj else supplier_text,
+                        received_by=request.user, note=note)
+                for r in rows:
+                    variant, _ = ProductVariant.objects.get_or_create(
+                        product=product, size=r['size'], color=r['color'])
+                    if r['barcode'] and variant.barcode != r['barcode']:
+                        variant.barcode = r['barcode']
+                        variant.save(update_fields=['barcode'])
+                    stock, _ = BranchStock.objects.get_or_create(
+                        variant=variant, branch=branch,
+                        defaults={'cost_price': r['cost'],
+                                  'sale_price': r['price']})
+                    stock.cost_price = r['cost']
+                    if r['price'] > 0:
+                        stock.sale_price = r['price']
+                    if r['qty'] > 0:
+                        stock.stock_count = F('stock_count') + r['qty']
+                    stock.save()
+                    if r['qty'] > 0:
+                        Intake.objects.create(
+                            session=session, supplier_ref=supplier_obj,
+                            variant=variant, branch=branch,
+                            quantity=r['qty'], cost_per_unit=r['cost'],
+                            supplier=supplier_text, note=note,
+                            received_by=request.user)
+                        total_qty += r['qty']
+                if product.default_sale_price == 0:
+                    first_price = next(
+                        (r['price'] for r in rows if r['price'] > 0), None)
+                    if first_price:
+                        product.default_sale_price = first_price
+                        product.save(update_fields=['default_sale_price'])
+            messages.success(
+                request,
+                f"Saqlandi: {product.name} — {len(rows)} ta tur, "
+                f"jami {total_qty} dona ({branch.name}).")
+            return redirect('product_detail', code=product.code)
+
+    return render(request, 'inventory/intake_variants.html', {
+        'categories': categories,
+        'branches': branches,
+        'suppliers': suppliers,
+        'prefill_product': prefill_product,
+        'post_back': post_back,
+    })
+
+
+@admin_required
 def intake_new(request):
     """Qabul dashboard'i: 3 ta kirish nuqtasi + so'nggi sessiyalar + low-stock."""
     products = Product.objects.order_by('-created_at')[:50]
@@ -1050,6 +1248,10 @@ def intake_lookup(request):
     product = Product.objects.filter(
         Q(code=code) | Q(external_barcode=q)
     ).first()
+    if not product:
+        _vm = ProductVariant.objects.filter(barcode=q).select_related('product').first()
+        if _vm:
+            product = _vm.product
     if not product:
         matches = list(Product.objects.filter(
             Q(name__icontains=q) | Q(category__name__icontains=q)
@@ -2573,6 +2775,15 @@ def pos_lookup(request):
         Q(code=code) | Q(external_barcode=q.strip())
     ).first()
 
+    # Tur (variant) shtrix-kodi skanerlangan bo'lishi mumkin — aniq turga moslaymiz
+    matched_variant_id = None
+    if not product:
+        _vm = (ProductVariant.objects.filter(barcode=q.strip())
+               .select_related('product').first())
+        if _vm:
+            product = _vm.product
+            matched_variant_id = _vm.id
+
     if not product:
         # Name search
         matches = list(Product.objects.filter(
@@ -2597,6 +2808,7 @@ def pos_lookup(request):
         'variant_id': s.variant_id,
         'size': s.variant.size,
         'color': s.variant.color,
+        'barcode': s.variant.barcode or '',
         'stock_count': s.stock_count,
         'sale_price': float(s.sale_price or product.default_sale_price),
         'wholesale_price': float(s.wholesale_price or 0),
@@ -2624,6 +2836,7 @@ def pos_lookup(request):
         },
         'branch_name': branch.name,
         'variants': variants,
+        'matched_variant_id': matched_variant_id,
         'other_branches': other_branches_with_stock,
     })
 

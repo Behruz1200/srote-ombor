@@ -177,6 +177,10 @@ class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
     size = models.CharField(max_length=30)
     color = models.CharField(max_length=50)
+    barcode = models.CharField(
+        max_length=64, blank=True, null=True, unique=True, db_index=True,
+        help_text="Turga xos shtrix-kod (EAN-13 va h.k.) — har tur uchun alohida."
+    )
 
     class Meta:
         unique_together = ('product', 'size', 'color')
