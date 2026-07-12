@@ -1072,7 +1072,6 @@ def intake_variants(request):
         colors = request.POST.getlist('row_color')
         sizes = request.POST.getlist('row_size')
         barcodes = request.POST.getlist('row_barcode')
-        costs = request.POST.getlist('row_cost')
         prices = request.POST.getlist('row_price')
         qtys = request.POST.getlist('row_qty')
 
@@ -1082,6 +1081,14 @@ def intake_variants(request):
                 return Decimal('0')
             return Decimal(raw)
 
+        # Marja % (default 0): tannarx = sotuv narx / (1 + marja/100)
+        try:
+            marja = _dec(request.POST.get('marja'))
+        except (InvalidOperation, ValueError):
+            marja = Decimal('0')
+        if marja < 0:
+            marja = Decimal('0')
+
         rows, raw_rows = [], []
         seen_pairs, seen_barcodes = set(), set()
         for i in range(len(colors)):
@@ -1089,22 +1096,27 @@ def intake_variants(request):
             color = get(colors).strip()
             size = get(sizes).strip()
             barcode = get(barcodes).strip() or None
-            cost_raw, price_raw, qty_raw = get(costs), get(prices), get(qtys)
+            price_raw, qty_raw = get(prices), get(qtys)
             if not (color or size or barcode or qty_raw.strip()):
                 continue  # butunlay bo'sh qator
             raw_rows.append({'color': color, 'size': size,
-                             'barcode': barcode or '', 'cost': cost_raw,
+                             'barcode': barcode or '',
                              'price': price_raw, 'qty': qty_raw})
             try:
-                cost = _dec(cost_raw)
                 price = _dec(price_raw)
                 qty = int((qty_raw or '').strip() or 0)
             except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"{i + 1}-qator: narx yoki miqdor noto'g'ri.")
                 continue
-            if qty < 0 or cost < 0 or price < 0:
+            if qty < 0 or price < 0:
                 errors.append(f"{i + 1}-qator: manfiy qiymat kiritilmaydi.")
                 continue
+            # Tannarx marja orqali hisoblanadi (marja=0 -> tannarx = narx)
+            if price > 0:
+                cost = (price / (Decimal('1') + marja / Decimal('100'))
+                        ).quantize(Decimal('0.01'))
+            else:
+                cost = Decimal('0')
             pair = (size, color)
             if pair in seen_pairs:
                 errors.append(
@@ -1146,6 +1158,7 @@ def intake_variants(request):
             for e in errors[:8]:
                 messages.error(request, e)
             post_back = {
+                'marja': request.POST.get('marja') or '0',
                 'product_code': product_code,
                 'product_name': product.name if product else '',
                 'new_name': new_name,

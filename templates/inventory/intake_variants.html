@@ -81,7 +81,7 @@
         <!-- ============ 2. Qabul ma'lumotlari ============ -->
         <div class="card p-3 mb-3">
             <div class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Filial <span class="text-danger">*</span></label>
                     <select name="branch" class="form-select" required>
                         <option value="">— tanlang —</option>
@@ -90,7 +90,13 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
+                    <label class="form-label">Marja %</label>
+                    <input type="text" name="marja" class="form-control" inputmode="decimal"
+                           value="{% if post_back %}{{ post_back.marja }}{% else %}0{% endif %}"
+                           title="Tannarx = sotuv narx / (1 + marja/100). 0 bo'lsa tannarx = sotuv narx.">
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Yetkazib beruvchi</label>
                     <input type="text" name="supplier" class="form-control" list="supplierList"
                            placeholder="Ixtiyoriy" value="{{ post_back.supplier|default:'' }}">
@@ -120,7 +126,6 @@
                             <th style="min-width:110px">Rang</th>
                             <th style="min-width:100px">O'lcham</th>
                             <th style="min-width:160px">Shtrix-kod</th>
-                            <th style="min-width:110px">Tannarx</th>
                             <th style="min-width:110px">Sotuv narx</th>
                             <th style="min-width:80px">Miqdor</th>
                             <th style="width:36px"></th>
@@ -133,7 +138,6 @@
                                 <td><input type="text" name="row_color" class="form-control form-control-sm" value="{{ r.color }}"></td>
                                 <td><input type="text" name="row_size" class="form-control form-control-sm" value="{{ r.size }}"></td>
                                 <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" value="{{ r.barcode }}"></td>
-                                <td><input type="text" name="row_cost" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.cost }}"></td>
                                 <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.price }}"></td>
                                 <td><input type="text" name="row_qty" class="form-control form-control-sm text-end row-qty" inputmode="numeric" value="{{ r.qty }}"></td>
                                 <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
@@ -168,7 +172,6 @@
         <td><input type="text" name="row_color" class="form-control form-control-sm" placeholder="Oq"></td>
         <td><input type="text" name="row_size" class="form-control form-control-sm" placeholder="400ml"></td>
         <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" placeholder="Skanerlang"></td>
-        <td><input type="text" name="row_cost" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="row_qty" class="form-control form-control-sm text-end row-qty" inputmode="numeric" placeholder="0"></td>
         <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
