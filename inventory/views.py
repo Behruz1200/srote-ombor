@@ -38,6 +38,30 @@ from .models import (
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession,
 )
+_SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
+
+
+def smart_title(raw):
+    """Nomlarni bir xil ko'rinishga keltiradi: "head and shoulders" ->
+    "Head And Shoulders". Qoidalar:
+    - faqat to'liq kichik harfli so'zlar bosh harfga ko'tariladi
+      (EDP, XPro kabi aralash/katta yozuvlar tegilmaydi)
+    - raqamli so'zlar (400ml, 2/1) o'zgarmaydi
+    - o'lcham so'zlari (s, m, l, xl...) to'liq KATTA bo'ladi
+    - ortiqcha bo'shliqlar yig'ishtiriladi
+    """
+    words = (raw or '').split()
+    out = []
+    for w in words:
+        if w.lower() in _SIZE_WORDS:
+            out.append(w.upper())
+        elif w.islower() and not any(ch.isdigit() for ch in w):
+            out.append(w[0].upper() + w[1:])
+        else:
+            out.append(w)
+    return ' '.join(out)
+
+
 def parse_dec(raw):
     """Foydalanuvchi kiritgan pul/son matnini Decimal'ga aylantiradi.
 
@@ -1261,8 +1285,8 @@ def product_variants_edit(request, code):
                 variant = variants[vid]
             except (ValueError, KeyError):
                 continue
-            color = get(colors).strip()
-            size = get(sizes).strip()
+            color = smart_title(get(colors))
+            size = smart_title(get(sizes))
             barcode = get(barcodes).strip() or None
             try:
                 cost = _dec(get(costs))
@@ -1424,13 +1448,17 @@ def intake_variants(request):
         # ---------- mahsulot: mavjud yoki yangi ----------
         product = None
         product_code = (request.POST.get('product_code') or '').strip()
-        new_name = (request.POST.get('new_name') or '').strip()
+        new_name = smart_title(request.POST.get('new_name'))
         if product_code:
             product = Product.objects.filter(
                 code=normalize_code(product_code.upper())).first()
             if not product:
                 errors.append(f"Mahsulot topilmadi: {product_code}")
-        elif not new_name:
+        elif new_name:
+            # Shu nomli mahsulot (katta-kichik harfdan qat'i nazar) bo'lsa —
+            # dublikat yaratmasdan o'shanga qo'shamiz
+            product = Product.objects.filter(name__iexact=new_name).first()
+        else:
             errors.append("Mahsulot tanlang yoki yangi mahsulot nomini kiriting.")
 
         branch = Branch.objects.filter(
@@ -1462,8 +1490,8 @@ def intake_variants(request):
         seen_pairs, seen_barcodes = set(), set()
         for i in range(len(colors)):
             get = lambda lst: (lst[i] if i < len(lst) else '') or ''
-            color = get(colors).strip()
-            size = get(sizes).strip()
+            color = smart_title(get(colors))
+            size = smart_title(get(sizes))
             barcode = get(barcodes).strip() or None
             price_raw, qty_raw = get(prices), get(qtys)
             if not (color or size or barcode or qty_raw.strip()):
@@ -1736,6 +1764,9 @@ def intake_import(request):
                 continue
             if name.upper().startswith('NAMUNA'):
                 continue
+            name = smart_title(name)
+            color = smart_title(color)
+            size = smart_title(size)
             if not name:
                 errors.append(f"{idx}-qator: mahsulot nomi bo'sh.")
                 continue
