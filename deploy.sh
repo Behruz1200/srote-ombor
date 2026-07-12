@@ -13,4 +13,5 @@ rsync -az --delete \
 echo "== Server deploy (migrate + collectstatic + restart) =="
 ssh root@45.138.159.120 '/usr/local/bin/yurit-deploy'
 echo "== Smoke test =="
+sleep 3
 curl -s -o /dev/null -w "https://koreysbozor.uz/login/ -> %{http_code}\n" https://koreysbozor.uz/login/
