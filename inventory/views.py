@@ -898,14 +898,20 @@ def product_search_for_attach(request):
     Lightweight JSON product search for the "attach EAN to existing
     product" picker. Returns up to 12 matches by name or code."""
     q = (request.GET.get('q') or '').strip()
-    if len(q) < 2:
+    if not q:
         return JsonResponse({'results': []})
-    qs = Product.objects.filter(
-        Q(name__icontains=q) | Q(code__icontains=q.upper())
-    )
+    # Avval nomi shu harf(lar) bilan BOSHLANADIGANLAR, keyin ichida
+    # uchraydiganlar — "F" yozilganda Fructis birinchi chiqadi
+    base = Product.objects.all()
     if request.GET.get('exclude_with_barcode') == '1':
-        qs = qs.filter(external_barcode__isnull=True)
-    qs = qs.order_by('name')[:12]
+        base = base.filter(external_barcode__isnull=True)
+    starts = list(base.filter(name__istartswith=q).order_by('name')[:12])
+    qs = starts
+    if len(qs) < 12 and len(q) >= 2:
+        extra = (base.filter(Q(name__icontains=q) | Q(code__icontains=q.upper()))
+                 .exclude(pk__in=[x.pk for x in starts])
+                 .order_by('name')[:12 - len(qs)])
+        qs = qs + list(extra)
     return JsonResponse({'results': [
         {
             'code': p.code,

@@ -43,9 +43,14 @@
             <div id="newProductBox" class="row g-3">
                 <div class="col-md-7">
                     <label class="form-label">Nomi <span class="text-danger">*</span></label>
-                    <input type="text" name="new_name" id="newName" class="form-control"
-                           placeholder="Masalan: Head & Shoulders shampun"
-                           value="{{ post_back.new_name|default:'' }}">
+                    <div class="position-relative">
+                        <input type="text" name="new_name" id="newName" class="form-control"
+                               placeholder="Masalan: Head & Shoulders shampun" autocomplete="off"
+                               value="{{ post_back.new_name|default:'' }}">
+                        <div id="nameSuggest" class="list-group position-absolute w-100 shadow"
+                             style="z-index:1050; display:none; max-height:260px; overflow:auto"></div>
+                    </div>
+                    <small class="text-muted">Mavjud mahsulot chiqsa — tanlang, turlari unga qo'shiladi</small>
                 </div>
                 <div class="col-md-5">
                     <label class="form-label">Kategoriya</label>
@@ -215,6 +220,43 @@
     }
     document.getElementById('modeNew').addEventListener('change', applyMode);
     document.getElementById('modeExisting').addEventListener('change', applyMode);
+
+    // ---------- yangi nom yozayotganda jonli takliflar ----------
+    const nameSuggest = document.getElementById('nameSuggest');
+    let nameTimer = null;
+    newName.addEventListener('input', () => {
+        clearTimeout(nameTimer);
+        const q = newName.value.trim();
+        if (!q) { nameSuggest.style.display = 'none'; return; }
+        nameTimer = setTimeout(async () => {
+            try {
+                const r = await fetch(`{% url 'product_search_for_attach' %}?q=${encodeURIComponent(q)}`);
+                const data = await r.json();
+                nameSuggest.innerHTML = '';
+                for (const it of (data.results || [])) {
+                    const a = document.createElement('button');
+                    a.type = 'button';
+                    a.className = 'list-group-item list-group-item-action';
+                    a.innerHTML = `<code>${it.code}</code> ${it.name}` +
+                        (it.category ? ` <small class="text-muted">· ${it.category}</small>` : '');
+                    a.addEventListener('click', () => {
+                        // Mavjud mahsulot tanlandi — "mavjud" rejimga o'tamiz
+                        document.getElementById('modeExisting').checked = true;
+                        applyMode();
+                        showPicked(it);
+                        nameSuggest.style.display = 'none';
+                    });
+                    nameSuggest.appendChild(a);
+                }
+                nameSuggest.style.display =
+                    data.results && data.results.length ? '' : 'none';
+            } catch (e) { /* jim */ }
+        }, 200);
+    });
+    document.addEventListener('click', (e) => {
+        if (!nameSuggest.contains(e.target) && e.target !== newName)
+            nameSuggest.style.display = 'none';
+    });
 
     // ---------- mavjud mahsulot qidirish ----------
     const searchInput = document.getElementById('productSearch');
