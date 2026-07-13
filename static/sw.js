@@ -4,7 +4,7 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'yurit-v1';
+const CACHE_NAME = 'yurit-v2';
 const STATIC_ASSETS = [
   '/static/img/icon-192.png',
   '/static/img/icon-512.png',
@@ -59,16 +59,18 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('jsdelivr.net');
 
   if (isStatic) {
+    // stale-while-revalidate: keshdan tez qaytadi, fonda yangilanadi —
+    // deploy'dan keyin JS/CSS o'zgarishlari keyingi ochilishda yetib boradi
     event.respondWith(
       caches.match(req).then((cached) => {
-        if (cached) return cached;
-        return fetch(req).then((resp) => {
+        const network = fetch(req).then((resp) => {
           if (resp.ok) {
             const respClone = resp.clone();
             caches.open(CACHE_NAME).then((c) => c.put(req, respClone));
           }
           return resp;
-        });
+        }).catch(() => cached);
+        return cached || network;
       })
     );
     return;
@@ -92,18 +94,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML pages: network-first with cache fallback
+  // HTML sahifalar: doim tarmoqdan. Kesh faqat POS sahifasi uchun
+  // (offline savdo rejimi) — boshqa sahifalarni keshlash eski
+  // ko'rinish/JS va login holati aralashuviga olib kelardi.
   if (req.headers.get('accept')?.includes('text/html')) {
+    const isPos = url.pathname === '/pos/';
     event.respondWith(
       fetch(req)
         .then((resp) => {
-          if (resp.ok) {
+          if (isPos && resp.ok && resp.type === 'basic' &&
+              !resp.redirected) {
             const respClone = resp.clone();
             caches.open(CACHE_NAME).then((c) => c.put(req, respClone));
           }
           return resp;
         })
-        .catch(() => caches.match(req).then((c) => c || caches.match('/lookup/')))
+        .catch(() => (isPos ? caches.match(req) : Response.error()))
     );
   }
 });
