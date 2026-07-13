@@ -2910,7 +2910,17 @@
         /* Hech narsa ekrandan chiqib ketmasin — telefon, planshet,
            laptop, monitor — hammasida moslashadi. */
         html, body { max-width: 100%; overflow-x: hidden; }
-        img, svg, video, canvas, table { max-width: 100%; }
+        img, svg, video, canvas { max-width: 100%; }
+        /* Jadvallar tabiiy kengligini oladi; scroll o'rovchi (.table-responsive
+           / .yrt-table-scroll) uni gorizontal aylantiradi */
+        .table-responsive, .yrt-table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .table-responsive > table, .yrt-table-scroll > table { max-width: none; }
+        /* O'ngga aylantirish mumkinligini bildiruvchi yumshoq soya */
+        .table-responsive, .yrt-table-scroll { position: relative; }
         /* Har qanday jadval o'ralmagan bo'lsa ham gorizontal scroll qiladi */
         .yrt-table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .table-responsive, .yrt-table-scroll { scrollbar-width: thin; }
