@@ -90,8 +90,12 @@
         <div class="row g-2">
             <div class="col-md-4">
                 <label class="form-label small text-muted mb-1">Qidirish</label>
-                <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
-                       placeholder="Kod yoki nom...">
+                <div class="position-relative">
+                    <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+                           placeholder="Nom, rang, o'lcham, shtrix-kod..." autocomplete="off" id="qInput">
+                    <div id="qSuggest" class="list-group position-absolute w-100 shadow"
+                         style="z-index:1060; display:none; max-height:280px; overflow:auto"></div>
+                </div>
             </div>
             <div class="col-md-3">
                 <label class="form-label small text-muted mb-1">Kategoriya</label>
@@ -168,11 +172,11 @@
                             <th>{% include "inventory/_sort_th.html" with field="name" label="Nomi" %}</th>
                             <th>Kategoriya</th>
                             <th class="text-end">{% include "inventory/_sort_th.html" with field="stock" label="Zaxira" %}</th>
-                            <th class="text-end">30 kun</th>
-                            <th class="text-end">Yetadi</th>
-                            <th class="text-end" title="Yillik aylanma (sotilgan / o'rtacha zaxira)">Aylanma</th>
+                            <th class="text-end d-none d-xl-table-cell">30 kun</th>
+                            <th class="text-end d-none d-xl-table-cell">Yetadi</th>
+                            <th class="text-end d-none d-xl-table-cell" title="Yillik aylanma (sotilgan / o'rtacha zaxira)">Aylanma</th>
                             <th class="text-end">{% include "inventory/_sort_th.html" with field="price" label="Narx" %}</th>
-                            <th class="text-end">Marja</th>
+                            <th class="text-end d-none d-lg-table-cell">Marja</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -220,17 +224,17 @@
                                     {{ p.total_stock }}
                                 {% endif %}
                             </td>
-                            <td class="text-end small text-muted">
+                            <td class="text-end small text-muted d-none d-xl-table-cell">
                                 {% if p.sold_30d %}{{ p.sold_30d }}{% else %}—{% endif %}
                             </td>
-                            <td class="text-end small">
+                            <td class="text-end small d-none d-xl-table-cell">
                                 {% if p.days_left is not None %}
                                     <span class="text-{% if p.days_left < 7 %}danger{% elif p.days_left < 14 %}warning{% else %}muted{% endif %}">
                                         {{ p.days_left|floatformat:0 }} kun
                                     </span>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
-                            <td class="text-end small">
+                            <td class="text-end small d-none d-xl-table-cell">
                                 {% if p.turnover %}
                                     <span class="text-{% if p.turnover < 1 %}danger{% elif p.turnover < 4 %}warning{% else %}success{% endif %}"
                                           title="Yiliga {{ p.turnover|floatformat:1 }} marta aylanadi">
@@ -245,7 +249,7 @@
                                     {% else %}{{ p.price_min|som }}{% endif %}
                                 {% else %}{{ p.default_sale_price|som }}{% endif %}
                             </td>
-                            <td class="text-end small">
+                            <td class="text-end small d-none d-lg-table-cell">
                                 {% if p.margin_percent %}
                                     <span class="text-{% if p.margin_percent < 10 %}danger{% elif p.margin_percent < 25 %}warning{% else %}success{% endif %}">
                                         {{ p.margin_percent|floatformat:0 }}%
@@ -341,6 +345,50 @@
 </div>
 
 <script>
+// Qidiruv: jonli takliflar (mahsulot / rang / o'lcham / shtrix)
+(function () {
+    const qInput = document.getElementById('qInput');
+    const qSuggest = document.getElementById('qSuggest');
+    if (!qInput) return;
+    const form = qInput.closest('form');
+    let timer = null;
+    const TYPE_BADGE = {
+        'mahsulot': 'primary', 'rang': 'success',
+        "o'lcham": 'info', 'shtrix': 'secondary',
+    };
+    qInput.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = qInput.value.trim();
+        if (q.length < 2) { qSuggest.style.display = 'none'; return; }
+        timer = setTimeout(async () => {
+            try {
+                const r = await fetch(`{% url 'product_search_suggest' %}?q=${encodeURIComponent(q)}`);
+                const data = await r.json();
+                qSuggest.innerHTML = '';
+                for (const it of (data.results || [])) {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center py-1';
+                    b.innerHTML = `<span>${it.label}` +
+                        (it.sub ? ` <small class="text-muted">${it.sub}</small>` : '') +
+                        `</span><span class="badge bg-${TYPE_BADGE[it.t] || 'light'}-subtle text-${TYPE_BADGE[it.t] || 'dark'} border">${it.t}</span>`;
+                    b.addEventListener('click', () => {
+                        qInput.value = it.q;
+                        qSuggest.style.display = 'none';
+                        form.submit();
+                    });
+                    qSuggest.appendChild(b);
+                }
+                qSuggest.style.display = data.results && data.results.length ? '' : 'none';
+            } catch (e) { /* jim */ }
+        }, 200);
+    });
+    document.addEventListener('click', (e) => {
+        if (!qSuggest.contains(e.target) && e.target !== qInput)
+            qSuggest.style.display = 'none';
+    });
+})();
+
 (function() {
     const selAll = document.getElementById('selAll');
     const picks = document.querySelectorAll('.pick');

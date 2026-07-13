@@ -55,6 +55,8 @@ urlpatterns = [
     path('products/bulk/', views.product_bulk_update, name='product_bulk_update'),
     path('products/new/', views.product_create, name='product_create'),
     path('products/merge/', views.product_merge, name='product_merge'),
+    path('products/search-suggest/', views.product_search_suggest,
+         name='product_search_suggest'),
     path('products/search-for-attach/', views.product_search_for_attach,
          name='product_search_for_attach'),
     path('products/attach-barcode/', views.product_attach_barcode,

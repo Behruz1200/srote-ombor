@@ -1031,6 +1031,33 @@ def product_merge(request):
 
 
 @admin_required
+def product_search_suggest(request):
+    """Mahsulotlar sahifasi qidiruvi uchun jonli takliflar:
+    mahsulot nomi/kodi, rang, o'lcham, shtrix-kod."""
+    q = (request.GET.get('q') or '').strip()
+    if len(q) < 2:
+        return JsonResponse({'results': []})
+    res = []
+    for pr in (Product.objects
+               .filter(Q(name__icontains=q) | Q(code__icontains=q.upper()))
+               .order_by('name')[:6]):
+        res.append({'t': 'mahsulot', 'label': pr.name, 'sub': pr.code,
+                    'q': pr.name})
+    for cl in (ProductVariant.objects.filter(color__icontains=q)
+               .values_list('color', flat=True).distinct()
+               .order_by('color')[:4]):
+        res.append({'t': 'rang', 'label': cl, 'sub': '', 'q': cl})
+    for sz in (ProductVariant.objects.filter(size__icontains=q)
+               .values_list('size', flat=True).distinct()
+               .order_by('size')[:3]):
+        res.append({'t': "o'lcham", 'label': sz, 'sub': '', 'q': sz})
+    for bc in (ProductVariant.objects.filter(barcode__istartswith=q)
+               .values_list('barcode', flat=True)[:2]):
+        res.append({'t': 'shtrix', 'label': bc, 'sub': '', 'q': bc})
+    return JsonResponse({'results': res[:12]})
+
+
+@admin_required
 def product_search_for_attach(request):
     """GET /products/search-for-attach/?q=&exclude_with_barcode=1
     Lightweight JSON product search for the "attach EAN to existing
