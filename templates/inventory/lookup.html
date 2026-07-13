@@ -169,37 +169,20 @@
         </div>
     </div>
 
-    <!-- KPI strip -->
+    <!-- Sotuvchi uchun ixcham qoldiq xulosasi -->
     {% if product_stats %}
-    <div class="row g-2 mb-3">
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Jami zaxira</div>
-                <div class="h4 mb-0 {% if product_stats.total_stock == 0 %}text-danger{% endif %}">
-                    {{ product_stats.total_stock }}
-                </div>
-                <small class="text-muted">{{ product_stats.variants_count }} variant · {{ product_stats.branches_count }} filial</small>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Zaxira qiymati</div>
-                <div class="h4 mb-0">{{ product_stats.total_value|som }}</div>
-                <small class="text-muted">so'm (tannarx)</small>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">30 kun sotilgan</div>
-                <div class="h4 mb-0 text-success">{{ product_stats.sold_30d }}</div>
-                <small class="text-muted">{{ product_stats.txns_30d }} ta chekda</small>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card p-2 text-center bg-light h-100">
-                <div class="small text-muted">Yetadigan kun</div>
-                {% if product_stats.days_left is not None %}
-                    <div class="h4 mb-0 text-{% if product_stats.days_left < 7 %}danger{% elif product_stats.days_left < 14 %}warning{% else %}success{% endif %}">
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-3 px-1">
+        <span class="badge fs-6 bg-{% if product_stats.total_stock == 0 %}danger{% elif product_stats.total_stock <= 3 %}warning text-dark{% else %}success{% endif %}">
+            <i class="bi bi-box-seam"></i> Jami: {{ product_stats.total_stock }} dona
+        </span>
+        <span class="text-muted small">{{ product_stats.variants_count }} tur</span>
+        {% if user.is_admin %}
+        <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-primary btn-sm ms-auto">
+            <i class="bi bi-info-circle"></i> Batafsil / boshqaruv
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}">
                         {{ product_stats.days_left|floatformat:0 }}
                     </div>
                     <small class="text-muted">kun</small>
@@ -212,28 +195,20 @@
     </div>
     {% endif %}
 
-    {% if user.is_admin %}
-    <!-- Quick actions -->
-    <div class="card p-2 mb-3 d-flex flex-row gap-2 flex-wrap">
-        <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-info-circle"></i> Batafsil
-        </a>
-        <a href="{% url 'intake_for_product' product.code %}" class="btn btn-outline-success btn-sm">
-            <i class="bi bi-box-arrow-in-down"></i> Qabul (matritsa)
-        </a>
-        <a href="{% url 'intake_quick' %}" class="btn btn-outline-success btn-sm">
-            <i class="bi bi-lightning-charge"></i> Tezkor qabul
-        </a>
-        <a href="{% url 'product_label' product.code %}" target="_blank" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-printer"></i> QR etiketka
-        </a>
-        <a href="{% url 'product_edit' product.code %}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-pencil"></i> Tahrirlash
-        </a>
+    <!-- Tez filtr: mijoz aytgan rang/o'lchamni yozing -->
+    {% if branches_data %}
+    <div class="mb-3">
+        <div class="position-relative">
+            <i class="bi bi-funnel position-absolute" style="left:14px; top:50%; transform:translateY(-50%); color:var(--yrt-fg-muted);"></i>
+            <input type="text" id="varFilter" class="form-control form-control-lg"
+                   style="padding-left:40px;"
+                   placeholder="Rang yoki o'lcham bo'yicha filtr (masalan: agursi 250)"
+                   autocomplete="off">
+        </div>
     </div>
     {% endif %}
 
-    <!-- Per-branch breakdown -->
+    <!-- Har filial: variant ro'yxati -->
     {% for bd in branches_data %}
     <div class="card p-3 mb-3">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
@@ -252,48 +227,37 @@
                 {% endif %}
             </div>
         </div>
-        {% if bd.matrix %}
-        <div class="table-responsive">
-            <table class="table table-bordered matrix-table mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th style="min-width:80px;">O'lcham \ Rang</th>
-                        {% for color in bd.colors %}<th>{{ color }}</th>{% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for size in bd.sizes %}
-                    <tr>
-                        <th>{{ size }}</th>
-                        {% for color in bd.colors %}
-                            <td class="stock-cell">
-                                {% for k, s in bd.matrix.items %}
-                                    {% if k.0 == size and k.1 == color %}
-                                        {% if s.stock_count == 0 %}
-                                            <span class="stock-zero">0</span>
-                                        {% elif s.stock_count <= 3 %}
-                                            <span class="stock-low">{{ s.stock_count }}</span>
-                                        {% else %}
-                                            <span class="stock-ok">{{ s.stock_count }}</span>
-                                        {% endif %}
-                                        {% if s.sale_price > 0 %}
-                                            <div class="small text-primary">{{ s.sale_price|som }}</div>
-                                        {% endif %}
-                                        {% if s.stock_count > 0 %}
-                                        <a href="{% url 'sale_create' s.id %}"
-                                           class="btn btn-sm btn-success mt-1"
-                                           title="Sotish">
-                                            <i class="bi bi-cart-check"></i>
-                                        </a>
-                                        {% endif %}
-                                    {% endif %}
-                                {% endfor %}
-                            </td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        {% if bd.variants %}
+        <div class="lk-vars" data-branch>
+            {% for v in bd.variants %}
+            <div class="lk-var{% if v.count == 0 %} lk-var--out{% endif %}"
+                 data-search="{{ v.color|lower }} {{ v.size|lower }} {{ v.barcode }}">
+                <div class="lk-var__id">
+                    <span class="lk-var__color">{{ v.color|default:'—' }}</span>
+                    <span class="lk-var__size">{{ v.size|default:'—' }}</span>
+                    {% if v.barcode %}<span class="lk-var__bc"><i class="bi bi-upc"></i> {{ v.barcode }}</span>{% endif %}
+                </div>
+                <div class="lk-var__price">
+                    {{ v.sale|som }} <small>so'm</small>
+                    {% if v.wholesale %}<span class="lk-var__wh">ulg: {{ v.wholesale|som }}</span>{% endif %}
+                </div>
+                <div class="lk-var__count">
+                    {% if v.count == 0 %}
+                        <span class="badge bg-secondary">Tugagan</span>
+                    {% else %}
+                        <span class="badge fs-6 bg-{% if v.count <= 3 %}warning text-dark{% else %}success{% endif %}">{{ v.count }} dona</span>
+                    {% endif %}
+                </div>
+                {% if v.count > 0 %}
+                <a href="{% url 'sale_create' v.stock_id %}" class="btn btn-sm btn-success lk-var__sell" title="Sotish">
+                    <i class="bi bi-cart-check"></i>
+                </a>
+                {% else %}<span class="lk-var__sell"></span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="lk-noresult text-muted small text-center py-3" style="display:none;">
+            <i class="bi bi-search"></i> Filtr bo'yicha bu filialda topilmadi
         </div>
         {% else %}
             <p class="text-muted mb-0">
@@ -691,6 +655,39 @@
     .lookup-tile__price { font-size: 0.9rem; }
 }
 
+
+/* ====== Sotuvchi variant ro'yxati ====== */
+.lk-vars { display: flex; flex-direction: column; gap: 0.4rem; }
+.lk-var {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--yrt-border);
+    border-radius: var(--yrt-radius);
+    background: var(--yrt-surface);
+}
+.lk-var--out { opacity: 0.55; }
+.lk-var__id { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.lk-var__color { font-weight: 700; font-size: 1rem; color: var(--yrt-fg); line-height: 1.2; }
+.lk-var__size { font-size: 0.85rem; color: var(--yrt-fg-muted); }
+.lk-var__bc { font-size: 0.72rem; color: var(--yrt-fg-muted); font-family: var(--yrt-font-mono); }
+.lk-var__price { text-align: right; font-weight: 600; color: var(--yrt-primary);
+                 font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lk-var__price small { color: var(--yrt-fg-muted); font-weight: 400; }
+.lk-var__wh { display: block; font-size: 0.72rem; color: var(--yrt-fg-muted); font-weight: 400; }
+.lk-var__count { text-align: right; }
+.lk-var__count .badge { min-width: 78px; }
+.lk-var__sell { min-width: 40px; text-align: center; }
+@media (max-width: 575.98px) {
+    .lk-var { grid-template-columns: 1fr auto auto; gap: 0.5rem; padding: 0.55rem 0.6rem; }
+    .lk-var__price { grid-column: 1; grid-row: 2; text-align: left; font-size: 0.85rem; }
+    .lk-var__count { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+    .lk-var__sell { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+    .lk-var__count .badge { min-width: 66px; }
+}
+
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -726,6 +723,26 @@
         document.getElementById('clearRecent').addEventListener('click', () => {
             localStorage.removeItem(RS_KEY);
             renderRecent();
+
+    // ---- Variant filtri: mijoz aytgan rang/o'lchamni tez topish ----
+    const varFilter = document.getElementById('varFilter');
+    if (varFilter) {
+        const applyFilter = () => {
+            const terms = varFilter.value.toLowerCase().split(/\s+/).filter(Boolean);
+            document.querySelectorAll('.lk-vars[data-branch]').forEach(box => {
+                let shown = 0;
+                box.querySelectorAll('.lk-var').forEach(row => {
+                    const hay = row.getAttribute('data-search') || '';
+                    const ok = terms.every(t => hay.includes(t));
+                    row.style.display = ok ? '' : 'none';
+                    if (ok) shown++;
+                });
+                const nr = box.parentElement.querySelector('.lk-noresult');
+                if (nr) nr.style.display = shown === 0 ? '' : 'none';
+            });
+        };
+        varFilter.addEventListener('input', applyFilter);
+    }
         });
     }
     // ---- Jonli mahsulot takliflari (POS sahifasidagi kabi: kod + nom) ----

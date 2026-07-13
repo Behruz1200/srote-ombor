@@ -244,10 +244,25 @@ def lookup(request):
                         zero_count += 1
                     elif s.stock_count <= 3:
                         low_count += 1
+                # Sotuvchi uchun yassi variant ro'yxati: bor bo'lganlar
+                # oldinda, ko'p qoldiq oldinda, keyin rang/o'lcham bo'yicha
+                var_list = [{
+                    'color': st.variant.color,
+                    'size': st.variant.size,
+                    'barcode': st.variant.barcode or '',
+                    'count': st.stock_count,
+                    'sale': float(st.sale_price or product.default_sale_price or 0),
+                    'wholesale': float(st.wholesale_price or 0),
+                    'stock_id': st.id,
+                } for st in stocks]
+                var_list.sort(key=lambda r: (r['count'] == 0, -r['count'],
+                                             r['color'], r['size']))
                 branches_data.append({
                     'branch': br, 'matrix': matrix,
                     'sizes': sizes, 'colors': colors,
                     'total': br_total, 'value': br_value,
+                    'variants': var_list,
+                    'in_stock_n': sum(1 for r in var_list if r['count'] > 0),
                 })
 
             # 30-day sales velocity
