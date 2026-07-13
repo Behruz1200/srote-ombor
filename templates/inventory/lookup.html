@@ -712,6 +712,8 @@
         document.getElementById('clearRecent').addEventListener('click', () => {
             localStorage.removeItem(RS_KEY);
             renderRecent();
+        });
+    }
 
     // ---- Variant filtri: mijoz aytgan rang/o'lchamni tez topish ----
     const varFilter = document.getElementById('varFilter');
@@ -731,8 +733,6 @@
             });
         };
         varFilter.addEventListener('input', applyFilter);
-    }
-        });
     }
     // ---- Jonli mahsulot takliflari (POS sahifasidagi kabi: kod + nom) ----
     const suggestBox = document.getElementById('lookupSuggest');
