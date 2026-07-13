@@ -21,10 +21,14 @@
             </p>
 
             <form method="get" id="lookupForm" class="lookup-search mt-3">
-                <input type="text" name="code" id="lookupCode" value="{{ code }}"
-                       placeholder="Kod (OYO-0001), nom, yoki kategoriya..."
-                       class="form-control form-control-lg lookup-search__input"
-                       autofocus autocomplete="off">
+                <div class="lookup-search__field" style="position:relative; flex:1 1 360px; min-width:0;">
+                    <input type="text" name="code" id="lookupCode" value="{{ code }}"
+                           placeholder="Kod (OYO-0001), nom, yoki kategoriya..."
+                           class="form-control form-control-lg lookup-search__input"
+                           style="width:100%;" autofocus autocomplete="off">
+                    <div id="lookupSuggest" class="list-group position-absolute w-100 shadow"
+                         style="z-index:1060; display:none; max-height:320px; overflow:auto; margin-top:2px;"></div>
+                </div>
                 <button type="submit" class="dash-btn dash-btn--indigo lookup-search__btn">
                     <i class="bi bi-search"></i>
                     <span>Topish</span>
@@ -498,7 +502,7 @@
     flex-wrap: wrap;
 }
 .lookup-search__input {
-    flex: 1 1 360px;
+    width: 100%;
     min-width: 0;
     font-size: 1.1rem;
     padding: 0.75rem 1.05rem;
@@ -528,7 +532,7 @@
 }
 .lookup-search__btn--icon i { font-size: 1.25rem; }
 @media (max-width: 540px) {
-    .lookup-search__input { flex-basis: 100%; }
+    .lookup-search__field { flex-basis: 100% !important; }
     .lookup-search__btn { flex: 1 1 auto; }
     .lookup-search__btn--icon { flex: 0 0 auto; min-width: 56px; }
 }
@@ -723,6 +727,60 @@
             renderRecent();
         });
     }
+    // ---- Jonli takliflar (nom / rang / o'lcham / shtrix) ----
+    const suggestBox = document.getElementById('lookupSuggest');
+    const lookupForm = document.getElementById('lookupForm');
+    let sugTimer = null, sugItems = [], sugActive = -1;
+    const TB = {'mahsulot':'primary','rang':'success',"o'lcham":'info','shtrix':'secondary'};
+
+    function hideSug() { suggestBox.style.display = 'none'; sugActive = -1; }
+    function chooseSug(q) {
+        codeInput.value = q;
+        hideSug();
+        lookupForm.submit();
+    }
+    function renderSug() {
+        if (!sugItems.length) { hideSug(); return; }
+        suggestBox.innerHTML = '';
+        sugItems.forEach((it, i) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2'
+                + (i === sugActive ? ' active' : '');
+            b.innerHTML = `<span>${it.label}` +
+                (it.sub ? ` <small class="text-muted">${it.sub}</small>` : '') +
+                `</span><span class="badge bg-${TB[it.t]||'light'}-subtle text-${TB[it.t]||'dark'} border">${it.t}</span>`;
+            b.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSug(it.q); });
+            suggestBox.appendChild(b);
+        });
+        suggestBox.style.display = '';
+    }
+    codeInput.addEventListener('input', () => {
+        clearTimeout(sugTimer);
+        const q = codeInput.value.trim();
+        if (q.length < 2) { hideSug(); return; }
+        sugTimer = setTimeout(async () => {
+            try {
+                const r = await fetch(`{% url 'product_search_suggest' %}?q=${encodeURIComponent(q)}`);
+                const data = await r.json();
+                sugItems = data.results || [];
+                sugActive = -1;
+                renderSug();
+            } catch (e) { /* jim */ }
+        }, 180);
+    });
+    // Klaviatura bilan: pastga/tepaga/Enter
+    codeInput.addEventListener('keydown', (e) => {
+        if (suggestBox.style.display === 'none' || !sugItems.length) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); sugActive = Math.min(sugActive + 1, sugItems.length - 1); renderSug(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); sugActive = Math.max(sugActive - 1, 0); renderSug(); }
+        else if (e.key === 'Enter' && sugActive >= 0) { e.preventDefault(); chooseSug(sugItems[sugActive].q); }
+        else if (e.key === 'Escape') { hideSug(); }
+    });
+    document.addEventListener('click', (e) => {
+        if (!suggestBox.contains(e.target) && e.target !== codeInput) hideSug();
+    });
+
     // If page loaded with a query that returned a product, save it
     const initialQuery = "{{ code|escapejs }}";
     if (initialQuery) pushRecent(initialQuery);
