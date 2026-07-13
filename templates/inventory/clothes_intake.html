@@ -24,17 +24,18 @@
         <div class="card p-3 mb-3">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Nomi <span class="text-danger">*</span></label>
-                    <input type="text" name="new_name" class="form-control" placeholder="Masalan: Erkaklar futbolkasi" value="{{ post_back.new_name|default:'' }}">
-                    <input type="hidden" name="product_code" value="">
-                    <small class="text-muted">Yangi mahsulot yaratiladi</small>
+                    <label class="form-label">Brend <span class="text-danger">*</span></label>
+                    <input type="text" name="brand" class="form-control" placeholder="Masalan: Zara, Nike, Adidas" value="{{ post_back.brand|default:'' }}" autocomplete="off" list="brandOptions" required>
+                    <datalist id="brandOptions">{% for b in brands_all %}<option value="{{ b }}"></option>{% endfor %}</datalist>
+                    <small class="text-muted">Mahsulot nomi: <b>Brend + Kategoriya</b> (masalan: «Zara Ko'ylaklar»)</small>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Kategoriya</label>
-                    <select name="category" class="form-select">
-                        <option value="">— tanlanmagan —</option>
-                        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                    <label class="form-label">Kategoriya / tur <span class="text-danger">*</span></label>
+                    <select name="category" class="form-select" required>
+                        <option value="">— tanlang —</option>
+                        {% for c in categories %}<option value="{{ c.id }}" {% if post_back.category == c.id|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
                     </select>
+                    <small class="text-muted">Masalan: Ko'ylaklar, Shimlar, Oyoq kiyimlar</small>
                 </div>
             </div>
         </div>

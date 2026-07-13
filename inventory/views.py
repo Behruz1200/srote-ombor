@@ -218,6 +218,7 @@ def lookup(request):
         if not product:
             matches = (Product.objects
                 .filter(Q(name__icontains=raw_query) |
+                        Q(brand__icontains=raw_query) |
                         Q(category__name__icontains=raw_query) |
                         Q(description__icontains=raw_query))
                 .select_related('category')[:20])
@@ -665,6 +666,7 @@ def product_list(request):
         # buzmasligi uchun avval mos mahsulot ID'larini topamiz
         _match_ids = Product.objects.filter(
             Q(code__icontains=q) | Q(name__icontains=q) |
+            Q(brand__icontains=q) |
             Q(external_barcode__icontains=q) |
             Q(variants__color__icontains=q) |
             Q(variants__size__icontains=q) |
@@ -1075,10 +1077,15 @@ def product_search_suggest(request):
         return JsonResponse({'results': []})
     res = []
     for pr in (Product.objects
-               .filter(Q(name__icontains=q) | Q(code__icontains=q.upper()))
+               .filter(Q(name__icontains=q) | Q(code__icontains=q.upper()) |
+                       Q(brand__icontains=q))
                .order_by('name')[:6]):
         res.append({'t': 'mahsulot', 'label': pr.name, 'sub': pr.code,
                     'q': pr.name})
+    for br in (Product.objects.filter(brand__icontains=q)
+               .exclude(brand='').values_list('brand', flat=True)
+               .distinct().order_by('brand')[:4]):
+        res.append({'t': 'brend', 'label': br, 'sub': '', 'q': br})
     for cl in (ProductVariant.objects.filter(color__icontains=q)
                .values_list('color', flat=True).distinct()
                .order_by('color')[:4]):
@@ -1693,15 +1700,13 @@ def clothes_intake(request):
     if request.method == 'POST':
         errors = []
         product = None
-        product_code = (request.POST.get('product_code') or '').strip()
-        new_name = smart_title(request.POST.get('new_name'))
-        if product_code:
-            product = Product.objects.filter(
-                code=normalize_code(product_code.upper())).first()
-            if not product:
-                errors.append(f"Mahsulot topilmadi: {product_code}")
-        elif not new_name:
-            errors.append("Mahsulot nomini kiriting yoki tanlang.")
+        brand = smart_title(request.POST.get('brand'))
+        category = Category.objects.filter(
+            pk=request.POST.get('category') or 0).first()
+        if not brand:
+            errors.append("Brend nomini kiriting (masalan: Zara).")
+        if not category:
+            errors.append("Kategoriya (tur) ni tanlang.")
 
         branch = Branch.objects.filter(
             pk=request.POST.get('branch') or 0, is_active=True).first()
@@ -1746,11 +1751,14 @@ def clothes_intake(request):
             created_ids = []
             total_qty = 0
             with transaction.atomic():
+                # Bir xil brend + kategoriya bo'lsa — o'shanga qo'shamiz
+                # (aks holda yangi mahsulot). Nomi = "Brend Kategoriya".
+                comp_name = f"{brand} {category.name}".strip()
+                product = Product.objects.filter(
+                    brand__iexact=brand, category=category).first()
                 if product is None:
-                    category = Category.objects.filter(
-                        pk=request.POST.get('category') or 0).first()
                     product = Product.objects.create(
-                        name=new_name, category=category,
+                        name=comp_name, brand=brand, category=category,
                         default_sale_price=price)
                 session = IntakeSession.objects.create(
                     branch=branch, received_by=request.user,
@@ -1790,9 +1798,12 @@ def clothes_intake(request):
 
     colors_all = (ProductVariant.objects.exclude(color='')
                   .values_list('color', flat=True).distinct().order_by('color')[:500])
+    brands_all = (Product.objects.exclude(brand='')
+                  .values_list('brand', flat=True).distinct().order_by('brand')[:500])
     return render(request, 'inventory/clothes_intake.html', {
         'categories': categories, 'branches': branches,
-        'colors_all': colors_all,
+        'colors_all': colors_all, 'brands_all': brands_all,
+        'post_back': request.POST if request.method == 'POST' else {},
     })
 
 
@@ -2406,7 +2417,8 @@ def intake_lookup(request):
             product = _vm.product
     if not product:
         matches = list(Product.objects.filter(
-            Q(name__icontains=q) | Q(category__name__icontains=q)
+            Q(name__icontains=q) | Q(brand__icontains=q) |
+            Q(category__name__icontains=q)
         )[:8])
         if len(matches) == 1:
             product = matches[0]
@@ -3939,7 +3951,8 @@ def pos_lookup(request):
     if not product:
         # Name search
         matches = list(Product.objects.filter(
-            Q(name__icontains=q) | Q(category__name__icontains=q)
+            Q(name__icontains=q) | Q(brand__icontains=q) |
+            Q(category__name__icontains=q)
         )[:8])
         if len(matches) == 1:
             product = matches[0]

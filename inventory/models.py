@@ -99,6 +99,10 @@ class Product(models.Model):
                   "(EAN-13, UPC va h.k.). Skanerlash uchun ishlatiladi."
     )
     name = models.CharField(max_length=200)
+    brand = models.CharField(
+        max_length=100, blank=True, db_index=True,
+        help_text="Brend nomi (masalan: Zara, Nike). Kiyim/poyabzal uchun ishlatiladi."
+    )
     category = models.ForeignKey(Category, on_delete=models.PROTECT,
                                  related_name='products', null=True, blank=True)
     description = models.TextField(blank=True)

@@ -197,6 +197,7 @@
                                 <a href="{% url 'product_detail' p.code %}">
                                     <strong>{{ p.name|truncatechars:35 }}</strong>
                                 </a>
+                                {% if p.brand %}<span class="badge rounded-pill bg-primary-subtle text-primary border ms-1"><i class="bi bi-tag"></i> {{ p.brand }}</span>{% endif %}
                                 <small class="text-muted text-nowrap">{{ p.variants_count }} tur</small>
                                 {% if p.variant_colors %}
                                     <span class="ms-1">

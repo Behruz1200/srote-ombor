@@ -52,11 +52,13 @@ class BranchForm(forms.ModelForm):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ['name', 'external_barcode', 'category', 'description', 'image',
+        fields = ['name', 'brand', 'external_barcode', 'category', 'description', 'image',
                   'default_sale_price', 'markup_percent',
                   'mxik_code', 'unit_code', 'vat_percent', 'package_code']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'brand': forms.TextInput(attrs={'class': 'form-control',
+                                            'placeholder': 'Masalan: Zara, Nike (ixtiyoriy)'}),
             'external_barcode': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': '4607034000234 — qadog\'idagi raqam (ixtiyoriy)',
@@ -82,6 +84,7 @@ class ProductForm(forms.ModelForm):
         }
         labels = {
             'name': 'Nomi',
+            'brand': 'Brend',
             'external_barcode': "Tashqi barcode (qadog'idagi)",
             'category': 'Kategoriya',
             'description': 'Tavsif',

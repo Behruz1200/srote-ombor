@@ -26,6 +26,9 @@
                         {% if product.external_barcode %}
                             <span><i class="bi bi-upc"></i> {{ product.external_barcode }}</span>
                         {% endif %}
+                        {% if product.brand %}
+                            <span class="dash-pill"><i class="bi bi-tag"></i> {{ product.brand }}</span>
+                        {% endif %}
                         {% if product.category %}
                             <span class="dash-pill">{{ product.category.name }}</span>
                         {% endif %}
