@@ -3234,7 +3234,8 @@
     {% with un=request.resolver_match.url_name %}
     {% if un != 'dashboard' and un != 'pos_terminal' and un != 'login' and un != 'pos_customer_display' %}
     <div class="no-print mb-2">
-        <a href="javascript:history.back()" class="btn btn-sm btn-outline-secondary">
+        <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary"
+           onclick="if(window.history.length>1){history.back();return false;}">
             <i class="bi bi-arrow-left"></i> Orqaga
         </a>
     </div>

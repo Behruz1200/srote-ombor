@@ -668,6 +668,24 @@
     box-shadow: var(--yrt-shadow-md);
     transform: translateY(-2px);
 }
+
+/* ====== MOBIL: kompakt, oynaga mos o'lcham (iPhone kabi) ====== */
+@media (max-width: 575.98px) {
+    .dash-hero__inner { padding: 1rem 0.9rem !important; }
+    .dash-hero__title { font-size: 1.3rem !important; }
+    .dash-hero__sub { font-size: 0.85rem; }
+    .lookup-search { gap: 0.45rem; margin-top: 0.75rem !important; }
+    .lookup-search__input { font-size: 1rem; padding: 0.6rem 0.8rem; }
+    .lookup-search__btn { padding: 0.6rem 0.9rem; font-size: 0.95rem; min-height: 46px; }
+    .lookup-search__btn--icon { min-width: 50px; }
+    .dash-card__body { padding: 0.75rem !important; }
+    .lookup-grid { grid-template-columns: 1fr; gap: 0.5rem; }
+    /* Kartani baland ustun emas, ixcham qatorga aylantiramiz */
+    .lookup-tile { padding: 0.6rem 0.75rem; gap: 0.35rem; }
+    .lookup-tile__name { min-height: 0; font-size: 0.92rem; }
+    .lookup-tile__price { font-size: 0.9rem; }
+}
+
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
