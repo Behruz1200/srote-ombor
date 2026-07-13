@@ -138,6 +138,31 @@
         }
         [data-bs-theme="dark"] .yurit-brand .brand-logo--mark { color: #e8e8ee; }
         .yurit-brand .nav-mark { display: block; overflow: visible; }
+        /* Stacked brand: mark (odam+mashina+shtrix) tepada, "yurit" pastda —
+           yon panel ochiq bo'lganda ustki bo'limni to'ldiradi (bo'luvchi
+           chiziq kengligicha) */
+        .yurit-brand--stacked {
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 0 !important;
+            width: 100% !important;
+            padding: 0.35rem 0.5rem 0.15rem !important;
+            height: auto !important;
+        }
+        .yurit-brand--stacked .brand-logo--mark {
+            width: 100% !important;
+            max-width: 190px;
+            height: auto !important;
+            aspect-ratio: 96 / 62;
+        }
+        .yurit-brand--stacked .brand-word {
+            font-weight: 800;
+            font-size: 2rem;
+            line-height: 1;
+            letter-spacing: -1.5px;
+            margin-top: -2px;
+            color: var(--yrt-fg);
+        }
         .yurit-brand .nav-mark .nm-ink { stroke: currentColor; }
 
         /* ---- Sidebar OCHIQ bo'lganda: logo harakatlanadi (yurish + g'ildirak) ---- */
@@ -975,12 +1000,18 @@
             font-size: 1rem !important;
             margin: 0 !important;
         }
-        /* Collapsed: mark SVG ko'rinadi, lekin ixcham (yig'ilgan rail ichida) */
+        /* Collapsed: faqat ixcham mark (odam+mashina) — "yurit" so'zi
+           yashiriladi, harakat to'xtaydi */
+        body.yrt-sidebar-collapsed nav.yurit-nav .yurit-brand--stacked {
+            flex-direction: row !important;
+            padding: 0.35rem !important;
+        }
         body.yrt-sidebar-collapsed nav.yurit-nav .yurit-brand .brand-logo--mark {
-            width: 32px !important; height: 26px !important;
+            width: 34px !important; height: 26px !important;
+            max-width: 34px !important; aspect-ratio: auto !important;
         }
         body.yrt-sidebar-collapsed nav.yurit-nav .yurit-brand .nav-mark {
-            width: 32px !important; height: 24px !important;
+            width: 34px !important; height: 26px !important;
         }
         /* Belt-and-braces: nuke the text spans completely so nothing
            inherits or escapes our font-size zero. */
@@ -2949,9 +2980,10 @@
 </button>
 <nav class="navbar navbar-expand-lg yurit-nav mb-4">
     <div class="container-fluid">
-        <a class="navbar-brand yurit-brand" href="{% url 'home' %}">
+        <a class="navbar-brand yurit-brand yurit-brand--stacked" href="{% url 'home' %}">
             <span class="brand-logo brand-logo--mark">
-                <svg class="nav-mark" viewBox="0 0 96 68" width="34" height="24" fill="none"
+                <svg class="nav-mark" viewBox="0 0 96 68" width="100%" height="100%"
+                     preserveAspectRatio="xMidYMid meet" fill="none"
                      stroke-linecap="round" stroke-linejoin="round" aria-label="yurit">
                     <g class="nm-body"><g class="nm-ink" stroke-width="4">
                         <circle cx="13" cy="13" r="5"></circle><path d="M16 17 L24 34"></path><path d="M18 22 L30 28"></path>
@@ -2969,7 +3001,7 @@
                     </g></g>
                 </svg>
             </span>
-            <span class="brand-text no-i18n">yurit</span>
+            <span class="brand-text brand-word no-i18n">yurit</span>
         </a>
 
         <!-- POS — always visible primary CTA on mobile too -->
