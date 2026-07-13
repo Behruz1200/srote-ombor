@@ -775,19 +775,20 @@ def product_create(request):
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES)
         if form.is_valid():
-            # Dublikat oldini olish: shu nomli mahsulot bo'lsa, yangisini
-            # yaratmasdan mavjudiga tur qo'shishga yo'naltiramiz
             _name = smart_title(form.cleaned_data.get('name'))
-            existing = Product.objects.filter(name__iexact=_name).first()
-            if existing:
-                messages.info(
-                    request,
-                    f"'{existing.name}' ({existing.code}) allaqachon mavjud — "
-                    f"yangi mahsulot yaratilmadi. Unga tur qo'shishingiz mumkin.")
-                return redirect(f"{reverse('intake_variants')}?code={existing.code}")
             product = form.save(commit=False)
             product.name = _name
             product.save()
+            # Bir xil nomli boshqa mahsulot bo'lsa — jim birlashtirmaymiz,
+            # faqat eslatib qo'yamiz (xohlasa qo'lda birlashtiradi)
+            dup = (Product.objects.filter(name__iexact=_name)
+                   .exclude(pk=product.pk).first())
+            if dup:
+                messages.info(
+                    request,
+                    f"Eslatma: '{_name}' nomli boshqa mahsulot ham bor "
+                    f"({dup.code}). Agar bir xil bo'lsa, Mahsulotlar "
+                    f"ro'yxatidan birlashtirishingiz mumkin.")
             messages.success(request, f"Mahsulot yaratildi. Kod: {product.code}")
             return redirect('product_detail', code=product.code)
     else:
@@ -1678,9 +1679,11 @@ def intake_variants(request):
             if not product:
                 errors.append(f"Mahsulot topilmadi: {product_code}")
         elif new_name:
-            # Shu nomli mahsulot (katta-kichik harfdan qat'i nazar) bo'lsa —
-            # dublikat yaratmasdan o'shanga qo'shamiz
-            product = Product.objects.filter(name__iexact=new_name).first()
+            # Yangi nom yozilgan -> YANGI mahsulot (jim birlashtirmaymiz).
+            # Mavjud mahsulotga qo'shmoqchi bo'lsa, "Mavjud mahsulot" rejimida
+            # ro'yxatdan tanlaydi (product_code). Bir brend ostida (masalan
+            # Ezo) turli mahsulotlar bo'lishi mumkin.
+            product = None  # keyin yangi yaratiladi
         else:
             errors.append("Mahsulot tanlang yoki yangi mahsulot nomini kiriting.")
 
