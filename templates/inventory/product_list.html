@@ -138,6 +138,22 @@
                         data-bs-toggle="modal" data-bs-target="#bulkModal">
                     <i class="bi bi-pencil-square"></i> Bulk amal
                 </button>
+                <span class="vr d-none d-md-inline-block"></span>
+                <form method="post" action="{% url 'product_bulk_update' %}" id="catMoveForm"
+                      class="d-inline-flex align-items-center gap-1">
+                    {% csrf_token %}
+                    <input type="hidden" name="op" value="change_category">
+                    <div id="catMoveIds"></div>
+                    <select name="value" id="catMoveSelect" class="form-select form-select-sm" style="width:auto">
+                        <option value="">→ kategoriyaga ko'chirish...</option>
+                        {% for c in categories %}
+                            <option value="{{ c.id }}">→ {{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary" id="catMoveBtn" disabled>
+                        <i class="bi bi-folder-symlink"></i> Ko'chirish
+                    </button>
+                </form>
             </div>
             <small class="text-muted">Topildi: <strong>{{ products|length }}</strong></small>
         </div>
@@ -332,12 +348,27 @@
     const btn = document.getElementById('printBtn');
     const bulkBtn = document.getElementById('bulkBtn');
     if (!selAll || !cnt || !btn) return;
+    const catMoveBtn = document.getElementById('catMoveBtn');
+    const catMoveSelect = document.getElementById('catMoveSelect');
     function refresh() {
         const n = document.querySelectorAll('.pick:checked').length;
         cnt.textContent = n;
         btn.disabled = (n === 0);
         if (bulkBtn) bulkBtn.disabled = (n === 0);
+        if (catMoveBtn) catMoveBtn.disabled = (n === 0 || !catMoveSelect.value);
     }
+    if (catMoveSelect) catMoveSelect.addEventListener('change', refresh);
+    const catMoveForm = document.getElementById('catMoveForm');
+    if (catMoveForm) catMoveForm.addEventListener('submit', (e) => {
+        const picked = Array.from(document.querySelectorAll('.pick:checked'));
+        const catName = catMoveSelect.options[catMoveSelect.selectedIndex].text.replace('→ ', '');
+        if (!picked.length || !catMoveSelect.value) { e.preventDefault(); return; }
+        if (!confirm(`${picked.length} ta mahsulot "${catName}" kategoriyasiga ko'chirilsinmi?`)) {
+            e.preventDefault(); return;
+        }
+        document.getElementById('catMoveIds').innerHTML =
+            picked.map(p => `<input type="hidden" name="id" value="${p.value}">`).join('');
+    });
     selAll.addEventListener('change', () => {
         picks.forEach(p => p.checked = selAll.checked);
         refresh();

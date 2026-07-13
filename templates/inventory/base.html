@@ -3118,6 +3118,18 @@
         </div>
     {% endif %}
 
+    {% block backbar %}
+    {% with un=request.resolver_match.url_name %}
+    {% if un != 'dashboard' and un != 'pos_terminal' and un != 'login' and un != 'pos_customer_display' %}
+    <div class="no-print mb-2">
+        <a href="javascript:history.back()" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Orqaga
+        </a>
+    </div>
+    {% endif %}
+    {% endwith %}
+    {% endblock %}
+
     {% block content %}{% endblock %}
 </div>
 

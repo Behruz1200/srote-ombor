@@ -568,7 +568,7 @@ def product_bulk_update(request):
                     p.save(update_fields=['category'])
                     n += 1
             except (ValueError, TypeError):
-                pass
+                cat = None
         elif op == 'delete':
             from django.db.models import ProtectedError
             try:
@@ -602,6 +602,17 @@ def product_bulk_update(request):
         )
 
     messages.success(request, f"{n} ta mahsulot yangilandi/o'chirildi.")
+    if op == 'change_category' and n > 0:
+        try:
+            _cid = int(value)
+            _cat = Category.objects.filter(pk=_cid).first()
+            if _cat:
+                messages.success(
+                    request,
+                    f"{n} ta mahsulot \"{_cat.name}\" kategoriyasiga ko'chirildi.")
+                return redirect(f"{reverse('product_list')}?category={_cid}")
+        except (ValueError, TypeError):
+            pass
     return redirect('product_list')
 
 
