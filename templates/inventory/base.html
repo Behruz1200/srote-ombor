@@ -1236,8 +1236,9 @@
                 margin-left: 0 !important;
                 width: 100% !important;
                 max-width: 100% !important;
-                padding-left: 12px !important;
-                padding-right: 12px !important;
+                /* Notch/rounded chetlarni hisobga olamiz */
+                padding-left: calc(12px + env(safe-area-inset-left)) !important;
+                padding-right: calc(12px + env(safe-area-inset-right)) !important;
             }
             /* Mobile top bar (added via JS) replaces the sidebar header */
             .yrt-mobile-topbar {
@@ -1251,9 +1252,18 @@
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 0.55rem 0.75rem;
+                gap: 0.5rem;
+                /* Notch/rounded-corner xavfsiz zonasi hisobga olinadi —
+                   POS tugmasi ekran chetidan qirqilmaydi */
+                padding: 0.5rem calc(0.75rem + env(safe-area-inset-right))
+                         0.5rem calc(0.75rem + env(safe-area-inset-left));
                 margin: -1rem -12px 1rem;
             }
+            .yrt-mobile-topbar > * { min-width: 0; }
+            .yrt-mobile-topbar .yrt-hamburger,
+            .yrt-mobile-topbar .btn { flex: 0 0 auto; }
+            .yrt-mobile-topbar .yrt-topbrand { flex: 1 1 auto; justify-content: center; overflow: hidden; }
+            .yrt-mobile-topbar .yrt-topbrand strong { white-space: nowrap; }
             [data-bs-theme="dark"] .yrt-mobile-topbar {
                 background: var(--yrt-glass-bg-dark);
             }
@@ -3193,14 +3203,12 @@
             aria-label="Menu" aria-controls="nav" aria-expanded="false">
         <i class="bi bi-list" style="font-size: 1.35rem; line-height: 1;"></i>
     </button>
-    <a href="{% url 'home' %}" class="d-flex align-items-center gap-2 text-decoration-none">
-        <span style="width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#5B5BD6,#6E70E0);display:inline-flex;align-items:center;justify-content:center;">
-            <i class="bi bi-shop" style="color:#fff;font-size:0.85rem;"></i>
-        </span>
-        <strong style="color: var(--yrt-fg);">yurit</strong>
+    <a href="{% url 'home' %}" class="yrt-topbrand d-flex align-items-center gap-2 text-decoration-none">
+        <img src="{% static 'img/yurit-mark.svg' %}" alt="yurit" width="30" height="22" style="display:block;">
+        <strong style="color: var(--yrt-fg); font-size:1.15rem;">yurit</strong>
     </a>
-    <a href="{% url 'pos_terminal' %}" class="btn btn-success btn-sm"
-       style="padding:0.35rem 0.7rem;">
+    <a href="{% url 'pos_terminal' %}" class="btn btn-success btn-sm text-nowrap"
+       style="padding:0.4rem 0.75rem;">
         <i class="bi bi-upc-scan"></i> POS
     </a>
 </div>

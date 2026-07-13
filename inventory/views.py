@@ -445,7 +445,11 @@ def dashboard(request):
     yesterday_stats = agg['yesterday_stats']
 
     def _delta(now, prev):
-        if not prev: return None
+        # Kunning boshida (bugun hali 0) -100% ko'rsatmaymiz — bu
+        # signal emas, shunchaki kun boshlangani. Delta faqat bugun
+        # ham savdo bo'lganda ma'noli.
+        if not prev or not now:
+            return None
         return (now - prev) / prev * 100
 
     deltas = {
