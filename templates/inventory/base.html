@@ -895,7 +895,8 @@
             inset: 0 auto 0 0;
             width: var(--yrt-sidebar-current);
             height: 100dvh;
-            padding: 0.85rem 0.75rem;
+            padding: calc(0.85rem + env(safe-area-inset-top)) 0.75rem
+                     calc(0.85rem + env(safe-area-inset-bottom)) 0.75rem;
             background: var(--yrt-glass-bg-light);
             backdrop-filter: blur(16px) saturate(160%);
             -webkit-backdrop-filter: blur(16px) saturate(160%);
@@ -1255,9 +1256,10 @@
                 gap: 0.5rem;
                 /* Notch/rounded-corner xavfsiz zonasi hisobga olinadi —
                    POS tugmasi ekran chetidan qirqilmaydi */
-                padding: 0.5rem calc(0.75rem + env(safe-area-inset-right))
+                padding: calc(0.5rem + env(safe-area-inset-top))
+                         calc(0.75rem + env(safe-area-inset-right))
                          0.5rem calc(0.75rem + env(safe-area-inset-left));
-                margin: -1rem -12px 1rem;
+                margin: 0 -12px 1rem;
             }
             .yrt-mobile-topbar > * { min-width: 0; }
             .yrt-mobile-topbar .yrt-hamburger,

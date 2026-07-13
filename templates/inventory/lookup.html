@@ -727,15 +727,15 @@
             renderRecent();
         });
     }
-    // ---- Jonli takliflar (nom / rang / o'lcham / shtrix) ----
+    // ---- Jonli mahsulot takliflari (POS sahifasidagi kabi: kod + nom) ----
     const suggestBox = document.getElementById('lookupSuggest');
     const lookupForm = document.getElementById('lookupForm');
     let sugTimer = null, sugItems = [], sugActive = -1;
-    const TB = {'mahsulot':'primary','rang':'success',"o'lcham":'info','shtrix':'secondary'};
 
     function hideSug() { suggestBox.style.display = 'none'; sugActive = -1; }
-    function chooseSug(q) {
-        codeInput.value = q;
+    function chooseSug(it) {
+        // POS'dagi kabi — aniq mahsulot kodi bilan qidiramiz
+        codeInput.value = it.code;
         hideSug();
         lookupForm.submit();
     }
@@ -745,12 +745,12 @@
         sugItems.forEach((it, i) => {
             const b = document.createElement('button');
             b.type = 'button';
-            b.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2'
+            b.className = 'list-group-item list-group-item-action d-flex align-items-center gap-2 py-2'
                 + (i === sugActive ? ' active' : '');
-            b.innerHTML = `<span>${it.label}` +
-                (it.sub ? ` <small class="text-muted">${it.sub}</small>` : '') +
-                `</span><span class="badge bg-${TB[it.t]||'light'}-subtle text-${TB[it.t]||'dark'} border">${it.t}</span>`;
-            b.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSug(it.q); });
+            b.innerHTML = `<code class="bg-light text-dark px-1 rounded">${it.code}</code>` +
+                `<span>${it.name}</span>` +
+                (it.category ? ` <small class="text-muted ms-auto">${it.category}</small>` : '');
+            b.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSug(it); });
             suggestBox.appendChild(b);
         });
         suggestBox.style.display = '';
@@ -761,7 +761,7 @@
         if (q.length < 2) { hideSug(); return; }
         sugTimer = setTimeout(async () => {
             try {
-                const r = await fetch(`{% url 'product_search_suggest' %}?q=${encodeURIComponent(q)}`);
+                const r = await fetch(`{% url 'product_search_for_attach' %}?q=${encodeURIComponent(q)}`);
                 const data = await r.json();
                 sugItems = data.results || [];
                 sugActive = -1;
@@ -774,7 +774,7 @@
         if (suggestBox.style.display === 'none' || !sugItems.length) return;
         if (e.key === 'ArrowDown') { e.preventDefault(); sugActive = Math.min(sugActive + 1, sugItems.length - 1); renderSug(); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); sugActive = Math.max(sugActive - 1, 0); renderSug(); }
-        else if (e.key === 'Enter' && sugActive >= 0) { e.preventDefault(); chooseSug(sugItems[sugActive].q); }
+        else if (e.key === 'Enter' && sugActive >= 0) { e.preventDefault(); chooseSug(sugItems[sugActive]); }
         else if (e.key === 'Escape') { hideSug(); }
     });
     document.addEventListener('click', (e) => {
