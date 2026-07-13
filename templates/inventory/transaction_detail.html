@@ -1,5 +1,5 @@
 {% extends 'inventory/base.html' %}
-{% load yurit_extras %}
+{% load yurit_extras static %}
 
 {% block title %}Chek #{{ txn.pk }} — yurit{% endblock %}
 
@@ -85,9 +85,8 @@
 
     <div class="card p-4" id="receipt">
         <div class="text-center mb-3">
-            <h4 class="mb-0">YURIT</h4>
-            <div class="text-muted small">{{ txn.branch.name }}</div>
-            <div class="text-muted small">{{ txn.branch.address }}</div>
+            <h4 class="mb-0">{{ txn.branch.name }}</h4>
+            {% if txn.branch.address %}<div class="text-muted small">{{ txn.branch.address }}</div>{% endif %}
             {% if txn.branch.inn %}
                 <div class="text-muted small">STIR: {{ txn.branch.inn }}</div>
             {% endif %}
@@ -165,6 +164,26 @@
         {% endif %}
 
         <div class="text-center text-muted small mt-3">— Xaridingiz uchun rahmat! —</div>
+        <div class="text-center mt-2" id="receiptBrand">
+            <svg viewBox="0 0 96 72" width="42" height="32" fill="none"
+                 stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;">
+                <defs><clipPath id="rcp-road"><rect x="0" y="56" width="96" height="14"></rect></clipPath></defs>
+                <g stroke="#000" stroke-width="3">
+                    <circle cx="13" cy="13" r="5"></circle><path d="M16 17 L24 34"></path><path d="M18 22 L30 28"></path>
+                    <path d="M24 34 C 20 42, 14 49, 9 55"></path><path d="M24 34 C 28 42, 32 49, 35 55"></path>
+                </g>
+                <path stroke="#000" stroke-width="3" stroke-dasharray="0.1 6" d="M30 28 C 36 34, 42 39, 48 42"></path>
+                <g stroke="#000" stroke-width="3">
+                    <path d="M48 48 L48 42 L58 40 L63 32 L77 32 L82 40 L90 40 L90 48"></path>
+                    <circle cx="58" cy="50" r="5"></circle><circle cx="80" cy="50" r="5"></circle>
+                    <path stroke-width="2" d="M58 46.5 L58 53.5"></path><path stroke-width="2" d="M80 46.5 L80 53.5"></path>
+                </g>
+                <g clip-path="url(#rcp-road)"><g fill="#000" stroke="none">
+                    <rect x="0" y="58" width="3" height="10"></rect><rect x="6" y="58" width="1.5" height="10"></rect><rect x="10" y="58" width="4" height="10"></rect><rect x="17" y="58" width="2" height="10"></rect><rect x="22" y="58" width="5" height="10"></rect><rect x="30" y="58" width="2" height="10"></rect><rect x="35" y="58" width="3" height="10"></rect><rect x="41" y="58" width="1.5" height="10"></rect><rect x="45" y="58" width="4" height="10"></rect><rect x="52" y="58" width="2" height="10"></rect><rect x="57" y="58" width="5" height="10"></rect><rect x="65" y="58" width="2" height="10"></rect><rect x="70" y="58" width="3" height="10"></rect><rect x="76" y="58" width="1.5" height="10"></rect><rect x="80" y="58" width="4" height="10"></rect><rect x="87" y="58" width="2" height="10"></rect><rect x="92" y="58" width="4" height="10"></rect>
+                </g></g>
+            </svg>
+            <div style="font-weight:800; letter-spacing:-0.5px; font-size:15pt; line-height:1;">yurit</div>
+        </div>
     </div>
 </div>
 
