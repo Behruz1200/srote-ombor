@@ -119,10 +119,17 @@
 
         <!-- ============ 3. Turlar jadvali ============ -->
         <div class="card p-3 mb-3">
-            <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
                 <strong><i class="bi bi-list-ol"></i> Turlar</strong>
-                <span class="small text-muted">Shtrix-kodni skaner bilan ham o'qitsa bo'ladi —
-                    kursorni katakka qo'yib skanerlang</span>
+                <button type="button" id="camScanBtn" class="btn btn-success btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#intakeScanModal">
+                    <i class="bi bi-camera"></i> Kamera bilan skanerlash
+                </button>
+            </div>
+            <div class="small text-muted mb-2">
+                <i class="bi bi-info-circle"></i>
+                Telefonda — <strong>kamera</strong> tugmasini bosing; kompyuterda — skaner qurilmasi
+                to'g'ridan-to'g'ri Shtrix-kod katagiga yozadi (kursorni o'sha katakka qo'ying).
             </div>
             <div class="table-responsive">
                 <table class="table table-sm align-middle" id="rowsTable">
@@ -201,6 +208,33 @@
     </tr>
 </template>
 
+<!-- Kamera skaner modali (telefon uchun) -->
+<div class="modal fade" id="intakeScanModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-camera"></i> Kamera bilan skanerlash</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="intakeScanStatus" class="alert alert-info py-2 mb-2">
+          <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
+        </div>
+        <div id="intakeScanReader" style="width:100%; max-width:480px; margin:0 auto;"></div>
+        <div class="text-center mt-2 small text-muted">
+          Har bir shtrix-kod avtomatik keyingi bo'sh katakka yoziladi. Ketma-ket skanerlayvering.
+        </div>
+        <div id="intakeScanList" class="d-flex flex-wrap gap-1 mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <span class="me-auto small text-muted"><strong id="intakeScanCount">0</strong> ta skanerlandi</span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tugatish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function () {
     const form = document.getElementById('variantIntakeForm');
@@ -522,6 +556,57 @@
                 name: '{{ post_back.product_name|escapejs }}'});
     {% endif %}
     recount();
+
+    // ---- Kamera skaner (telefon): ketma-ket skanerlash ----
+    (function initCamScan() {
+        const modalEl = document.getElementById('intakeScanModal');
+        if (!modalEl || typeof Html5Qrcode === 'undefined') return;
+        const statusEl = document.getElementById('intakeScanStatus');
+        const listEl = document.getElementById('intakeScanList');
+        const countEl = document.getElementById('intakeScanCount');
+        let qr = null, count = 0, lastCode = '', lastTs = 0;
+
+        function setStat(html, type) {
+            statusEl.className = 'alert py-2 mb-2 alert-' + (type || 'info');
+            statusEl.innerHTML = html;
+        }
+        function onDecode(code) {
+            code = (code || '').trim();
+            const now = Date.now();
+            // Bir xil kodni 1.5s ichida takror o'qimaymiz
+            if (!code || (code === lastCode && now - lastTs < 1500)) return;
+            // Jadvalda allaqachon bor bo'lsa — ogohlantiramiz, qo'shmaymiz
+            const exists = [...rowsBody.querySelectorAll('input.row-barcode')]
+                .some(i => i.value.trim() === code);
+            lastCode = code; lastTs = now;
+            if (exists) { setStat('<i class="bi bi-exclamation-circle"></i> Bu kod allaqachon jadvalda: <strong>' + code + '</strong>', 'warning'); return; }
+            const cell = nextEmptyBarcodeCell();
+            if (cell) cell.value = code;
+            recount();
+            count++;
+            countEl.textContent = count;
+            const chip = document.createElement('span');
+            chip.className = 'badge bg-success-subtle text-success border';
+            chip.textContent = code;
+            listEl.prepend(chip);
+            setStat('<i class="bi bi-check-circle"></i> Qo\'shildi: <strong>' + code + '</strong> — davom eting', 'success');
+            if (navigator.vibrate) navigator.vibrate(40);
+        }
+        function stop() {
+            if (qr && qr.isScanning) { qr.stop().catch(()=>{}).finally(()=>{ qr.clear(); qr = null; }); }
+        }
+        modalEl.addEventListener('shown.bs.modal', () => {
+            count = 0; lastCode = ''; countEl.textContent = '0'; listEl.innerHTML = '';
+            setStat('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
+            qr = new Html5Qrcode('intakeScanReader');
+            qr.start({ facingMode: 'environment' },
+                { fps: 10, qrbox: (w,h)=>{ const m=Math.min(w,h), sz=Math.floor(m*0.75); return {width:sz,height:sz}; } },
+                onDecode, () => {})
+              .then(() => setStat('<i class="bi bi-camera-video"></i> Skanerlashga tayyor — kodni kameraga to\'g\'rilang', 'info'))
+              .catch(err => setStat('<i class="bi bi-exclamation-triangle"></i> Kamera ochilmadi: ' + err, 'danger'));
+        });
+        modalEl.addEventListener('hide.bs.modal', stop);
+    })();
 })();
 </script>
 {% endblock %}
