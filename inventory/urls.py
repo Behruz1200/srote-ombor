@@ -75,6 +75,8 @@ urlpatterns = [
 
     path('intake/', views.intake_new, name='intake_new'),
     path('intake/variants/', views.intake_variants, name='intake_variants'),
+    path('intake/clothes/', views.clothes_intake, name='clothes_intake'),
+    path('labels/variants/', views.variant_labels, name='variant_labels'),
     path('intake/import/', views.intake_import, name='intake_import'),
     path('intake/import/template/', views.intake_import_template,
          name='intake_import_template'),

@@ -62,6 +62,22 @@ def smart_title(raw):
     return ' '.join(out)
 
 
+def ean13_check_digit(body12):
+    """12 xonali EAN body uchun nazorat raqami."""
+    total = 0
+    for i, ch in enumerate(body12):
+        d = int(ch)
+        total += d if (i % 2 == 0) else d * 3
+    return (10 - (total % 10)) % 10
+
+
+def gen_internal_ean13(seed_int):
+    """Ichki (do'kon) EAN-13: '2' prefiks + 11 xonali seed + nazorat raqami.
+    GS1 '20-29' oralig'i do'kon ichki tovarlar uchun ajratilgan."""
+    body = ('2' + str(int(seed_int)).zfill(11))[:12]
+    return body + str(ean13_check_digit(body))
+
+
 def parse_dec(raw):
     """Foydalanuvchi kiritgan pul/son matnini Decimal'ga aylantiradi.
 
@@ -1662,6 +1678,183 @@ def product_variants_edit(request, code):
     return render(request, 'inventory/product_variants_edit.html', {
         'product': product, 'branch': branch, 'branches': branches,
         'rows': rows,
+    })
+
+
+@admin_required
+def clothes_intake(request):
+    """Kiyim/poyabzal qabul — zavod kodisiz tovarlar. O'lcham x rang
+    jadvali, har kombinatsiya uchun avtomatik EAN-13 kod yaratiladi,
+    keyin termal etiketka chop etiladi."""
+    from decimal import Decimal, InvalidOperation
+    categories = Category.objects.order_by('name')
+    branches = Branch.objects.filter(is_active=True)
+
+    if request.method == 'POST':
+        errors = []
+        product = None
+        product_code = (request.POST.get('product_code') or '').strip()
+        new_name = smart_title(request.POST.get('new_name'))
+        if product_code:
+            product = Product.objects.filter(
+                code=normalize_code(product_code.upper())).first()
+            if not product:
+                errors.append(f"Mahsulot topilmadi: {product_code}")
+        elif not new_name:
+            errors.append("Mahsulot nomini kiriting yoki tanlang.")
+
+        branch = Branch.objects.filter(
+            pk=request.POST.get('branch') or 0, is_active=True).first()
+        if not branch:
+            errors.append("Filial tanlang.")
+
+        try:
+            price = parse_dec(request.POST.get('price'))
+            marja = parse_dec(request.POST.get('marja'))
+        except (InvalidOperation, ValueError):
+            price = Decimal('0'); marja = Decimal('0')
+        if price <= 0:
+            errors.append("Sotuv narxini kiriting.")
+        if marja < 0:
+            marja = Decimal('0')
+        cost = (price / (Decimal('1') + marja / Decimal('100'))
+                ).quantize(Decimal('0.01')) if price > 0 else Decimal('0')
+
+        # Kataklar: qty[<size>|<color>]
+        cells = []
+        for key, val in request.POST.items():
+            if not (key.startswith('qty[') and key.endswith(']')):
+                continue
+            payload = key[4:-1]
+            if '|' not in payload:
+                continue
+            size, color = payload.split('|', 1)
+            size = smart_title(size); color = smart_title(color)
+            try:
+                qty = int(parse_dec(val))
+            except (InvalidOperation, ValueError, TypeError):
+                qty = 0
+            if qty > 0 and (size or color):
+                cells.append((size, color, qty))
+        if not cells and not errors:
+            errors.append("Kamida bitta o'lcham/rang katagiga son kiriting.")
+
+        if errors:
+            for e in errors[:8]:
+                messages.error(request, e)
+        else:
+            created_ids = []
+            total_qty = 0
+            with transaction.atomic():
+                if product is None:
+                    category = Category.objects.filter(
+                        pk=request.POST.get('category') or 0).first()
+                    product = Product.objects.create(
+                        name=new_name, category=category,
+                        default_sale_price=price)
+                session = IntakeSession.objects.create(
+                    branch=branch, received_by=request.user,
+                    note="Kiyim/poyabzal qabul (avto-kod)")
+                for size, color, qty in cells:
+                    variant, _ = ProductVariant.objects.get_or_create(
+                        product=product, size=size, color=color)
+                    if not variant.barcode:
+                        code = gen_internal_ean13(variant.pk)
+                        # kolliziya bo'lsa (kamdan-kam) — pk+offset
+                        n = 0
+                        while ProductVariant.objects.filter(
+                                barcode=code).exclude(pk=variant.pk).exists():
+                            n += 1
+                            code = gen_internal_ean13(variant.pk + n * 100000)
+                        variant.barcode = code
+                        variant.save(update_fields=['barcode'])
+                    stock, _ = BranchStock.objects.get_or_create(
+                        variant=variant, branch=branch,
+                        defaults={'cost_price': cost, 'sale_price': price})
+                    stock.cost_price = cost
+                    stock.sale_price = price
+                    stock.stock_count = F('stock_count') + qty
+                    stock.save()
+                    Intake.objects.create(
+                        session=session, variant=variant, branch=branch,
+                        quantity=qty, cost_per_unit=cost,
+                        note="Kiyim qabul", received_by=request.user)
+                    created_ids.append(variant.pk)
+                    total_qty += qty
+            messages.success(
+                request,
+                f"{product.name}: {len(cells)} tur, {total_qty} dona qabul "
+                f"qilindi. Endi etiketkalarni chop eting.")
+            ids = ','.join(str(i) for i in created_ids)
+            return redirect(f"{reverse('variant_labels')}?ids={ids}&price={price}")
+
+    colors_all = (ProductVariant.objects.exclude(color='')
+                  .values_list('color', flat=True).distinct().order_by('color')[:500])
+    return render(request, 'inventory/clothes_intake.html', {
+        'categories': categories, 'branches': branches,
+        'colors_all': colors_all,
+    })
+
+
+@admin_required
+def variant_labels(request):
+    """Termal etiketka: EAN-13 barcode + QR + kod + narx (variantlar)."""
+    import base64
+    from barcode import EAN13
+    from barcode.writer import SVGWriter
+
+    ids = [int(i) for i in (request.GET.get('ids') or '').split(',')
+           if i.strip().isdigit()]
+    variants = list(ProductVariant.objects.filter(pk__in=ids)
+                    .select_related('product'))
+    # Etiketka nusxalari — har variant uchun nechta (default 1)
+    try:
+        copies = max(1, min(200, int(request.GET.get('copies') or 1)))
+    except ValueError:
+        copies = 1
+
+    # Narx: variantning filial narxi yoki so'rov paramidan yoki mahsulot default
+    price_param = request.GET.get('price')
+    labels = []
+    for v in variants:
+        bc = v.barcode or gen_internal_ean13(v.pk)
+        # EAN-13 barcode SVG (12 body -> lib check qo'shadi)
+        try:
+            svg_io = io.BytesIO()
+            EAN13(bc[:12], writer=SVGWriter()).write(
+                svg_io, options={'module_height': 9.0, 'module_width': 0.28,
+                                 'font_size': 8, 'text_distance': 3.5,
+                                 'quiet_zone': 2.0})
+            barcode_svg = svg_io.getvalue().decode('utf-8')
+            # <?xml ...?> va DOCTYPE'ni olib tashlaymiz (inline uchun)
+            i = barcode_svg.find('<svg')
+            barcode_svg = barcode_svg[i:] if i >= 0 else barcode_svg
+        except Exception:
+            barcode_svg = ''
+        # QR (kod) -> PNG data URI
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,
+                           box_size=3, border=1)
+        qr.add_data(bc)
+        qr.make(fit=True)
+        qbuf = io.BytesIO()
+        qr.make_image(fill_color='black', back_color='white').save(qbuf, 'PNG')
+        qr_uri = 'data:image/png;base64,' + base64.b64encode(qbuf.getvalue()).decode()
+        # narx
+        st = (BranchStock.objects.filter(variant=v, sale_price__gt=0)
+              .order_by('-sale_price').first())
+        price = (price_param or (st.sale_price if st else v.product.default_sale_price))
+        labels.append({
+            'variant': v, 'code': bc, 'barcode_svg': barcode_svg,
+            'qr_uri': qr_uri, 'price': price,
+        })
+    # copies bo'yicha ko'paytiramiz
+    render_labels = []
+    for lb in labels:
+        for _ in range(copies):
+            render_labels.append(lb)
+    return render(request, 'inventory/variant_labels.html', {
+        'labels': render_labels, 'copies': copies,
+        'ids': request.GET.get('ids', ''),
     })
 
 

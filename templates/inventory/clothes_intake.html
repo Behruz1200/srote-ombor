@@ -1,0 +1,157 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+{% block title %}Kiyim/poyabzal qabul — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page" style="max-width:900px;">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Kodsiz tovarlar</span>
+                <h1 class="dash-hero__title"><i class="bi bi-bag"></i> Kiyim / poyabzal qabul</h1>
+                <p class="dash-hero__sub"><span>O'lcham × rang jadvali — har biriga avtomatik kod va etiketka</span></p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Qabulga qaytish</span></a>
+            </div>
+        </div>
+    </header>
+
+    <form method="post" id="clothesForm" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card p-3 mb-3">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nomi <span class="text-danger">*</span></label>
+                    <input type="text" name="new_name" class="form-control" placeholder="Masalan: Erkaklar futbolkasi" value="{{ post_back.new_name|default:'' }}">
+                    <input type="hidden" name="product_code" value="">
+                    <small class="text-muted">Yangi mahsulot yaratiladi</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Kategoriya</label>
+                    <select name="category" class="form-select">
+                        <option value="">— tanlanmagan —</option>
+                        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-3 mb-3">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Filial <span class="text-danger">*</span></label>
+                    <select name="branch" class="form-select" required>
+                        <option value="">— tanlang —</option>
+                        {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Sotuv narx <span class="text-danger">*</span></label>
+                    <input type="text" name="price" class="form-control" inputmode="decimal" placeholder="150000" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Marja %</label>
+                    <input type="text" name="marja" class="form-control" inputmode="decimal" value="0">
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-3 mb-3">
+            <strong class="mb-2 d-block"><i class="bi bi-grid-3x3"></i> O'lcham × rang jadvali</strong>
+            <div class="row g-3 mb-2">
+                <div class="col-md-6">
+                    <label class="form-label">O'lchamlar</label>
+                    <div class="d-flex gap-2">
+                        <input type="text" id="sizeInput" class="form-control" placeholder="S, M, L, 42, 43...">
+                        <button type="button" class="btn btn-outline-primary" id="addSize">Qo'shish</button>
+                    </div>
+                    <div id="sizeChips" class="d-flex flex-wrap gap-1 mt-2"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Ranglar</label>
+                    <div class="d-flex gap-2">
+                        <input type="text" id="colorInput" class="form-control" placeholder="Qora, Oq, Ko'k..." list="colorOptions">
+                        <button type="button" class="btn btn-outline-primary" id="addColor">Qo'shish</button>
+                    </div>
+                    <datalist id="colorOptions">{% for c in colors_all %}<option value="{{ c }}">{% endfor %}</datalist>
+                    <div id="colorChips" class="d-flex flex-wrap gap-1 mt-2"></div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle text-center mb-0" id="matrix">
+                    <thead class="table-light"><tr id="matrixHead"><th style="min-width:90px">O'lcham \ Rang</th></tr></thead>
+                    <tbody id="matrixBody"></tbody>
+                </table>
+            </div>
+            <div class="small text-muted mt-2">
+                <i class="bi bi-info-circle"></i> Har katakka shu o'lcham+rangdan nechta borligini yozing. Faqat 0 dan katta kataklar qabul qilinadi.
+                <span class="ms-2">Jami: <strong id="sumTotal">0</strong> dona</span>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-4">
+            <button type="submit" class="btn btn-success btn-lg"><i class="bi bi-check2-circle"></i> Qabul + etiketka</button>
+            <a href="{% url 'intake_new' %}" class="btn btn-outline-secondary btn-lg">Bekor</a>
+        </div>
+    </form>
+</div>
+
+<script>
+(function () {
+    const sizes = [], colors = [];
+    const sizeChips = document.getElementById('sizeChips');
+    const colorChips = document.getElementById('colorChips');
+    const head = document.getElementById('matrixHead');
+    const body = document.getElementById('matrixBody');
+    const sumEl = document.getElementById('sumTotal');
+
+    function chip(text, arr, box, kind) {
+        const s = document.createElement('span');
+        s.className = 'badge bg-primary-subtle text-primary border';
+        s.style.cursor = 'pointer';
+        s.innerHTML = text + ' <i class="bi bi-x"></i>';
+        s.title = "O'chirish";
+        s.addEventListener('click', () => {
+            const i = arr.indexOf(text); if (i >= 0) arr.splice(i, 1);
+            s.remove(); rebuild();
+        });
+        box.appendChild(s);
+    }
+    function addItem(inputId, arr, box, kind) {
+        const inp = document.getElementById(inputId);
+        inp.value.split(',').map(x => x.trim()).filter(Boolean).forEach(t => {
+            if (!arr.some(x => x.toLowerCase() === t.toLowerCase())) { arr.push(t); chip(t, arr, box, kind); }
+        });
+        inp.value = ''; inp.focus(); rebuild();
+    }
+    document.getElementById('addSize').addEventListener('click', () => addItem('sizeInput', sizes, sizeChips, 'size'));
+    document.getElementById('addColor').addEventListener('click', () => addItem('colorInput', colors, colorChips, 'color'));
+    document.getElementById('sizeInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addItem('sizeInput', sizes, sizeChips); } });
+    document.getElementById('colorInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addItem('colorInput', colors, colorChips); } });
+
+    function recount() {
+        let t = 0; document.querySelectorAll('.qcell').forEach(i => { const v = parseInt(i.value, 10); if (v > 0) t += v; });
+        sumEl.textContent = t;
+    }
+    function rebuild() {
+        const cols = colors.length ? colors : [''];
+        head.innerHTML = '<th style="min-width:90px">O\'lcham \\ Rang</th>' + cols.map(c => `<th>${c || '—'}</th>`).join('');
+        body.innerHTML = '';
+        const rows = sizes.length ? sizes : [''];
+        rows.forEach(sz => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<th class="text-start">${sz || '—'}</th>` + cols.map(c =>
+                `<td><input type="text" inputmode="numeric" class="form-control form-control-sm text-center qcell" name="qty[${sz}|${c}]" placeholder="0" style="min-width:60px"></td>`
+            ).join('');
+            body.appendChild(tr);
+        });
+        recount();
+    }
+    body.addEventListener('input', recount);
+    rebuild();
+})();
+</script>
+{% endblock %}
