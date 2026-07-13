@@ -2469,10 +2469,12 @@
         .card .table-responsive,
         .dash-card .table-responsive,
         .yrt-section .table-responsive { border-radius: 0; overflow: auto; }
+        /* Kartaning burchaklarini yumaloq qilamiz, LEKIN gorizontal
+           scroll'ni saqlaymiz (overflow:hidden emas, overflow-x:auto) */
         .card > .table-responsive:first-child,
-        .card > .table:first-child { border-top-left-radius: var(--dash-radius); border-top-right-radius: var(--dash-radius); overflow: hidden; }
+        .card > .table:first-child { border-top-left-radius: var(--dash-radius); border-top-right-radius: var(--dash-radius); overflow-x: auto; overflow-y: hidden; }
         .card > .table-responsive:last-child,
-        .card > .table:last-child { border-bottom-left-radius: var(--dash-radius); border-bottom-right-radius: var(--dash-radius); overflow: hidden; }
+        .card > .table:last-child { border-bottom-left-radius: var(--dash-radius); border-bottom-right-radius: var(--dash-radius); overflow-x: auto; overflow-y: hidden; }
 
         /* Bootstrap badge → glass pill */
         .badge {
