@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 72" width="96" height="72" role="img" aria-label="yurit mark">
+  <defs>
+    
+    <clipPath id="m-road-clip"><rect x="0" y="56" width="96" height="14"></rect></clipPath>
+  </defs>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g class="m-body"><g stroke="#201e1d" stroke-width="3">
+      <circle cx="13" cy="13" r="5"></circle><path d="M16 17 L24 34"></path><path d="M18 22 L30 28"></path>
+      <path class="m-leg1" d="M24 34 C 20 42, 14 49, 9 55"></path><path class="m-leg2" d="M24 34 C 28 42, 32 49, 35 55"></path>
+    </g></g>
+    <path class="m-rope" stroke="#d6006c" stroke-width="3" stroke-dasharray="0.1 6" d="M30 28 C 36 34, 42 39, 48 42"></path>
+    <g stroke="#201e1d" stroke-width="3">
+      <path d="M48 48 L48 42 L58 40 L63 32 L77 32 L82 40 L90 40 L90 48"></path>
+      <circle cx="58" cy="50" r="5"></circle><circle cx="80" cy="50" r="5"></circle>
+      <path class="m-w1" stroke-width="2" d="M58 46.5 L58 53.5"></path><path class="m-w2" stroke-width="2" d="M80 46.5 L80 53.5"></path>
+    </g>
+    <g clip-path="url(#m-road-clip)"><g class="m-road" fill="#201e1d" stroke="none">
+      <rect x="0" y="58" width="3" height="10"></rect><rect x="6" y="58" width="1.5" height="10"></rect><rect x="10" y="58" width="4" height="10"></rect><rect x="17" y="58" width="2" height="10"></rect><rect x="22" y="58" width="5" height="10"></rect><rect x="30" y="58" width="2" height="10"></rect><rect x="35" y="58" width="3" height="10"></rect><rect x="41" y="58" width="1.5" height="10"></rect><rect x="45" y="58" width="4" height="10"></rect><rect x="52" y="58" width="2" height="10"></rect><rect x="57" y="58" width="5" height="10"></rect><rect x="65" y="58" width="2" height="10"></rect><rect x="70" y="58" width="3" height="10"></rect><rect x="76" y="58" width="1.5" height="10"></rect><rect x="80" y="58" width="4" height="10"></rect><rect x="87" y="58" width="2" height="10"></rect><rect x="92" y="58" width="4" height="10"></rect>
+      <rect x="96" y="58" width="3" height="10"></rect><rect x="102" y="58" width="1.5" height="10"></rect><rect x="106" y="58" width="4" height="10"></rect><rect x="113" y="58" width="2" height="10"></rect><rect x="118" y="58" width="5" height="10"></rect><rect x="126" y="58" width="2" height="10"></rect><rect x="131" y="58" width="3" height="10"></rect><rect x="137" y="58" width="1.5" height="10"></rect><rect x="141" y="58" width="4" height="10"></rect><rect x="148" y="58" width="2" height="10"></rect><rect x="153" y="58" width="5" height="10"></rect><rect x="161" y="58" width="2" height="10"></rect><rect x="166" y="58" width="3" height="10"></rect><rect x="172" y="58" width="1.5" height="10"></rect><rect x="176" y="58" width="4" height="10"></rect><rect x="183" y="58" width="2" height="10"></rect><rect x="188" y="58" width="4" height="10"></rect>
+    </g></g>
+  </g>
+</svg>

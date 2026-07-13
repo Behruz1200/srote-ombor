@@ -9,6 +9,7 @@
     <!-- PWA -->
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#212529">
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/yurit-favicon.svg' %}">
     <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
     <!-- iOS Safari -->
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/icon-180.png' %}">
@@ -129,6 +130,13 @@
             font-weight: 700;
             letter-spacing: 0.3px;
         }
+        .yurit-brand .brand-logo--mark {
+            background: transparent !important;
+            box-shadow: none !important;
+            width: 34px; height: 34px;
+        }
+        .yurit-brand .brand-logo--mark img { display: block; width: 30px; height: auto; }
+        [data-bs-theme="dark"] .yurit-brand .brand-logo--mark img { filter: invert(1) hue-rotate(180deg); }
 
         /* Navlink + dropdown styling */
         .yurit-nav .nav-link {
@@ -2830,6 +2838,29 @@
 
         /* Section grids spacing — keep matching dash-page rhythm */
         .dash-page .row.g-3 { --bs-gutter-y: 1rem; }
+
+        /* ============ GLOBAL RESPONSIVE SAFETY-NET ============ */
+        /* Hech narsa ekrandan chiqib ketmasin — telefon, planshet,
+           laptop, monitor — hammasida moslashadi. */
+        html, body { max-width: 100%; overflow-x: hidden; }
+        img, svg, video, canvas, table { max-width: 100%; }
+        /* Har qanday jadval o'ralmagan bo'lsa ham gorizontal scroll qiladi */
+        .yrt-table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table-responsive, .yrt-table-scroll { scrollbar-width: thin; }
+        /* Kartalar ichidagi keng bloklar kartani yormasin */
+        .card, .dash-card, .yrt-section { max-width: 100%; }
+        /* Uzun so'z/kod qatorlari sindirilsin */
+        td, th, .badge, code { overflow-wrap: anywhere; }
+        /* Kichik ekranlarda gap va padding'ni ixchamlaymiz */
+        @media (max-width: 575.98px) {
+            .card { padding: 0.85rem !important; }
+            .dash-hero__inner { padding: 1.1rem !important; }
+            .dash-hero__title { font-size: 1.35rem !important; }
+            .table-sm td, .table-sm th { padding: 0.35rem 0.4rem !important; }
+            .btn-lg { padding: 0.6rem 0.9rem !important; font-size: 0.95rem !important; }
+            .dash-kpi__value { font-size: 1.5rem !important; }
+        }
+
     </style>
 </head>
 <body>
@@ -2880,8 +2911,8 @@
 <nav class="navbar navbar-expand-lg yurit-nav mb-4">
     <div class="container-fluid">
         <a class="navbar-brand yurit-brand" href="{% url 'home' %}">
-            <span class="brand-logo">
-                <i class="bi bi-shop"></i>
+            <span class="brand-logo brand-logo--mark">
+                <img src="{% static 'img/yurit-mark.svg' %}" alt="yurit" width="30" height="23">
             </span>
             <span class="brand-text no-i18n">yurit</span>
         </a>
@@ -3478,6 +3509,17 @@
         });
     }
     render();
+})();
+
+// Responsive: o'ralmagan har qanday <table>ni scroll konteynerga o'raymiz
+(function () {
+    document.querySelectorAll('table').forEach((t) => {
+        if (t.closest('.table-responsive, .yrt-table-scroll')) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'yrt-table-scroll';
+        t.parentNode.insertBefore(wrap, t);
+        wrap.appendChild(t);
+    });
 })();
 
 // PWA: register the service worker

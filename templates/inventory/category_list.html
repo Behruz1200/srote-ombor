@@ -140,25 +140,47 @@
                                         </button>
                                     </form>
                                     {% else %}
-                                    <form method="post" class="d-inline-flex align-items-center gap-1"
-                                          onsubmit="return confirm('{{ c.name|escapejs }} o\'chirilsinmi? {{ c.product_count }} ta mahsulot tanlangan joyga ko\'chiriladi.');">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="pk" value="{{ c.pk }}">
-                                        <select name="move_to" class="form-select form-select-sm"
-                                                style="width:auto" title="Mahsulotlar qayerga ko'chsin?">
-                                            <option value="none">→ kategoriyasiz</option>
-                                            {% for oc in categories %}
-                                                {% if oc.pk != c.pk %}
-                                                    <option value="{{ oc.pk }}">→ {{ oc.name }}</option>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </select>
-                                        <button type="submit" class="btn btn-outline-danger"
-                                                title="Mahsulotlarni ko'chirib, kategoriyani o'chirish">
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-outline-danger dropdown-toggle"
+                                                data-bs-toggle="dropdown" data-bs-boundary="viewport"
+                                                aria-expanded="false"
+                                                title="O'chirish — mahsulotlarni ko'chirib">
                                             <i class="bi bi-trash"></i>
                                         </button>
-                                    </form>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><h6 class="dropdown-header">
+                                                {{ c.product_count }} ta mahsulotni ko'chirish:
+                                            </h6></li>
+                                            <li>
+                                                <form method="post"
+                                                      onsubmit="return confirm('{{ c.name|escapejs }} o\'chirilsinmi? {{ c.product_count }} ta mahsulot kategoriyasiz qoladi.');">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="delete">
+                                                    <input type="hidden" name="pk" value="{{ c.pk }}">
+                                                    <input type="hidden" name="move_to" value="none">
+                                                    <button type="submit" class="dropdown-item">
+                                                        <i class="bi bi-folder-x"></i> Kategoriyasiz qoldirish
+                                                    </button>
+                                                </form>
+                                            </li>
+                                            {% for oc in categories %}
+                                                {% if oc.pk != c.pk %}
+                                                <li>
+                                                    <form method="post"
+                                                          onsubmit="return confirm('{{ c.name|escapejs }} o\'chirilsinmi? {{ c.product_count }} ta mahsulot \'{{ oc.name|escapejs }}\' ga ko\'chiriladi.');">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="delete">
+                                                        <input type="hidden" name="pk" value="{{ c.pk }}">
+                                                        <input type="hidden" name="move_to" value="{{ oc.pk }}">
+                                                        <button type="submit" class="dropdown-item">
+                                                            <i class="bi bi-folder-symlink"></i> {{ oc.name }} ga
+                                                        </button>
+                                                    </form>
+                                                </li>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
                                     {% endif %}
                                 </div>
                             </td>

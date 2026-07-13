@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="yurit">
+  <rect width="64" height="64" rx="12" fill="#0088b0"></rect>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="14" cy="14" r="4.5" stroke-width="0" fill="#ffffff"></circle>
+    <path d="M16 18 L22 34" stroke-width="5"></path>
+    <path d="M22 26 L34 32" stroke-width="4"></path>
+    <path d="M22 34 L15 48" stroke-width="5"></path>
+    <path d="M22 34 L29 48" stroke-width="5"></path>
+    <path d="M34 44 L34 38 L44 36 L48 30 L57 30 L60 36 L62 36" stroke-width="3.5"></path>
+    <circle cx="43" cy="46" r="4.5" stroke-width="3.5"></circle>
+    <circle cx="57" cy="46" r="4.5" stroke-width="3.5"></circle>
+  </g>
+  <g fill="#ffffff">
+    <rect x="4" y="54" width="4" height="8"></rect><rect x="11" y="54" width="2" height="8"></rect><rect x="16" y="54" width="5" height="8"></rect><rect x="24" y="54" width="2.5" height="8"></rect><rect x="30" y="54" width="4" height="8"></rect><rect x="37" y="54" width="2" height="8"></rect><rect x="42" y="54" width="5" height="8"></rect><rect x="50" y="54" width="2.5" height="8"></rect><rect x="56" y="54" width="4" height="8"></rect>
+  </g>
+</svg>
