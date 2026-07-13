@@ -615,7 +615,16 @@ def product_list(request):
     products = Product.objects.select_related('category')
 
     if q:
-        products = products.filter(Q(code__icontains=q) | Q(name__icontains=q))
+        # Subquery orqali — variant JOIN'lari annotatsiya Sum'larini
+        # buzmasligi uchun avval mos mahsulot ID'larini topamiz
+        _match_ids = Product.objects.filter(
+            Q(code__icontains=q) | Q(name__icontains=q) |
+            Q(external_barcode__icontains=q) |
+            Q(variants__color__icontains=q) |
+            Q(variants__size__icontains=q) |
+            Q(variants__barcode__icontains=q)
+        ).values('id')
+        products = products.filter(id__in=_match_ids)
     if category_id:
         try:
             products = products.filter(category_id=int(category_id))
@@ -811,6 +820,88 @@ def product_delete(request, code):
     )
     messages.success(request, f"O'chirildi: {name} ({code}).")
     return redirect('product_list')
+
+
+@admin_required
+def variant_delete(request, pk):
+    """Turni (rang/o'lcham) o'chirish. Sotuv/transfer/inventarizatsiya
+    tarixi bo'lsa DB himoyasi (PROTECT) — aniq xabar bilan rad etiladi."""
+    from django.db.models import ProtectedError
+    v = get_object_or_404(
+        ProductVariant.objects.select_related('product'), pk=pk)
+    code = v.product.code
+    branch_id = request.POST.get('branch') or ''
+    label = f"{v.size or '—'} / {v.color or '—'}"
+    back = f"{reverse('product_variants_edit', args=[code])}"
+    if branch_id:
+        back += f"?branch={branch_id}"
+    if request.method != 'POST':
+        return redirect(back)
+    try:
+        v.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            f"{label} o'chirilmadi: sotuv/transfer/inventarizatsiya tarixi "
+            f"bor. Tarix saqlanishi shart — o'rniga omborni 0 qiling.")
+        return redirect(back)
+    AuditLog.objects.create(
+        user=request.user,
+        username_snapshot=request.user.username,
+        action=AuditLog.Action.DELETE,
+        model_name='ProductVariant', object_id=str(pk),
+        object_repr=f'{code}: {label}')
+    messages.success(request, f"O'chirildi: {label}")
+    return redirect(back)
+
+
+@admin_required
+def product_variants_move(request, code):
+    """Tanlangan turlarni boshqa mahsulotga ko'chirish."""
+    product = get_object_or_404(Product, code=normalize_code(code))
+    back = reverse('product_variants_edit', args=[product.code])
+    if request.method != 'POST':
+        return redirect(back)
+    target_code = normalize_code(
+        (request.POST.get('target_code') or '').strip().upper())
+    target = Product.objects.filter(code=target_code).first()
+    ids = [int(i) for i in request.POST.getlist('mv') if str(i).isdigit()]
+    variants = list(product.variants.filter(pk__in=ids))
+    if not variants:
+        messages.warning(request, "Ko'chirish uchun tur tanlanmagan.")
+        return redirect(back)
+    if not target:
+        messages.error(request, "Maqsad mahsulot topilmadi — ro'yxatdan tanlang.")
+        return redirect(back)
+    if target.pk == product.pk:
+        messages.warning(request, "Bir xil mahsulot tanlangan.")
+        return redirect(back)
+    moved, skipped = 0, []
+    with transaction.atomic():
+        for v in variants:
+            if target.variants.filter(size=v.size, color=v.color).exists():
+                skipped.append(f"{v.size or '—'}/{v.color or '—'}")
+                continue
+            v.product = target
+            v.save(update_fields=['product'])
+            moved += 1
+        if moved:
+            AuditLog.objects.create(
+                user=request.user,
+                username_snapshot=request.user.username,
+                action=AuditLog.Action.UPDATE,
+                model_name='ProductVariant', object_id=str(product.pk),
+                object_repr=(f"{moved} ta tur {product.code} -> "
+                             f"{target.code}")[:300])
+    if moved:
+        messages.success(
+            request,
+            f"{moved} ta tur '{target.name}' ({target.code}) ga ko'chirildi.")
+    if skipped:
+        messages.warning(
+            request,
+            f"O'tkazilmadi (maqsadda shu o'lcham/rang bor): {', '.join(skipped)}")
+    return redirect(back)
 
 
 @admin_required
@@ -4692,16 +4783,34 @@ def category_list(request):
                 pk = 0
             cat = Category.objects.filter(pk=pk).first()
             if cat:
-                # Don't allow deleting categories with products
                 n_products = cat.products.count()
+                move_to = (request.POST.get('move_to') or '').strip()
                 if n_products > 0:
-                    messages.error(request,
-                        f"\"{cat.name}\" o'chirilmadi: unda {n_products} ta "
-                        "mahsulot bor. Avval mahsulotlarni boshqa kategoriyaga o'tkazing.")
-                else:
-                    name = cat.name
-                    cat.delete()
-                    messages.success(request, f"\"{name}\" o'chirildi.")
+                    # Mahsulotlarni avval tanlangan joyga ko'chiramiz
+                    if move_to == 'none':
+                        cat.products.update(category=None)
+                        messages.info(request,
+                            f"{n_products} ta mahsulot kategoriyasiz qoldi.")
+                    elif move_to.isdigit() and Category.objects.filter(
+                            pk=int(move_to)).exclude(pk=cat.pk).exists():
+                        target = Category.objects.get(pk=int(move_to))
+                        cat.products.update(category=target)
+                        messages.info(request,
+                            f"{n_products} ta mahsulot \"{target.name}\" ga ko'chirildi.")
+                    else:
+                        messages.error(request,
+                            f"\"{cat.name}\" o'chirilmadi: unda {n_products} ta "
+                            "mahsulot bor — ular ko'chiriladigan joyni tanlang.")
+                        return redirect('category_list')
+                name = cat.name
+                cat.delete()
+                AuditLog.objects.create(
+                    user=request.user,
+                    username_snapshot=request.user.username,
+                    action=AuditLog.Action.DELETE,
+                    model_name='Category', object_id=str(pk),
+                    object_repr=name)
+                messages.success(request, f"\"{name}\" o'chirildi.")
             return redirect('category_list')
         if action == 'edit':
             try:

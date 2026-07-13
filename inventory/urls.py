@@ -65,6 +65,10 @@ urlpatterns = [
          name='product_delete'),
     path('products/<str:code>/variants/edit/', views.product_variants_edit,
          name='product_variants_edit'),
+    path('products/<str:code>/variants/move/', views.product_variants_move,
+         name='product_variants_move'),
+    path('variants/<int:pk>/delete/', views.variant_delete,
+         name='variant_delete'),
     path('products/<str:code>/intake/', views.intake_for_product, name='intake_for_product'),
 
     path('intake/', views.intake_new, name='intake_new'),

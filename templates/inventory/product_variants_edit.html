@@ -47,6 +47,7 @@
                 <table class="table table-sm align-middle">
                     <thead class="table-light">
                         <tr>
+                            <th style="width:32px"><input type="checkbox" id="mvAll" class="form-check-input" title="Hammasini belgilash"></th>
                             <th style="min-width:110px">Rang</th>
                             <th style="min-width:100px">O'lcham</th>
                             <th style="min-width:160px">Shtrix-kod</th>
@@ -54,12 +55,17 @@
                             <th style="min-width:100px">Sotuv narx</th>
                             <th style="min-width:100px">Ulgurji</th>
                             <th style="min-width:80px">Ombor</th>
+                            <th style="width:40px"></th>
                         </tr>
                     </thead>
                     <tbody id="editRows">
                         {% for r in rows %}
                         <tr>
                             <input type="hidden" name="v_id" value="{{ r.variant.id }}">
+                            <td class="text-center align-middle">
+                                <input type="checkbox" class="form-check-input mv-pick" form="moveForm"
+                                       name="mv" value="{{ r.variant.id }}">
+                            </td>
                             <td><input type="text" name="v_color" class="form-control form-control-sm" value="{{ r.variant.color }}"></td>
                             <td><input type="text" name="v_size" class="form-control form-control-sm" value="{{ r.variant.size }}"></td>
                             <td><input type="text" name="v_barcode" class="form-control form-control-sm" value="{{ r.variant.barcode|default:'' }}" placeholder="—"></td>
@@ -67,6 +73,14 @@
                             <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.sale|floatformat:'0u' }}"></td>
                             <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.wholesale|floatformat:'0u' }}"></td>
                             <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" value="{{ r.stock|unlocalize }}"></td>
+                            <td class="text-center align-middle">
+                                <button type="button" class="btn btn-sm btn-outline-danger v-del" tabindex="-1"
+                                        data-pk="{{ r.variant.id }}"
+                                        data-label="{{ r.variant.size|default:'—' }} / {{ r.variant.color|default:'—' }}"
+                                        title="Turni o'chirish">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -82,12 +96,42 @@
                 </div>
             </div>
         </div>
-        <div class="d-flex gap-2 mb-4">
+        <div class="d-flex gap-2 mb-3">
             <button type="submit" class="btn btn-success btn-lg">
                 <i class="bi bi-check2-circle"></i> Saqlash
             </button>
             <a href="{% url 'product_detail' product.code %}" class="btn btn-outline-secondary btn-lg">Bekor qilish</a>
         </div>
+    </form>
+
+    <!-- Tanlangan turlarni boshqa mahsulotga ko'chirish -->
+    <form method="post" id="moveForm" action="{% url 'product_variants_move' product.code %}"
+          class="card p-3 mb-4">
+        {% csrf_token %}
+        <div class="d-flex align-items-end gap-2 flex-wrap">
+            <div>
+                <strong><i class="bi bi-arrow-left-right"></i> Tanlanganlarni boshqa mahsulotga ko'chirish</strong>
+                <div class="small text-muted">Chap ustundagi katakchalar bilan turlarni belgilang</div>
+            </div>
+            <div class="position-relative" style="min-width:280px">
+                <input type="text" id="moveSearch" class="form-control form-control-sm"
+                       placeholder="Maqsad mahsulotni qidiring..." autocomplete="off">
+                <div id="moveSuggest" class="list-group position-absolute w-100 shadow"
+                     style="z-index:1050; display:none; max-height:220px; overflow:auto"></div>
+                <input type="hidden" name="target_code" id="moveTarget">
+            </div>
+            <span id="movePicked" class="badge bg-success-subtle text-success border border-success"
+                  style="display:none"></span>
+            <button type="submit" class="btn btn-sm btn-primary" id="moveBtn" disabled>
+                <i class="bi bi-arrow-right"></i> Ko'chirish
+            </button>
+        </div>
+    </form>
+
+    <!-- Tur o'chirish (yashirin forma) -->
+    <form method="post" id="vdelForm" style="display:none">
+        {% csrf_token %}
+        <input type="hidden" name="branch" value="{{ branch.id }}">
     </form>
     {% else %}
     <div class="card p-4 text-center text-muted">
@@ -100,6 +144,7 @@
 <template id="newRowTpl">
     <tr class="table-success-subtle">
         <input type="hidden" name="v_id" value="">
+        <td></td>
         <td><input type="text" name="v_color" class="form-control form-control-sm" placeholder="Yangi rang/tur"></td>
         <td><input type="text" name="v_size" class="form-control form-control-sm" placeholder="O'lcham"></td>
         <td><input type="text" name="v_barcode" class="form-control form-control-sm" placeholder="Skanerlang"></td>
@@ -107,10 +152,72 @@
         <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" placeholder="0"></td>
+        <td></td>
     </tr>
 </template>
 
 <script>
+// Tur o'chirish
+(function () {
+    const delForm = document.getElementById('vdelForm');
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.v-del');
+        if (!btn) return;
+        const label = btn.dataset.label;
+        if (!confirm(`${label} turini o'chirasizmi?\nOmbor qoldig'i va qabul tarixi ham o'chadi. Sotuv tarixi bo'lsa, tizim rad etadi.`)) return;
+        delForm.action = `/variants/${btn.dataset.pk}/delete/`;
+        delForm.submit();
+    });
+})();
+
+// Ko'chirish: maqsad mahsulot qidiruvi + hammasini belgilash
+(function () {
+    const search = document.getElementById('moveSearch');
+    const suggest = document.getElementById('moveSuggest');
+    const target = document.getElementById('moveTarget');
+    const picked = document.getElementById('movePicked');
+    const moveBtn = document.getElementById('moveBtn');
+    const mvAll = document.getElementById('mvAll');
+    if (mvAll) mvAll.addEventListener('change', () => {
+        document.querySelectorAll('.mv-pick').forEach(c => c.checked = mvAll.checked);
+    });
+    if (!search) return;
+    let timer = null;
+    search.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = search.value.trim();
+        if (!q) { suggest.style.display = 'none'; return; }
+        timer = setTimeout(async () => {
+            try {
+                const r = await fetch(`{% url 'product_search_for_attach' %}?q=${encodeURIComponent(q)}`);
+                const data = await r.json();
+                suggest.innerHTML = '';
+                for (const it of (data.results || [])) {
+                    if (it.code === '{{ product.code }}') continue;
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'list-group-item list-group-item-action';
+                    b.innerHTML = `<code>${it.code}</code> ${it.name}`;
+                    b.addEventListener('click', () => {
+                        target.value = it.code;
+                        picked.textContent = `${it.code} — ${it.name}`;
+                        picked.style.display = '';
+                        moveBtn.disabled = false;
+                        suggest.style.display = 'none';
+                        search.value = '';
+                    });
+                    suggest.appendChild(b);
+                }
+                suggest.style.display = data.results && data.results.length ? '' : 'none';
+            } catch (e) { /* jim */ }
+        }, 200);
+    });
+    document.addEventListener('click', (e) => {
+        if (!suggest.contains(e.target) && e.target !== search)
+            suggest.style.display = 'none';
+    });
+})();
+
 // Yangi tur qatori qo'shish
 (function () {
     const btn = document.getElementById('addNewRowBtn');
