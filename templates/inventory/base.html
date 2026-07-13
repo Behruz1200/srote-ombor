@@ -138,8 +138,10 @@
         }
         [data-bs-theme="dark"] .yurit-brand .brand-logo--mark { color: #e8e8ee; }
         .yurit-brand .nav-mark { display: block; overflow: visible; }
-        /* Brand mark — eski gorizontal o'lcham */
-        .yurit-brand .brand-logo--mark { width: 40px; height: 30px; }
+        /* Brand mark — handoff o'lchami (96:72), to'liq shtrix ko'rinadi */
+        .yurit-brand .brand-logo--mark { width: 46px; height: 34px; }
+        .yurit-brand--stacked, .yurit-brand { gap: 0.5rem; }
+        .yurit-brand .brand-text { font-weight: 800; letter-spacing: -0.5px; font-size: 1.5rem; }
         .yurit-brand .nav-mark .nm-ink { stroke: currentColor; }
 
         /* ---- Sidebar OCHIQ bo'lganda: logo harakatlanadi (yurish + g'ildirak) ---- */
@@ -2962,20 +2964,21 @@
     <div class="container-fluid">
         <a class="navbar-brand yurit-brand" href="{% url 'home' %}">
             <span class="brand-logo brand-logo--mark">
-                <svg class="nav-mark" viewBox="0 0 96 68" width="38" height="27"
+                <svg class="nav-mark" viewBox="0 0 96 72" width="46" height="34"
                      preserveAspectRatio="xMidYMid meet" fill="none"
                      stroke-linecap="round" stroke-linejoin="round" aria-label="yurit">
-                    <g class="nm-body"><g class="nm-ink" stroke-width="4">
+                    <defs><clipPath id="nm-road-clip"><rect x="0" y="56" width="96" height="14"></rect></clipPath></defs>
+                    <g class="nm-body"><g class="nm-ink" stroke-width="3">
                         <circle cx="13" cy="13" r="5"></circle><path d="M16 17 L24 34"></path><path d="M18 22 L30 28"></path>
                         <path class="nm-leg1" d="M24 34 C 20 42, 14 49, 9 55"></path><path class="nm-leg2" d="M24 34 C 28 42, 32 49, 35 55"></path>
                     </g></g>
-                    <path class="nm-rope" stroke="#d6006c" stroke-width="4" stroke-dasharray="0.1 6" d="M30 28 C 36 34, 42 39, 48 42"></path>
-                    <g class="nm-ink" stroke-width="4">
+                    <path class="nm-rope" stroke="#d6006c" stroke-width="3" stroke-dasharray="0.1 6" d="M30 28 C 36 34, 42 39, 48 42"></path>
+                    <g class="nm-ink" stroke-width="3">
                         <path d="M48 48 L48 42 L58 40 L63 32 L77 32 L82 40 L90 40 L90 48"></path>
                         <circle cx="58" cy="50" r="5"></circle><circle cx="80" cy="50" r="5"></circle>
-                        <path class="nm-w1" stroke-width="2.5" d="M58 46.5 L58 53.5"></path><path class="nm-w2" stroke-width="2.5" d="M80 46.5 L80 53.5"></path>
+                        <path class="nm-w1" stroke-width="2" d="M58 46.5 L58 53.5"></path><path class="nm-w2" stroke-width="2" d="M80 46.5 L80 53.5"></path>
                     </g>
-                    <g clip-path="inset(56px 0 0 0)"><g class="nm-roadG nm-ink" fill="currentColor" stroke="none">
+                    <g clip-path="url(#nm-road-clip)"><g class="nm-roadG nm-ink" fill="currentColor" stroke="none">
                         <rect x="0" y="58" width="3" height="10"></rect><rect x="6" y="58" width="1.5" height="10"></rect><rect x="10" y="58" width="4" height="10"></rect><rect x="17" y="58" width="2" height="10"></rect><rect x="22" y="58" width="5" height="10"></rect><rect x="30" y="58" width="2" height="10"></rect><rect x="35" y="58" width="3" height="10"></rect><rect x="41" y="58" width="1.5" height="10"></rect><rect x="45" y="58" width="4" height="10"></rect><rect x="52" y="58" width="2" height="10"></rect><rect x="57" y="58" width="5" height="10"></rect><rect x="65" y="58" width="2" height="10"></rect><rect x="70" y="58" width="3" height="10"></rect><rect x="76" y="58" width="1.5" height="10"></rect><rect x="80" y="58" width="4" height="10"></rect><rect x="87" y="58" width="2" height="10"></rect><rect x="92" y="58" width="4" height="10"></rect>
                         <rect x="96" y="58" width="3" height="10"></rect><rect x="102" y="58" width="1.5" height="10"></rect><rect x="106" y="58" width="4" height="10"></rect><rect x="113" y="58" width="2" height="10"></rect><rect x="118" y="58" width="5" height="10"></rect><rect x="126" y="58" width="2" height="10"></rect><rect x="131" y="58" width="3" height="10"></rect><rect x="137" y="58" width="1.5" height="10"></rect><rect x="141" y="58" width="4" height="10"></rect><rect x="148" y="58" width="2" height="10"></rect><rect x="153" y="58" width="5" height="10"></rect><rect x="161" y="58" width="2" height="10"></rect><rect x="166" y="58" width="3" height="10"></rect><rect x="172" y="58" width="1.5" height="10"></rect><rect x="176" y="58" width="4" height="10"></rect><rect x="183" y="58" width="2" height="10"></rect><rect x="188" y="58" width="4" height="10"></rect>
                     </g></g>
