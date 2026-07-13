@@ -21,13 +21,11 @@
             </p>
 
             <form method="get" id="lookupForm" class="lookup-search mt-3">
-                <div class="lookup-search__field" style="position:relative; flex:1 1 360px; min-width:0;">
+                <div class="lookup-search__field" style="flex:1 1 360px; min-width:0;">
                     <input type="text" name="code" id="lookupCode" value="{{ code }}"
                            placeholder="Kod (OYO-0001), nom, yoki kategoriya..."
                            class="form-control form-control-lg lookup-search__input"
                            style="width:100%;" autofocus autocomplete="off">
-                    <div id="lookupSuggest" class="list-group position-absolute w-100 shadow"
-                         style="z-index:1060; display:none; max-height:320px; overflow:auto; margin-top:2px;"></div>
                 </div>
                 <button type="submit" class="dash-btn dash-btn--indigo lookup-search__btn">
                     <i class="bi bi-search"></i>
@@ -39,6 +37,9 @@
                     <i class="bi bi-qr-code-scan"></i>
                 </button>
             </form>
+
+            <!-- Takliflar — POS sahifasidagi kabi (kod + nom tugmalar) -->
+            <div id="lookupSuggest" class="d-flex flex-wrap gap-2 mt-3" style="display:none;"></div>
 
             <!-- Recent searches (localStorage) -->
             <div id="recentSearches" class="d-flex flex-wrap gap-1 mt-3" style="display:none;"></div>
@@ -743,13 +744,11 @@
         if (!sugItems.length) { hideSug(); return; }
         suggestBox.innerHTML = '';
         sugItems.forEach((it, i) => {
+            // POS sahifasi bilan 1:1 bir xil: btn btn-primary + <code> + nom
             const b = document.createElement('button');
             b.type = 'button';
-            b.className = 'list-group-item list-group-item-action d-flex align-items-center gap-2 py-2'
-                + (i === sugActive ? ' active' : '');
-            b.innerHTML = `<code class="bg-light text-dark px-1 rounded">${it.code}</code>` +
-                `<span>${it.name}</span>` +
-                (it.category ? ` <small class="text-muted ms-auto">${it.category}</small>` : '');
+            b.className = 'btn btn-primary' + (i === sugActive ? ' active' : '');
+            b.innerHTML = `<code class="bg-light text-dark px-1">${it.code}</code> ${it.name}`;
             b.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSug(it); });
             suggestBox.appendChild(b);
         });
