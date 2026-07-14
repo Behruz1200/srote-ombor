@@ -88,26 +88,69 @@ def _som(value):
 
 # ---------- Low-stock alert (auto from signals) ----------
 
-def maybe_low_stock_alert(branch_stock):
+def _variant_descr(variant):
+    """Human label: size/color for clothes, else the variant barcode."""
+    parts = [p for p in (variant.size, variant.color) if p]
+    if parts:
+        return ' / '.join(parts)
+    return variant.barcode or 'asosiy'
+
+
+def maybe_low_stock_alert(branch_stock, previous_count=None, created=False):
+    """Alert only when stock SELLS DOWN to <= threshold.
+
+    Never fires on intake or when a variant is first stocked (otherwise a
+    small received batch would instantly look "low"). Reads the real int in
+    case the count arrives as an F()-expression, and sends after the
+    surrounding transaction commits.
+    """
     if not _enabled():
         return
-    if branch_stock.stock_count > LOW_STOCK_THRESHOLD:
-        cache.delete(_dedup_key(branch_stock))
+    from .models import BranchStock
+    count = branch_stock.stock_count
+    if not isinstance(count, int):
+        try:
+            count = (BranchStock.objects.only("stock_count")
+                     .get(pk=branch_stock.pk).stock_count)
+        except BranchStock.DoesNotExist:
+            return
+    key = _dedup_key(branch_stock)
+
+    if count > LOW_STOCK_THRESHOLD:
+        cache.delete(key)
         return
-    if cache.get(_dedup_key(branch_stock)):
+
+    # Brand-new stock or stock that went up/unchanged (intake) -> skip.
+    if created:
         return
+    if previous_count is not None:
+        try:
+            if count >= int(previous_count):
+                return
+        except (ValueError, TypeError):
+            pass
+
+    if cache.get(key):
+        return
+
     variant = branch_stock.variant
     product = variant.product
-    badge = '⛔' if branch_stock.stock_count == 0 else '⚠️'
+    badge = '⛔' if count == 0 else '⚠️'
+    brand = f"{product.brand} · " if getattr(product, 'brand', '') else ''
     text = (
         f"{badge} <b>Tovar tugab bormoqda</b>\n\n"
-        f"<b>{product.name}</b>\n"
-        f"<code>{product.code}</code>  ·  {variant.size} / {variant.color}\n"
+        f"{brand}<b>{product.name}</b>\n"
+        f"<code>{product.code}</code>  ·  {_variant_descr(variant)}\n"
         f"Filial: <b>{branch_stock.branch.name}</b>\n"
-        f"Qoldiq: <b>{branch_stock.stock_count}</b> dona"
+        f"Qoldiq: <b>{count}</b> dona"
     )
-    if send_telegram(text):
-        cache.set(_dedup_key(branch_stock), True, DEDUP_TTL_SECONDS)
+
+    def _fire():
+        if send_telegram(text):
+            cache.set(key, True, DEDUP_TTL_SECONDS)
+
+    from django.db import transaction
+    transaction.on_commit(_fire)
 
 
 def _dedup_key(bs):
@@ -182,24 +225,36 @@ def daily_summary_text(d=None):
 # ---------- /stock CODE ----------
 
 def stock_text(code):
-    """Reply for /stock CODE command."""
-    from .models import Product, BranchStock
+    """Reply for /stock CODE command. Accepts internal code, manufacturer
+    barcode, generated variant EAN, product name, or brand."""
+    from .models import Product, ProductVariant, BranchStock
+    from django.db.models import Q
 
-    typed = (code or '').strip().upper()
+    raw = (code or '').strip()
+    typed = raw.upper()
     m = re.match(r'^([A-Z]+)-?(\d+)$', typed)
     if m:
         typed = f"{m.group(1)}-{int(m.group(2)):04d}"
 
-    product = Product.objects.filter(code=typed).first()
+    # 1) exact internal code, 2) manufacturer barcode, 3) generated variant EAN
+    product = Product.objects.filter(
+        Q(code=typed) | Q(external_barcode=raw)).first()
     if not product:
-        # Try name search
-        matches = list(Product.objects.filter(name__icontains=code)[:5])
+        _v = (ProductVariant.objects.filter(barcode=raw)
+              .select_related("product").first())
+        if _v:
+            product = _v.product
+    if not product:
+        # 4) name / brand search
+        matches = list(Product.objects.filter(
+            Q(name__icontains=raw) | Q(brand__icontains=raw))[:5])
         if not matches:
             return f"❌ <code>{code}</code> topilmadi."
         if len(matches) > 1:
             lines = [f"🔍 <b>'{code}'</b> bo'yicha topilganlar:\n"]
             for p in matches:
-                lines.append(f"  • <code>{p.code}</code> — {p.name}")
+                _b = f"{p.brand} · " if getattr(p, "brand", "") else ""
+                lines.append(f"  • <code>{p.code}</code> — {_b}{p.name}")
             lines.append("\nAniq kodni yozing: <code>/stock OYO-0001</code>")
             return '\n'.join(lines)
         product = matches[0]
@@ -213,10 +268,11 @@ def stock_text(code):
     for s in stocks:
         by_branch.setdefault(s.branch.name, []).append(s)
 
-    lines = [
-        f"<b>{product.name}</b>",
-        f"<code>{product.code}</code>  ·  {_som(product.default_sale_price)} so'm",
-    ]
+    lines = [f"<b>{product.name}</b>"]
+    if getattr(product, 'brand', ''):
+        lines.append(f"🏷 Brend: <b>{product.brand}</b>")
+    lines.append(
+        f"<code>{product.code}</code>  ·  {_som(product.default_sale_price)} so'm")
     if not by_branch:
         lines.append("\nVariantlar yo'q.")
         return '\n'.join(lines)
@@ -226,7 +282,7 @@ def stock_text(code):
         lines.append(f"\n{emoji} <b>{bname}</b>: {total} dona")
         for s in items:
             if s.stock_count > 0:
-                lines.append(f"  · {s.variant.size}/{s.variant.color}: {s.stock_count}")
+                lines.append(f"  · {_variant_descr(s.variant)}: {s.stock_count}")
     return '\n'.join(lines)
 
 
@@ -235,8 +291,9 @@ def stock_text(code):
 HELP_TEXT = (
     "<b>yurit bot — komandalar</b>\n\n"
     "/stock KOD — mahsulot zaxirasi\n"
-    "  Misol: <code>/stock OYO-0001</code>\n"
-    "  Yoki: <code>/stock nike</code>\n\n"
+    "  Kod: <code>/stock OYO-0001</code>\n"
+    "  Brend/nom: <code>/stock zara</code>\n"
+    "  Shtrix/EAN: <code>/stock 2000000000015</code>\n\n"
     "/today — bugungi sotuv xulosasi\n"
     "/help — bu yordam"
 )

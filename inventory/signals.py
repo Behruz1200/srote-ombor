@@ -109,7 +109,12 @@ def post_save_handler(sender, instance, created, **kwargs):
     if sender is BranchStock:
         try:
             from .notifications import maybe_low_stock_alert
-            maybe_low_stock_alert(instance)
+            _before = getattr(instance, "_audit_before", None) or {}
+            maybe_low_stock_alert(
+                instance,
+                previous_count=_before.get("stock_count"),
+                created=created,
+            )
         except Exception as e:
             # Never let a notification failure break the request
             import logging
