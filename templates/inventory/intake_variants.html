@@ -564,7 +564,7 @@
         const statusEl = document.getElementById('intakeScanStatus');
         const listEl = document.getElementById('intakeScanList');
         const countEl = document.getElementById('intakeScanCount');
-        let qr = null, count = 0, lastCode = '', lastTs = 0;
+        let qr = null, count = 0, lastCode = '', lastSeenTs = 0, resetTimer = null;
 
         function setStat(html, type) {
             statusEl.className = 'alert py-2 mb-2 alert-' + (type || 'info');
@@ -572,13 +572,15 @@
         }
         function onDecode(code) {
             code = (code || '').trim();
+            if (!code) return;
             const now = Date.now();
-            // Bir xil kodni 1.5s ichida takror o'qimaymiz
-            if (!code || (code === lastCode && now - lastTs < 1500)) return;
+            // Bir xil kod kamera ostida ushlab turilgan bo'lsa — e'tibor bermaymiz.
+            // Yangi skan faqat KOD O'ZGARGANDA qabul qilinadi: 1 mahsulot = 1 qator.
+            if (code === lastCode) { lastSeenTs = now; return; }
+            lastCode = code; lastSeenTs = now;
             // Jadvalda allaqachon bor bo'lsa — ogohlantiramiz, qo'shmaymiz
             const exists = [...rowsBody.querySelectorAll('input.row-barcode')]
                 .some(i => i.value.trim() === code);
-            lastCode = code; lastTs = now;
             if (exists) { setStat('<i class="bi bi-exclamation-circle"></i> Bu kod allaqachon jadvalda: <strong>' + code + '</strong>', 'warning'); return; }
             const cell = nextEmptyBarcodeCell();
             if (cell) cell.value = code;
@@ -589,14 +591,21 @@
             chip.className = 'badge bg-success-subtle text-success border';
             chip.textContent = code;
             listEl.prepend(chip);
-            setStat('<i class="bi bi-check-circle"></i> Qo\'shildi: <strong>' + code + '</strong> — davom eting', 'success');
+            setStat('<i class="bi bi-check-circle"></i> Qo\'shildi: <strong>' + code + '</strong> — keyingi mahsulotni ko\'rsating', 'success');
             if (navigator.vibrate) navigator.vibrate(40);
         }
         function stop() {
+            if (resetTimer) { clearInterval(resetTimer); resetTimer = null; }
             if (qr && qr.isScanning) { qr.stop().catch(()=>{}).finally(()=>{ qr.clear(); qr = null; }); }
         }
         modalEl.addEventListener('shown.bs.modal', () => {
-            count = 0; lastCode = ''; countEl.textContent = '0'; listEl.innerHTML = '';
+            count = 0; lastCode = ''; lastSeenTs = 0; countEl.textContent = '0'; listEl.innerHTML = '';
+            if (resetTimer) clearInterval(resetTimer);
+            resetTimer = setInterval(() => {
+                // Mahsulot kamera ostidan olinsa (>0.9s ko'rinmasa) — xotirani
+                // tozalaymiz; qayta ko'rsatilsa yangi skan sifatida qabul qilinadi.
+                if (lastCode && Date.now() - lastSeenTs > 900) lastCode = '';
+            }, 250);
             setStat('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
             qr = new Html5Qrcode('intakeScanReader');
             qr.start({ facingMode: 'environment' },
