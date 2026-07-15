@@ -323,6 +323,27 @@
     .pos-collapse__chev,
     .pos-collapse__body { animation: none !important; transition: none !important; }
 }
+
+/* Savat — soni (qty) stepperi: kattaroq va yaqqol ko'rinadigan */
+.cart-qty .btn {
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1;
+    padding: 0.35rem 0.6rem;
+    color: #111827;
+    border-color: #cbd5e1;
+}
+.cart-qty .btn:hover { background: #eef2f7; color: #000; }
+.cart-qty .btn:active { background: #e2e8f0; }
+.cart-qty .qty-input {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #111827;
+    padding: 0.35rem 0.25rem;
+    -moz-appearance: textfield;
+}
+.cart-qty .qty-input::-webkit-outer-spin-button,
+.cart-qty .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 </style>
 
 <div class="container-fluid px-3 dash-page">
@@ -1309,7 +1330,7 @@ function renderCart() {
                 </div>
             </td>
             <td>
-                <div class="input-group input-group-sm" style="width:90px;">
+                <div class="input-group cart-qty" style="width:132px;">
                     <button class="btn btn-outline-secondary qty-dec" type="button">−</button>
                     <input class="form-control text-center qty-input" type="number"
                            value="${it.qty}" min="1" max="${it.max}">
