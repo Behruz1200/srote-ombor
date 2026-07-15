@@ -130,6 +130,11 @@ class Product(models.Model):
         max_length=20, blank=True,
         help_text="Markirovka kodi (zarur tovarlar uchun; aks holda bo'sh)"
     )
+    is_open_price = models.BooleanField(
+        default=False,
+        help_text="Ochiq narx (qo'lda summa) — kiyim/poyabzalni tizimga "
+                  "kiritmasdan sotish uchun. Ombor tekshirilmaydi/kamaymaydi."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

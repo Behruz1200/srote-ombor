@@ -344,6 +344,29 @@
 }
 .cart-qty .qty-input::-webkit-outer-spin-button,
 .cart-qty .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* --- Kiyim/Poyabzal: qo'lda summa raqamli klaviatura --- */
+.open-price-btn { font-size: 1.05rem; }
+.kp-display {
+    text-align: right; font-size: 2.4rem; font-weight: 800; color: #111827;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 0.6rem 1rem; margin-bottom: 1rem; min-height: 3.6rem;
+    line-height: 1.2; letter-spacing: 0.5px; overflow-x: auto; white-space: nowrap;
+}
+.kp-display .kp-cur { font-size: 1.1rem; font-weight: 600; color: #64748b; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kp-key {
+    font-size: 1.7rem; font-weight: 700; padding: 0.75rem 0; border-radius: 12px;
+    background: #fff; border: 1px solid #e2e8f0; color: #111827;
+    transition: transform .05s ease, background .1s ease;
+}
+.kp-key:hover { background: #f1f5f9; }
+.kp-key:active { transform: scale(0.96); background: #e2e8f0; }
+.kp-key--muted { background: #f8fafc; color: #475569; font-size: 1.3rem; }
+@media (max-width: 480px) {
+    .kp-key { font-size: 1.5rem; padding: 0.65rem 0; }
+    .kp-display { font-size: 2rem; }
+}
 </style>
 
 <div class="container-fluid px-3 dash-page">
@@ -478,6 +501,11 @@
                     </button>
                 </div>
                 <div id="searchStatus" class="small text-muted mt-1"></div>
+
+                <button type="button" class="btn btn-warning w-100 mt-2 fw-semibold open-price-btn"
+                        id="openPriceBtn" data-bs-toggle="modal" data-bs-target="#keypadModal">
+                    <i class="bi bi-bag-plus"></i> Kiyim / Poyabzal — qo'lda summa
+                </button>
 
                 <!-- Variant picker (shown when product has multiple variants) -->
                 <div id="variantPicker" class="mt-2" style="display:none;">
@@ -1053,6 +1081,41 @@
   </div>
 </div>
 
+<!-- Kiyim/Poyabzal — qo'lda summa (raqamli klaviatura) -->
+<div class="modal fade" id="keypadModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-bag-plus text-warning"></i> Kiyim / Poyabzal — summa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="kp-display"><span id="kpDisplay">0</span> <small class="kp-cur">so'm</small></div>
+        <div class="keypad">
+          <button type="button" class="btn kp-key" data-kp="1">1</button>
+          <button type="button" class="btn kp-key" data-kp="2">2</button>
+          <button type="button" class="btn kp-key" data-kp="3">3</button>
+          <button type="button" class="btn kp-key" data-kp="4">4</button>
+          <button type="button" class="btn kp-key" data-kp="5">5</button>
+          <button type="button" class="btn kp-key" data-kp="6">6</button>
+          <button type="button" class="btn kp-key" data-kp="7">7</button>
+          <button type="button" class="btn kp-key" data-kp="8">8</button>
+          <button type="button" class="btn kp-key" data-kp="9">9</button>
+          <button type="button" class="btn kp-key kp-key--muted" data-kp="000">000</button>
+          <button type="button" class="btn kp-key" data-kp="0">0</button>
+          <button type="button" class="btn kp-key kp-key--muted" data-kp="del"><i class="bi bi-backspace"></i></button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-kp="clr">Tozalash</button>
+        <button type="button" class="btn btn-warning fw-bold flex-grow-1" id="kpAdd" disabled>
+          <i class="bi bi-plus-lg"></i> Savatga qo'shish
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <form id="posCsrfForm" style="display:none">{% csrf_token %}</form>
 <script>
 const CSRF = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]').value;
@@ -1326,7 +1389,7 @@ function renderCart() {
             <td>
                 <strong>${it.product_name}</strong>
                 <div class="small text-muted">
-                    <code>${it.product_code}</code> · ${it.size} / ${it.color}
+                    ${it.open ? `<span class="badge bg-warning-subtle text-warning border">qo'lda kiritilgan</span>` : `<code>${it.product_code}</code> · ${it.size} / ${it.color}`}
                 </div>
             </td>
             <td>
@@ -2573,6 +2636,47 @@ document.addEventListener('keydown', (e) => {
         if (helpModal) new bootstrap.Modal(helpModal).show();
     }
 });
+
+// ---- Kiyim / Poyabzal: ochiq narx (qo'lda summa) ----
+(function () {
+    const OPEN_SID = {{ open_price_sid|default:"null" }};
+    const btn = document.getElementById('openPriceBtn');
+    const modalEl = document.getElementById('keypadModal');
+    if (!btn || !modalEl || OPEN_SID == null) return;
+    const disp = document.getElementById('kpDisplay');
+    const addBtn = document.getElementById('kpAdd');
+    let buf = '', openCounter = 0;
+    function refresh() {
+        const val = parseInt(buf || '0', 10);
+        disp.textContent = fmt(val);
+        addBtn.disabled = !(val > 0);
+    }
+    modalEl.querySelectorAll('[data-kp]').forEach(b => b.addEventListener('click', () => {
+        const k = b.dataset.kp;
+        if (k === 'clr') buf = '';
+        else if (k === 'del') buf = buf.slice(0, -1);
+        else if (buf.length < 9) buf += k;
+        refresh();
+    }));
+    modalEl.addEventListener('shown.bs.modal', () => { buf = ''; refresh(); });
+    addBtn.addEventListener('click', () => {
+        const val = parseInt(buf || '0', 10);
+        if (val <= 0) return;
+        cart['open:' + (++openCounter) + ':' + Date.now()] = {
+            stock_id: OPEN_SID, product_code: '', product_name: 'Kiyim / Poyabzal',
+            size: '', color: '', qty: 1, sale_price: val, max: 9999, open: true,
+        };
+        renderCart();
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        setStatus("✓ Qo'shildi: Kiyim / Poyabzal — " + fmt(val) + " so'm", 'success');
+        refocus();
+    });
+    modalEl.addEventListener('keydown', (e) => {
+        if (e.key >= '0' && e.key <= '9') { if (buf.length < 9) buf += e.key; refresh(); }
+        else if (e.key === 'Backspace') { buf = buf.slice(0, -1); refresh(); }
+        else if (e.key === 'Enter') { e.preventDefault(); if (!addBtn.disabled) addBtn.click(); }
+    });
+})();
 </script>
 
 <!-- POS shortcuts help modal -->

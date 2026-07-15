@@ -659,7 +659,7 @@ def product_list(request):
     stock_filter = request.GET.get('stock') or ''  # zero|low|in_stock|''
     sort = request.GET.get('sort') or '-created_at'
 
-    products = Product.objects.select_related('category')
+    products = Product.objects.select_related('category').exclude(is_open_price=True)
 
     if q:
         # Subquery orqali — variant JOIN'lari annotatsiya Sum'larini
@@ -787,7 +787,7 @@ def product_list(request):
     # Dublikat nomli mahsulotlar (birlashtirish tavsiyasi uchun)
     dup_groups = []
     _name_map = {}
-    for pid, pname in Product.objects.values_list('id', 'name'):
+    for pid, pname in Product.objects.exclude(is_open_price=True).values_list('id', 'name'):
         _name_map.setdefault(pname.strip().lower(), []).append(pid)
     for _n, _ids in _name_map.items():
         if len(_ids) > 1:
@@ -3793,6 +3793,23 @@ def pos_customer_display(request):
     })
 
 
+def _open_price_stock(branch):
+    """Get/create the hidden 'open price' product (manual clothes/shoes sale)
+    and return its BranchStock for this branch. Ombor tekshirilmaydi."""
+    product = Product.objects.filter(is_open_price=True).first()
+    if product is None:
+        product = Product.objects.create(
+            name='Kiyim / Poyabzal', is_open_price=True,
+            default_sale_price=0, markup_percent=0)
+    variant = product.variants.first()
+    if variant is None:
+        variant = ProductVariant.objects.create(product=product, size='', color='')
+    stock, _ = BranchStock.objects.get_or_create(
+        variant=variant, branch=branch,
+        defaults={'stock_count': 0, 'sale_price': 0, 'cost_price': 0})
+    return stock
+
+
 @login_required
 def pos_terminal(request):
     """Single-page POS UI. Browser maintains the cart, posts via AJAX."""
@@ -3897,6 +3914,7 @@ def pos_terminal(request):
 
     return render(request, 'inventory/pos.html', {
         'branch': branch,
+        'open_price_sid': _open_price_stock(branch).id,
         'shift': open_shift,
         'recent_txns': recent_txns,
         'favorites': favorites,
@@ -4120,7 +4138,8 @@ def pos_checkout(request):
             # F() deduction below — they queue on the row lock instead.
             for ln in parsed_lines:
                 stock = locked[ln['sid']]
-                if ln['qty'] > stock.stock_count:
+                if (not stock.variant.product.is_open_price
+                        and ln['qty'] > stock.stock_count):
                     err = (f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
                            f"omborda faqat {stock.stock_count} ta bor, soʻrov {ln['qty']}")
                     # C2: if this is an offline-queue replay, alert admin via Telegram
@@ -4163,8 +4182,9 @@ def pos_checkout(request):
             )
             for ln in parsed_lines:
                 stock = locked[ln['sid']]
-                stock.stock_count = F('stock_count') - ln['qty']
-                stock.save()
+                if not stock.variant.product.is_open_price:
+                    stock.stock_count = F('stock_count') - ln['qty']
+                    stock.save()
                 Sale.objects.create(
                     transaction=txn,
                     variant=stock.variant, branch=stock.branch,
