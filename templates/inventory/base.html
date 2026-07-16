@@ -3566,7 +3566,7 @@
         countUp(el, final, opts) {
             opts = opts || {};
             const duration = opts.duration || 900;
-            const fmt = opts.format || (n => new Intl.NumberFormat('uz-UZ').format(Math.round(n)));
+            const fmt = opts.format || (n => Math.round(n).toLocaleString('en-US').replace(/,/g, ' '));
             const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             if (reduce || duration === 0) { el.textContent = fmt(final); return; }
             const start = performance.now();
@@ -3729,7 +3729,7 @@ if ('serviceWorker' in navigator) {
                     label: `${d.product.name}`,
                     url: url,
                     icon: 'box',
-                    sub: d.product.code + ' · ' + (d.product.default_sale_price ? d.product.default_sale_price.toLocaleString() : '0') + ' so\'m',
+                    sub: d.product.code + ' · ' + (d.product.default_sale_price ? d.product.default_sale_price.toLocaleString('en-US').replace(/,/g,' ') : '0') + ' so\'m',
                 }];
             } else if (d.suggestions) {
                 products = d.suggestions.slice(0, 6).map(s => ({

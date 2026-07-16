@@ -519,7 +519,7 @@
                     titleFont: { family: 'Fira Sans', weight: 600, size: 12 },
                     bodyFont:  { family: 'Fira Code', size: 12 },
                     callbacks: {
-                        label: c => new Intl.NumberFormat('uz-UZ').format(c.parsed.y) + " so'm"
+                        label: c => Math.round(c.parsed.y).toLocaleString('en-US').replace(/,/g," ") + " so'm"
                     }
                 },
                 datalabels: {
