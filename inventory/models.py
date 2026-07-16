@@ -50,6 +50,10 @@ class User(AbstractUser):
         max_digits=5, decimal_places=2, default=0,
         help_text="Sotuvchi komissiyasi (sotuv summasidan foiz). 0 = komissiyasiz."
     )
+    # ----- Opt-in TOTP 2FA -----
+    totp_secret = models.CharField(max_length=64, blank=True, editable=False)
+    totp_confirmed = models.BooleanField(default=False)
+    recovery_codes = models.JSONField(default=list, blank=True, editable=False)
 
     def is_admin(self):
         return self.role == self.Role.ADMIN or self.is_superuser

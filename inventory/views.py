@@ -167,8 +167,12 @@ def login_view(request):
         form = LoginForm(request, data=request.POST)
         if form.is_valid():
             cache.delete(fail_key)  # reset counter on success
-            login(request, form.get_user())
-            messages.success(request, f'Xush kelibsiz, {request.user.username}!')
+            _u = form.get_user()
+            if _u.totp_confirmed and _u.totp_secret:
+                request.session['2fa_pending_user'] = _u.id
+                return redirect('login_2fa')
+            login(request, _u)
+            messages.success(request, f'Xush kelibsiz, {_u.username}!')
             return redirect('home')
         else:
             # Increment fail counter (5-min TTL)
@@ -185,6 +189,66 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+
+def login_2fa(request):
+    """Second step: verify a TOTP or recovery code after a valid password."""
+    from .twofa import verify_totp, use_recovery_code
+    uid = request.session.get('2fa_pending_user')
+    if not uid:
+        return redirect('login')
+    user = User.objects.filter(id=uid).first()
+    if not user:
+        request.session.pop('2fa_pending_user', None)
+        return redirect('login')
+    if request.method == 'POST':
+        code = request.POST.get('code', '')
+        if verify_totp(user.totp_secret, code) or use_recovery_code(user, code):
+            request.session.pop('2fa_pending_user', None)
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            messages.success(request, f'Xush kelibsiz, {user.username}!')
+            return redirect('home')
+        messages.error(request, "Kod noto'g'ri.")
+    return render(request, 'inventory/login_2fa.html', {})
+
+
+@login_required
+def security_2fa(request):
+    """Opt-in TOTP 2FA setup for the current user."""
+    from .twofa import (gen_secret, verify_totp, otpauth_uri, qr_datauri,
+                        gen_recovery_codes, hash_code)
+    user = request.user
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'disable':
+            user.totp_secret = ''
+            user.totp_confirmed = False
+            user.recovery_codes = []
+            user.save()
+            messages.success(request, "Ikki bosqichli himoya o'chirildi.")
+            return redirect('security_2fa')
+        if action == 'enable':
+            secret = request.session.get('2fa_setup_secret') or ''
+            if secret and verify_totp(secret, request.POST.get('code', '')):
+                plain = gen_recovery_codes(8)
+                user.totp_secret = secret
+                user.totp_confirmed = True
+                user.recovery_codes = [hash_code(c) for c in plain]
+                user.save()
+                request.session.pop('2fa_setup_secret', None)
+                messages.success(request, "Ikki bosqichli himoya yoqildi.")
+                return render(request, 'inventory/security_2fa.html',
+                              {'enabled': True, 'recovery': plain})
+            messages.error(request, "Kod noto'g'ri — ilovadagi 6 xonali kodni kiriting.")
+    if user.totp_confirmed:
+        return render(request, 'inventory/security_2fa.html',
+                      {'enabled': True, 'recovery_left': len(user.recovery_codes or [])})
+    secret = request.session.get('2fa_setup_secret') or gen_secret()
+    request.session['2fa_setup_secret'] = secret
+    return render(request, 'inventory/security_2fa.html', {
+        'enabled': False, 'secret': secret,
+        'qr': qr_datauri(otpauth_uri(secret, user.username)),
+    })
 
 
 @login_required
@@ -5713,6 +5777,99 @@ def reports(request):
                 rows.append(['Ustun jami'] + [''] * (len(row_labels) - 1)
                             + list(pivot['col_totals']) + [pivot['grand_total']])
                 summary = {f"Jami {metric_label.lower()}": pivot['grand_total']}
+
+        elif rtype == 'deadstock':
+            title = "O'lik zaxira — davrda sotilmagan tovarlar"
+            stock_qs = BranchStock.objects.filter(stock_count__gt=0).exclude(
+                variant__product__is_open_price=True).select_related('variant__product')
+            if branch:
+                stock_qs = stock_qs.filter(branch=branch)
+            smap = {}
+            for st in stock_qs:
+                pid = st.variant.product_id
+                d = smap.setdefault(pid, {'qty': 0, 'val': 0,
+                    'code': st.variant.product.code, 'name': st.variant.product.name})
+                d['qty'] += st.stock_count
+                d['val'] += st.stock_count * st.cost_price
+            sold_qs = Sale.objects.filter(sold_at__gte=dt_start, sold_at__lt=dt_end)
+            if branch:
+                sold_qs = sold_qs.filter(branch=branch)
+            sold_map = {r['variant__product']: r['q'] for r in
+                        sold_qs.values('variant__product').annotate(q=Sum('quantity'))}
+            headers = ['Kod', 'Mahsulot', 'Ombordagi soni',
+                       "Band pul (so'm)", 'Davrda sotilgan']
+            dead = []
+            for pid, d in smap.items():
+                if sold_map.get(pid, 0) == 0:
+                    dead.append((d['val'], d['code'], d['name'], d['qty']))
+            dead.sort(reverse=True)
+            total_val = 0
+            for val, code, name, qty in dead:
+                rows.append([code, name, qty, val, 0])
+                total_val += val
+            summary = {"O'lik zaxira mahsulotlari": len(dead),
+                       "Band bo'lgan pul (so'm)": total_val}
+
+        elif rtype == 'reorder':
+            title = "Qayta buyurtma tavsiyasi (14 kunlik)"
+            days = max(1, (d_end - d_start).days) if d_start and d_end else 30
+            sold_qs = Sale.objects.filter(sold_at__gte=dt_start, sold_at__lt=dt_end)
+            if branch:
+                sold_qs = sold_qs.filter(branch=branch)
+            sold_map = {r['variant__product']: r['q'] for r in
+                        sold_qs.values('variant__product').annotate(q=Sum('quantity'))}
+            stock_qs = BranchStock.objects.exclude(
+                variant__product__is_open_price=True).select_related('variant__product')
+            if branch:
+                stock_qs = stock_qs.filter(branch=branch)
+            smap = {}
+            for st in stock_qs:
+                pid = st.variant.product_id
+                d = smap.setdefault(pid, {'qty': 0,
+                    'code': st.variant.product.code, 'name': st.variant.product.name})
+                d['qty'] += st.stock_count
+            headers = ['Kod', 'Mahsulot', 'Ombordagi soni', "Kunlik o'rtacha",
+                       'Qolgan kun', 'Tavsiya (dona)']
+            urgent = []
+            for pid, d in smap.items():
+                sold = sold_map.get(pid, 0)
+                daily = sold / days if sold else 0
+                if daily <= 0:
+                    continue
+                days_left = d['qty'] / daily
+                if days_left < 14:
+                    need = max(0, round(daily * 14) - d['qty'])
+                    urgent.append((days_left, d['code'], d['name'], d['qty'],
+                                   round(daily, 1), round(days_left), need))
+            urgent.sort()
+            for dl, code, name, qty, daily, dleft, need in urgent:
+                rows.append([code, name, qty, daily, dleft, need])
+            summary = {"Qayta buyurtma kerak bo'lgan": len(urgent),
+                       "Davr (kun)": days}
+
+        elif rtype == 'margin':
+            title = "Kategoriya bo'yicha marja"
+            sale_qs = Sale.objects.filter(sold_at__gte=dt_start, sold_at__lt=dt_end)
+            if branch:
+                sale_qs = sale_qs.filter(branch=branch)
+            agg = sale_qs.values('variant__product__category__name').annotate(
+                qty=Sum('quantity'),
+                rev=Sum(ExpressionWrapper(F('quantity') * F('sale_price'),
+                        output_field=DecimalField(max_digits=14, decimal_places=2))),
+                cost=Sum(ExpressionWrapper(F('quantity') * F('cost_at_sale'),
+                        output_field=DecimalField(max_digits=14, decimal_places=2))),
+            ).order_by('-rev')
+            headers = ['Kategoriya', 'Sotilgan dona', "Daromad (so'm)",
+                       "Tannarx (so'm)", "Foyda (so'm)", 'Marja %']
+            t_rev = 0; t_cost = 0; t_qty = 0
+            for a in agg:
+                rev = a['rev'] or 0; cost = a['cost'] or 0; profit = rev - cost
+                margin = (profit / rev * 100) if rev else 0
+                rows.append([a['variant__product__category__name'] or '—',
+                             a['qty'] or 0, rev, cost, profit, round(margin, 1)])
+                t_rev += rev; t_cost += cost; t_qty += a['qty'] or 0
+            summary = {"Jami daromad (so'm)": t_rev, "Jami foyda (so'm)": t_rev - t_cost,
+                       'Umumiy marja %': round((t_rev - t_cost) / t_rev * 100, 1) if t_rev else 0}
 
         if request.GET.get('export') == 'csv':
             return _csv_response(title, headers, rows, summary,

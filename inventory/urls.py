@@ -10,6 +10,8 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('login/2fa/', views.login_2fa, name='login_2fa'),
+    path('security/2fa/', views.security_2fa, name='security_2fa'),
     path('lookup/', views.lookup, name='lookup'),
 
     # Stocktake (physical inventory count)

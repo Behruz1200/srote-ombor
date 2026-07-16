@@ -1,0 +1,40 @@
+{% extends 'inventory/base.html' %}
+{% block title %}Xavfsizlik (2FA) — yurit{% endblock %}
+{% block content %}
+<div class="container dash-page" style="max-width:640px;">
+  <h3 class="mb-3"><i class="bi bi-shield-lock"></i> Ikki bosqichli himoya (2FA)</h3>
+  {% if recovery %}
+    <div class="alert alert-success">
+      <strong>2FA yoqildi!</strong> Quyidagi zaxira kodlarni xavfsiz joyda saqlang — telefoningizni
+      yo'qotsangiz, shular bilan kirasiz. Har biri faqat bir marta ishlaydi. Bu ro'yxat qayta ko'rsatilmaydi.
+    </div>
+    <div class="card p-3 mb-3">
+      <div class="row row-cols-2 g-2">
+        {% for c in recovery %}<div class="col"><code class="fs-6">{{ c }}</code></div>{% endfor %}
+      </div>
+    </div>
+    <a href="{% url 'security_2fa' %}" class="btn btn-primary">Tayyor</a>
+  {% elif enabled %}
+    <div class="alert alert-success mb-3"><i class="bi bi-check-circle"></i>
+      2FA <strong>yoqilgan</strong>.{% if recovery_left is not None %} Qolgan zaxira kodlar: <strong>{{ recovery_left }}</strong>.{% endif %}</div>
+    <form method="post" onsubmit="return confirm('2FA o‘chirilsinmi? Akkaunt faqat parol bilan himoyalanadi.');">
+      {% csrf_token %}
+      <button name="action" value="disable" class="btn btn-outline-danger">
+        <i class="bi bi-shield-slash"></i> 2FA ni o'chirish</button>
+    </form>
+  {% else %}
+    <p class="text-muted">Google Authenticator yoki Authy ilovasi bilan QR-kodni skanerlang,
+      so'ng ilovadagi 6 xonali kodni kiriting.</p>
+    <div class="card p-3 mb-3 text-center">
+      <img src="{{ qr }}" alt="2FA QR" style="width:200px; height:200px; margin:0 auto;">
+      <div class="small text-muted mt-2">Qo'lda: <code>{{ secret }}</code></div>
+    </div>
+    <form method="post" class="d-flex gap-2" style="max-width:340px;">
+      {% csrf_token %}
+      <input type="text" name="code" inputmode="numeric" maxlength="6" class="form-control"
+             placeholder="000000" autocomplete="off" required aria-label="6 xonali kod">
+      <button name="action" value="enable" class="btn btn-primary">Yoqish</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

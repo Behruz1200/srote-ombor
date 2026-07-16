@@ -301,6 +301,9 @@ REPORT_TYPES = [
     ('inventory', 'Joriy ombor (hozirgi holat)'),
     ('by_product', 'Mahsulotlar bo\'yicha xulosa'),
     ('pivot', 'Pivot / Matritsa'),
+    ('deadstock', "O'lik zaxira (sotilmayotgan)"),
+    ('reorder', 'Qayta buyurtma tavsiyasi'),
+    ('margin', 'Kategoriya bo\'yicha marja'),
 ]
 
 PERIOD_CHOICES = [

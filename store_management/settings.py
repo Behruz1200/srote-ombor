@@ -317,6 +317,10 @@ LOGGING = {
     },
     'handlers': {
         'console': {'class': 'logging.StreamHandler', 'formatter': 'simple'},
+        'telegram': {
+            'class': 'inventory.telegram_logging.TelegramErrorHandler',
+            'level': 'ERROR', 'formatter': 'simple',
+        },
     },
     'root': {
         'handlers': ['console'],
@@ -324,5 +328,10 @@ LOGGING = {
     },
     'loggers': {
         'django.db.backends': {'level': 'WARNING'},
+        # Unhandled 500s -> Telegram (production only)
+        'django.request': {
+            'handlers': ['console'] + ([] if DEBUG else ['telegram']),
+            'level': 'ERROR', 'propagate': False,
+        },
     },
 }
