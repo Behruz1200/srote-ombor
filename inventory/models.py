@@ -114,7 +114,7 @@ class Product(models.Model):
     default_sale_price = models.DecimalField(max_digits=12, decimal_places=2,
                                              default=0, help_text="Sotuv narxi (so'm)")
     markup_percent = models.DecimalField(
-        max_digits=6, decimal_places=2, default=40,
+        max_digits=6, decimal_places=2, default=0,
         help_text="Foiz: sotuv narxi = tannarx × (1 + foiz/100)"
     )
     # ----- Soliq / fiscal fields (used when OFD provider is connected) -----
