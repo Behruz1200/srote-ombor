@@ -2940,6 +2940,16 @@
             .dash-kpi__value { font-size: 1.5rem !important; }
         }
 
+        /* Touch targets: icon-only controls reach ~44px on touch devices */
+        @media (pointer: coarse) {
+            .btn { min-height: 40px; }
+            .btn:has(> i.bi:only-child) {
+                min-width: 44px; min-height: 44px;
+                display: inline-flex; align-items: center; justify-content: center;
+            }
+            .btn-group-sm > .btn:has(> i.bi:only-child),
+            .btn-sm:has(> i.bi:only-child) { min-width: 40px; min-height: 40px; }
+        }
     </style>
 </head>
 <body>
@@ -3894,6 +3904,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
     // Re-capture just before print as a belt-and-braces.
     window.addEventListener('beforeprint', snapshotCharts);
 })();
+</script>
+<script>
+// Accessibility: give every icon-only control an accessible name (from its
+// title if present, else a mapped fallback based on its icon).
+document.addEventListener('DOMContentLoaded', function(){
+  var L={'search':'Qidirish','trash':'Oʻchirish','trash3':'Oʻchirish','pencil':'Tahrirlash','pencil-square':'Tahrirlash','x':'Yopish','x-lg':'Yopish','plus':'Qoʻshish','plus-lg':'Qoʻshish','dash':'Kamaytirish','dash-lg':'Kamaytirish','printer':'Chop etish','eye':'Koʻrish','three-dots':'Amallar','three-dots-vertical':'Amallar','gear':'Sozlamalar','arrow-left':'Orqaga','chevron-left':'Orqaga','chevron-up':'Yigʻish','chevron-down':'Ochish','list':'Menyu','truck':'Qabul','tag':'Yorliq','check':'Tasdiqlash','check-lg':'Tasdiqlash','camera':'Kamera','upc-scan':'Skanerlash','backspace':'Oʻchirish','funnel':'Filtr','download':'Yuklab olish','upload':'Yuklash'};
+  document.querySelectorAll('button, a.btn, .btn').forEach(function(el){
+    if (el.getAttribute('aria-label') || (el.textContent||'').trim()) return;
+    var icon = el.querySelector('i.bi'); if(!icon) return;
+    var t = el.getAttribute('title'); if(t){ el.setAttribute('aria-label', t); return; }
+    var cls = Array.prototype.find.call(icon.classList, function(c){return c.indexOf('bi-')===0;});
+    if(cls){ el.setAttribute('aria-label', L[cls.slice(3)] || 'Tugma'); }
+  });
+});
 </script>
 </body>
 </html>

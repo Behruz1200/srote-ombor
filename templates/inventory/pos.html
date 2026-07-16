@@ -414,7 +414,7 @@
                                     onchange="this.form.submit()" id="branchSwitcher">
                                 {% for b in branches_list %}
                                     <option value="{{ b.pk }}" {% if b.pk == branch.pk %}selected{% endif %}>
-                                        🏢 {{ b.name }}
+                                        {{ b.name }}
                                     </option>
                                 {% endfor %}
                             </select>
@@ -465,14 +465,9 @@
                     </li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
-                        <button class="dropdown-item" type="button" id="printHelpBtn">
-                            <i class="bi bi-printer"></i> Chop etishni sozlash...
-                        </button>
-                    </li>
-                    <li>
                         <button class="dropdown-item" type="button"
-                                data-bs-toggle="modal" data-bs-target="#shortcutsHelp">
-                            <i class="bi bi-keyboard"></i> Klaviatura yorliqlari (F1)
+                                data-bs-toggle="modal" data-bs-target="#helpModal">
+                            <i class="bi bi-question-circle"></i> Yordam / Sozlash (F1)
                         </button>
                     </li>
                 </ul>
@@ -892,115 +887,76 @@
   </div>
 </div>
 
-<!-- Cash drawer setup help modal -->
-<div class="modal fade" id="drawerHelpModal" tabindex="-1" aria-hidden="true">
+<!-- Consolidated help / setup modal -->
+<div class="modal fade" id="helpModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-cash-stack"></i> Kassa qutisini sozlash</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title"><i class="bi bi-question-circle"></i> Yordam / Sozlash</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Yopish"></button>
       </div>
       <div class="modal-body">
-        <div class="alert alert-info small">
-            <strong>2 ta usuli bor — sizning apparatga qarab tanlang:</strong>
-        </div>
-
-        <h6 class="mt-3"><i class="bi bi-1-circle"></i> Avtomatik (eng tavsiya etiladi)</h6>
-        <p class="small mb-1">
-            Kassa qutisi <strong>thermal printer'ga RJ-11 kabel orqali ulanadi</strong>.
-            Printer chek bosib chiqarganda quti avtomatik ochiladi (mexanik signal yuboriladi).
-        </p>
-        <p class="small text-muted">
-            Hech qanday qo'shimcha sozlash kerak emas. Bizning chek bosib chiqarish jarayoni
-            (POS → printer) o'zi qutini ochadi.
-        </p>
-
-        <h6 class="mt-3"><i class="bi bi-2-circle"></i> WebUSB orqali (chekisiz)</h6>
-        <p class="small mb-1">
-            Brauzerdan to'g'ridan-to'g'ri USB printer'ga ESC/POS komandasi yuboriladi
-            (chek bosmasdan quti ochiladi).
-        </p>
-        <ul class="small">
-            <li>Faqat <strong>Chrome / Edge / Opera</strong>'da ishlaydi (Safari'da yo'q).</li>
-            <li>HTTPS bo'lishi shart.</li>
-            <li>Tugma bosilganda brauzer USB qurilmasini tanlashni so'raydi —
-                printer'ni tanlang va "Connect" bosing.</li>
-            <li>Birinchi marta bog'langach, keyingisida ham eslab qoladi.</li>
-        </ul>
-
-        <h6 class="mt-3"><i class="bi bi-3-circle"></i> Native driver (eng kuchli)</h6>
-        <p class="small">
-            POS kompyuteriga lokal printer driver o'rnatib (CUPS / Windows), uni
-            tizimning default printeri qiling. Kassir <code>Cmd+P</code> bilan chek bosadi.
-        </p>
-
-        <div class="alert alert-warning small mt-3 mb-0">
-            <i class="bi bi-tools"></i>
-            Mashhur modellar: Xprinter XP-58 / 80mm, Star TSP100, Epson TM-T20,
-            POS-58 — barchasi ESC/POS qo'llab-quvvatlaydi.
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Tushundim</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Print silent-mode help modal -->
-<div class="modal fade" id="printHelpModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">
-            <i class="bi bi-printer"></i> Chop etishni "preview'siz" sozlash
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="alert alert-warning small">
-            <i class="bi bi-info-circle"></i>
-            <strong>Brauzer xavfsizlik qoidasi:</strong> oddiy web-sahifa preview oynasini
-            o'chira olmaydi. Lekin brauzerni maxsus rejimda ishga tushirsangiz,
-            preview umuman ko'rsatilmaydi — chek to'g'ridan-to'g'ri printerga yuboriladi.
-        </div>
-
-        <h6 class="mt-3"><i class="bi bi-browser-chrome"></i> Chrome / Edge — eng oson</h6>
-        <ol class="small">
-            <li>Brauzerni yoping</li>
-            <li>Buyruq qatorini ochib quyidagi buyruqni yuboring:</li>
-        </ol>
-        <div class="bg-dark text-light p-2 rounded small mb-2" style="font-family: monospace;">
-            <strong>macOS:</strong><br>
-            open -a "Google Chrome" --args --kiosk-printing --app=https://yurit-web.onrender.com/pos/
-        </div>
-        <div class="bg-dark text-light p-2 rounded small mb-2" style="font-family: monospace;">
-            <strong>Windows:</strong><br>
-            chrome.exe --kiosk-printing --app=https://yurit-web.onrender.com/pos/
-        </div>
-        <div class="small text-muted mb-3">
-            OS sozlamalarida default printer'ni 80mm thermal printer'ga qo'ying — Chrome o'shaga
-            to'g'ridan-to'g'ri yuboradi.
-        </div>
-
-        <h6 class="mt-3"><i class="bi bi-browser-firefox"></i> Firefox</h6>
-        <ol class="small">
-            <li>Manzil qatoriga <code>about:config</code> yozing</li>
-            <li><code>print.always_print_silent</code> izlang</li>
-            <li>Qiymatini <code>true</code> qiling</li>
-        </ol>
-
-        <h6 class="mt-3"><i class="bi bi-phone"></i> Android (telefon/planshet)</h6>
-        <div class="small text-muted">
-            Telefon brauzerida silent print yo'q. Bluetooth thermal printer + maxsus
-            ilova kerak (kelajakda qo'shilishi mumkin).
-        </div>
-
-        <hr>
-        <div class="small text-muted">
-            <i class="bi bi-lightbulb"></i> <strong>Maslahat:</strong>
-            Sozlangach, har chek chop etilgandan keyin tab avtomatik yopiladi.
-            Kassir hech narsa bosmasligi kerak.
+        <div class="accordion" id="helpAccordion">
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#helpShortcuts">
+                <i class="bi bi-keyboard me-2"></i> Klaviatura yorliqlari
+              </button>
+            </h2>
+            <div id="helpShortcuts" class="accordion-collapse collapse show" data-bs-parent="#helpAccordion">
+              <div class="accordion-body">
+                <table class="table table-sm mb-0">
+                  <tbody>
+                    <tr><td><kbd>F2</kbd></td><td>Skanerga focus qilish</td></tr>
+                    <tr><td><kbd>F4</kbd></td><td>Sotuvni yakunlash</td></tr>
+                    <tr><td><kbd>F9</kbd></td><td>Savatni saqlab qo'yish (park)</td></tr>
+                    <tr><td><kbd>F10</kbd></td><td>Tovushni yoqish/o'chirish</td></tr>
+                    <tr><td><kbd>F1</kbd></td><td>Bu oynani ko'rsatish</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Joriy modal'ni yopish</td></tr>
+                    <tr><td><kbd>Cmd</kbd>+<kbd>K</kbd></td><td>Tezkor qidirish (global)</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#helpPrint">
+                <i class="bi bi-printer me-2"></i> Chop etishni sozlash (preview'siz)
+              </button>
+            </h2>
+            <div id="helpPrint" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+              <div class="accordion-body">
+                <div class="alert alert-warning small"><i class="bi bi-info-circle"></i>
+                  <strong>Brauzer qoidasi:</strong> oddiy sahifa preview'ni o'chira olmaydi. Brauzerni maxsus rejimda ishga tushiring — preview ko'rsatilmaydi.</div>
+                <h6 class="mt-2"><i class="bi bi-browser-chrome"></i> Chrome / Edge (eng oson)</h6>
+                <div class="bg-dark text-light p-2 rounded small mb-2" style="font-family: monospace;"><strong>macOS:</strong><br>open -a "Google Chrome" --args --kiosk-printing --app=https://koreysbozor.uz/pos/</div>
+                <div class="bg-dark text-light p-2 rounded small mb-2" style="font-family: monospace;"><strong>Windows:</strong><br>chrome.exe --kiosk-printing --app=https://koreysbozor.uz/pos/</div>
+                <div class="small text-muted mb-2">OS sozlamalarida default printer'ni 80mm thermal printerga qo'ying.</div>
+                <h6 class="mt-2"><i class="bi bi-browser-firefox"></i> Firefox</h6>
+                <ol class="small"><li><code>about:config</code></li><li><code>print.always_print_silent</code> &rarr; <code>true</code></li></ol>
+                <div class="small text-muted"><i class="bi bi-phone"></i> Android telefonda silent print yo'q (Bluetooth thermal printer + ilova kerak).</div>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#helpDrawer">
+                <i class="bi bi-cash-stack me-2"></i> Kassa qutisini sozlash
+              </button>
+            </h2>
+            <div id="helpDrawer" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+              <div class="accordion-body">
+                <h6><i class="bi bi-1-circle"></i> Avtomatik (tavsiya)</h6>
+                <p class="small mb-2">Quti thermal printerga RJ-11 kabel orqali ulanadi; chek bosilganda avtomatik ochiladi. Qo'shimcha sozlash shart emas.</p>
+                <h6><i class="bi bi-2-circle"></i> WebUSB (chekisiz)</h6>
+                <ul class="small"><li>Faqat Chrome / Edge / Opera (Safari'da yo'q), HTTPS shart.</li><li>Tugma bosilganda printerni tanlab "Connect" bosing — keyingi safar eslab qoladi.</li></ul>
+                <h6><i class="bi bi-3-circle"></i> Native driver</h6>
+                <p class="small mb-2">Lokal printer driverni default qiling; kassir <code>Cmd+P</code> bilan bosadi.</p>
+                <div class="alert alert-warning small mb-0"><i class="bi bi-tools"></i> Modellar: Xprinter XP-58/80mm, Star TSP100, Epson TM-T20, POS-58 — barchasi ESC/POS.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -1984,7 +1940,7 @@ checkoutBtn.addEventListener('click', async () => {
             await queuePut(payload);
             await broadcastQueueCount();
             checkoutStatus.innerHTML = `<span class="text-warning">
-                📥 Offline: sotuv navbatga olindi, onlayn'da yuboriladi (${reason})</span>`;
+                <i class="bi bi-inbox"></i> Offline: sotuv navbatga olindi, onlayn'da yuboriladi (${reason})</span>`;
             cart = {};
             qrBreakdownExtra = [];
             renderCart();
@@ -2403,7 +2359,7 @@ if (lockNowBtn) {
 
 if (printHelpBtn) {
     printHelpBtn.addEventListener('click', () => {
-        const helpModal = new bootstrap.Modal(document.getElementById('printHelpModal'));
+        const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
         helpModal.show();
     });
 }
@@ -2457,7 +2413,7 @@ const drawerBtn = document.getElementById('drawerBtn');
 if (drawerBtn) {
     drawerBtn.addEventListener('click', async () => {
         if (!navigator.usb) {
-            new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
+            new bootstrap.Modal(document.getElementById('helpModal')).show();
             return;
         }
         _enqueueDrawer(async () => {
@@ -2472,7 +2428,7 @@ if (drawerBtn) {
                 beepOk();
             } catch (e) {
                 setStatus('Kassa qutisi: ' + e.message, 'error');
-                new bootstrap.Modal(document.getElementById('drawerHelpModal')).show();
+                new bootstrap.Modal(document.getElementById('helpModal')).show();
             }
         });
     });
@@ -2632,7 +2588,7 @@ document.addEventListener('keydown', (e) => {
         if (muteMenuBtn) muteMenuBtn.click();
     } else if (e.key === 'F1') {
         e.preventDefault();
-        const helpModal = document.getElementById('shortcutsHelp');
+        const helpModal = document.getElementById('helpModal');
         if (helpModal) new bootstrap.Modal(helpModal).show();
     }
 });
@@ -2679,30 +2635,6 @@ document.addEventListener('keydown', (e) => {
 })();
 </script>
 
-<!-- POS shortcuts help modal -->
-<div class="modal fade" id="shortcutsHelp" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-keyboard"></i> Klaviatura yorliqlari</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <table class="table table-sm mb-0">
-          <tbody>
-            <tr><td><kbd>F2</kbd></td><td>Skanerga focus qilish</td></tr>
-            <tr><td><kbd>F4</kbd></td><td>Sotuvni yakunlash</td></tr>
-            <tr><td><kbd>F9</kbd></td><td>Savatni saqlab qo'yish (park)</td></tr>
-            <tr><td><kbd>F10</kbd></td><td>Tovushni yoqish/o'chirish</td></tr>
-            <tr><td><kbd>F1</kbd></td><td>Bu oynani ko'rsatish</td></tr>
-            <tr><td><kbd>Esc</kbd></td><td>Joriy modal'ni yopish</td></tr>
-            <tr><td><kbd>Cmd</kbd>+<kbd>K</kbd></td><td>Tezkor qidirish (global)</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
 <script>
 // stub continuation script (so previous script tag closes cleanly)
 console.log('yurit POS shortcuts ready');

@@ -72,30 +72,21 @@
     </section>
     {% endif %}
 
-    {% if dup_groups %}
+    {% if not price_filter and dup_groups or not price_filter and zero_price_count %}
     <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2">
-        <i class="bi bi-exclamation-triangle"></i>
-        <span>Bir xil nomli mahsulotlar bor:</span>
+        <i class="bi bi-clipboard-check"></i> <strong>Maʼlumot nazorati:</strong>
+        {% if zero_price_count %}
+            <a href="?price=zero" class="btn btn-sm btn-danger"><i class="bi bi-cash-coin"></i> {{ zero_price_count }} ta narxsiz tovar</a>
+        {% endif %}
         {% for g in dup_groups %}
-            <a href="{% url 'product_merge' %}?ids={{ g.ids }}"
-               class="btn btn-sm btn-outline-warning">
-                {{ g.name }} ({{ g.count }} ta) — birlashtirish
-            </a>
+            <a href="{% url 'product_merge' %}?ids={{ g.ids }}" class="btn btn-sm btn-outline-warning">{{ g.name }} ({{ g.count }}) — birlashtirish</a>
         {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if zero_price_count and not price_filter %}
-    <div class="alert alert-danger d-flex flex-wrap align-items-center gap-2 py-2">
-        <i class="bi bi-cash-coin"></i>
-        <span><strong>{{ zero_price_count }} ta</strong> sotuvda turgan tovarning narxi <strong>0</strong> — ular kassada 0 so'mga sotiladi!</span>
-        <a href="?price=zero" class="btn btn-sm btn-danger ms-auto">Ko'rish va narx qo'yish</a>
     </div>
     {% endif %}
     {% if price_filter == 'zero' %}
     <div class="alert alert-warning d-flex align-items-center gap-2 py-2">
-        <i class="bi bi-funnel"></i> Faqat narxsiz (0 so'm) tovarlar ko'rsatilmoqda.
-        <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary ms-auto">Filtrni tozalash</a>
+        <i class="bi bi-funnel"></i> Faqat narxsiz (0 soʻm) tovarlar.
+        <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary ms-auto">Tozalash</a>
     </div>
     {% endif %}
 
@@ -272,23 +263,23 @@
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
                             <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <a href="{% url 'product_detail' p.code %}" class="btn btn-outline-primary" title="Batafsil">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
-                                    <a href="{% url 'intake_for_product' p.code %}" class="btn btn-outline-success" title="Qabul">
-                                        <i class="bi bi-truck"></i>
-                                    </a>
-                                    <a href="{% url 'product_label' p.code %}" target="_blank" class="btn btn-outline-secondary" title="Etiketka">
-                                        <i class="bi bi-printer"></i>
-                                    </a>
-                                    <form method="post" action="{% url 'product_delete' p.code %}" class="d-inline"
-                                          onsubmit="return confirm('{{ p.name|escapejs }} ({{ p.code }}) o\'chirilsinmi? Turlari va ombor qoldiqlari ham o\'chadi. Bu amalni ortga qaytarib bo\'lmaydi.');">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-outline-danger" title="O'chirish">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Amallar">
+                                        <i class="bi bi-three-dots"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="{% url 'product_detail' p.code %}"><i class="bi bi-eye me-2"></i> Batafsil</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'intake_for_product' p.code %}"><i class="bi bi-truck me-2"></i> Qabul</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'product_label' p.code %}" target="_blank"><i class="bi bi-printer me-2"></i> Etiketka</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="post" action="{% url 'product_delete' p.code %}"
+                                                  onsubmit="return confirm('{{ p.name|escapejs }} ({{ p.code }}) o\'chirilsinmi? Turlari va ombor qoldiqlari ham o\'chadi. Bu amalni ortga qaytarib bo\'lmaydi.');">
+                                                {% csrf_token %}
+                                                <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i> Oʻchirish</button>
+                                            </form>
+                                        </li>
+                                    </ul>
                                 </div>
                             </td>
                         </tr>
@@ -508,5 +499,16 @@
         }
     });
 })();
+
+// Row-action dropdown: temporarily lift the table wrapper's overflow so the
+// menu isn't clipped by the horizontal scroll container.
+document.addEventListener('show.bs.dropdown', (e) => {
+    const w = e.target.closest('.table-responsive');
+    if (w) { w.dataset._ov = w.style.overflow; w.style.overflow = 'visible'; }
+});
+document.addEventListener('hide.bs.dropdown', (e) => {
+    const w = e.target.closest('.table-responsive');
+    if (w) { w.style.overflow = w.dataset._ov || ''; }
+});
 </script>
 {% endblock %}
