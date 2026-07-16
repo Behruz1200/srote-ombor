@@ -341,31 +341,26 @@ document.getElementById('editForm') && document.getElementById('editForm')
         const isScan = scanBuf.length >= SCAN_MIN && (now - lastKeyTs) <= SCAN_GAP;
         const code = scanBuf.join('');
         scanBuf = [];
-        if (!isScan) return;              // oddiy Enter -> mavjud handler ishlaydi
-        const t = e.target;
-        // Skaner to'g'ridan-to'g'ri shtrix katakda -> yozib keyingi qatorga
-        if (t && t.name === 'v_barcode') {
-            e.preventDefault(); e.stopImmediatePropagation();
-            t.value = code;
-            let tr = t.closest('tr').nextElementSibling;
-            if (!tr && window.yuritAddEditRow) tr = window.yuritAddEditRow();
-            const bc = tr && tr.querySelector('input[name="v_barcode"]');
-            if (bc) { bc.focus(); bc.select && bc.select(); }
-            return;
-        }
-        // Boshqa katakda (nom/narx...) yoki hech qayerda fokus bo'lsa:
-        if (barcodeExists(code)) return;  // jadvalda bor
+        if (!isScan) return;              // oddiy Enter -> mavjud navigatsiya handleri
         e.preventDefault(); e.stopImmediatePropagation();
+        const t = e.target;
+        // burst adashib biror katakka tushgan bo'lsa — olib tashlaymiz
         if (t && typeof t.value === 'string' && t.value.endsWith(code)) {
-            t.value = t.value.slice(0, -code.length);  // adashib tushgan belgilarni olib tashlaymiz
+            t.value = t.value.slice(0, -code.length);
         }
-        // Ustuvorlik: fokus qaysi QATORDA bo'lsa — o'sha qatorning bo'sh shtrix
-        // katagiga (siz nom/narx kiritgan qator). Aks holda keyingi bo'sh katak.
+        if (barcodeExists(code)) return;  // bu kod allaqachon jadvalda bor
+        // Maqsad katak: 1) fokusdagi BO'SH shtrix katak; 2) fokusdagi qatorning
+        // bo'sh shtrix katagi (nom/narx kiritgan qatoringiz); 3) keyingi bo'sh
+        // shtrix katak (hammasi to'lgan bo'lsa — yangi qator). Hech qachon
+        // to'ldirilgan katak ustiga yozmaymiz.
         let cell = null;
-        const tr = (t && t.closest) ? t.closest('#editRows tr') : null;
-        if (tr) {
-            const rowBc = tr.querySelector('input[name="v_barcode"]');
-            if (rowBc && !rowBc.value.trim()) cell = rowBc;
+        if (t && t.name === 'v_barcode' && !t.value.trim()) cell = t;
+        if (!cell) {
+            const tr = (t && t.closest) ? t.closest('#editRows tr') : null;
+            if (tr) {
+                const rb = tr.querySelector('input[name="v_barcode"]');
+                if (rb && !rb.value.trim()) cell = rb;
+            }
         }
         if (!cell) cell = nextEmptyBarcode();
         if (cell) { cell.value = code; cell.focus(); cell.select && cell.select(); }
