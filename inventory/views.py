@@ -652,6 +652,7 @@ def product_bulk_update(request):
     return redirect('product_list')
 
 
+@admin_required
 def product_list(request):
     """Mahsulotlar ro'yxati: qidiruv + filtrlar + sortable + 30 kunlik sotilganlik."""
     q = (request.GET.get('q') or '').strip()
