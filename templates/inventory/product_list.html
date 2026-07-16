@@ -85,6 +85,20 @@
     </div>
     {% endif %}
 
+    {% if zero_price_count and not price_filter %}
+    <div class="alert alert-danger d-flex flex-wrap align-items-center gap-2 py-2">
+        <i class="bi bi-cash-coin"></i>
+        <span><strong>{{ zero_price_count }} ta</strong> sotuvda turgan tovarning narxi <strong>0</strong> — ular kassada 0 so'mga sotiladi!</span>
+        <a href="?price=zero" class="btn btn-sm btn-danger ms-auto">Ko'rish va narx qo'yish</a>
+    </div>
+    {% endif %}
+    {% if price_filter == 'zero' %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 py-2">
+        <i class="bi bi-funnel"></i> Faqat narxsiz (0 so'm) tovarlar ko'rsatilmoqda.
+        <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary ms-auto">Filtrni tozalash</a>
+    </div>
+    {% endif %}
+
     <!-- Filtrlar -->
     <form method="get" class="card p-3 mb-3">
         <div class="row g-2">

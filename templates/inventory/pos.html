@@ -1400,7 +1400,7 @@ function renderCart() {
                     <button class="btn btn-outline-secondary qty-inc" type="button">+</button>
                 </div>
             </td>
-            <td class="text-end">${fmt(it.sale_price)}</td>
+            <td class="text-end">${(!it.open && Number(it.sale_price) === 0) ? '<span class=\'badge bg-danger\' title=\'Narx 0 — sotishdan oldin narx qo\\'ying\'><i class=\'bi bi-exclamation-triangle\'></i> 0</span>' : fmt(it.sale_price)}</td>
             <td class="text-end"><strong>${fmt(sub)}</strong></td>
             <td><button class="btn btn-sm btn-outline-danger remove-btn" type="button">
                 <i class="bi bi-trash"></i></button></td>

@@ -102,6 +102,12 @@ def post_save_handler(sender, instance, created, **kwargs):
     else:
         before = getattr(instance, '_audit_before', {}) or {}
         changes = _diff(before, after)
+        # Noise cut: BranchStock.stock_count changes on every sale/intake, and
+        # those movements are already captured in Sale/Intake/Transfer with full
+        # context. Skip auditing stock_count-only BranchStock updates so the
+        # audit table doesn't balloon (price/other-field changes still logged).
+        if sender is BranchStock and set(changes) == {'stock_count'}:
+            changes = {}
         if changes:
             _write_log(AuditLog.Action.UPDATE, instance=instance, changes=changes)
 

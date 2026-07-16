@@ -141,6 +141,12 @@ class Product(models.Model):
         verbose_name = 'Mahsulot'
         verbose_name_plural = 'Mahsulotlar'
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(default_sale_price__gte=0),
+                                   name='product_sale_price_nonneg'),
+            models.CheckConstraint(condition=models.Q(markup_percent__gte=0),
+                                   name='product_markup_nonneg'),
+        ]
 
     def __str__(self):
         return f'{self.code} — {self.name}'
@@ -227,6 +233,11 @@ class BranchStock(models.Model):
         verbose_name = 'Zaxira'
         verbose_name_plural = 'Zaxiralar'
         ordering = ['branch', 'variant']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(cost_price__gte=0), name='bs_cost_nonneg'),
+            models.CheckConstraint(condition=models.Q(sale_price__gte=0), name='bs_sale_nonneg'),
+            models.CheckConstraint(condition=models.Q(wholesale_price__gte=0), name='bs_wholesale_nonneg'),
+        ]
 
     def __str__(self):
         return f'{self.branch.name}: {self.variant} = {self.stock_count}'
@@ -336,6 +347,9 @@ class Intake(models.Model):
         verbose_name = 'Qabul'
         verbose_name_plural = 'Qabullar'
         ordering = ['-received_at']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(cost_per_unit__gte=0), name='intake_cost_nonneg'),
+        ]
 
     @property
     def total_cost(self):
@@ -495,6 +509,9 @@ class SaleTransaction(models.Model):
             models.Index(fields=['branch', '-sold_at'], name='saletxn_branch_soldat_idx'),
             models.Index(fields=['sold_by', '-sold_at'], name='saletxn_seller_soldat_idx'),
             models.Index(fields=['payment_method', '-sold_at'], name='saletxn_pay_soldat_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(order_discount__gte=0), name='saletxn_orderdisc_nonneg'),
         ]
 
     def __str__(self):
@@ -746,6 +763,11 @@ class Sale(models.Model):
             models.Index(fields=['variant', '-sold_at'], name='sale_variant_soldat_idx'),
             models.Index(fields=['sold_by', '-sold_at'], name='sale_seller_soldat_idx'),
             models.Index(fields=['transaction', 'sold_at'], name='sale_txn_soldat_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(sale_price__gte=0), name='sale_price_nonneg'),
+            models.CheckConstraint(condition=models.Q(cost_at_sale__gte=0), name='sale_cost_nonneg'),
+            models.CheckConstraint(condition=models.Q(line_discount__gte=0), name='sale_linedisc_nonneg'),
         ]
 
     @property

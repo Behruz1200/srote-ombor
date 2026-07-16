@@ -662,6 +662,7 @@ def product_list(request):
     q = (request.GET.get('q') or '').strip()
     category_id = request.GET.get('category') or ''
     stock_filter = request.GET.get('stock') or ''  # zero|low|in_stock|''
+    price_filter = request.GET.get('price') or ''  # 'zero' = narxsiz sotuvda
     sort = request.GET.get('sort') or '-created_at'
 
     products = Product.objects.select_related('category').exclude(is_open_price=True)
@@ -709,6 +710,10 @@ def product_list(request):
         products = products.filter(total_stock__gt=0, total_stock__lte=3)
     elif stock_filter == 'in_stock':
         products = products.filter(total_stock__gt=0)
+
+    if price_filter == 'zero':
+        products = products.filter(total_stock__gt=0, default_sale_price=0).filter(
+            Q(price_max__isnull=True) | Q(price_max=0))
 
     # Sort
     allowed_sorts = {
@@ -789,6 +794,13 @@ def product_list(request):
 
     categories = Category.objects.order_by('name')
 
+    # Sifat nazorati: sotuvda turgan, lekin narxi 0 bo'lgan tovarlar (0 so'mga ketadi!)
+    zero_price_count = (Product.objects.exclude(is_open_price=True)
+        .annotate(_stk=Coalesce(Sum('variants__branch_stocks__stock_count'), 0),
+                  _pmax=Max('variants__branch_stocks__sale_price'))
+        .filter(_stk__gt=0, default_sale_price=0)
+        .filter(Q(_pmax__isnull=True) | Q(_pmax=0)).count())
+
     # Dublikat nomli mahsulotlar (birlashtirish tavsiyasi uchun)
     dup_groups = []
     _name_map = {}
@@ -807,6 +819,8 @@ def product_list(request):
         'q': q,
         'category_id': category_id,
         'stock_filter': stock_filter,
+        'price_filter': price_filter,
+        'zero_price_count': zero_price_count,
         'sort': sort,
         'categories': categories,
     })
