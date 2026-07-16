@@ -1088,6 +1088,12 @@
 <form id="posCsrfForm" style="display:none">{% csrf_token %}</form>
 <script>
 const CSRF = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]').value;
+// Safe localStorage — some mobile contexts (PWA standalone / Safari private
+// mode) THROW on access, which would abort the whole script and kill every
+// handler below (e.g. the collapse toggles). These wrappers never throw.
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+function lsDel(k){ try { localStorage.removeItem(k); } catch(e){} }
 
 const scanInput      = document.getElementById('scanInput');
 const searchBtn      = document.getElementById('searchBtn');
@@ -1142,7 +1148,7 @@ function broadcastCart() {
 const CART_LS_KEY = 'yurit_pos_cart';
 function loadCart() {
     try {
-        const raw = localStorage.getItem(CART_LS_KEY);
+        const raw = lsGet(CART_LS_KEY);
         if (!raw) return {};
         const parsed = JSON.parse(raw);
         return (parsed && typeof parsed === 'object') ? parsed : {};
@@ -1151,9 +1157,9 @@ function loadCart() {
 function saveCart() {
     try {
         if (Object.keys(cart).length === 0) {
-            localStorage.removeItem(CART_LS_KEY);
+            lsDel(CART_LS_KEY);
         } else {
-            localStorage.setItem(CART_LS_KEY, JSON.stringify(cart));
+            lsSet(CART_LS_KEY, JSON.stringify(cart));
         }
     } catch {}
 }
@@ -1174,7 +1180,7 @@ function refocus() { setTimeout(() => scanInput.focus(), 50); }
 // localStorage key 'pos_sounds_muted'.
 let _audioCtx = null;
 function beep(freq, durationMs, type) {
-    if (localStorage.getItem('pos_sounds_muted') === '1') return;
+    if (lsGet('pos_sounds_muted') === '1') return;
     try {
         _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         const o = _audioCtx.createOscillator();
@@ -1369,7 +1375,7 @@ function renderCart() {
                     <button class="btn btn-outline-secondary qty-inc" type="button">+</button>
                 </div>
             </td>
-            <td class="text-end">${(!it.open && Number(it.sale_price) === 0) ? '<span class=\'badge bg-danger\' title=\'Narx 0 — sotishdan oldin narx qo\\'ying\'><i class=\'bi bi-exclamation-triangle\'></i> 0</span>' : fmt(it.sale_price)}</td>
+            <td class="text-end">${(!it.open && Number(it.sale_price) === 0) ? `<span class="badge bg-danger" title="Narx 0 — narx qo'ying"><i class="bi bi-exclamation-triangle"></i> 0</span>` : fmt(it.sale_price)}</td>
             <td class="text-end"><strong>${fmt(sub)}</strong></td>
             <td><button class="btn btn-sm btn-outline-danger remove-btn" type="button">
                 <i class="bi bi-trash"></i></button></td>
@@ -2166,11 +2172,11 @@ function applyFavState(collapsed) {
     favToggleIcon.className = collapsed ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
 }
 if (favToggleBtn) {
-    applyFavState(localStorage.getItem(FAV_KEY) === '1');
+    applyFavState(lsGet(FAV_KEY) === '1');
     favToggleBtn.addEventListener('click', () => {
         const collapsed = favBody.style.display !== 'none';
         applyFavState(collapsed);
-        localStorage.setItem(FAV_KEY, collapsed ? '1' : '0');
+        lsSet(FAV_KEY, collapsed ? '1' : '0');
     });
 }
 
@@ -2342,7 +2348,7 @@ const muteMenuLabel = document.getElementById('muteMenuLabel');
 const lockNowBtn   = document.getElementById('lockNowBtn');
 const printHelpBtn = document.getElementById('printHelpBtn');
 
-function isMuted() { return localStorage.getItem('pos_sounds_muted') === '1'; }
+function isMuted() { return lsGet('pos_sounds_muted') === '1'; }
 function renderMute() {
     if (!muteMenuIcon || !muteMenuLabel) return;
     const muted = isMuted();
@@ -2352,7 +2358,7 @@ function renderMute() {
 if (muteMenuBtn) {
     muteMenuBtn.addEventListener('click', () => {
         const wasMuted = isMuted();
-        localStorage.setItem('pos_sounds_muted', wasMuted ? '0' : '1');
+        lsSet('pos_sounds_muted', wasMuted ? '0' : '1');
         renderMute();
         if (wasMuted) beepOk(); // unmute → confirm with a beep
         // Show feedback in POS status area
@@ -2521,12 +2527,12 @@ setInterval(tickClock, 30000); tickClock();
     const setCollapsed = (on, persist) => {
         document.body.classList.toggle('pos-page-collapsed', !!on);
         if (persist !== false) {
-            try { localStorage.setItem(KEY, on ? '1' : '0'); } catch(e) {}
+            try { lsSet(KEY, on ? '1' : '0'); } catch(e) {}
         }
     };
     // Apply saved state on load
     try {
-        if (localStorage.getItem(KEY) === '1') setCollapsed(true, false);
+        if (lsGet(KEY) === '1') setCollapsed(true, false);
     } catch(e) {}
 
     const collapseBtn = document.getElementById('posHeaderCollapse');
@@ -2552,12 +2558,12 @@ setInterval(tickClock, 30000); tickClock();
     document.querySelectorAll('details.pos-collapse[id]').forEach(d => {
         const key = PREFIX + d.id;
         try {
-            const saved = localStorage.getItem(key);
+            const saved = lsGet(key);
             if (saved === '0') d.removeAttribute('open');
             else if (saved === '1') d.setAttribute('open', '');
         } catch(e) {}
         d.addEventListener('toggle', () => {
-            try { localStorage.setItem(key, d.open ? '1' : '0'); } catch(e) {}
+            try { lsSet(key, d.open ? '1' : '0'); } catch(e) {}
         });
     });
 })();
