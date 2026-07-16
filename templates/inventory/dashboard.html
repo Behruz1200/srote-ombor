@@ -61,13 +61,12 @@
                 {% endif %}
             </div>
             <div class="dash-kpi__value">
-                <span data-countup="{{ today_stats.revenue|default:0 }}">{{ today_stats.revenue|som }}</span>
+                <span data-countup="{{ today_stats.revenue|default:0 }}">{{ today_stats.revenue|som }}</span><span class="dash-kpi__u">so'm</span>
             </div>
             <div class="dash-kpi__footer">
                 <span class="dash-kpi__compare">
-                    Kechagisi: <strong>{{ yesterday_stats.revenue|som }}</strong>
+                    Kechagisi: <strong>{{ yesterday_stats.revenue|som }}</strong> so'm
                 </span>
-                <span class="dash-kpi__unit">so'm</span>
             </div>
         </article>
 
@@ -83,7 +82,7 @@
                 {% endif %}
             </div>
             <div class="dash-kpi__value">
-                <span data-countup="{{ today_stats.profit|default:0 }}">{{ today_stats.profit|som }}</span>
+                <span data-countup="{{ today_stats.profit|default:0 }}">{{ today_stats.profit|som }}</span><span class="dash-kpi__u">so'm</span>
             </div>
             <div class="dash-kpi__footer">
                 <span>Marja: <strong>{{ today_stats.margin|floatformat:1 }}%</strong></span>
@@ -102,7 +101,7 @@
                 {% endif %}
             </div>
             <div class="dash-kpi__value">
-                <span data-countup="{{ today_stats.txns|default:0 }}">{{ today_stats.txns }}</span>
+                <span data-countup="{{ today_stats.txns|default:0 }}">{{ today_stats.txns }}</span><span class="dash-kpi__u">ta</span>
             </div>
             <div class="dash-kpi__footer">
                 <span>Kecha: <strong>{{ yesterday_stats.txns }}</strong></span>
@@ -121,7 +120,7 @@
                 {% endif %}
             </div>
             <div class="dash-kpi__value">
-                <span data-countup="{{ today_stats.qty|default:0 }}">{{ today_stats.qty }}</span>
+                <span data-countup="{{ today_stats.qty|default:0 }}">{{ today_stats.qty }}</span><span class="dash-kpi__u">dona</span>
             </div>
             <div class="dash-kpi__footer">
                 <span>Kecha: <strong>{{ yesterday_stats.qty }}</strong></span>

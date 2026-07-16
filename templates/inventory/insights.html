@@ -112,10 +112,9 @@
                     </span>
                 {% endif %}
             </div>
-            <div class="dash-kpi__value">{{ revenue|som }}</div>
+            <div class="dash-kpi__value">{{ revenue|som }}<span class="dash-kpi__u">so'm</span></div>
             <div class="dash-kpi__footer">
-                <span>Oldingi davr: <strong>{{ prev_revenue|som }}</strong></span>
-                <span class="dash-kpi__unit">so'm</span>
+                <span>Oldingi davr: <strong>{{ prev_revenue|som }}</strong> so'm</span>
             </div>
         </article>
 
@@ -123,7 +122,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-coin"></i> Tannarx (COGS)</span>
             </div>
-            <div class="dash-kpi__value">{{ total_cost|som }}</div>
+            <div class="dash-kpi__value">{{ total_cost|som }}<span class="dash-kpi__u">so'm</span></div>
             <div class="dash-kpi__footer">
                 <span><strong>{{ sales_count }}</strong> sotuv · <strong>{{ qty }}</strong> dona</span>
             </div>
@@ -133,7 +132,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-graph-up-arrow"></i> Sof foyda</span>
             </div>
-            <div class="dash-kpi__value">{{ profit|som }}</div>
+            <div class="dash-kpi__value">{{ profit|som }}<span class="dash-kpi__u">so'm</span></div>
             <div class="dash-kpi__footer">
                 <span>Marja: <strong>{{ margin|floatformat:1 }}%</strong></span>
             </div>
@@ -143,7 +142,7 @@
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cart-check"></i> O'rtacha 1 sotuv</span>
             </div>
-            <div class="dash-kpi__value">{{ avg_sale_value|som }}</div>
+            <div class="dash-kpi__value">{{ avg_sale_value|som }}<span class="dash-kpi__u">so'm</span></div>
             <div class="dash-kpi__footer">
                 {% if largest_sale %}
                     <span>Eng katta: <strong>{{ largest_sale.line|som }}</strong></span>

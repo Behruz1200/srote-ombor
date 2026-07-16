@@ -1746,6 +1746,8 @@
             font-weight: 600;
         }
         .dash-kpi__unit { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+        .dash-kpi__u { font-size: 0.5em; font-weight: 600; opacity: 0.5; margin-left: 0.2em; }
+        .dash-kpi--lead .dash-kpi__u { color: rgba(255,255,255,0.85); opacity: 1; }
 
         .dash-kpi--lead {
             background: var(--dash-grad-revenue);
@@ -1758,7 +1760,10 @@
         .dash-kpi--lead .dash-kpi__value { color: #FFFFFF; font-size: 2.15rem; }
         .dash-kpi--lead .dash-kpi__footer { color: rgba(255,255,255,0.85); }
         .dash-kpi--lead .dash-kpi__footer strong { color: #FFFFFF; }
-        .dash-kpi--lead .dash-delta { background: rgba(255,255,255,0.22); color: #FFFFFF; }
+        .dash-kpi--lead .dash-delta { background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.14); }
+        .dash-kpi--lead .dash-delta.is-up   { color: #15803D; }
+        .dash-kpi--lead .dash-delta.is-down { color: #B91C1C; }
+        .dash-kpi--lead .dash-delta.is-flat { color: #475569; }
 
         /* ── Delta pill ───────────────────────────────────────────────── */
         .dash-delta {
