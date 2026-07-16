@@ -5,6 +5,8 @@ set -e
 cd "$(dirname "$0")"
 echo "== Django check =="
 ./venv/bin/python manage.py check
+echo "== JS syntax check (inline <script> on all pages) =="
+./venv/bin/python manage.py check_js
 echo "== Kod sinxron (rsync) =="
 rsync -az --delete \
   --exclude venv --exclude .git --exclude __pycache__ --exclude '*.pyc' \
