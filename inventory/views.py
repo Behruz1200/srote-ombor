@@ -1872,6 +1872,8 @@ def clothes_intake(request):
                         note="Kiyim qabul", received_by=request.user)
                     created_ids.append(variant.pk)
                     total_qty += qty
+            from .notifications import notify_intake_session
+            notify_intake_session(session)
             messages.success(
                 request,
                 f"{product.name}: {len(cells)} tur, {total_qty} dona qabul "
@@ -2145,6 +2147,8 @@ def intake_variants(request):
                     if first_price:
                         product.default_sale_price = first_price
                         product.save(update_fields=['default_sale_price'])
+            from .notifications import notify_intake_session
+            notify_intake_session(session)
             messages.success(
                 request,
                 f"Saqlandi: {product.name} — {len(rows)} ta tur, "
@@ -2440,6 +2444,8 @@ def intake_import(request):
                                  f"{created_products} yangi mahsulot, "
                                  f"{total_qty} dona ({branch.name})")[:300],
                 )
+            from .notifications import notify_intake_session
+            notify_intake_session(session)
             messages.success(
                 request,
                 f"Import tayyor: {len(rows)} qator — {created_products} ta "
@@ -2677,6 +2683,8 @@ def intake_quick_save(request):
 
             affected_product_codes.add(product.code)
 
+    from .notifications import notify_intake_session
+    notify_intake_session(session)
     return JsonResponse({
         'ok': True,
         'session_id': session.pk,

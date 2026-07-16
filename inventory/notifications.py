@@ -157,6 +157,53 @@ def _dedup_key(bs):
     return f'low_stock_alert:{bs.variant_id}:{bs.branch_id}'
 
 
+def notify_intake_session(session):
+    """Telegram summary after an intake session is completed. Best-effort;
+    never raises. Sends after the surrounding transaction commits."""
+    if not _enabled():
+        return
+    try:
+        from django.db import transaction
+        from .models import Intake
+        lines = list(Intake.objects.filter(session=session)
+                     .select_related('variant__product'))
+        if not lines:
+            return
+        total_qty = sum(l.quantity for l in lines)
+        total_cost = sum(l.quantity * (l.cost_per_unit or 0) for l in lines)
+        by_prod = {}
+        for l in lines:
+            p = l.variant.product
+            d = by_prod.setdefault(p.id, {
+                'name': p.name, 'brand': getattr(p, 'brand', ''),
+                'variants': 0, 'qty': 0})
+            d['variants'] += 1
+            d['qty'] += l.quantity
+        who = getattr(session.received_by, 'username', '') or '-'
+        supplier = ''
+        if getattr(session, 'supplier_id', None):
+            supplier = session.supplier.name
+        elif getattr(session, 'supplier_text', ''):
+            supplier = session.supplier_text
+        head = ["\U0001F4E5 <b>Yangi qabul</b>",
+                f"Filial: <b>{session.branch.name}</b> \u00b7 {who}"]
+        if supplier:
+            head.append(f"Yetkazuvchi: {supplier}")
+        prods = list(by_prod.values())
+        body = []
+        for d in prods[:12]:
+            brand = f"{d['brand']} " if d['brand'] else ''
+            body.append(f"\u2022 {brand}{d['name']} \u2014 {d['variants']} tur, {d['qty']} dona")
+        if len(prods) > 12:
+            body.append(f"\u2026 yana {len(prods) - 12} mahsulot")
+        foot = [f"Jami: {len(lines)} tur \u00b7 {total_qty} dona \u00b7 "
+                f"{_som(total_cost)} so'm"]
+        text = '\n'.join(head + [''] + body + [''] + foot)
+        transaction.on_commit(lambda: send_telegram(text))
+    except Exception:
+        pass
+
+
 # ---------- Daily summary ----------
 
 def daily_summary_text(d=None):
