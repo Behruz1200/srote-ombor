@@ -368,6 +368,9 @@
 .kp-key--op:hover { background: #e0e7ff; }
 .kp-key--eq { background: #f59e0b; color: #7c2d12; font-weight: 800; }
 .kp-key--eq:hover { background: #d97706; color: #fff; }
+@media (min-width: 576px) {
+    #keypadModal .modal-dialog { margin-right: 1.5rem; margin-left: auto; }
+}
 @media (max-width: 480px) {
     .kp-key { font-size: 1.35rem; padding: 0.6rem 0; }
     .kp-result { font-size: 1.9rem; }
@@ -2651,7 +2654,9 @@ document.addEventListener('keydown', (e) => {
         addBtn.disabled = !(r > 0);
     }
     function pushDigit(d) {
-        if (expr.replace(/[^0-9]/g, '').length >= 12) return;
+        // Faqat JORIY sonni cheklaymiz (9 xona) — jamlashda sonlar soni cheksiz
+        const cur = (expr.match(/(\d*)$/) || ['',''])[1];
+        if (cur.length >= 9) return;
         expr += d; refresh();
     }
     function pushOp(op) {
