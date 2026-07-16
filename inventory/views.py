@@ -378,18 +378,25 @@ def lookup(request):
     else:
         # No search — show popular products and category quick-jumps
         since_30d = timezone.now() - timedelta(days=30)
+        from django.db.models import Max as _Max
         top_rows = (Sale.objects
                     .filter(sold_at__gte=since_30d)
+                    .exclude(variant__product__is_open_price=True)
                     .values('variant__product')
                     .annotate(qty=Sum('quantity'))
                     .order_by('-qty')[:8])
         top_ids = [r['variant__product'] for r in top_rows]
         prods_map = {p.id: p for p in Product.objects
                      .filter(id__in=top_ids).select_related('category')}
+        # Haqiqiy sotuv narxi = variantlarning eng katta narxi (default 0 bo'lsa ham)
+        price_map = {r['variant__product']: r['pmax'] for r in
+                     BranchStock.objects.filter(variant__product_id__in=top_ids)
+                     .values('variant__product').annotate(pmax=_Max('sale_price'))}
         for r in top_rows:
             p = prods_map.get(r['variant__product'])
             if p:
-                popular_products.append({'p': p, 'qty': r['qty']})
+                eff = price_map.get(p.id) or p.default_sale_price or 0
+                popular_products.append({'p': p, 'qty': r['qty'], 'price': eff})
         categories_quick = list(Category.objects.annotate(
             n=Count('products')
         ).filter(n__gt=0).order_by('-n')[:8])
