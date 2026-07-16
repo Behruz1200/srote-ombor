@@ -353,13 +353,21 @@ document.getElementById('editForm') && document.getElementById('editForm')
             if (bc) { bc.focus(); bc.select && bc.select(); }
             return;
         }
-        // Boshqa joyda (yoki hech qayerda fokus) -> keyingi bo'sh shtrix katakka
+        // Boshqa katakda (nom/narx...) yoki hech qayerda fokus bo'lsa:
         if (barcodeExists(code)) return;  // jadvalda bor
         e.preventDefault(); e.stopImmediatePropagation();
         if (t && typeof t.value === 'string' && t.value.endsWith(code)) {
-            t.value = t.value.slice(0, -code.length);  // adashib tushган belgilarni olib tashlaymiz
+            t.value = t.value.slice(0, -code.length);  // adashib tushgan belgilarni olib tashlaymiz
         }
-        const cell = nextEmptyBarcode();
+        // Ustuvorlik: fokus qaysi QATORDA bo'lsa — o'sha qatorning bo'sh shtrix
+        // katagiga (siz nom/narx kiritgan qator). Aks holda keyingi bo'sh katak.
+        let cell = null;
+        const tr = (t && t.closest) ? t.closest('#editRows tr') : null;
+        if (tr) {
+            const rowBc = tr.querySelector('input[name="v_barcode"]');
+            if (rowBc && !rowBc.value.trim()) cell = rowBc;
+        }
+        if (!cell) cell = nextEmptyBarcode();
         if (cell) { cell.value = code; cell.focus(); cell.select && cell.select(); }
     }, true);
 
