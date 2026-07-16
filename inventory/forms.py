@@ -234,6 +234,14 @@ class UserCreateForm(forms.ModelForm):
             'is_active': 'Faol',
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['commission_percent'].required = False
+        self.fields['commission_percent'].initial = 0
+
+    def clean_commission_percent(self):
+        return self.cleaned_data.get('commission_percent') or 0
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data['password'])
@@ -268,6 +276,14 @@ class UserEditForm(forms.ModelForm):
             'commission_percent': 'Komissiya (%)',
             'is_active': 'Faol',
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['commission_percent'].required = False
+        self.fields['commission_percent'].initial = 0
+
+    def clean_commission_percent(self):
+        return self.cleaned_data.get('commission_percent') or 0
 
     def save(self, commit=True):
         user = super().save(commit=False)

@@ -55,10 +55,14 @@ def smart_title(raw):
     for w in words:
         if w.lower() in _SIZE_WORDS:
             out.append(w.upper())
-        elif w.islower() and not any(ch.isdigit() for ch in w):
-            out.append(w[0].upper() + w[1:])
+        elif any(ch.isdigit() for ch in w):
+            out.append(w)                       # 400ml, 2/1 — tegilmaydi
+        elif w.isupper() and len(w) > 3:
+            out.append(w[0] + w[1:].lower())    # ELEKTR -> Elektr (CapsLock)
+        elif w.islower():
+            out.append(w[0].upper() + w[1:])    # elektr -> Elektr
         else:
-            out.append(w)
+            out.append(w)                       # EDP, XPro, iPhone — saqlanadi
     return ' '.join(out)
 
 
