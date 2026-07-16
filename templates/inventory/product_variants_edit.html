@@ -328,9 +328,11 @@ document.getElementById('editForm') && document.getElementById('editForm')
     // --- Apparat skaner "portlashi" (USB/BT): tez yozib Enter yuboradi ---
     const SCAN_GAP = 35, SCAN_MIN = 4;
     let scanBuf = [], lastKeyTs = 0;
-    form.addEventListener('keydown', (e) => {
+    // Document-level (fokusdan mustaqil) — kassa kabi: qayerda bo'lsa ham
+    // skanerlangan kod shtrix-kod ustuniga tushadi.
+    document.addEventListener('keydown', (e) => {
         const now = Date.now();
-        if (e.key.length === 1) {
+        if (e.key && e.key.length === 1) {
             if (now - lastKeyTs > SCAN_GAP) scanBuf = [];
             scanBuf.push(e.key);
             lastKeyTs = now;
@@ -340,20 +342,25 @@ document.getElementById('editForm') && document.getElementById('editForm')
         const code = scanBuf.join('');
         scanBuf = [];
         if (!isScan) return;              // oddiy Enter -> mavjud handler ishlaydi
-        e.preventDefault();
-        e.stopImmediatePropagation();     // Enter/strelka handleri ishlamasin
         const t = e.target;
-        if (t.name === 'v_barcode') {
+        // Skaner to'g'ridan-to'g'ri shtrix katakda -> yozib keyingi qatorga
+        if (t && t.name === 'v_barcode') {
+            e.preventDefault(); e.stopImmediatePropagation();
             t.value = code;
             let tr = t.closest('tr').nextElementSibling;
             if (!tr && window.yuritAddEditRow) tr = window.yuritAddEditRow();
             const bc = tr && tr.querySelector('input[name="v_barcode"]');
             if (bc) { bc.focus(); bc.select && bc.select(); }
-        } else {
-            if (t.value.endsWith(code)) t.value = t.value.slice(0, -code.length);
-            const cell = nextEmptyBarcode();
-            if (cell) cell.value = code;
+            return;
         }
+        // Boshqa joyda (yoki hech qayerda fokus) -> keyingi bo'sh shtrix katakka
+        if (barcodeExists(code)) return;  // jadvalda bor
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (t && typeof t.value === 'string' && t.value.endsWith(code)) {
+            t.value = t.value.slice(0, -code.length);  // adashib tushган belgilarni olib tashlaymiz
+        }
+        const cell = nextEmptyBarcode();
+        if (cell) { cell.value = code; cell.focus(); cell.select && cell.select(); }
     }, true);
 
     // --- Kamera skaner (telefon): bitta mahsulot = bitta skan ---
