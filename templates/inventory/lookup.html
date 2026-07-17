@@ -88,6 +88,55 @@
     </article>
     {% endif %}
 
+    <!-- Not found → offer to log a customer request -->
+    {% if code and not product and not suggestions %}
+    <article class="dash-card">
+        <header class="dash-card__head">
+            <h2 class="dash-card__title">
+                <i class="bi bi-search" style="color: var(--yrt-warning);"></i>
+                "{{ code }}" topilmadi
+            </h2>
+            <p class="dash-card__sub">
+                Mijoz shu mahsulotni so'rayaptimi? So'rovlarga qo'shing —
+                ko'p so'ralsa, omborga kiritamiz.
+            </p>
+        </header>
+        <div class="dash-card__body">
+            <form method="post" action="{% url 'product_request_add' %}" autocomplete="off">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'lookup' %}">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-5">
+                        <label class="form-label small mb-1">Mahsulot nomi <span class="text-danger">*</span></label>
+                        <input type="text" name="name" required maxlength="200"
+                               value="{{ code }}" class="form-control form-control-lg">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Mijoz telefoni</label>
+                        <input type="tel" name="customer_phone" maxlength="40"
+                               placeholder="+998 …" class="form-control form-control-lg">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1">Izoh</label>
+                        <input type="text" name="note" maxlength="255"
+                               placeholder="rang / o'lcham" class="form-control form-control-lg">
+                    </div>
+                    <div class="col-12 col-md-2 d-grid">
+                        <button type="submit" class="dash-btn dash-btn--primary">
+                            <i class="bi bi-plus-lg"></i> <span>So'rovga qo'shish</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <div class="mt-2">
+                <a href="{% url 'product_requests' %}" class="small text-decoration-none">
+                    <i class="bi bi-chat-square-heart"></i> Barcha mijoz so'rovlari →
+                </a>
+            </div>
+        </div>
+    </article>
+    {% endif %}
+
     <!-- Empty state: popular products + categories -->
     {% if not product and not suggestions and not code %}
         {% if popular_products %}

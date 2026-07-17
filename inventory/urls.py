@@ -14,6 +14,11 @@ urlpatterns = [
     path('security/2fa/', views.security_2fa, name='security_2fa'),
     path('lookup/', views.lookup, name='lookup'),
 
+    # Mijoz so'rovlari (customer product-request / demand log)
+    path('requests/', views.product_requests, name='product_requests'),
+    path('requests/add/', views.product_request_add, name='product_request_add'),
+    path('requests/resolve/', views.product_request_resolve, name='product_request_resolve'),
+
     # Stocktake (physical inventory count)
     path('stocktake/', views.stocktake_list, name='stocktake_list'),
     path('stocktake/new/', views.stocktake_create, name='stocktake_create'),

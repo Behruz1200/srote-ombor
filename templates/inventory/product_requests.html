@@ -1,0 +1,206 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Mijoz so'rovlari — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <!-- Hero + quick add -->
+    <header class="dash-hero mb-3">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner" style="display:block;">
+            <span class="dash-hero__eyebrow">
+                <span class="dash-pulse"></span>
+                Talab jurnali
+            </span>
+            <h1 class="dash-hero__title">
+                <i class="bi bi-chat-square-heart"></i> Mijoz so'rovlari
+            </h1>
+            <p class="dash-hero__sub">
+                Mijoz so'ragan, lekin bizda yo'q mahsulotni shu yerga yozing.
+                Ko'p so'ralganini omborga kiritamiz.
+            </p>
+
+            <form method="post" action="{% url 'product_request_add' %}"
+                  class="mt-3" autocomplete="off">
+                {% csrf_token %}
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-5">
+                        <label class="form-label small mb-1">Mahsulot nomi <span class="text-danger">*</span></label>
+                        <input type="text" name="name" required maxlength="200"
+                               placeholder="masalan: Nike Air Force 42-razmer"
+                               class="form-control form-control-lg" autofocus>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Mijoz telefoni</label>
+                        <input type="tel" name="customer_phone" maxlength="40"
+                               placeholder="+998 90 123 45 67"
+                               class="form-control form-control-lg">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1">Izoh</label>
+                        <input type="text" name="note" maxlength="255"
+                               placeholder="rang / o'lcham"
+                               class="form-control form-control-lg">
+                    </div>
+                    <div class="col-12 col-md-2 d-grid">
+                        <button type="submit" class="dash-btn dash-btn--primary">
+                            <i class="bi bi-plus-lg"></i> <span>Qo'shish</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </header>
+
+    <!-- Stats -->
+    <div class="row g-2 mb-3">
+        <div class="col-4">
+            <article class="dash-card h-100">
+                <div class="dash-card__body text-center">
+                    <div style="font-size:1.9rem; font-weight:800; line-height:1;">{{ stats.pending_items }}</div>
+                    <div class="small text-muted mt-1">Kutilayotgan mahsulot</div>
+                </div>
+            </article>
+        </div>
+        <div class="col-4">
+            <article class="dash-card h-100">
+                <div class="dash-card__body text-center">
+                    <div style="font-size:1.9rem; font-weight:800; line-height:1;">{{ stats.pending_total }}</div>
+                    <div class="small text-muted mt-1">Jami so'rov</div>
+                </div>
+            </article>
+        </div>
+        <div class="col-4">
+            <article class="dash-card h-100">
+                <div class="dash-card__body text-center">
+                    <div style="font-size:1.9rem; font-weight:800; line-height:1; color: var(--yrt-danger);">{{ stats.top_count }}×</div>
+                    <div class="small text-muted mt-1">Eng ko'p so'ralgani</div>
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <!-- Pending, grouped by name -->
+    <article class="dash-card mb-3">
+        <header class="dash-card__head">
+            <h2 class="dash-card__title">
+                <i class="bi bi-fire" style="color: var(--yrt-danger);"></i>
+                Eng ko'p so'ralgan
+            </h2>
+            <p class="dash-card__sub">Ko'p so'ralganlar tepada — omborga kiritishga nomzod</p>
+        </header>
+        <div class="dash-card__body dash-card__body--flush">
+            {% if pending_groups %}
+            <ul class="lookup-suggest yrt-stagger">
+                {% for g in pending_groups %}
+                <li>
+                    <div class="lookup-suggest__item" style="cursor:default;">
+                        <div class="lookup-suggest__main">
+                            <strong>
+                                {{ g.name }}
+                                <span class="yrt-tile ms-1" data-tone="{% if g.count >= 3 %}danger{% elif g.count == 2 %}warning{% else %}muted{% endif %}"
+                                      style="padding:0.1rem 0.5rem; font-size:0.8rem;">
+                                    <strong>{{ g.count }}×</strong> so'raldi
+                                </span>
+                            </strong>
+                            <span class="lookup-suggest__meta">
+                                {% if g.phones %}
+                                    <span class="dash-pill"><i class="bi bi-telephone"></i>
+                                        {{ g.phones|join:", " }}</span>
+                                {% endif %}
+                                {% if g.notes %}
+                                    <span class="dash-pill"><i class="bi bi-sticky"></i>
+                                        {{ g.notes|join:" · "|truncatechars:60 }}</span>
+                                {% endif %}
+                                <span class="text-muted small">
+                                    <i class="bi bi-clock-history"></i>
+                                    oxirgi: {{ g.last|date:"d.m.Y H:i" }}
+                                </span>
+                            </span>
+                        </div>
+                        {% if user.is_admin %}
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <form method="post" action="{% url 'product_request_resolve' %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="name" value="{{ g.name }}">
+                                <input type="hidden" name="action" value="stock">
+                                <button type="submit" class="dash-btn dash-btn--primary dash-btn--sm"
+                                        title="Omborga keltirildi deb belgilash">
+                                    <i class="bi bi-check-lg"></i> <span>Keltirildi</span>
+                                </button>
+                            </form>
+                            <form method="post" action="{% url 'product_request_resolve' %}" class="d-inline"
+                                  onsubmit="return confirm('“{{ g.name|escapejs }}” — rad etilsinmi?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="name" value="{{ g.name }}">
+                                <input type="hidden" name="action" value="dismiss">
+                                <button type="submit" class="dash-btn dash-btn--ghost dash-btn--sm"
+                                        title="Rad etish">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox" style="font-size:2.4rem; opacity:0.4;"></i>
+                <p class="mt-2 mb-0">Hozircha kutilayotgan so'rov yo'q.</p>
+                <p class="small mb-0">Mijoz bizda yo'q narsa so'rasa — yuqoridagi shakl orqali qo'shing.</p>
+            </div>
+            {% endif %}
+        </div>
+    </article>
+
+    <!-- Recently resolved -->
+    {% if resolved_recent %}
+    <article class="dash-card">
+        <header class="dash-card__head">
+            <h2 class="dash-card__title">
+                <i class="bi bi-clock-history"></i> So'nggi yopilganlar
+            </h2>
+        </header>
+        <div class="dash-card__body dash-card__body--flush">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Mahsulot</th>
+                            <th>Holat</th>
+                            <th class="d-none d-md-table-cell">Telefon</th>
+                            <th class="d-none d-md-table-cell">Kim</th>
+                            <th class="text-end">Sana</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in resolved_recent %}
+                        <tr>
+                            <td>{{ r.name }}</td>
+                            <td>
+                                {% if r.status == 'stocked' %}
+                                    <span class="badge bg-success">Keltirildi</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Rad etildi</span>
+                                {% endif %}
+                            </td>
+                            <td class="d-none d-md-table-cell text-muted">{{ r.customer_phone|default:"—" }}</td>
+                            <td class="d-none d-md-table-cell text-muted">
+                                {{ r.resolved_by.get_full_name|default:r.resolved_by.username|default:"—" }}
+                            </td>
+                            <td class="text-end text-muted small">
+                                {{ r.resolved_at|default:r.created_at|date:"d.m.Y" }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </article>
+    {% endif %}
+</div>
+{% endblock %}

@@ -3064,6 +3064,14 @@
                     </a>
                 </li>
 
+                <!-- Mijoz so'rovlari -->
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'product_requests' %}">
+                        <i class="bi bi-chat-square-heart"></i> So'rovlar
+                        {% if pending_requests_count %}<span class="badge rounded-pill bg-danger ms-1">{{ pending_requests_count }}</span>{% endif %}
+                    </a>
+                </li>
+
                 <!-- Sotuv guruhi -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">
@@ -3148,6 +3156,12 @@
                 <li class="nav-item">
                     <a class="nav-link" href="{% url 'lookup' %}">
                         <i class="bi bi-search"></i> Qidirish
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'product_requests' %}">
+                        <i class="bi bi-chat-square-heart"></i> So'rovlar
+                        {% if pending_requests_count %}<span class="badge rounded-pill bg-danger ms-1">{{ pending_requests_count }}</span>{% endif %}
                     </a>
                 </li>
                 {% endif %}
@@ -3658,6 +3672,7 @@ if ('serviceWorker' in navigator) {
     const PAGES = [
         {label: 'POS terminal', url: '{% url "pos_terminal" %}', icon: 'upc-scan', kw: 'pos kassa sotuv'},
         {label: 'Qidirish', url: '{% url "lookup" %}', icon: 'search', kw: 'qidirish lookup'},
+        {label: 'Mijoz so\'rovlari', url: '{% url "product_requests" %}', icon: 'chat-square-heart', kw: 'sorov request talab mijoz demand'},
         {% if user.is_admin %}
         {label: 'Boshqaruv (Dashboard)', url: '{% url "dashboard" %}', icon: 'speedometer2', kw: 'dashboard'},
         {label: 'Mahsulotlar', url: '{% url "product_list" %}', icon: 'box', kw: 'mahsulot product'},

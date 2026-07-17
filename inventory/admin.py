@@ -4,8 +4,17 @@ from .models import (
     User, Branch, Category, Product, ProductVariant,
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
-    Supplier, IntakeSession,
+    Supplier, IntakeSession, ProductRequest,
 )
+
+
+@admin.register(ProductRequest)
+class ProductRequestAdmin(admin.ModelAdmin):
+    list_display = ('name', 'status', 'customer_phone', 'branch',
+                    'requested_by', 'created_at')
+    list_filter = ('status', 'branch')
+    search_fields = ('name', 'customer_phone', 'note')
+    readonly_fields = ('created_at',)
 
 
 @admin.register(Supplier)

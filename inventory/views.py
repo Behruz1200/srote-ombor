@@ -36,7 +36,7 @@ from .models import (
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
-    Supplier, IntakeSession,
+    Supplier, IntakeSession, ProductRequest,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -7435,3 +7435,151 @@ def _pdf_response(title, headers, rows, summary, d_start, d_end, branch):
     response.write(buf.getvalue())
     buf.close()
     return response
+
+
+# ---------- MIJOZ SO'ROVLARI (customer product requests / demand log) ----------
+
+def _request_branch(request):
+    """Best-effort branch for a new request. Sellers → their branch;
+    admins → POS-selected/assigned branch, else first active branch."""
+    b = getattr(request.user, 'branch', None)
+    if b:
+        return b
+    if request.user.is_admin():
+        return Branch.objects.filter(is_active=True).order_by('name').first()
+    return None
+
+
+@login_required
+def product_requests(request):
+    """Talab jurnali: mijozlar so'ragan, lekin bizda yo'q mahsulotlar.
+
+    Bir xil nom bo'yicha guruhlanadi — eng ko'p so'ralganlar tepada.
+    """
+    Status = ProductRequest.Status
+
+    # --- Pending, grouped by name (case-insensitive via smart_title on input) ---
+    pending = list(
+        ProductRequest.objects.filter(status=Status.NEW)
+        .select_related('requested_by')
+        .order_by('-created_at')
+    )
+    groups = {}
+    for r in pending:
+        key = r.name.strip().lower()
+        g = groups.get(key)
+        if not g:
+            g = groups[key] = {
+                'name': r.name, 'count': 0,
+                'phones': [], 'notes': [],
+                'first': r.created_at, 'last': r.created_at,
+            }
+        g['count'] += 1
+        g['last'] = max(g['last'], r.created_at)
+        g['first'] = min(g['first'], r.created_at)
+        if r.customer_phone and r.customer_phone not in g['phones']:
+            g['phones'].append(r.customer_phone)
+        if r.note and r.note not in g['notes']:
+            g['notes'].append(r.note)
+    pending_groups = sorted(
+        groups.values(), key=lambda g: (-g['count'], -g['last'].timestamp())
+    )
+
+    # --- Recently resolved (brought in / dismissed) ---
+    resolved_recent = list(
+        ProductRequest.objects
+        .filter(status__in=[Status.STOCKED, Status.DISMISSED])
+        .select_related('resolved_by')
+        .order_by('-resolved_at', '-created_at')[:25]
+    )
+
+    stats = {
+        'pending_total': len(pending),
+        'pending_items': len(pending_groups),
+        'top_count': pending_groups[0]['count'] if pending_groups else 0,
+    }
+
+    return render(request, 'inventory/product_requests.html', {
+        'pending_groups': pending_groups,
+        'resolved_recent': resolved_recent,
+        'stats': stats,
+    })
+
+
+@login_required
+def product_request_add(request):
+    """Yangi so'rov qo'shish. Sotuvchi ham, admin ham qo'sha oladi.
+    `next` bo'lsa — o'sha sahifaga qaytadi (Qidiruv integratsiyasi)."""
+    if request.method != 'POST':
+        return redirect('product_requests')
+
+    name = smart_title((request.POST.get('name') or '').strip())
+    phone = (request.POST.get('customer_phone') or '').strip()
+    note = (request.POST.get('note') or '').strip()
+    nxt = (request.POST.get('next') or '').strip()
+
+    if not name:
+        messages.warning(request, "Mahsulot nomi bo'sh bo'lishi mumkin emas.")
+        return redirect(nxt or 'product_requests')
+
+    pr = ProductRequest.objects.create(
+        name=name[:200],
+        customer_phone=phone[:40],
+        note=note[:255],
+        branch=_request_branch(request),
+        requested_by=request.user,
+    )
+    cache.delete('nav:pending_requests')
+
+    # How many times has this item been asked (still pending)?
+    same = ProductRequest.objects.filter(
+        name__iexact=name, status=ProductRequest.Status.NEW
+    ).count()
+    if same > 1:
+        messages.success(
+            request,
+            f"\"{pr.name}\" so'rovlarga qo'shildi — bu mahsulot {same} marta so'raldi."
+        )
+    else:
+        messages.success(request, f"\"{pr.name}\" so'rovlarga qo'shildi.")
+
+    # Redirect back to a safe local page only
+    if nxt.startswith('/'):
+        return redirect(nxt)
+    return redirect('product_requests')
+
+
+@login_required
+def product_request_resolve(request):
+    """Nom bo'yicha barcha kutilayotgan so'rovlarni yopish:
+    'stock' = keltirildi, 'dismiss' = rad etildi. Faqat admin."""
+    if request.method != 'POST':
+        return redirect('product_requests')
+    if not request.user.is_admin():
+        return HttpResponseForbidden("Faqat administrator uchun.")
+
+    name = (request.POST.get('name') or '').strip()
+    action = (request.POST.get('action') or '').strip()
+    if not name:
+        return redirect('product_requests')
+
+    status_map = {
+        'stock': ProductRequest.Status.STOCKED,
+        'dismiss': ProductRequest.Status.DISMISSED,
+    }
+    new_status = status_map.get(action)
+    if not new_status:
+        messages.warning(request, "Noma'lum amal.")
+        return redirect('product_requests')
+
+    n = (ProductRequest.objects
+         .filter(name__iexact=name, status=ProductRequest.Status.NEW)
+         .update(status=new_status,
+                 resolved_by=request.user,
+                 resolved_at=timezone.now()))
+    cache.delete('nav:pending_requests')
+    if action == 'stock':
+        messages.success(request, f"\"{name}\" — keltirildi deb belgilandi ({n} ta so'rov).")
+    else:
+        messages.info(request, f"\"{name}\" — rad etildi ({n} ta so'rov).")
+    return redirect('product_requests')

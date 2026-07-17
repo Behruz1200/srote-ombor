@@ -1011,3 +1011,57 @@ class Return(models.Model):
             per_unit_total = self.sale.total / self.sale.quantity
             return self.quantity * per_unit_total
         return self.quantity * self.sale.sale_price
+
+
+class ProductRequest(models.Model):
+    """Mijoz so'ragan, lekin bizda yo'q (yoki hech sotmagan) mahsulot.
+
+    Sotuvchi shu yerga qayd etadi. Bir xil nom ko'p marta so'ralsa —
+    uni omborga kiritish (sotuvni boshlash) uchun signal bo'ladi.
+    """
+    class Status(models.TextChoices):
+        NEW = 'new', 'Kutilmoqda'
+        STOCKED = 'stocked', 'Keltirildi'
+        DISMISSED = 'dismissed', 'Rad etildi'
+
+    name = models.CharField(
+        max_length=200, db_index=True,
+        help_text="Mijoz so'ragan mahsulot nomi"
+    )
+    note = models.CharField(
+        max_length=255, blank=True,
+        help_text="Qo'shimcha: brend, o'lcham, rang yoki izoh"
+    )
+    customer_phone = models.CharField(
+        max_length=40, blank=True,
+        help_text="Mijoz telefoni — mahsulot kelganda xabar berish uchun"
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.NEW
+    )
+    branch = models.ForeignKey(
+        Branch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='product_requests'
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='product_requests'
+    )
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='resolved_requests'
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "Mijoz so'rovi"
+        verbose_name_plural = "Mijoz so'rovlari"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at'],
+                         name='inv_prodreq_status_dt'),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.get_status_display()})'

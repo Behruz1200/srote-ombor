@@ -67,7 +67,7 @@ class Command(BaseCommand):
         v = ProductVariant.objects.first(); vid = v.pk if v else 1
 
         pages = [
-            '/lookup/', '/pos/', '/pos/display/', '/dashboard/', '/products/', '/products/new/',
+            '/lookup/', '/requests/', '/pos/', '/pos/display/', '/dashboard/', '/products/', '/products/new/',
             f'/products/{code}/', f'/products/{code}/edit/', f'/products/{code}/variants/edit/',
             f'/products/{code}/intake/', '/intake/', '/intake/variants/', '/intake/clothes/',
             '/intake/import/', '/intake/quick/', '/intake/suppliers/', '/reorder/', '/sales/', '/cart/',
