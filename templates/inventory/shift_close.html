@@ -45,7 +45,10 @@
                     <div class="dash-kpi__value" style="color: var(--yrt-primary);">
                         <span data-countup="{{ expected|default:0 }}">{{ expected|som }}</span>
                     </div>
-                    <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span></div>
+                    <div class="dash-kpi__footer">
+                        <span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span>
+                        {% if payouts_total %}<div class="small text-danger mt-1">− {{ payouts_total|som }} kassadan olingan</div>{% endif %}
+                    </div>
                 </article>
             </section>
             <div class="text-center mb-3" style="font-size: 0.78rem; color: var(--yrt-fg-muted);">

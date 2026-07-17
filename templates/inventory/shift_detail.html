@@ -85,7 +85,10 @@
             <div class="dash-kpi__value" style="color: var(--yrt-primary);">
                 <span data-countup="{{ expected|default:0 }}">{{ expected|som }}</span>
             </div>
-            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span></div>
+            <div class="dash-kpi__footer">
+                <span class="dash-kpi__unit">so'm · kassada bo'lishi kerak</span>
+                {% if payouts_total %}<div class="small text-danger mt-1">− {{ payouts_total|som }} kassadan olingan</div>{% endif %}
+            </div>
         </article>
 
         <article class="dash-kpi" data-tone="{% if shift.counted_cash is None %}slate{% elif variance_value == 0 %}success{% elif variance_value > 0 %}info{% else %}danger{% endif %}">
@@ -111,6 +114,70 @@
             {% endif %}
         </article>
     </section>
+
+    <!-- Kassadan olingan pul (payouts) -->
+    <article class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="text-muted text-uppercase small mb-0">
+                <i class="bi bi-cash-coin text-danger"></i> Kassadan olingan pul
+            </h6>
+            <span class="fw-bold text-danger">{{ payouts_total|som }} so'm</span>
+        </div>
+
+        {% if shift.status == 'open' %}
+        <form method="post" action="{% url 'cash_payout' %}" class="row g-2 align-items-end mb-3">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'shift_detail' shift.pk %}">
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-1">Summa (so'm)</label>
+                <input type="number" name="amount" min="1" step="1000" required
+                       class="form-control" placeholder="0">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-1">Sabab</label>
+                <select name="category" class="form-select">
+                    <option value="lunch">Tushlik</option>
+                    <option value="store">Do'kon xarajati</option>
+                    <option value="repair">Ta'mirlash</option>
+                    <option value="other" selected>Boshqa</option>
+                </select>
+            </div>
+            <div class="col-8 col-md-4">
+                <label class="form-label small mb-1">Izoh</label>
+                <input type="text" name="note" maxlength="200" class="form-control" placeholder="ixtiyoriy">
+            </div>
+            <div class="col-4 col-md-2 d-grid">
+                <button type="submit" class="btn btn-danger"><i class="bi bi-cash-coin"></i> Olish</button>
+            </div>
+        </form>
+        {% endif %}
+
+        {% if payouts %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Vaqt</th><th>Sabab</th>
+                        <th class="text-end">Summa</th><th>Kim</th><th>Izoh</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in payouts %}
+                    <tr>
+                        <td class="text-muted small">{{ p.created_at|date:"d.m H:i" }}</td>
+                        <td><span class="badge bg-light text-dark">{{ p.get_category_display }}</span></td>
+                        <td class="text-end fw-semibold text-danger">−{{ p.amount|som }}</td>
+                        <td class="text-muted small">{{ p.created_by.username|default:"—" }}</td>
+                        <td class="text-muted small">{{ p.note }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">Bu smenda kassadan pul olinmagan.</p>
+        {% endif %}
+    </article>
 
     <!-- Payment breakdown + Top products -->
     <div class="row g-3 mb-3">

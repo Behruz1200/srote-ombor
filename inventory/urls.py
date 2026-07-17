@@ -33,6 +33,7 @@ urlpatterns = [
     # Shifts (open/close, cash reconciliation)
     path('shift/open/', views.shift_open, name='shift_open'),
     path('shift/close/', views.shift_close, name='shift_close'),
+    path('shift/cash-out/', views.cash_payout, name='cash_payout'),
     path('shift/<int:pk>/', views.shift_detail, name='shift_detail'),
     path('shifts/', views.shift_list, name='shift_list'),
 

@@ -722,9 +722,13 @@ class Shift(models.Model):
         ).aggregate(s=models.Sum('order_discount'))['s'] or 0
         return line_rev - order_disc
 
+    def payouts_total(self):
+        """Smen davomida kassadan olingan naqd (tushlik, xarajat va h.k.)."""
+        return self.payouts.aggregate(s=models.Sum('amount'))['s'] or 0
+
     def expected_cash(self):
-        """Kutilgan naqd = ochilish + smen davomidagi naqd sotuvlar."""
-        return self.opening_cash + self.cash_sales()
+        """Kutilgan naqd = ochilish + naqd sotuvlar − kassadan olingan pul."""
+        return self.opening_cash + self.cash_sales() - self.payouts_total()
 
     def variance(self):
         """Kassa farqi = sanalgan − kutilgan. Manfiy bo'lsa kam, ortiq bo'lsa ko'p."""
@@ -1065,3 +1069,57 @@ class ProductRequest(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.get_status_display()})'
+
+
+class CashPayout(models.Model):
+    """Kassadan olingan naqd pul (chiqim) — tushlik, do'kon xarajati va h.k.
+
+    Har bir chiqim ochiq smenga bog'lanadi va smen yopilishida
+    kutilgan naqddan ayiriladi (kassa farqi to'g'ri chiqishi uchun).
+    """
+    class Category(models.TextChoices):
+        LUNCH = 'lunch', 'Tushlik'
+        STORE = 'store', "Do'kon xarajati"
+        REPAIR = 'repair', "Ta'mirlash"
+        OTHER = 'other', 'Boshqa'
+
+    shift = models.ForeignKey(
+        'Shift', on_delete=models.PROTECT, related_name='payouts'
+    )
+    branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name='cash_payouts'
+    )
+    amount = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        help_text="Kassadan olingan summa (so'm)"
+    )
+    category = models.CharField(
+        max_length=12, choices=Category.choices, default=Category.OTHER
+    )
+    note = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='cash_payouts'
+    )
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    #: valid category keys — used to validate incoming POST values
+    VALID_CATEGORIES = {c[0] for c in Category.choices}
+
+    class Meta:
+        verbose_name = 'Kassa chiqimi'
+        verbose_name_plural = 'Kassa chiqimlari'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['branch', '-created_at'],
+                         name='cashpayout_branch_dt'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name='cashpayout_amount_positive'
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.amount} so'm — {self.get_category_display()}"

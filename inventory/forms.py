@@ -304,6 +304,7 @@ REPORT_TYPES = [
     ('deadstock', "O'lik zaxira (sotilmayotgan)"),
     ('reorder', 'Qayta buyurtma tavsiyasi'),
     ('margin', 'Kategoriya bo\'yicha marja'),
+    ('payouts', 'Kassa chiqimlari (naqd)'),
 ]
 
 PERIOD_CHOICES = [

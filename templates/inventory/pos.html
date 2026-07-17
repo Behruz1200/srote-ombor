@@ -471,6 +471,12 @@
                             <i class="bi bi-cash-stack"></i> Kassa qutisini ochish
                         </button>
                     </li>
+                    <li>
+                        <button class="dropdown-item" type="button" id="cashOutBtn"
+                                data-bs-toggle="modal" data-bs-target="#cashOutModal">
+                            <i class="bi bi-cash-coin text-danger"></i> Kassadan pul olish
+                        </button>
+                    </li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <button class="dropdown-item" type="button"
@@ -1087,6 +1093,112 @@
     </div>
   </div>
 </div>
+
+<!-- Kassadan pul olish (naqd chiqim) -->
+<div class="modal fade" id="cashOutModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cash-coin text-danger"></i> Kassadan pul olish</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small mb-1">Summa (so'm)</label>
+        <input type="number" id="coAmount" class="form-control form-control-lg" inputmode="numeric"
+               min="0" step="1000" placeholder="0" style="font-size:1.5rem; font-weight:700;">
+        <div class="d-flex flex-wrap gap-1 mt-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary co-quick" data-amt="10000">+10 000</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary co-quick" data-amt="20000">+20 000</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary co-quick" data-amt="50000">+50 000</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary co-quick" data-amt="100000">+100 000</button>
+        </div>
+        <label class="form-label small mb-1 mt-3">Sabab</label>
+        <div class="d-flex flex-wrap gap-2" id="coCats">
+          <button type="button" class="btn btn-outline-danger co-cat active" data-cat="lunch"><i class="bi bi-cup-hot"></i> Tushlik</button>
+          <button type="button" class="btn btn-outline-danger co-cat" data-cat="store"><i class="bi bi-shop"></i> Do'kon xarajati</button>
+          <button type="button" class="btn btn-outline-danger co-cat" data-cat="repair"><i class="bi bi-tools"></i> Ta'mirlash</button>
+          <button type="button" class="btn btn-outline-danger co-cat" data-cat="other"><i class="bi bi-three-dots"></i> Boshqa</button>
+        </div>
+        <label class="form-label small mb-1 mt-3">Izoh (ixtiyoriy)</label>
+        <input type="text" id="coNote" class="form-control" maxlength="200" placeholder="masalan: tushlik uchun">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Bekor qilish</button>
+        <button type="button" class="btn btn-danger fw-bold flex-grow-1" id="coSubmit">
+          <i class="bi bi-cash-coin"></i> Kassadan olish
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const modalEl = document.getElementById('cashOutModal');
+  if (!modalEl) return;
+  const amtEl = document.getElementById('coAmount');
+  const noteEl = document.getElementById('coNote');
+  const submitBtn = document.getElementById('coSubmit');
+  const catWrap = document.getElementById('coCats');
+  let cat = 'lunch';
+
+  function csrf() {
+    const el = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+  }
+  function notify(msg, type) {
+    if (typeof setStatus === 'function') setStatus(msg, type);
+  }
+  function groupNum(n) {
+    return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+  }
+
+  catWrap.addEventListener('click', function (e) {
+    const b = e.target.closest('.co-cat');
+    if (!b) return;
+    cat = b.dataset.cat;
+    catWrap.querySelectorAll('.co-cat').forEach(function (x) { x.classList.remove('active'); });
+    b.classList.add('active');
+  });
+
+  document.querySelectorAll('.co-quick').forEach(function (b) {
+    b.addEventListener('click', function () {
+      const cur = parseInt(amtEl.value || '0', 10) || 0;
+      amtEl.value = cur + (parseInt(b.dataset.amt, 10) || 0);
+    });
+  });
+
+  async function submit() {
+    const amount = Math.round(parseFloat(amtEl.value || '0')) || 0;
+    if (amount <= 0) { notify("Summa 0 dan katta bo'lsin", 'error'); amtEl.focus(); return; }
+    submitBtn.disabled = true;
+    try {
+      const resp = await fetch('/shift/cash-out/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+        body: JSON.stringify({ amount: amount, category: cat, note: noteEl.value || '' })
+      });
+      const data = await resp.json();
+      if (data && data.ok) {
+        notify('Kassadan olindi: ' + groupNum(amount) + " so'm", 'success');
+        amtEl.value = ''; noteEl.value = '';
+        const m = bootstrap.Modal.getInstance(modalEl);
+        if (m) m.hide();
+      } else {
+        notify((data && data.error) || 'Xatolik', 'error');
+        submitBtn.disabled = false;
+      }
+    } catch (err) {
+      notify('Tarmoq xatosi', 'error');
+      submitBtn.disabled = false;
+    }
+  }
+
+  submitBtn.addEventListener('click', submit);
+  modalEl.addEventListener('shown.bs.modal', function () { amtEl.focus(); });
+  modalEl.addEventListener('hidden.bs.modal', function () { submitBtn.disabled = false; });
+})();
+</script>
 
 <form id="posCsrfForm" style="display:none">{% csrf_token %}</form>
 <script>

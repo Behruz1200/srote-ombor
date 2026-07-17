@@ -4,7 +4,7 @@ from .models import (
     User, Branch, Category, Product, ProductVariant,
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
-    Supplier, IntakeSession, ProductRequest,
+    Supplier, IntakeSession, ProductRequest, CashPayout,
 )
 
 
@@ -14,6 +14,15 @@ class ProductRequestAdmin(admin.ModelAdmin):
                     'requested_by', 'created_at')
     list_filter = ('status', 'branch')
     search_fields = ('name', 'customer_phone', 'note')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(CashPayout)
+class CashPayoutAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'amount', 'category', 'branch',
+                    'shift', 'created_by', 'note')
+    list_filter = ('category', 'branch')
+    search_fields = ('note',)
     readonly_fields = ('created_at',)
 
 

@@ -36,7 +36,7 @@ from .models import (
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
-    Supplier, IntakeSession, ProductRequest,
+    Supplier, IntakeSession, ProductRequest, CashPayout,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -3689,6 +3689,7 @@ def shift_close(request):
         'shift': shift,
         'expected': shift.expected_cash(),
         'cash_sales': shift.cash_sales(),
+        'payouts_total': shift.payouts_total(),
     })
 
 
@@ -3740,11 +3741,17 @@ def shift_detail(request, pk):
     # Variance value
     variance_value = shift.variance() if callable(getattr(shift, 'variance', None)) else None
 
+    # Cash taken out of the till during the shift (payouts)
+    payouts = list(shift.payouts.select_related('created_by').order_by('-created_at'))
+    payouts_total = shift.payouts_total()
+
     return render(request, 'inventory/shift_detail.html', {
         'shift': shift,
         'txns': txns,
         'cash_sales': shift.cash_sales(),
         'expected': shift.expected_cash(),
+        'payouts': payouts,
+        'payouts_total': payouts_total,
         'pm_list': pm_list,
         'hour_labels': [f'{h:02d}:00' for h, _, _ in active_hours],
         'hour_qty': [q for _, q, _ in active_hours],
@@ -3752,6 +3759,77 @@ def shift_detail(request, pk):
         'top_products': top_products,
         'variance_value': variance_value,
     })
+
+
+@login_required
+def cash_payout(request):
+    """Kassadan pul olishni qayd etish (naqd chiqim).
+
+    Ikki joydan chaqiriladi:
+      - POS (fetch/JSON) → JSON javob, sahifa yangilanmaydi
+      - Smen sahifasi (form POST) → xabar + redirect
+    Har doim joriy ochiq smenga bog'lanadi.
+    """
+    if request.method != 'POST':
+        return redirect('pos_terminal')
+
+    ctype = request.content_type or ''
+    wants_json = 'application/json' in ctype or \
+        request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    if 'application/json' in ctype:
+        try:
+            data = _json.loads(request.body.decode('utf-8'))
+        except ValueError:
+            return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    else:
+        data = request.POST
+
+    def _fail(msg, status=400):
+        if wants_json:
+            return JsonResponse({'ok': False, 'error': msg}, status=status)
+        messages.warning(request, msg)
+        back = request.POST.get('next')
+        return redirect(back if back and back.startswith('/') else 'pos_terminal')
+
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return _fail("Filial biriktirilmagan.", 403)
+
+    shift = _open_shift_for(branch)
+    if not shift:
+        return _fail("Ochiq smen yo'q — avval smen oching.", 400)
+
+    try:
+        amount = round(float(data.get('amount') or 0))
+    except (ValueError, TypeError):
+        amount = 0
+    if amount <= 0:
+        return _fail("Summa 0 dan katta bo'lishi kerak.", 400)
+
+    category = (data.get('category') or 'other').strip()
+    if category not in CashPayout.VALID_CATEGORIES:
+        category = 'other'
+    note = (data.get('note') or '').strip()[:200]
+
+    payout = CashPayout.objects.create(
+        shift=shift, branch=branch, amount=amount,
+        category=category, note=note, created_by=request.user,
+    )
+
+    if wants_json:
+        return JsonResponse({
+            'ok': True,
+            'id': payout.id,
+            'amount': amount,
+            'category': payout.get_category_display(),
+            'payouts_total': float(shift.payouts_total()),
+            'expected': float(shift.expected_cash()),
+        })
+    messages.success(
+        request,
+        f"Kassadan olindi: {amount:,.0f} so'm — {payout.get_category_display()}."
+    )
+    return redirect('shift_detail', pk=shift.pk)
 
 
 @admin_required
@@ -5885,6 +5963,35 @@ def reports(request):
                 t_rev += rev; t_cost += cost; t_qty += a['qty'] or 0
             summary = {"Jami daromad (so'm)": t_rev, "Jami foyda (so'm)": t_rev - t_cost,
                        'Umumiy marja %': round((t_rev - t_cost) / t_rev * 100, 1) if t_rev else 0}
+
+        elif rtype == 'payouts':
+            title = "Kassa chiqimlari (naqd)"
+            qs = (CashPayout.objects
+                  .filter(created_at__gte=dt_start, created_at__lt=dt_end)
+                  .select_related('branch', 'created_by')
+                  .order_by('-created_at'))
+            if branch:
+                qs = qs.filter(branch=branch)
+            headers = ['Sana', 'Filial', 'Kategoriya', "Summa (so'm)",
+                       'Sotuvchi', 'Smen', 'Izoh']
+            total = 0
+            by_cat = {}
+            for p in qs:
+                amt = int(round(p.amount))
+                rows.append([
+                    timezone.localtime(p.created_at).strftime('%Y-%m-%d %H:%M'),
+                    p.branch.name if p.branch else '—',
+                    p.get_category_display(),
+                    amt,
+                    p.created_by.username if p.created_by else '—',
+                    f'#{p.shift_id}',
+                    p.note,
+                ])
+                total += amt
+                by_cat[p.get_category_display()] = by_cat.get(p.get_category_display(), 0) + amt
+            summary = {"Jami olingan (so'm)": total, 'Chiqimlar soni': len(rows)}
+            for cat, amt in sorted(by_cat.items(), key=lambda kv: -kv[1]):
+                summary[f"{cat} (so'm)"] = amt
 
         if request.GET.get('export') == 'csv':
             return _csv_response(title, headers, rows, summary,
