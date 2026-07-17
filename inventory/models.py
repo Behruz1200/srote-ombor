@@ -1,7 +1,19 @@
+from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.utils import timezone
+
+
+def _dec(x):
+    """Coerce int/float/Decimal/str to Decimal for safe money arithmetic.
+
+    Form-posted amounts arrive as float; DB values are Decimal. Mixing the
+    two in a subtraction raises TypeError, so normalise before doing math.
+    """
+    if isinstance(x, Decimal):
+        return x
+    return Decimal(str(x))
 
 
 class Branch(models.Model):
@@ -724,17 +736,23 @@ class Shift(models.Model):
 
     def payouts_total(self):
         """Smen davomida kassadan olingan naqd (tushlik, xarajat va h.k.)."""
-        return self.payouts.aggregate(s=models.Sum('amount'))['s'] or 0
+        return self.payouts.aggregate(s=models.Sum('amount'))['s'] or Decimal('0')
 
     def expected_cash(self):
         """Kutilgan naqd = ochilish + naqd sotuvlar − kassadan olingan pul."""
-        return self.opening_cash + self.cash_sales() - self.payouts_total()
+        return (_dec(self.opening_cash) + _dec(self.cash_sales())
+                - _dec(self.payouts_total()))
 
     def variance(self):
-        """Kassa farqi = sanalgan − kutilgan. Manfiy bo'lsa kam, ortiq bo'lsa ko'p."""
+        """Kassa farqi = sanalgan − kutilgan. Manfiy bo'lsa kam, ortiq bo'lsa ko'p.
+
+        counted_cash smen yopish formasidan float sifatida kelishi mumkin,
+        expected_cash() esa Decimal — shuning uchun ikkalasini ham Decimal'ga
+        keltiramiz (aks holda float − Decimal TypeError beradi).
+        """
         if self.counted_cash is None:
             return None
-        return self.counted_cash - self.expected_cash()
+        return _dec(self.counted_cash) - _dec(self.expected_cash())
 
 
 class Sale(models.Model):
