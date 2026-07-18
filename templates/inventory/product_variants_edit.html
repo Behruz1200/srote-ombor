@@ -366,7 +366,21 @@ document.getElementById('editForm') && document.getElementById('editForm')
             }
         }
         if (!cell) cell = nextEmptyBarcode();
-        if (cell) { cell.value = code; cell.focus(); cell.select && cell.select(); }
+        if (cell) {
+            cell.value = code;
+            // Intake kabi: yozgandan so'ng pastdagi (keyingi qator) shtrix-kod
+            // katagiga o'tamiz — ustun bo'ylab ketma-ket skanerlash uchun.
+            const tr = cell.closest('#editRows tr');
+            let nextCell = null;
+            for (let sib = tr ? tr.nextElementSibling : null; sib; sib = sib.nextElementSibling) {
+                const nb = sib.querySelector('input[name="v_barcode"]');
+                if (nb) { nextCell = nb; break; }
+            }
+            if (!nextCell) nextCell = nextEmptyBarcode();   // oxirida — yangi qator ochadi
+            const dest = nextCell || cell;
+            dest.focus();
+            dest.select && dest.select();
+        }
     }, true);
 
     // --- Kamera skaner (telefon): bitta mahsulot = bitta skan ---
