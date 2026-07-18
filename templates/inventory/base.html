@@ -3954,13 +3954,11 @@ window.yuritScan = (function () {
         return [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E,
                 F.CODE_128, F.CODE_39, F.ITF];
     }
+    // MUHIM: html5-qrcode 1-argumentda AYNAN bitta kalit talab qiladi
+    // (facingMode yoki deviceId). Qo'shimcha cheklovlar config.videoConstraints
+    // ichida beriladi — aks holda "should have exactly 1 key" xatosi chiqadi.
     function camera() {
-        return {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: 'continuous' }]
-        };
+        return { facingMode: 'environment' };
     }
     // Keng skan oynasi — EAN-13 uzun bo'ladi, kvadratga sig'masdi
     function box(w, h) {
@@ -3973,7 +3971,13 @@ window.yuritScan = (function () {
             fps: 20,
             qrbox: box,
             disableFlip: false,
-            experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            // Faqat "ideal" — qurilma qo'llab-quvvatlamasa ham xato bermaydi
+            videoConstraints: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
         };
         const f = formats();
         if (f) c.formatsToSupport = f;
