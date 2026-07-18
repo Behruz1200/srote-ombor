@@ -1,114 +1,107 @@
-{% extends 'inventory/base.html' %}
-{% load yurit_extras %}
+{% load yurit_extras %}<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Narx etiketkasi — yurit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #e9ecef; font-family: -apple-system, system-ui, "Segoe UI", sans-serif; margin: 0; }
 
-{% block title %}Narx etiketkasi — yurit{% endblock %}
+        .toolbar {
+            background: #fff; padding: 12px 18px; border-bottom: 1px solid #dee2e6;
+            position: sticky; top: 0; z-index: 100;
+            display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+        }
+        .toolbar .grp { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-{% block content %}
-<div class="container dash-page no-print" style="max-width:760px;">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Peshtaxta yorlig'i</span>
-                <h1 class="dash-hero__title"><i class="bi bi-tag"></i> Narx etiketkasi</h1>
-                <p class="dash-hero__sub">
-                    <span>{{ n_products }} ta mahsulot · {{ labels|length }} ta yorliq · nom + narx + do'kon nomi</span>
-                </p>
-            </div>
-            <div class="dash-hero__actions">
-                <button onclick="window.print()" class="dash-btn dash-btn--primary">
-                    <i class="bi bi-printer"></i> <span>Chop etish</span>
-                </button>
-            </div>
+        /* --- Preview sheet --- */
+        .plbl-sheet {
+            display: flex; flex-wrap: wrap; gap: 6mm;
+            justify-content: center; padding: 18px;
+        }
+        .plbl {
+            box-sizing: border-box; background: #fff; color: #000;
+            border: 1px dashed #adb5bd;
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+            overflow: hidden;
+        }
+        .plbl__name { font-weight: 700; text-transform: uppercase; line-height: 1.05; width: 100%; }
+        .plbl__mid { flex: 1; display: flex; align-items: center; justify-content: center; gap: 1mm; width: 100%; }
+        .plbl__price { font-weight: 800; line-height: 1; }
+        .plbl__cur { align-self: flex-end; }
+        .plbl__store { width: 100%; line-height: 1.05; }
+
+        /* 58 × 40 mm */
+        .sz-58x40 .plbl { width: 58mm; height: 40mm; padding: 3mm 2mm; }
+        .sz-58x40 .plbl__name { font-size: 12pt; }
+        .sz-58x40 .plbl__price { font-size: 26pt; }
+        .sz-58x40 .plbl__cur { font-size: 9pt; margin-bottom: 3pt; }
+        .sz-58x40 .plbl__store { font-size: 9pt; }
+
+        /* 30 × 20 mm */
+        .sz-30x20 .plbl { width: 30mm; height: 20mm; padding: 1mm; }
+        .sz-30x20 .plbl__name { font-size: 7pt; }
+        .sz-30x20 .plbl__price { font-size: 13pt; }
+        .sz-30x20 .plbl__cur { font-size: 5pt; margin-bottom: 1pt; }
+        .sz-30x20 .plbl__store { font-size: 5pt; }
+
+        @media print {
+            html, body { margin: 0; padding: 0; background: #fff; }
+            .toolbar, .no-print { display: none !important; }
+            @page { size: {{ w }}mm {{ h }}mm; margin: 0; }
+            .plbl-sheet { display: block; gap: 0; padding: 0; }
+            .plbl {
+                border: none; margin: 0;
+                width: {{ w }}mm; height: {{ h }}mm;
+                page-break-after: always; break-after: page;
+                -webkit-print-color-adjust: exact; print-color-adjust: exact;
+            }
+            .plbl:last-child { page-break-after: auto; break-after: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar no-print">
+        <div>
+            <strong>Narx etiketkasi</strong>
+            <span class="text-muted small">— {{ n_products }} mahsulot · {{ labels|length }} yorliq</span>
         </div>
-    </header>
-
-    <div class="card p-3 mb-3">
-        <!-- O'lcham tanlash -->
-        <div class="mb-3">
-            <div class="form-label mb-1">Qog'oz o'lchami</div>
-            <div class="btn-group" role="group">
+        <div class="grp">
+            <div class="btn-group btn-group-sm" role="group">
                 <a href="?codes={{ codes }}&size=58x40&copies={{ copies }}"
-                   class="btn btn-sm {% if size == '58x40' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                    58 × 40 mm
-                </a>
+                   class="btn {% if size == '58x40' %}btn-primary{% else %}btn-outline-primary{% endif %}">58 × 40 mm</a>
                 <a href="?codes={{ codes }}&size=30x20&copies={{ copies }}"
-                   class="btn btn-sm {% if size == '30x20' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                    30 × 20 mm
-                </a>
+                   class="btn {% if size == '30x20' %}btn-primary{% else %}btn-outline-primary{% endif %}">30 × 20 mm</a>
             </div>
+            <form method="get" class="d-flex gap-2 align-items-center mb-0">
+                <input type="hidden" name="codes" value="{{ codes }}">
+                <input type="hidden" name="size" value="{{ size }}">
+                <label class="form-label mb-0 small">Nusxa:</label>
+                <input type="number" name="copies" value="{{ copies }}" min="1" max="200"
+                       class="form-control form-control-sm" style="width: 74px;">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Yangilash</button>
+            </form>
+            <button onclick="window.print()" class="btn btn-success btn-sm">Chop etish</button>
+            <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">Orqaga</a>
         </div>
-
-        <!-- Nusxa soni -->
-        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
-            <input type="hidden" name="codes" value="{{ codes }}">
-            <input type="hidden" name="size" value="{{ size }}">
-            <label class="form-label mb-0">Har mahsulotdan nusxa:</label>
-            <input type="number" name="copies" value="{{ copies }}" min="1" max="200"
-                   class="form-control form-control-sm" style="width:100px">
-            <button class="btn btn-sm btn-outline-primary" type="submit">Yangilash</button>
-            <span class="small text-muted ms-2">Odatda 1 (tokchaga bitta yorliq).</span>
-        </form>
     </div>
 
     {% if not labels %}
-    <div class="alert alert-warning">Mahsulot topilmadi. Qabuldan qaytib, qayta urinib ko'ring.</div>
+    <div class="alert alert-warning m-4">Mahsulot topilmadi. Qabuldan qaytib, qayta urinib ko'ring.</div>
     {% endif %}
-</div>
 
-<!-- Bosiladigan yorliqlar -->
-<div class="plbl-sheet sz-{{ size }}">
-    {% for lb in labels %}
-    <div class="plbl">
-        <div class="plbl__name">{{ lb.product.name|truncatechars:40 }}</div>
-        <div class="plbl__mid">
-            <span class="plbl__price">{{ lb.price|som }}</span>
-            <span class="plbl__cur">so'm</span>
+    <div class="plbl-sheet sz-{{ size }}">
+        {% for lb in labels %}
+        <div class="plbl">
+            <div class="plbl__name">{{ lb.product.name|truncatechars:40 }}</div>
+            <div class="plbl__mid">
+                <span class="plbl__price">{{ lb.price|som }}</span>
+                <span class="plbl__cur">so'm</span>
+            </div>
+            <div class="plbl__store">{{ store_name }}</div>
         </div>
-        <div class="plbl__store">{{ store_name }}</div>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
-
-<style>
-    .plbl-sheet { display: flex; flex-wrap: wrap; gap: 4mm; justify-content: center; padding: 8px; }
-    .plbl {
-        box-sizing: border-box;
-        display: flex; flex-direction: column; align-items: center;
-        text-align: center; background: #fff; color: #000;
-        border: 1px dashed #bbb;
-    }
-    .plbl__name { font-weight: 700; text-transform: uppercase; line-height: 1.05; width: 100%; }
-    .plbl__mid { flex: 1; display: flex; align-items: center; justify-content: center; gap: 1mm; }
-    .plbl__price { font-weight: 800; line-height: 1; }
-    .plbl__cur { align-self: flex-end; }
-    .plbl__store { width: 100%; line-height: 1.05; }
-
-    /* 58 × 40 mm */
-    .sz-58x40 .plbl { width: 58mm; height: 40mm; padding: 3mm 2mm; }
-    .sz-58x40 .plbl__name { font-size: 11pt; }
-    .sz-58x40 .plbl__price { font-size: 24pt; }
-    .sz-58x40 .plbl__cur { font-size: 9pt; margin-bottom: 2pt; }
-    .sz-58x40 .plbl__store { font-size: 9pt; }
-
-    /* 30 × 20 mm */
-    .sz-30x20 .plbl { width: 30mm; height: 20mm; padding: 1mm; }
-    .sz-30x20 .plbl__name { font-size: 6.5pt; }
-    .sz-30x20 .plbl__price { font-size: 12pt; }
-    .sz-30x20 .plbl__cur { font-size: 5pt; margin-bottom: 1pt; }
-    .sz-30x20 .plbl__store { font-size: 5pt; }
-
-    @media print {
-        .no-print { display: none !important; }
-        html, body { margin: 0; padding: 0; background: #fff; }
-        @page { size: {{ w }}mm {{ h }}mm; margin: 0; }
-        .plbl-sheet { display: block; gap: 0; padding: 0; }
-        .plbl {
-            border: none;
-            width: {{ w }}mm; height: {{ h }}mm;
-            page-break-after: always;
-        }
-        .plbl:last-child { page-break-after: auto; }
-    }
-</style>
-{% endblock %}
+</body>
+</html>
