@@ -81,9 +81,10 @@
         <div class="fw-semibold small mb-1">KASSA (naqd)</div>
         <div class="d-flex justify-content-between small"><span>Boshlang'ich:</span><span>{{ shift.opening_cash|som }} so'm</span></div>
         <div class="d-flex justify-content-between small"><span>+ Naqd sotuv:</span><span>{{ cash_sales|som }} so'm</span></div>
-        {% if payouts_total %}
-        <div class="d-flex justify-content-between small text-danger"><span>− Kassadan olingan:</span><span>{{ payouts_total|som }} so'm</span></div>
-        {% endif %}
+        <div class="d-flex justify-content-between small {% if payouts_total %}text-danger{% endif %}">
+            <span>− Kassadan olingan:</span>
+            <span>{{ payouts_total|som }} so'm{% if payouts %} <span class="text-muted">({{ payouts|length }})</span>{% endif %}</span>
+        </div>
         <div class="d-flex justify-content-between"><span><strong>= Kutilgan:</strong></span><strong>{{ expected|som }} so'm</strong></div>
         {% if shift.counted_cash is not None %}
         <div class="d-flex justify-content-between small"><span>Sanalgan:</span><span>{{ shift.counted_cash|som }} so'm</span></div>
