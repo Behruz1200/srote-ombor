@@ -6652,7 +6652,12 @@ def price_labels(request):
             st = (BranchStock.objects.filter(variant__product=p, sale_price__gt=0)
                   .order_by('-sale_price').first())
             price = st.sale_price if st else p.default_sale_price
-        labels.append({'product': p, 'price': price})
+        # Etiketkada BarTender andozasi kabi vergul bilan: 60,000
+        try:
+            price_str = f"{int(round(float(price))):,}"
+        except (ValueError, TypeError):
+            price_str = str(price)
+        labels.append({'product': p, 'price': price, 'price_str': price_str})
 
     render_labels = []
     for lb in labels:
