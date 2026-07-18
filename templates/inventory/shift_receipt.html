@@ -49,16 +49,24 @@
         <div class="fw-semibold small mb-1">SOTUVLAR</div>
         <div class="d-flex justify-content-between small"><span>Cheklar:</span><strong>{{ txn_count }}</strong></div>
         <div class="d-flex justify-content-between small"><span>Sotilgan mahsulot:</span><strong>{{ item_qty }} dona</strong></div>
-        <div class="d-flex justify-content-between"><span>Jami savdo:</span><strong>{{ total_rev|som }} so'm</strong></div>
-        {% if pm_list %}
-        <div class="small text-muted mt-1">To'lov turlari bo'yicha:</div>
-        {% for label, info in pm_list %}
-        <div class="d-flex justify-content-between small">
-            <span>&nbsp;&nbsp;{{ label }} <span class="text-muted">({{ info.count }})</span></span>
-            <span>{{ info.total|som }} so'm</span>
+
+        <hr class="my-2">
+        <div class="fw-semibold small mb-1">PUL (to'lov turi bo'yicha)</div>
+        {% for row in pay_rows %}
+        <div class="d-flex justify-content-between">
+            <span>{{ row.label }} <span class="text-muted small">({{ row.count }})</span></span>
+            <strong>{{ row.amount|som }} so'm</strong>
         </div>
         {% endfor %}
+        {% if other_money %}
+        <div class="d-flex justify-content-between">
+            <span>Boshqa</span><strong>{{ other_money|som }} so'm</strong>
+        </div>
         {% endif %}
+        <div class="d-flex justify-content-between border-top mt-1 pt-1">
+            <span><strong>JAMI:</strong></span>
+            <strong style="font-size:1.15rem;">{{ total_rev|som }} so'm</strong>
+        </div>
 
         {% if refunds %}
         <hr class="my-2">

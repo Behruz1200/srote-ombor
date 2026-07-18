@@ -3803,18 +3803,48 @@ def shift_receipt(request, pk):
         return HttpResponseForbidden()
 
     txns = list(shift.transactions.select_related('sold_by').prefetch_related('lines'))
-    pm = {}
     total_rev = 0.0
     item_qty = 0
+    # Pul har bir to'lov turi bo'yicha alohida. "Aralash" chek payment_breakdown
+    # bo'yicha bo'linadi — naqd/karta/o'tkazma qismi o'z ustuniga tushadi.
+    PM = SaleTransaction.PaymentMethod
+    labels = dict(PM.choices)
+    money = {PM.CASH: 0.0, PM.CARD: 0.0, PM.TRANSFER: 0.0}
+    counts = {PM.CASH: 0, PM.CARD: 0, PM.TRANSFER: 0}
+    other_money = 0.0
     for t in txns:
-        key = t.get_payment_method_display()
-        d = pm.setdefault(key, {'count': 0, 'total': 0.0})
-        d['count'] += 1
-        d['total'] += float(t.total)
         total_rev += float(t.total)
         for ln in t.lines.all():
             item_qty += ln.quantity
-    pm_list = sorted(pm.items(), key=lambda kv: -kv[1]['total'])
+        if t.payment_method == PM.MIXED:
+            used = set()
+            covered = 0.0
+            for part in (t.payment_breakdown or []):
+                m = (part.get('method') or '').strip()
+                try:
+                    amt = float(part.get('amount') or 0)
+                except (TypeError, ValueError):
+                    amt = 0.0
+                covered += amt
+                if m in money:
+                    money[m] += amt
+                    used.add(m)
+                else:
+                    other_money += amt
+            # Breakdown to'liq bo'lmasa (eski/chala yozuvlar) — qolgan summa
+            # "Boshqa"ga tushadi, shunda qismlar yig'indisi JAMI bilan teng bo'ladi.
+            rem = float(t.total) - covered
+            if abs(rem) > 0.005:
+                other_money += rem
+            for m in used:
+                counts[m] += 1
+        elif t.payment_method in money:
+            money[t.payment_method] += float(t.total)
+            counts[t.payment_method] += 1
+        else:
+            other_money += float(t.total)
+    pay_rows = [{'label': labels.get(k, k), 'amount': money[k], 'count': counts[k]}
+                for k in (PM.CASH, PM.CARD, PM.TRANSFER)]
 
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
 
@@ -3829,7 +3859,8 @@ def shift_receipt(request, pk):
         'txn_count': len(txns),
         'item_qty': item_qty,
         'total_rev': total_rev,
-        'pm_list': pm_list,
+        'pay_rows': pay_rows,
+        'other_money': other_money,
         'cash_sales': shift.cash_sales(),
         'payouts': payouts,
         'payouts_total': shift.payouts_total(),
