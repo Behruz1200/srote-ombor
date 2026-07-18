@@ -272,7 +272,7 @@
         modalEl.addEventListener('shown.bs.modal', () => {
             setStatus('Kamerani yuklayapti...', 'info');
             html5Qr = new Html5Qrcode('scannerReader');
-            html5Qr.start({facingMode: 'environment'}, {fps: 10, qrbox: 250},
+            html5Qr.start(yuritScan.camera(), yuritScan.config(),
                 (decoded) => {
                     setStatus(`Aniqlandi: <strong>${decoded}</strong>`, 'success');
                     // Find row by code

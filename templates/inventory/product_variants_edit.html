@@ -427,10 +427,9 @@ document.getElementById('editForm') && document.getElementById('editForm')
         }, 250);
         setStat('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
         qr = new Html5Qrcode('editScanReader');
-        qr.start({ facingMode: 'environment' },
-            { fps: 10, qrbox: (w,h)=>{ const m=Math.min(w,h), sz=Math.floor(m*0.75); return {width:sz,height:sz}; } },
+        qr.start(yuritScan.camera(), yuritScan.config(),
             onDecode, () => {})
-          .then(() => setStat('<i class="bi bi-camera-video"></i> Skanerlashga tayyor — kodni kameraga to\'g\'rilang', 'info'))
+          .then(() => { yuritScan.addTorch(qr, 'editScanReader'); setStat('<i class="bi bi-camera-video"></i> Skanerlashga tayyor — kodni kameraga to\'g\'rilang', 'info'); })
           .catch(err => setStat('<i class="bi bi-exclamation-triangle"></i> Kamera ochilmadi: ' + err, 'danger'));
     });
     modalEl.addEventListener('hide.bs.modal', stop);

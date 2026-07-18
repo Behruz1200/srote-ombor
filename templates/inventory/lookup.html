@@ -862,17 +862,9 @@
     modalEl.addEventListener('shown.bs.modal', function() {
         setStatus('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
         html5QrCode = new Html5Qrcode('scanReader');
-        const config = {
-            fps: 10,
-            qrbox: function(w, h) {
-                const m = Math.min(w, h);
-                const size = Math.floor(m * 0.75);
-                return { width: size, height: size };
-            },
-            aspectRatio: 1.0,
-        };
+        const config = yuritScan.config();
         html5QrCode.start(
-            { facingMode: 'environment' },
+            yuritScan.camera(),
             config,
             function(decoded) {
                 setStatus('<i class="bi bi-check-circle"></i> Aniqlandi: <strong>' + decoded + '</strong>', 'success');

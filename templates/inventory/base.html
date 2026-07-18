@@ -3941,5 +3941,70 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 </script>
+<script>
+// ---- Kamera skaner sozlamalari (barcha sahifalar uchun yagona) ----
+// Tezlik uchun: (1) telefonning O'Z BarcodeDetector'i (Android Chrome) —
+// eng katta tezlik farqi; (2) faqat kerakli formatlar; (3) shtrix-kod KENG
+// bo'lgani uchun kvadrat emas, keng to'rtburchak skan oynasi; (4) yuqori
+// aniqlik + uzluksiz fokus; (5) fps 20.
+window.yuritScan = (function () {
+    function formats() {
+        const F = window.Html5QrcodeSupportedFormats;
+        if (!F) return null;
+        return [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E,
+                F.CODE_128, F.CODE_39, F.ITF];
+    }
+    function camera() {
+        return {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            advanced: [{ focusMode: 'continuous' }]
+        };
+    }
+    // Keng skan oynasi — EAN-13 uzun bo'ladi, kvadratga sig'masdi
+    function box(w, h) {
+        const width = Math.floor(Math.min(w * 0.92, Math.max(w - 16, 120)));
+        const height = Math.floor(Math.max(110, Math.min(h * 0.6, width * 0.45)));
+        return { width: width, height: height };
+    }
+    function config(extra) {
+        const c = {
+            fps: 20,
+            qrbox: box,
+            disableFlip: false,
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+        };
+        const f = formats();
+        if (f) c.formatsToSupport = f;
+        if (extra) { for (const k in extra) c[k] = extra[k]; }
+        return c;
+    }
+    // Fonar tugmasi — qorong'i joyda skanerlash uchun (qo'llab-quvvatlansa)
+    function addTorch(qr, containerId) {
+        try {
+            const caps = qr && qr.getRunningTrackCapabilities
+                ? qr.getRunningTrackCapabilities() : null;
+            if (!caps || !caps.torch) return;
+            const host = document.getElementById(containerId);
+            if (!host || !host.parentNode) return;
+            if (host.parentNode.querySelector('.yrt-torch')) return;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-outline-warning yrt-torch mt-2';
+            btn.textContent = 'Fonar (yorug\'lik)';
+            let on = false;
+            btn.addEventListener('click', function () {
+                on = !on;
+                try { qr.applyVideoConstraints({ advanced: [{ torch: on }] }); } catch (e) {}
+                btn.classList.toggle('btn-warning', on);
+                btn.classList.toggle('btn-outline-warning', !on);
+            });
+            host.parentNode.appendChild(btn);
+        } catch (e) {}
+    }
+    return { camera: camera, config: config, addTorch: addTorch, formats: formats };
+})();
+</script>
 </body>
 </html>
