@@ -42,20 +42,29 @@
 
         <div class="card p-3 mb-3">
             <div class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Filial <span class="text-danger">*</span></label>
                     <select name="branch" class="form-select" required>
                         <option value="">— tanlang —</option>
                         {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Sotuv narx <span class="text-danger">*</span></label>
-                    <input type="text" name="price" class="form-control" inputmode="decimal" placeholder="150000" required>
+                <div class="col-md-3">
+                    <label class="form-label">Tannarx</label>
+                    <input type="text" name="cost" id="ciCost" class="form-control" inputmode="decimal" placeholder="100000">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Marja %</label>
-                    <input type="text" name="marja" class="form-control" inputmode="decimal" value="0">
+                    <input type="text" name="marja" id="ciMarja" class="form-control" inputmode="decimal" value="0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Sotuv narx <span class="text-danger">*</span></label>
+                    <input type="text" name="price" id="ciPrice" class="form-control" inputmode="decimal" placeholder="150000" required>
+                </div>
+                <div class="col-12">
+                    <div class="form-text">
+                        Tannarx + marja % → sotuv narx avtomatik. Yoki sotuv narxni yozsangiz — marja % o'zi hisoblanadi.
+                    </div>
                 </div>
             </div>
         </div>
@@ -95,6 +104,39 @@
 </div>
 
 <script>
+// Tannarx ↔ Marja % ↔ Sotuv narx — ikki tomonlama hisob (boshqa sahifalardagi kabi)
+(function () {
+    const costEl = document.getElementById('ciCost');
+    const marjaEl = document.getElementById('ciMarja');
+    const saleEl = document.getElementById('ciPrice');
+    if (!costEl || !marjaEl || !saleEl) return;
+    function num(s) {
+        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
+        if (s === '' || s === '-' || s === '.') return null;
+        const v = parseFloat(s);
+        return isNaN(v) ? null : v;
+    }
+    const asInt = v => String(Math.round(v));
+    function asMarja(v) {
+        const r = Math.round(v * 10) / 10;
+        return (r % 1 === 0) ? String(r) : r.toFixed(1);
+    }
+    function recalc(src) {
+        const cost = num(costEl.value), marja = num(marjaEl.value), sale = num(saleEl.value);
+        if (src === 'marja') {
+            if (cost !== null && marja !== null) saleEl.value = asInt(cost * (1 + marja / 100));
+        } else if (src === 'sale') {
+            if (cost) marjaEl.value = asMarja((sale / cost - 1) * 100);
+        } else { // tannarx
+            if (marja !== null) { if (cost !== null) saleEl.value = asInt(cost * (1 + marja / 100)); }
+            else if (sale !== null && cost) { marjaEl.value = asMarja((sale / cost - 1) * 100); }
+        }
+    }
+    costEl.addEventListener('input', function () { recalc('cost'); });
+    marjaEl.addEventListener('input', function () { recalc('marja'); });
+    saleEl.addEventListener('input', function () { recalc('sale'); });
+})();
+
 (function () {
     // Faqat o'lcham — rang ishlatilmaydi (kiyim/poyabzal uchun)
     const sizes = [];

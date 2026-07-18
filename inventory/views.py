@@ -1808,12 +1808,32 @@ def clothes_intake(request):
             marja = parse_dec(request.POST.get('marja'))
         except (InvalidOperation, ValueError):
             price = Decimal('0'); marja = Decimal('0')
-        if price <= 0:
-            errors.append("Sotuv narxini kiriting.")
         if marja < 0:
             marja = Decimal('0')
-        cost = (price / (Decimal('1') + marja / Decimal('100'))
-                ).quantize(Decimal('0.01')) if price > 0 else Decimal('0')
+        # Tannarx (ixtiyoriy) — boshqa qabul sahifalaridagi kabi:
+        #   tannarx berilsa -> sotuv = tannarx × (1 + marja/100)
+        #   faqat sotuv berilsa -> tannarx = sotuv / (1 + marja/100)
+        cost_in = Decimal('0')
+        cost_raw = (request.POST.get('cost') or '').strip()
+        if cost_raw:
+            try:
+                cost_in = parse_dec(cost_raw)
+            except (InvalidOperation, ValueError):
+                cost_in = Decimal('0')
+        if cost_in < 0:
+            cost_in = Decimal('0')
+        if cost_in > 0:
+            cost = cost_in.quantize(Decimal('0.01'))
+            if price <= 0:
+                price = (cost_in * (Decimal('1') + marja / Decimal('100'))
+                         ).quantize(Decimal('0.01'))
+        elif price > 0:
+            cost = (price / (Decimal('1') + marja / Decimal('100'))
+                    ).quantize(Decimal('0.01'))
+        else:
+            cost = Decimal('0')
+        if price <= 0:
+            errors.append("Sotuv narxini yoki tannarxni kiriting.")
 
         # Kataklar: qty[<size>]  (kiyim/poyabzalda rang ishlatilmaydi).
         # Eski format qty[<size>|<color>] ham qo'llab-quvvatlanadi.
