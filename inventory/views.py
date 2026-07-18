@@ -2014,12 +2014,16 @@ def intake_variants(request):
         colors = request.POST.getlist('row_color')
         sizes = request.POST.getlist('row_size')
         barcodes = request.POST.getlist('row_barcode')
+        costs = request.POST.getlist('row_cost')
+        marjas = request.POST.getlist('row_marja')
         prices = request.POST.getlist('row_price')
         qtys = request.POST.getlist('row_qty')
 
         _dec = parse_dec
 
-        # Marja % (default 0): tannarx = sotuv narx / (1 + marja/100)
+        # Standart marja — row_marja bo'sh bo'lsa fallback sifatida ishlatiladi.
+        # Tannarx berilsa: sotuv = tannarx × (1 + marja/100).
+        # Tannarx bo'sh, faqat sotuv berilsa: tannarx = sotuv / (1 + marja/100).
         try:
             marja = _dec(request.POST.get('marja'))
         except (InvalidOperation, ValueError):
@@ -2034,11 +2038,14 @@ def intake_variants(request):
             color = smart_title(get(colors))
             size = smart_title(get(sizes))
             barcode = get(barcodes).strip() or None
+            cost_raw, marja_raw = get(costs), get(marjas)
             price_raw, qty_raw = get(prices), get(qtys)
-            if not (color or size or barcode or qty_raw.strip()):
+            if not (color or size or barcode or qty_raw.strip()
+                    or price_raw.strip() or cost_raw.strip()):
                 continue  # butunlay bo'sh qator
             raw_rows.append({'color': color, 'size': size,
                              'barcode': barcode or '',
+                             'cost': cost_raw, 'marja': marja_raw,
                              'price': price_raw, 'qty': qty_raw})
             try:
                 price = _dec(price_raw)
@@ -2046,12 +2053,32 @@ def intake_variants(request):
             except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"{i + 1}-qator: narx yoki miqdor noto'g'ri.")
                 continue
-            if qty < 0 or price < 0:
+            # Tannarx (ixtiyoriy) va shu qatorning marjasi
+            cost_in = Decimal('0')
+            if cost_raw.strip():
+                try:
+                    cost_in = _dec(cost_raw)
+                except (InvalidOperation, ValueError):
+                    cost_in = Decimal('0')
+            row_marja = None
+            if marja_raw.strip():
+                try:
+                    row_marja = _dec(marja_raw)
+                except (InvalidOperation, ValueError):
+                    row_marja = None
+            if qty < 0 or price < 0 or cost_in < 0:
                 errors.append(f"{i + 1}-qator: manfiy qiymat kiritilmaydi.")
                 continue
-            # Tannarx marja orqali hisoblanadi (marja=0 -> tannarx = narx)
-            if price > 0:
-                cost = (price / (Decimal('1') + marja / Decimal('100'))
+            eff_marja = row_marja if row_marja is not None else marja
+            if cost_in > 0:
+                # Tannarx to'g'ridan-to'g'ri kiritilgan
+                cost = cost_in.quantize(Decimal('0.01'))
+                if price <= 0:
+                    price = (cost_in * (Decimal('1') + eff_marja / Decimal('100'))
+                             ).quantize(Decimal('0.01'))
+            elif price > 0:
+                # Faqat sotuv narx berilgan — tannarxni marja orqali chiqaramiz
+                cost = (price / (Decimal('1') + eff_marja / Decimal('100'))
                         ).quantize(Decimal('0.01'))
             else:
                 cost = Decimal('0')

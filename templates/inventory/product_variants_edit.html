@@ -52,6 +52,7 @@
                             <th style="min-width:100px">O'lcham</th>
                             <th style="min-width:160px">Shtrix-kod</th>
                             <th style="min-width:100px">Tannarx</th>
+                            <th style="min-width:90px">Marja %</th>
                             <th style="min-width:100px">Sotuv narx</th>
                             <th style="min-width:100px">Ulgurji</th>
                             <th style="min-width:80px">Ombor</th>
@@ -69,8 +70,9 @@
                             <td><input type="text" name="v_color" class="form-control form-control-sm" value="{{ r.variant.color }}"></td>
                             <td><input type="text" name="v_size" class="form-control form-control-sm" value="{{ r.variant.size }}"></td>
                             <td><input type="text" name="v_barcode" class="form-control form-control-sm" value="{{ r.variant.barcode|default:'' }}" placeholder="—"></td>
-                            <td><input type="text" name="v_cost" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.cost|floatformat:'0u' }}"></td>
-                            <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.sale|floatformat:'0u' }}"></td>
+                            <td><input type="text" name="v_cost" class="form-control form-control-sm text-end v-cost" inputmode="decimal" value="{{ r.cost|floatformat:'0u' }}"></td>
+                            <td><input type="text" name="v_marja" class="form-control form-control-sm text-end v-marja" inputmode="decimal" placeholder="%"></td>
+                            <td><input type="text" name="v_sale" class="form-control form-control-sm text-end v-sale" inputmode="decimal" value="{{ r.sale|floatformat:'0u' }}"></td>
                             <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.wholesale|floatformat:'0u' }}"></td>
                             <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" value="{{ r.stock|unlocalize }}"></td>
                             <td class="text-center align-middle">
@@ -153,8 +155,9 @@
         <td><input type="text" name="v_color" class="form-control form-control-sm" placeholder="Yangi rang/tur"></td>
         <td><input type="text" name="v_size" class="form-control form-control-sm" placeholder="O'lcham"></td>
         <td><input type="text" name="v_barcode" class="form-control form-control-sm" placeholder="Skanerlang"></td>
-        <td><input type="text" name="v_cost" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
-        <td><input type="text" name="v_sale" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="v_cost" class="form-control form-control-sm text-end v-cost" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="v_marja" class="form-control form-control-sm text-end v-marja" inputmode="decimal" placeholder="%"></td>
+        <td><input type="text" name="v_sale" class="form-control form-control-sm text-end v-sale" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" placeholder="0"></td>
         <td></td>
@@ -417,6 +420,57 @@ document.getElementById('editForm') && document.getElementById('editForm')
           .catch(err => setStat('<i class="bi bi-exclamation-triangle"></i> Kamera ochilmadi: ' + err, 'danger'));
     });
     modalEl.addEventListener('hide.bs.modal', stop);
+})();
+</script>
+
+<script>
+// Tannarx ↔ Marja % ↔ Sotuv narx — ikki tomonlama hisob (tahrirlash jadvali).
+(function () {
+    const body = document.getElementById('editRows');
+    if (!body) return;
+    function num(s) {
+        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
+        if (s === '' || s === '-' || s === '.') return null;
+        const v = parseFloat(s);
+        return isNaN(v) ? null : v;
+    }
+    const asInt = v => String(Math.round(v));
+    function asMarja(v) {
+        const r = Math.round(v * 10) / 10;
+        return (r % 1 === 0) ? String(r) : r.toFixed(1);
+    }
+    // Boshlang'ich: mavjud tannarx va sotuvdan marjani chiqaramiz
+    function initRow(tr) {
+        const c = tr.querySelector('.v-cost'), m = tr.querySelector('.v-marja'), s = tr.querySelector('.v-sale');
+        if (!c || !m || !s || m.value.trim()) return;
+        const cost = num(c.value), sale = num(s.value);
+        if (cost && sale !== null) m.value = asMarja((sale / cost - 1) * 100);
+    }
+    body.querySelectorAll('tr').forEach(initRow);
+
+    body.addEventListener('input', function (e) {
+        const t = e.target;
+        if (!t.classList) return;
+        const isCost = t.classList.contains('v-cost');
+        const isMarja = t.classList.contains('v-marja');
+        const isSale = t.classList.contains('v-sale');
+        if (!isCost && !isMarja && !isSale) return;
+        const tr = t.closest('tr');
+        if (!tr) return;
+        const costEl = tr.querySelector('.v-cost');
+        const marjaEl = tr.querySelector('.v-marja');
+        const saleEl = tr.querySelector('.v-sale');
+        if (!costEl || !marjaEl || !saleEl) return;
+        const cost = num(costEl.value), marja = num(marjaEl.value), sale = num(saleEl.value);
+        if (isMarja) {
+            if (cost !== null && marja !== null) saleEl.value = asInt(cost * (1 + marja / 100));
+        } else if (isSale) {
+            if (cost) marjaEl.value = asMarja((sale / cost - 1) * 100);
+        } else { // tannarx
+            if (marja !== null) { if (cost !== null) saleEl.value = asInt(cost * (1 + marja / 100)); }
+            else if (sale !== null && cost) { marjaEl.value = asMarja((sale / cost - 1) * 100); }
+        }
+    });
 })();
 </script>
 

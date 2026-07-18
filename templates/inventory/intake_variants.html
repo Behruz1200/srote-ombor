@@ -96,10 +96,10 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Marja %</label>
+                    <label class="form-label">Standart marja %</label>
                     <input type="text" name="marja" class="form-control" inputmode="decimal"
                            value="{% if post_back %}{{ post_back.marja }}{% else %}0{% endif %}"
-                           title="Tannarx = sotuv narx / (1 + marja/100). 0 bo'lsa tannarx = sotuv narx.">
+                           title="Yangi qatorlar uchun standart marja. Har qatorda alohida o'zgartirsa bo'ladi.">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Yetkazib beruvchi</label>
@@ -145,6 +145,20 @@
                                 </button>
                             </th>
                             <th style="min-width:160px">Shtrix-kod</th>
+                            <th style="min-width:100px">Tannarx
+                                <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                        data-col="row_cost" tabindex="-1"
+                                        title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                    <i class="bi bi-arrow-down-square"></i>
+                                </button>
+                            </th>
+                            <th style="min-width:90px">Marja %
+                                <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                        data-col="row_marja" tabindex="-1"
+                                        title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                    <i class="bi bi-arrow-down-square"></i>
+                                </button>
+                            </th>
                             <th style="min-width:110px">Sotuv narx
                                 <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
                                         data-col="row_price" tabindex="-1"
@@ -164,7 +178,9 @@
                                 <td><input type="text" name="row_color" class="form-control form-control-sm" value="{{ r.color }}" list="colorOptions" autocomplete="off"></td>
                                 <td><input type="text" name="row_size" class="form-control form-control-sm" value="{{ r.size }}"></td>
                                 <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" value="{{ r.barcode }}"></td>
-                                <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.price }}"></td>
+                                <td><input type="text" name="row_cost" class="form-control form-control-sm text-end row-cost" inputmode="decimal" value="{{ r.cost }}"></td>
+                                <td><input type="text" name="row_marja" class="form-control form-control-sm text-end row-marja" inputmode="decimal" value="{{ r.marja }}"></td>
+                                <td><input type="text" name="row_price" class="form-control form-control-sm text-end row-price" inputmode="decimal" value="{{ r.price }}"></td>
                                 <td><input type="text" name="row_qty" class="form-control form-control-sm text-end row-qty" inputmode="numeric" value="{{ r.qty }}"></td>
                                 <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
                             </tr>
@@ -202,7 +218,9 @@
         <td><input type="text" name="row_color" class="form-control form-control-sm" placeholder="Oq" list="colorOptions" autocomplete="off"></td>
         <td><input type="text" name="row_size" class="form-control form-control-sm" placeholder="400ml"></td>
         <td><input type="text" name="row_barcode" class="form-control form-control-sm row-barcode" placeholder="Skanerlang"></td>
-        <td><input type="text" name="row_price" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="row_cost" class="form-control form-control-sm text-end row-cost" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="row_marja" class="form-control form-control-sm text-end row-marja" inputmode="decimal" placeholder="%"></td>
+        <td><input type="text" name="row_price" class="form-control form-control-sm text-end row-price" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="row_qty" class="form-control form-control-sm text-end row-qty" inputmode="numeric" placeholder="0"></td>
         <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
     </tr>
@@ -353,6 +371,11 @@
     function addRow(focus) {
         const tr = rowTpl.content.firstElementChild.cloneNode(true);
         rowsBody.appendChild(tr);
+        // Yangi qatorga standart marjani oldindan yozamiz (tannarx kiritilganda
+        // sotuv narx avtomatik hisoblanadi).
+        const mj = tr.querySelector('.row-marja');
+        const dm = document.querySelector('input[name="marja"]');
+        if (mj && dm && dm.value.trim() && !mj.value.trim()) mj.value = dm.value.trim();
         if (focus) tr.querySelector('input').focus();
         recount();
         return tr;
@@ -616,6 +639,50 @@
         });
         modalEl.addEventListener('hide.bs.modal', stop);
     })();
+})();
+</script>
+
+<script>
+// Tannarx ↔ Marja % ↔ Sotuv narx — ikki tomonlama hisob.
+//   tannarx + marja  -> sotuv = tannarx × (1 + marja/100)
+//   tannarx + sotuv  -> marja = (sotuv/tannarx − 1) × 100
+(function () {
+    const body = document.getElementById('rowsBody');
+    if (!body) return;
+    function num(s) {
+        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
+        if (s === '' || s === '-' || s === '.') return null;
+        const v = parseFloat(s);
+        return isNaN(v) ? null : v;
+    }
+    const asInt = v => String(Math.round(v));
+    function asMarja(v) {
+        const r = Math.round(v * 10) / 10;
+        return (r % 1 === 0) ? String(r) : r.toFixed(1);
+    }
+    body.addEventListener('input', function (e) {
+        const t = e.target;
+        if (!t.classList) return;
+        const isCost = t.classList.contains('row-cost');
+        const isMarja = t.classList.contains('row-marja');
+        const isSale = t.classList.contains('row-price');
+        if (!isCost && !isMarja && !isSale) return;
+        const tr = t.closest('tr');
+        if (!tr) return;
+        const costEl = tr.querySelector('.row-cost');
+        const marjaEl = tr.querySelector('.row-marja');
+        const saleEl = tr.querySelector('.row-price');
+        if (!costEl || !marjaEl || !saleEl) return;
+        const cost = num(costEl.value), marja = num(marjaEl.value), sale = num(saleEl.value);
+        if (isMarja) {
+            if (cost !== null && marja !== null) saleEl.value = asInt(cost * (1 + marja / 100));
+        } else if (isSale) {
+            if (cost) marjaEl.value = asMarja((sale / cost - 1) * 100);
+        } else { // tannarx o'zgardi
+            if (marja !== null) { if (cost !== null) saleEl.value = asInt(cost * (1 + marja / 100)); }
+            else if (sale !== null && cost) { marjaEl.value = asMarja((sale / cost - 1) * 100); }
+        }
+    });
 })();
 </script>
 {% endblock %}
