@@ -1254,12 +1254,16 @@
                 align-items: center;
                 justify-content: space-between;
                 gap: 0.5rem;
-                /* Notch/rounded-corner xavfsiz zonasi hisobga olinadi —
-                   POS tugmasi ekran chetidan qirqilmaydi */
-                padding: calc(0.5rem + env(safe-area-inset-top))
-                         calc(0.75rem + env(safe-area-inset-right))
-                         0.5rem calc(0.75rem + env(safe-area-inset-left));
-                margin: 0 -12px 1rem;
+                /* Notch/rounded-corner xavfsiz zonasi + chetdan bo'sh joy.
+                   MUHIM: bu panel body'ning bevosita farzandi (container-fluid
+                   ichida EMAS), shuning uchun manfiy margin bermaymiz — aks
+                   holda ☰ va POS tugmalari ekran chetiga yopishib qoladi. */
+                padding: calc(0.55rem + env(safe-area-inset-top))
+                         calc(0.9rem + env(safe-area-inset-right))
+                         0.55rem calc(0.9rem + env(safe-area-inset-left));
+                margin: 0 0 1rem;
+                max-width: 100%;
+                overflow-x: hidden;
             }
             .yrt-mobile-topbar > * { min-width: 0; }
             .yrt-mobile-topbar .yrt-hamburger,
