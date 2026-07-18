@@ -3960,10 +3960,11 @@ window.yuritScan = (function () {
     function camera() {
         return { facingMode: 'environment' };
     }
-    // Keng skan oynasi — EAN-13 uzun bo'ladi, kvadratga sig'masdi
+    // Skan oynasi: KENG (EAN-13 uzun) va BALAND (QR kvadrat) — ikkalasi ham
+    // sig'sin. Eski kvadrat oynadan har ikki o'lchamda ham kattaroq.
     function box(w, h) {
         const width = Math.floor(Math.min(w * 0.92, Math.max(w - 16, 120)));
-        const height = Math.floor(Math.max(110, Math.min(h * 0.6, width * 0.45)));
+        const height = Math.floor(Math.max(120, Math.min(h * 0.8, width * 0.85)));
         return { width: width, height: height };
     }
     function config(extra) {
