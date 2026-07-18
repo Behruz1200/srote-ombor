@@ -140,12 +140,29 @@
                                         </button>
                                     </form>
                                     {% else %}
+                                    <!-- Split tugma: chapdagi savat = to'g'ridan-to'g'ri o'chirish
+                                         (mahsulotlar kategoriyasiz qoladi), o'ngdagi strelka =
+                                         mahsulotlarni boshqa kategoriyaga ko'chirib o'chirish. -->
+                                    <form method="post" id="catDel{{ c.pk }}" class="d-none"
+                                          onsubmit="return confirm('{{ c.name|escapejs }} o\'chirilsinmi? {{ c.product_count }} ta mahsulot kategoriyasiz qoladi.');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="pk" value="{{ c.pk }}">
+                                        <input type="hidden" name="move_to" value="none">
+                                    </form>
                                     <div class="btn-group">
-                                        <button type="button" class="btn btn-outline-danger dropdown-toggle"
+                                        <button type="submit" form="catDel{{ c.pk }}"
+                                                class="btn btn-outline-danger"
+                                                title="O'chirish — mahsulotlar kategoriyasiz qoladi"
+                                                aria-label="O'chirish">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        <button type="button"
+                                                class="btn btn-outline-danger dropdown-toggle dropdown-toggle-split"
                                                 data-bs-toggle="dropdown" data-bs-boundary="viewport"
                                                 aria-expanded="false"
-                                                title="O'chirish — mahsulotlarni ko'chirib">
-                                            <i class="bi bi-trash"></i>
+                                                title="Mahsulotlarni ko'chirib o'chirish">
+                                            <span class="visually-hidden">Boshqa variantlar</span>
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end">
                                             <li><h6 class="dropdown-header">
