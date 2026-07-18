@@ -27,6 +27,9 @@
                     <span class="dash-pill dash-pill--success"><i class="bi bi-circle-fill"></i>&nbsp; Ochiq</span>
                 {% else %}
                     <span class="dash-pill">Yopilgan</span>
+                    <a href="{% url 'shift_receipt' shift.pk %}" class="dash-btn dash-btn--ghost dash-btn--sm">
+                        <i class="bi bi-receipt"></i> <span>Yopilish cheki</span>
+                    </a>
                 {% endif %}
             </div>
         </div>

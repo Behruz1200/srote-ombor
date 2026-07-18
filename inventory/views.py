@@ -3710,7 +3710,8 @@ def shift_close(request):
                 f"({'ortiq' if var > 0 else 'kam'}).")
         else:
             messages.success(request, "Smen yopildi. Kassa to'g'ri.")
-        return redirect('shift_detail', pk=shift.pk)
+        # Yopilgach — chek printerida Z-hisobotni chop etish (avtomatik)
+        return redirect(f"{reverse('shift_receipt', args=[shift.pk])}?autoprint=1")
 
     return render(request, 'inventory/shift_close.html', {
         'shift': shift,
@@ -3785,6 +3786,59 @@ def shift_detail(request, pk):
         'hour_revenue': [r for _, _, r in active_hours],
         'top_products': top_products,
         'variance_value': variance_value,
+    })
+
+
+@login_required
+def shift_receipt(request, pk):
+    """Smena yopilish cheki (Z-hisobot) — 80mm chek printerida chop etish uchun.
+
+    Ichida: smen ma'lumoti, sotuvlar xulosasi + to'lov turlari, kassa
+    hisob-kitobi (ochilish + naqd sotuv − kassadan olingan = kutilgan),
+    kassadan olingan pullar ro'yxati va qaytarishlar.
+    """
+    shift = get_object_or_404(Shift.objects.select_related(
+        'branch', 'opened_by', 'closed_by'), pk=pk)
+    if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
+        return HttpResponseForbidden()
+
+    txns = list(shift.transactions.select_related('sold_by').prefetch_related('lines'))
+    pm = {}
+    total_rev = 0.0
+    item_qty = 0
+    for t in txns:
+        key = t.get_payment_method_display()
+        d = pm.setdefault(key, {'count': 0, 'total': 0.0})
+        d['count'] += 1
+        d['total'] += float(t.total)
+        total_rev += float(t.total)
+        for ln in t.lines.all():
+            item_qty += ln.quantity
+    pm_list = sorted(pm.items(), key=lambda kv: -kv[1]['total'])
+
+    payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
+
+    refunds = list(Return.objects.filter(shift=shift)
+                   .select_related('sale__variant__product', 'refunded_by')
+                   .order_by('refunded_at'))
+    refund_total = sum(float(r.refund_amount) for r in refunds)
+    refund_qty = sum(r.quantity for r in refunds)
+
+    return render(request, 'inventory/shift_receipt.html', {
+        'shift': shift,
+        'txn_count': len(txns),
+        'item_qty': item_qty,
+        'total_rev': total_rev,
+        'pm_list': pm_list,
+        'cash_sales': shift.cash_sales(),
+        'payouts': payouts,
+        'payouts_total': shift.payouts_total(),
+        'expected': shift.expected_cash(),
+        'variance_value': shift.variance(),
+        'refunds': refunds,
+        'refund_total': refund_total,
+        'refund_qty': refund_qty,
+        'printed_at': timezone.now(),
     })
 
 

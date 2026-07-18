@@ -1,0 +1,132 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Smena cheki #{{ shift.pk }} — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero d-print-none">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Smena hisoboti</span>
+                <h1 class="dash-hero__title"><i class="bi bi-receipt-cutoff"></i> Smena cheki #{{ shift.pk }}</h1>
+                <p class="dash-hero__sub">
+                    <span><i class="bi bi-building"></i> {{ shift.branch.name }}</span>
+                    <span><i class="bi bi-clock"></i> {{ shift.closed_at|date:"d.m.Y H:i" }}</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <button onclick="window.print()" class="dash-btn dash-btn--primary">
+                    <i class="bi bi-printer"></i> <span>Chop etish</span>
+                </button>
+                <a href="{% url 'shift_detail' shift.pk %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-list-ul"></i> <span>Smen tafsilotlari</span>
+                </a>
+                <a href="{% url 'pos_terminal' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-upc-scan"></i> <span>POS</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="card p-4 mx-auto" id="receipt" style="max-width:420px;">
+        <div class="text-center mb-2">
+            <h4 class="mb-0">{{ shift.branch.name }}</h4>
+            {% if shift.branch.address %}<div class="text-muted small">{{ shift.branch.address }}</div>{% endif %}
+            {% if shift.branch.inn %}<div class="text-muted small">STIR: {{ shift.branch.inn }}</div>{% endif %}
+        </div>
+        <div class="text-center fw-bold" style="letter-spacing:1px;">SMENA HISOBOTI (Z)</div>
+        <hr class="my-2">
+
+        <div class="d-flex justify-content-between small"><span>Smena:</span><strong>#{{ shift.pk }}</strong></div>
+        <div class="d-flex justify-content-between small"><span>Ochildi:</span>
+            <span>{{ shift.opened_at|date:"d.m.Y H:i" }} · {{ shift.opened_by.username }}</span></div>
+        <div class="d-flex justify-content-between small"><span>Yopildi:</span>
+            <span>{{ shift.closed_at|date:"d.m.Y H:i" }} · {{ shift.closed_by.username|default:"—" }}</span></div>
+
+        <hr class="my-2">
+        <div class="fw-semibold small mb-1">SOTUVLAR</div>
+        <div class="d-flex justify-content-between small"><span>Cheklar:</span><strong>{{ txn_count }}</strong></div>
+        <div class="d-flex justify-content-between small"><span>Sotilgan mahsulot:</span><strong>{{ item_qty }} dona</strong></div>
+        <div class="d-flex justify-content-between"><span>Jami savdo:</span><strong>{{ total_rev|som }} so'm</strong></div>
+        {% if pm_list %}
+        <div class="small text-muted mt-1">To'lov turlari bo'yicha:</div>
+        {% for label, info in pm_list %}
+        <div class="d-flex justify-content-between small">
+            <span>&nbsp;&nbsp;{{ label }} <span class="text-muted">({{ info.count }})</span></span>
+            <span>{{ info.total|som }} so'm</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if refunds %}
+        <hr class="my-2">
+        <div class="fw-semibold small mb-1">QAYTARISHLAR</div>
+        <div class="d-flex justify-content-between small">
+            <span>Qaytarilgan:</span>
+            <strong class="text-danger">{{ refund_qty }} dona · −{{ refund_total|som }} so'm</strong>
+        </div>
+        {% endif %}
+
+        <hr class="my-2">
+        <div class="fw-semibold small mb-1">KASSA (naqd)</div>
+        <div class="d-flex justify-content-between small"><span>Boshlang'ich:</span><span>{{ shift.opening_cash|som }} so'm</span></div>
+        <div class="d-flex justify-content-between small"><span>+ Naqd sotuv:</span><span>{{ cash_sales|som }} so'm</span></div>
+        {% if payouts_total %}
+        <div class="d-flex justify-content-between small text-danger"><span>− Kassadan olingan:</span><span>{{ payouts_total|som }} so'm</span></div>
+        {% endif %}
+        <div class="d-flex justify-content-between"><span><strong>= Kutilgan:</strong></span><strong>{{ expected|som }} so'm</strong></div>
+        {% if shift.counted_cash is not None %}
+        <div class="d-flex justify-content-between small"><span>Sanalgan:</span><span>{{ shift.counted_cash|som }} so'm</span></div>
+        <div class="d-flex justify-content-between">
+            <span><strong>Farq:</strong></span>
+            {% if variance_value == 0 %}
+                <strong class="text-success">0 — to'g'ri</strong>
+            {% elif variance_value > 0 %}
+                <strong>+{{ variance_value|som }} (ortiq)</strong>
+            {% else %}
+                <strong class="text-danger">{{ variance_value|som }} (kam)</strong>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if payouts %}
+        <hr class="my-2">
+        <div class="fw-semibold small mb-1">KASSADAN OLINGAN</div>
+        {% for p in payouts %}
+        <div class="d-flex justify-content-between small">
+            <span>{{ p.created_at|date:"H:i" }} · {{ p.get_category_display }}{% if p.note %} <span class="text-muted">({{ p.note|truncatechars:20 }})</span>{% endif %}</span>
+            <span class="text-danger">−{{ p.amount|som }}</span>
+        </div>
+        {% endfor %}
+        <div class="d-flex justify-content-between small border-top mt-1 pt-1">
+            <span><strong>Jami olingan:</strong></span><strong class="text-danger">−{{ payouts_total|som }} so'm</strong>
+        </div>
+        {% endif %}
+
+        {% if shift.note %}
+        <hr class="my-2">
+        <div class="small text-muted">Izoh: {{ shift.note }}</div>
+        {% endif %}
+
+        <hr class="my-2">
+        <div class="text-center text-muted small">Chop etildi: {{ printed_at|date:"d.m.Y H:i" }}</div>
+        <div class="text-center mt-2">
+            <span style="font-weight:800; letter-spacing:-0.5px; font-size:14pt; color:#000;">yurit</span>
+        </div>
+    </div>
+</div>
+
+<script>
+// Smen yopilgach avtomatik chop etish (?autoprint=1). Kiosk-printing rejimida
+// dialogsiz. Popup bo'lsa — bosgandan keyin yopiladi; asosiy oynada qoladi.
+(function () {
+    if (new URLSearchParams(location.search).get('autoprint') !== '1') return;
+    window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 350); });
+    window.addEventListener('afterprint', function () {
+        if (window.opener) setTimeout(function () { try { window.close(); } catch (e) {} }, 200);
+    });
+})();
+</script>
+{% endblock %}

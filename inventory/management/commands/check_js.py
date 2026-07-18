@@ -76,6 +76,7 @@ class Command(BaseCommand):
             '/labels/', f'/labels/variants/?ids={vid}&copies=1',
             f'/labels/price/?code={code}&size=58x40', '/security/2fa/',
             '/payment-qrs/', '/transfers/', '/transfers/new/', '/stocktake/', '/stocktake/new/', '/shifts/',
+            f'/shift/{sh.id}/receipt/',
         ]
         anon_pages = ['/login/']
 
