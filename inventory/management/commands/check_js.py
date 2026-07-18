@@ -73,7 +73,8 @@ class Command(BaseCommand):
             '/intake/import/', '/intake/quick/', '/intake/suppliers/', '/reorder/', '/sales/', '/cart/',
             '/categories/', '/branches/', '/branches/new/', '/users/', '/users/new/',
             '/customers/', '/reports/?report_type=sales&period=month', '/insights/', '/audit/',
-            '/labels/', f'/labels/variants/?ids={vid}&copies=1', '/security/2fa/',
+            '/labels/', f'/labels/variants/?ids={vid}&copies=1',
+            f'/labels/price/?code={code}&size=58x40', '/security/2fa/',
             '/payment-qrs/', '/transfers/', '/transfers/new/', '/stocktake/', '/stocktake/new/', '/shifts/',
         ]
         anon_pages = ['/login/']

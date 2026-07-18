@@ -103,5 +103,22 @@
         </div>
         {% endfor %}
     </div>
+
+    <script>
+    // Avtomatik chop etish: ?autoprint=1 bo'lsa, sahifa ochilishi bilan
+    // print chaqiriladi. Chrome --kiosk-printing rejimida dialogsiz bosiladi
+    // (printer standart qog'oz o'lchami etiketkaga sozlangan bo'lishi kerak).
+    (function () {
+        var qs = new URLSearchParams(location.search);
+        if (qs.get('autoprint') !== '1') return;
+        var fired = false;
+        function go() { if (fired) return; fired = true; window.print(); }
+        if (document.readyState === 'complete') { setTimeout(go, 350); }
+        else { window.addEventListener('load', function () { setTimeout(go, 350); }); }
+        window.addEventListener('afterprint', function () {
+            setTimeout(function () { try { window.close(); } catch (e) {} }, 200);
+        });
+    })();
+    </script>
 </body>
 </html>
