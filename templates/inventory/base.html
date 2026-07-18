@@ -3941,6 +3941,11 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 </script>
+<style>
+    /* Kamera skaner: video ekranga sig'sin (modal ichidagi barcha reader'lar) */
+    .modal [id$="Reader"] { max-width: 420px; margin-left: auto; margin-right: auto; }
+    .modal [id$="Reader"] img { max-width: 100%; }
+</style>
 <script>
 // ---- Kamera skaner sozlamalari (barcha sahifalar uchun yagona) ----
 // Tezlik uchun: (1) telefonning O'Z BarcodeDetector'i (Android Chrome) —
@@ -3971,6 +3976,9 @@ window.yuritScan = (function () {
         const c = {
             fps: 20,
             qrbox: box,
+            // Video kvadrat bo'lsin — telefonning tik (portret) oqimi modalni
+            // ekrandan chiqarib yuboradi. 1.0 = ixcham va ekranga sig'adi.
+            aspectRatio: 1.0,
             disableFlip: false,
             experimentalFeatures: { useBarCodeDetectorIfSupported: true },
             // Faqat "ideal" — qurilma qo'llab-quvvatlamasa ham xato bermaydi
