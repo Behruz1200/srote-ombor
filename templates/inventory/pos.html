@@ -508,6 +508,11 @@
                     <button type="button" class="btn btn-primary btn-lg" id="searchBtn">
                         <i class="bi bi-search"></i>
                     </button>
+                    <button type="button" class="btn btn-success btn-lg" id="posCamBtn"
+                            data-bs-toggle="modal" data-bs-target="#posScanModal"
+                            title="Telefon kamerasi bilan skanerlash" aria-label="Kamera bilan skanerlash">
+                        <i class="bi bi-camera"></i>
+                    </button>
                 </div>
                 <div id="searchStatus" class="small text-muted mt-1"></div>
 
@@ -1197,6 +1202,93 @@
   submitBtn.addEventListener('click', submit);
   modalEl.addEventListener('shown.bs.modal', function () { amtEl.focus(); });
   modalEl.addEventListener('hidden.bs.modal', function () { submitBtn.disabled = false; });
+})();
+</script>
+
+<!-- Kamera bilan skanerlash (telefon) — savatga to'g'ridan-to'g'ri qo'shadi -->
+<div class="modal fade" id="posScanModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-camera"></i> Kamera bilan skanerlash</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="posScanStatus" class="alert alert-info py-2 mb-2">Kamerani yuklayapti...</div>
+        <div id="posScanReader" style="width:100%;"></div>
+        <div class="small text-muted mt-2">
+          Skanerlangan mahsulot avtomatik savatga qo'shiladi — ketma-ket skanerlayvering.
+        </div>
+        <div class="small mt-1">Skanlar: <strong id="posScanCount">0</strong></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tugatish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+// POS kamera skaneri: har skan savatga qo'shiladi (hardware skaner bilan bir xil yo'l).
+(function () {
+    const modalEl = document.getElementById('posScanModal');
+    if (!modalEl) return;
+    const statusEl = document.getElementById('posScanStatus');
+    const countEl = document.getElementById('posScanCount');
+    let qr = null, count = 0, lastCode = '', lastTs = 0, timer = null;
+
+    function setStat(html, type) {
+        statusEl.className = 'alert py-2 mb-2 alert-' + (type || 'info');
+        statusEl.innerHTML = html;
+    }
+    function onDecode(code) {
+        code = (code || '').trim();
+        if (!code) return;
+        const now = Date.now();
+        // Bir xil kod 1.5s ichida takrorlanmasin (mahsulot kamera oldida tursa)
+        if (code === lastCode && now - lastTs < 1500) return;
+        lastCode = code; lastTs = now;
+        count++; countEl.textContent = count;
+        setStat('<i class="bi bi-check-circle"></i> ' + code, 'success');
+        try { if (typeof beepOk === 'function') beepOk(); } catch (e) {}
+        if (navigator.vibrate) { try { navigator.vibrate(40); } catch (e) {} }
+        // Hardware skaner bilan bir xil yo'l: inputga yozib, qidiruvni ishga tushiramiz
+        try {
+            scanInput.value = code;
+            doSearch();
+        } catch (e) {
+            setStat('<i class="bi bi-exclamation-triangle"></i> Qo\'shib bo\'lmadi: ' + e.message, 'danger');
+        }
+    }
+    function stop() {
+        if (timer) { clearInterval(timer); timer = null; }
+        if (qr) {
+            try { qr.stop().then(function () { qr.clear(); }).catch(function () {}); } catch (e) {}
+            qr = null;
+        }
+    }
+    modalEl.addEventListener('shown.bs.modal', function () {
+        if (typeof Html5Qrcode === 'undefined') {
+            setStat('<i class="bi bi-exclamation-triangle"></i> Skaner kutubxonasi yuklanmadi', 'danger');
+            return;
+        }
+        count = 0; countEl.textContent = '0'; lastCode = '';
+        setStat('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
+        qr = new Html5Qrcode('posScanReader');
+        qr.start(yuritScan.camera(), yuritScan.config(), onDecode, function () {})
+          .then(function () {
+              yuritScan.addTorch(qr, 'posScanReader');
+              setStat('<i class="bi bi-camera-video"></i> Tayyor — kodni kameraga to\'g\'rilang', 'info');
+          })
+          .catch(function (err) {
+              setStat('<i class="bi bi-exclamation-triangle"></i> Kamera ochilmadi: ' + err, 'danger');
+          });
+        timer = setInterval(function () {
+            if (lastCode && Date.now() - lastTs > 1500) lastCode = '';
+        }, 300);
+    });
+    modalEl.addEventListener('hide.bs.modal', stop);
 })();
 </script>
 
