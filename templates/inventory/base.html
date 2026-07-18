@@ -3942,9 +3942,29 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 <style>
-    /* Kamera skaner: video ekranga sig'sin (modal ichidagi barcha reader'lar) */
-    .modal [id$="Reader"] { max-width: 420px; margin-left: auto; margin-right: auto; }
+    /* Kamera skaner: video ekranga sig'sin.
+       Kutubxona video KENGLIGINI konteynerdan oladi, balandligini esa oqim
+       nisbatidan. Telefon kamerasi tik (portret) oqim beradi — shuning uchun
+       kenglikni cheklaymiz, aks holda video ekranni to'ldirib yuboradi. */
+    .modal [id$="Reader"] {
+        max-width: min(300px, 70vw);
+        margin-left: auto;
+        margin-right: auto;
+    }
+    @media (min-width: 576px) {
+        .modal [id$="Reader"] { max-width: 380px; }
+    }
     .modal [id$="Reader"] img { max-width: 100%; }
+    /* To'liq ekran modal telefonda: sarlavha "notch"/Dynamic Island ostiga
+       kirib ketmasin, footer esa pastki chiziq ostida qolmasin. */
+    @media (max-width: 575.98px) {
+        .modal-fullscreen-sm-down .modal-header {
+            padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+        }
+        .modal-fullscreen-sm-down .modal-footer {
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        }
+    }
 </style>
 <script>
 // ---- Kamera skaner sozlamalari (barcha sahifalar uchun yagona) ----
