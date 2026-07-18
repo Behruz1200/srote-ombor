@@ -6595,6 +6595,78 @@ def product_labels(request, code=None):
     })
 
 
+# Do'kon nomi — peshtaxta narx etiketkasida chiqadi
+PRICE_LABEL_STORE_NAME = 'Koreys Bozor'
+PRICE_LABEL_SIZES = {'30x20': (30, 20), '58x40': (58, 40)}
+
+
+@login_required
+def price_labels(request):
+    """Peshtaxta (narx) etiketkasi: mahsulot nomi + narx + do'kon nomi.
+
+    Barcode YO'Q — bu sotuvchi skanerlaydigan emas, tokchaga qo'yiladigan
+    narx yorlig'i. Ikki qog'oz o'lchami: 30×20 mm va 58×40 mm.
+    Manba: ?codes=KOD1,KOD2  yoki  ?code=KOD  yoki  ?ids=<variant id'lar>.
+    """
+    size = request.GET.get('size') or '58x40'
+    if size not in PRICE_LABEL_SIZES:
+        size = '58x40'
+    w, h = PRICE_LABEL_SIZES[size]
+
+    try:
+        copies = max(1, min(200, int(request.GET.get('copies') or 1)))
+    except ValueError:
+        copies = 1
+    price_param = request.GET.get('price')
+
+    # --- Mahsulotlarni yig'ish: codes= / code= / ids= (variant id) ---
+    products = []
+    seen = set()
+
+    def _add(p):
+        if p and p.id not in seen:
+            seen.add(p.id)
+            products.append(p)
+
+    raw_codes = (request.GET.get('codes') or request.GET.get('code') or '')
+    codes = [c.strip() for c in raw_codes.split(',') if c.strip()]
+    if codes:
+        norm = [normalize_code(c.upper()) for c in codes]
+        pmap = {p.code: p for p in Product.objects.filter(code__in=norm)}
+        for c in norm:
+            _add(pmap.get(c))
+
+    ids = [int(i) for i in (request.GET.get('ids') or '').split(',')
+           if i.strip().isdigit()]
+    if ids:
+        for v in (ProductVariant.objects.filter(pk__in=ids)
+                  .select_related('product')):
+            _add(v.product)
+
+    # --- Har mahsulot uchun amaldagi sotuv narxi ---
+    labels = []
+    for p in products:
+        if price_param:
+            price = price_param
+        else:
+            st = (BranchStock.objects.filter(variant__product=p, sale_price__gt=0)
+                  .order_by('-sale_price').first())
+            price = st.sale_price if st else p.default_sale_price
+        labels.append({'product': p, 'price': price})
+
+    render_labels = []
+    for lb in labels:
+        for _ in range(copies):
+            render_labels.append(lb)
+
+    return render(request, 'inventory/price_labels.html', {
+        'labels': render_labels, 'copies': copies, 'size': size,
+        'w': w, 'h': h, 'n_products': len(labels),
+        'codes': ','.join(p.code for p in products),
+        'store_name': PRICE_LABEL_STORE_NAME,
+    })
+
+
 # ---------- INSIGHTS / ANALYTICS ----------
 
 def _insights_context(request):

@@ -67,6 +67,10 @@
         <button onclick="window.print()" class="btn btn-success btn-sm">
             <i class="bi bi-printer"></i> Chop etish
         </button>
+        <a href="{% url 'price_labels' %}?codes={% for p in products %}{{ p.code }}{% if not forloop.last %},{% endif %}{% endfor %}&size=58x40"
+           class="btn btn-outline-danger btn-sm" target="_blank">
+            <i class="bi bi-tag"></i> Narx etiketkasi
+        </a>
         <a href="javascript:history.back()" class="btn btn-secondary btn-sm">Orqaga</a>
     </div>
 </div>

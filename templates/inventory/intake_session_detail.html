@@ -137,12 +137,14 @@
             <div class="card p-3 mb-3">
                 <h6 class="text-muted text-uppercase small mb-2">Keyingi amallar</h6>
                 <div class="d-grid gap-2">
-                    {% with codes=session.intakes.all|join:"," %}
                     <a href="{% url 'labels' %}?codes={% for i in session.intakes.all %}{{ i.variant.product.code }}{% if not forloop.last %},{% endif %}{% endfor %}"
                        class="btn btn-outline-primary" target="_blank">
-                        <i class="bi bi-tag"></i> QR labellarni chop etish
+                        <i class="bi bi-qr-code"></i> QR labellarni chop etish
                     </a>
-                    {% endwith %}
+                    <a href="{% url 'price_labels' %}?codes={% for i in session.intakes.all %}{{ i.variant.product.code }}{% if not forloop.last %},{% endif %}{% endfor %}&size=58x40"
+                       class="btn btn-outline-danger" target="_blank">
+                        <i class="bi bi-tag"></i> Narx etiketkasi (peshtaxta)
+                    </a>
                     <a href="{% url 'intake_quick' %}" class="btn btn-outline-success">
                         <i class="bi bi-plus-circle"></i> Yangi sessiya
                     </a>

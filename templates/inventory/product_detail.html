@@ -51,6 +51,9 @@
                         <a href="{% url 'product_label' product.code %}" target="_blank" class="dash-btn dash-btn--ghost dash-btn--sm">
                             <i class="bi bi-printer"></i> <span>QR etiketka</span>
                         </a>
+                        <a href="{% url 'price_labels' %}?code={{ product.code }}&size=58x40" target="_blank" class="dash-btn dash-btn--ghost dash-btn--sm">
+                            <i class="bi bi-tag"></i> <span>Narx etiketkasi</span>
+                        </a>
                         <a href="{% url 'qr_image' product.code %}" download="{{ product.code }}.png"
                            class="dash-btn dash-btn--ghost dash-btn--sm">
                             <i class="bi bi-qr-code"></i> <span>QR rasm</span>
