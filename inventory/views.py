@@ -1815,15 +1815,17 @@ def clothes_intake(request):
         cost = (price / (Decimal('1') + marja / Decimal('100'))
                 ).quantize(Decimal('0.01')) if price > 0 else Decimal('0')
 
-        # Kataklar: qty[<size>|<color>]
+        # Kataklar: qty[<size>]  (kiyim/poyabzalda rang ishlatilmaydi).
+        # Eski format qty[<size>|<color>] ham qo'llab-quvvatlanadi.
         cells = []
         for key, val in request.POST.items():
             if not (key.startswith('qty[') and key.endswith(']')):
                 continue
             payload = key[4:-1]
-            if '|' not in payload:
-                continue
-            size, color = payload.split('|', 1)
+            if '|' in payload:
+                size, color = payload.split('|', 1)
+            else:
+                size, color = payload, ''
             size = smart_title(size); color = smart_title(color)
             try:
                 qty = int(parse_dec(val))
@@ -1832,7 +1834,7 @@ def clothes_intake(request):
             if qty > 0 and (size or color):
                 cells.append((size, color, qty))
         if not cells and not errors:
-            errors.append("Kamida bitta o'lcham/rang katagiga son kiriting.")
+            errors.append("Kamida bitta o'lcham qatoriga son kiriting.")
 
         if errors:
             for e in errors[:8]:

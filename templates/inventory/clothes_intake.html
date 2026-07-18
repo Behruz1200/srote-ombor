@@ -10,7 +10,7 @@
             <div class="dash-hero__heading">
                 <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Kodsiz tovarlar</span>
                 <h1 class="dash-hero__title"><i class="bi bi-bag"></i> Kiyim / poyabzal qabul</h1>
-                <p class="dash-hero__sub"><span>O'lcham × rang jadvali — har biriga avtomatik kod va etiketka</span></p>
+                <p class="dash-hero__sub"><span>O'lchamlar jadvali — har biriga avtomatik kod va etiketka</span></p>
             </div>
             <div class="dash-hero__actions">
                 <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Qabulga qaytish</span></a>
@@ -61,34 +61,28 @@
         </div>
 
         <div class="card p-3 mb-3">
-            <strong class="mb-2 d-block"><i class="bi bi-grid-3x3"></i> O'lcham × rang jadvali</strong>
+            <strong class="mb-2 d-block"><i class="bi bi-rulers"></i> O'lchamlar va sonlar</strong>
             <div class="row g-3 mb-2">
-                <div class="col-md-6">
+                <div class="col-md-8">
                     <label class="form-label">O'lchamlar</label>
                     <div class="d-flex gap-2">
                         <input type="text" id="sizeInput" class="form-control" placeholder="S, M, L, 42, 43...">
                         <button type="button" class="btn btn-outline-primary" id="addSize">Qo'shish</button>
                     </div>
+                    <div class="form-text">Vergul bilan bir nechta: S, M, L</div>
                     <div id="sizeChips" class="d-flex flex-wrap gap-1 mt-2"></div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Ranglar</label>
-                    <div class="d-flex gap-2">
-                        <input type="text" id="colorInput" class="form-control" placeholder="Qora, Oq, Ko'k..." list="colorOptions">
-                        <button type="button" class="btn btn-outline-primary" id="addColor">Qo'shish</button>
-                    </div>
-                    <datalist id="colorOptions">{% for c in colors_all %}<option value="{{ c }}">{% endfor %}</datalist>
-                    <div id="colorChips" class="d-flex flex-wrap gap-1 mt-2"></div>
                 </div>
             </div>
             <div class="table-responsive">
-                <table class="table table-sm table-bordered align-middle text-center mb-0" id="matrix">
-                    <thead class="table-light"><tr id="matrixHead"><th style="min-width:90px">O'lcham \ Rang</th></tr></thead>
+                <table class="table table-sm table-bordered align-middle mb-0" id="matrix">
+                    <thead class="table-light">
+                        <tr><th style="min-width:120px">O'lcham</th><th style="width:150px">Soni</th></tr>
+                    </thead>
                     <tbody id="matrixBody"></tbody>
                 </table>
             </div>
             <div class="small text-muted mt-2">
-                <i class="bi bi-info-circle"></i> Har katakka shu o'lcham+rangdan nechta borligini yozing. Faqat 0 dan katta kataklar qabul qilinadi.
+                <i class="bi bi-info-circle"></i> Har o'lchamdan nechta borligini yozing. Faqat 0 dan katta qatorlar qabul qilinadi.
                 <span class="ms-2">Jami: <strong id="sumTotal">0</strong> dona</span>
             </div>
         </div>
@@ -102,51 +96,65 @@
 
 <script>
 (function () {
-    const sizes = [], colors = [];
+    // Faqat o'lcham — rang ishlatilmaydi (kiyim/poyabzal uchun)
+    const sizes = [];
     const sizeChips = document.getElementById('sizeChips');
-    const colorChips = document.getElementById('colorChips');
-    const head = document.getElementById('matrixHead');
     const body = document.getElementById('matrixBody');
     const sumEl = document.getElementById('sumTotal');
 
-    function chip(text, arr, box, kind) {
+    function chip(text) {
         const s = document.createElement('span');
         s.className = 'badge bg-primary-subtle text-primary border';
         s.style.cursor = 'pointer';
         s.innerHTML = text + ' <i class="bi bi-x"></i>';
         s.title = "O'chirish";
-        s.addEventListener('click', () => {
-            const i = arr.indexOf(text); if (i >= 0) arr.splice(i, 1);
+        s.addEventListener('click', function () {
+            const i = sizes.indexOf(text);
+            if (i >= 0) sizes.splice(i, 1);
             s.remove(); rebuild();
         });
-        box.appendChild(s);
+        sizeChips.appendChild(s);
     }
-    function addItem(inputId, arr, box, kind) {
-        const inp = document.getElementById(inputId);
-        inp.value.split(',').map(x => x.trim()).filter(Boolean).forEach(t => {
-            if (!arr.some(x => x.toLowerCase() === t.toLowerCase())) { arr.push(t); chip(t, arr, box, kind); }
+    function addSizes() {
+        const inp = document.getElementById('sizeInput');
+        inp.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (t) {
+            if (!sizes.some(function (x) { return x.toLowerCase() === t.toLowerCase(); })) {
+                sizes.push(t); chip(t);
+            }
         });
         inp.value = ''; inp.focus(); rebuild();
     }
-    document.getElementById('addSize').addEventListener('click', () => addItem('sizeInput', sizes, sizeChips, 'size'));
-    document.getElementById('addColor').addEventListener('click', () => addItem('colorInput', colors, colorChips, 'color'));
-    document.getElementById('sizeInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addItem('sizeInput', sizes, sizeChips); } });
-    document.getElementById('colorInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addItem('colorInput', colors, colorChips); } });
+    document.getElementById('addSize').addEventListener('click', addSizes);
+    document.getElementById('sizeInput').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); addSizes(); }
+    });
 
     function recount() {
-        let t = 0; document.querySelectorAll('.qcell').forEach(i => { const v = parseInt(i.value, 10); if (v > 0) t += v; });
+        let t = 0;
+        document.querySelectorAll('.qcell').forEach(function (i) {
+            const v = parseInt(i.value, 10);
+            if (v > 0) t += v;
+        });
         sumEl.textContent = t;
     }
     function rebuild() {
-        const cols = colors.length ? colors : [''];
-        head.innerHTML = '<th style="min-width:90px">O\'lcham \\ Rang</th>' + cols.map(c => `<th>${c || '—'}</th>`).join('');
         body.innerHTML = '';
         const rows = sizes.length ? sizes : [''];
-        rows.forEach(sz => {
+        rows.forEach(function (sz) {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<th class="text-start">${sz || '—'}</th>` + cols.map(c =>
-                `<td><input type="text" inputmode="numeric" class="form-control form-control-sm text-center qcell" name="qty[${sz}|${c}]" placeholder="0" style="min-width:60px"></td>`
-            ).join('');
+            const th = document.createElement('th');
+            th.className = 'text-start';
+            th.textContent = sz || '—';
+            const td = document.createElement('td');
+            const inp = document.createElement('input');
+            inp.type = 'text';
+            inp.inputMode = 'numeric';
+            inp.className = 'form-control form-control-sm text-center qcell';
+            inp.name = 'qty[' + sz + ']';   // rangsiz kalit
+            inp.placeholder = '0';
+            td.appendChild(inp);
+            tr.appendChild(th);
+            tr.appendChild(td);
             body.appendChild(tr);
         });
         recount();

@@ -69,7 +69,15 @@
     #labelSheet, #labelSheet * { visibility: visible; }
     #labelSheet { position: absolute; left: 0; top: 0; padding: 0; gap: 0; display: block; }
     @page { size: 50mm auto; margin: 1mm; }
-    .lbl { width: 48mm; border: none; border-radius: 0; padding: 1mm 1mm 2mm; margin: 0 0 1mm; }
+    /* Har etiketka ALOHIDA sahifada bosiladi — bitta varaqqa bir nechtasi
+       tushmasin (die-cut/rulon etiketka uchun shart). */
+    .lbl {
+        width: 48mm; border: none; border-radius: 0;
+        padding: 1mm 1mm 2mm; margin: 0;
+        page-break-after: always; break-after: page;
+        page-break-inside: avoid; break-inside: avoid;
+    }
+    .lbl:last-child { page-break-after: auto; break-after: auto; }
     .lbl__name, .lbl__sc, .lbl__price { color: #000 !important; }
     .lbl__bc svg { height: 12mm; }
 }
