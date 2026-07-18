@@ -287,6 +287,12 @@ document.getElementById('editForm') && document.getElementById('editForm')
 <!-- html5-qrcode (kamera skaner) -->
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
+<style>
+    /* Skaner rejimida "hozir skanerlanadigan" qator ajratib turadi */
+    #editRows tr.scan-target > td { background: #EEF2FF !important; }
+    #editRows tr.scan-target > td:first-child { box-shadow: inset 3px 0 0 #4F46E5; }
+</style>
+
 <!-- Kamera skaner modali (telefon uchun) -->
 <div class="modal fade" id="editScanModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -299,9 +305,15 @@ document.getElementById('editForm') && document.getElementById('editForm')
         <div id="editScanStatus" class="alert alert-info py-2 mb-2">
           <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
         </div>
+        <!-- Hozir qaysi turni skanerlash kerak -->
+        <div class="text-center p-2 mb-2 rounded" style="background:#EEF2FF; border:1px solid #C7D2FE;">
+          <div class="small text-muted">Hozir shu turni skanerlang:</div>
+          <div id="editScanTarget" style="font-size:1.3rem; font-weight:800; line-height:1.2;">—</div>
+          <div class="small text-muted mt-1">Bajarildi: <strong id="editScanProgress">0 / 0</strong></div>
+        </div>
         <div id="editScanReader" style="width:100%; max-width:480px; margin:0 auto;"></div>
         <div class="text-center mt-2 small text-muted">
-          Har bir shtrix-kod avtomatik keyingi bo'sh katakka yoziladi. Bitta mahsulot = bitta skan.
+          Skanerlangach — keyingi tur avtomatik ko'rsatiladi. Modalni yopish shart emas.
         </div>
         <div id="editScanList" class="d-flex flex-wrap gap-1 mt-2"></div>
       </div>
@@ -389,11 +401,46 @@ document.getElementById('editForm') && document.getElementById('editForm')
     const statusEl = document.getElementById('editScanStatus');
     const listEl = document.getElementById('editScanList');
     const countEl = document.getElementById('editScanCount');
+    const targetEl = document.getElementById('editScanTarget');
+    const progEl = document.getElementById('editScanProgress');
     let qr = null, count = 0, lastCode = '', lastSeenTs = 0, resetTimer = null;
 
     function setStat(html, type) {
         statusEl.className = 'alert py-2 mb-2 alert-' + (type || 'info');
         statusEl.innerHTML = html;
+    }
+    // Shtrix-kodi bo'sh birinchi qator — "hozir skanerlanadigan" tur
+    function nextEmptyRow() {
+        for (const inp of barcodeInputs()) {
+            if (!inp.value.trim()) return inp.closest('tr');
+        }
+        return null;
+    }
+    // Qator nomi: Rang / O'lcham (jadvaldagi kabi)
+    function rowLabel(tr) {
+        if (!tr) return '';
+        const c = tr.querySelector('input[name="v_color"]');
+        const s = tr.querySelector('input[name="v_size"]');
+        const parts = [(c && c.value.trim()) || '', (s && s.value.trim()) || ''].filter(Boolean);
+        return parts.join(' / ') || '(nomsiz tur)';
+    }
+    // Keyingi maqsadni ko'rsatamiz: nomi + progress + jadvalda ajratib turamiz
+    function updateTarget() {
+        body.querySelectorAll('tr.scan-target').forEach(function (tr) {
+            tr.classList.remove('scan-target');
+        });
+        const all = barcodeInputs();
+        const filled = all.filter(function (i) { return i.value.trim(); }).length;
+        if (progEl) progEl.textContent = filled + ' / ' + all.length;
+        const tr = nextEmptyRow();
+        if (!tr) {
+            if (targetEl) targetEl.innerHTML = '<span class="text-success">✓ Hammasi skanerlandi</span>';
+            return null;
+        }
+        tr.classList.add('scan-target');
+        if (targetEl) targetEl.textContent = rowLabel(tr);
+        try { tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+        return tr;
     }
     function onDecode(code) {
         code = (code || '').trim();
@@ -405,15 +452,22 @@ document.getElementById('editForm') && document.getElementById('editForm')
             setStat('<i class="bi bi-exclamation-circle"></i> Bu kod allaqachon jadvalda: <strong>' + code + '</strong>', 'warning');
             return;
         }
-        const cell = nextEmptyBarcode();
+        const tr = nextEmptyRow();
+        if (!tr) {
+            setStat('<i class="bi bi-check-all"></i> Hammasi skanerlandi — saqlashni unutmang', 'success');
+            return;
+        }
+        const label = rowLabel(tr);
+        const cell = tr.querySelector('input[name="v_barcode"]');
         if (cell) cell.value = code;
         count++; countEl.textContent = count;
         const chip = document.createElement('span');
         chip.className = 'badge bg-success-subtle text-success border';
-        chip.textContent = code;
+        chip.textContent = label + ': ' + code;
         listEl.prepend(chip);
-        setStat('<i class="bi bi-check-circle"></i> Qo\'shildi: <strong>' + code + '</strong> — keyingi mahsulotni ko\'rsating', 'success');
+        setStat('<i class="bi bi-check-circle"></i> <strong>' + label + '</strong> → ' + code, 'success');
         if (navigator.vibrate) navigator.vibrate(40);
+        updateTarget();   // keyingi turga o'tamiz va nomini ko'rsatamiz
     }
     function stop() {
         if (resetTimer) { clearInterval(resetTimer); resetTimer = null; }
@@ -425,6 +479,7 @@ document.getElementById('editForm') && document.getElementById('editForm')
         resetTimer = setInterval(() => {
             if (lastCode && Date.now() - lastSeenTs > 900) lastCode = '';
         }, 250);
+        updateTarget();   // ochilishda darhol qaysi turni skanerlashni ko'rsatamiz
         setStat('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
         qr = new Html5Qrcode('editScanReader');
         qr.start(yuritScan.camera(), yuritScan.config(),
