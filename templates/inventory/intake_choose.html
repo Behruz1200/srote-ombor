@@ -62,6 +62,14 @@
                     Nakladnoyni suratga oling: nomi, miqdori va tannarxi
                     jadvalga tushadi. Saqlashdan oldin tekshirasiz.
                 </p>
+                {% if draft_count %}
+                    <div class="mt-2">
+                        <span class="badge bg-warning text-dark">
+                            <i class="bi bi-hourglass-split"></i>
+                            {{ draft_count }} ta qoralama kutmoqda
+                        </span>
+                    </div>
+                {% endif %}
             </a>
         </div>
         <div class="col-md-3">

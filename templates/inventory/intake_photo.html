@@ -25,6 +25,68 @@
     </div>
     {% endif %}
 
+    {% if drafts %}
+    <article class="dash-card mb-3">
+        <header class="dash-card__head">
+            <h2 class="dash-card__title"><i class="bi bi-hourglass-split"></i> Tugallanmagan qoralamalar</h2>
+            <p class="dash-card__sub">Telefonda boshlangan ish — shu yerdan davom ettiring.</p>
+        </header>
+        <div class="dash-card__body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <tbody>
+                    {% for d in drafts %}
+                        <tr>
+                            <td>
+                                <strong>{{ d.supplier_text|default:"— yetkazib beruvchi yo'q —" }}</strong>
+                                {% if d.invoice_number %}
+                                    <span class="text-muted small">· № {{ d.invoice_number }}</span>
+                                {% endif %}
+                                <div class="small text-muted">
+                                    {{ d.row_count }} qator · {{ d.total_qty }} dona
+                                    {% if d.branch %} · {{ d.branch.name }}{% endif %}
+                                    · {{ d.created_by.username }}
+                                    · {{ d.updated_at|date:"d.m H:i" }}
+                                </div>
+                            </td>
+                            <td class="text-end" style="width:180px">
+                                <a href="{% url 'intake_photo' %}?draft={{ d.pk }}"
+                                   class="btn btn-sm btn-primary">
+                                    <i class="bi bi-play-fill"></i> Davom ettirish
+                                </a>
+                                <form method="post" class="d-inline"
+                                      action="{% url 'intake_photo_draft_delete' d.pk %}"
+                                      onsubmit="return confirm('Qoralama o\'chirilsinmi?')">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-danger">✕</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </article>
+    {% endif %}
+
+    {% if draft %}
+    <div class="alert alert-primary d-flex align-items-center flex-wrap gap-2">
+        <i class="bi bi-hourglass-split"></i>
+        <span>
+            <strong>Qoralama #{{ draft.pk }}</strong> ochildi —
+            {{ draft.updated_at|date:"d.m.Y H:i" }} da saqlangan.
+            Tekshiring va qabul qiling.
+        </span>
+        <form method="post" class="ms-auto"
+              action="{% url 'intake_photo_draft_delete' draft.pk %}"
+              onsubmit="return confirm('Qoralama o\'chirilsinmi?')">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger">Qoralamani o'chirish</button>
+        </form>
+    </div>
+    {% endif %}
+
     <!-- 1-qadam: rasm -->
     <article class="dash-card mb-3">
         <header class="dash-card__head">
@@ -94,13 +156,6 @@
                         <input type="tel" id="fAgentPhone" class="form-control"
                                placeholder="+998 90 123 45 67">
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-1">Yangi mahsulot kategoriyasi</label>
-                        <select id="fCategory" class="form-select">
-                            <option value="">— yo'q —</option>
-                            {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
-                        </select>
-                    </div>
                 </div>
 
                 <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
@@ -146,6 +201,13 @@
                                     </button>
                                 </th>
                                 <th style="min-width:80px">Miqdor</th>
+                                <th style="min-width:150px">Kategoriya
+                                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                            data-col="row-cat" tabindex="-1"
+                                            title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                        <i class="bi bi-arrow-down-square"></i>
+                                    </button>
+                                </th>
                                 <th style="width:36px"></th>
                             </tr>
                         </thead>
@@ -164,12 +226,21 @@
                     </div>
                 </div>
 
-                <div class="d-flex gap-2 mt-3">
+                <div class="d-flex gap-2 mt-3 flex-wrap">
                     <button type="button" class="dash-btn dash-btn--primary" id="saveBtn">
                         <i class="bi bi-check2-circle"></i> <span>Qabul qilish</span>
                     </button>
+                    <button type="button" class="dash-btn dash-btn--ghost" id="draftBtn"
+                            title="Omborga yozilmaydi — keyin boshqa qurilmada davom ettirasiz">
+                        <i class="bi bi-hourglass-split"></i> <span>Qoralama saqlash</span>
+                    </button>
                     <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost"><span>Bekor</span></a>
                     <span id="saveStatus" class="small align-self-center"></span>
+                </div>
+                <div class="small text-muted mt-2">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Qoralama</strong> omborga ta'sir qilmaydi — telefonda
+                    suratga olib to'ldirasiz, kompyuterda ochib tugatasiz.
                 </div>
             </div>
         </article>
@@ -189,6 +260,13 @@
         <td>
             <input type="text" class="form-control form-control-sm text-end row-qty" inputmode="numeric" placeholder="0">
             <div class="row-hint text-muted" style="font-size:.72rem"></div>
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm row-cat" list="catOptions"
+                   placeholder="Tanlang yoki yozing" autocomplete="off">
+            <div class="cat-new text-success" style="font-size:.72rem; display:none;">
+                <i class="bi bi-plus-circle"></i> yangi kategoriya
+            </div>
         </td>
         <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
     </tr>
@@ -221,6 +299,11 @@
   </div>
 </div>
 
+<datalist id="catOptions">
+    {% for c in categories %}<option value="{{ c.name }}">{% endfor %}
+</datalist>
+{{ draft_data|json_script:"draftData" }}
+
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function () {
@@ -234,7 +317,14 @@
     const rowTpl = document.getElementById('rowTpl');
     const marjaEl = document.getElementById('fMarja');
     const saveBtn = document.getElementById('saveBtn');
+    const draftBtn = document.getElementById('draftBtn');
     const saveStat = document.getElementById('saveStatus');
+    let draftId = null;
+
+    // Mavjud kategoriyalar — yozilgani ro'yxatda bo'lmasa "yangi" deb belgilaymiz
+    const KNOWN_CATS = new Set(
+        [...document.querySelectorAll('#catOptions option')]
+            .map(o => o.value.trim().toLowerCase()));
 
     function num(s) {
         s = (s || '').toString().replace(/[^0-9.\-]/g, '');
@@ -288,7 +378,17 @@
         if (t.classList.contains('row-cost')) priceCalc(t.closest('tr'), 'cost');
         else if (t.classList.contains('row-marja')) priceCalc(t.closest('tr'), 'marja');
         else if (t.classList.contains('row-price')) priceCalc(t.closest('tr'), 'sale');
+        else if (t.classList.contains('row-cat')) markCat(t);
     });
+
+    // Ro'yxatda yo'q kategoriya — saqlashda yangisi yaratiladi, shuni ko'rsatamiz
+    function markCat(input) {
+        const tr = input.closest('tr');
+        const tag = tr && tr.querySelector('.cat-new');
+        if (!tag) return;
+        const v = input.value.trim().toLowerCase();
+        tag.style.display = (v && !KNOWN_CATS.has(v)) ? '' : 'none';
+    }
 
     // Standart marja: bo'sh (yoki avvalgi standart qiymatdagi) qatorlarga tarqaladi
     let lastDefMarja = '';
@@ -315,10 +415,15 @@
         const q = r.total_qty || r.qty;
         if (q) tr.querySelector('.row-qty').value = Math.round(q);
         if (r.cost) tr.querySelector('.row-cost').value = Math.round(r.cost);
+        if (r.barcode) tr.querySelector('.row-barcode').value = r.barcode;
+        if (r.category) tr.querySelector('.row-cat').value = r.category;
         const dm = marjaEl.value.trim();
-        if (dm) tr.querySelector('.row-marja').value = dm;
+        if (r.marja) tr.querySelector('.row-marja').value = r.marja;
+        else if (dm) tr.querySelector('.row-marja').value = dm;
+        if (r.sale) tr.querySelector('.row-price').value = r.sale;
 
         const bits = [];
+        if (r.hint) bits.push(r.hint);
         if (r.per_case > 1) bits.push((r.qty || 0) + ' × ' + r.per_case + ' dona');
         if (r.sum_ok === false) {
             bits.push('<span class="text-warning" title="Miqdor × tannarx faktura summasiga ' +
@@ -328,7 +433,8 @@
         tr.querySelector('.row-hint').innerHTML = bits.join(' · ');
 
         rowsBody.appendChild(tr);
-        priceCalc(tr, 'cost');
+        if (!r.sale) priceCalc(tr, 'cost');
+        markCat(tr.querySelector('.row-cat'));
         if (focus) tr.querySelector('input').focus();
         return tr;
     }
@@ -368,6 +474,10 @@
             const src = inputs.find(i => i.value.trim());
             if (!src) return;
             const val = src.value.trim();
+            if (col === 'row-cat') {
+                inputs.forEach(function (i) { i.value = val; markCat(i); });
+                return;
+            }
             const kind = col === 'row-cost' ? 'cost' : (col === 'row-marja' ? 'marja' : 'sale');
             inputs.forEach(function (i) {
                 i.value = val;
@@ -510,38 +620,91 @@
         readBtn.disabled = false;
     });
 
+    // ---------- payload yig'ish ----------
+    function meta() {
+        return {
+            draft_id: draftId,
+            branch: document.getElementById('fBranch').value,
+            supplier: document.getElementById('fSupplier').value.trim(),
+            agent: document.getElementById('fAgent').value.trim(),
+            agent_phone: document.getElementById('fAgentPhone').value.trim(),
+            invoice_no: document.getElementById('fInvoice').value.trim(),
+            date: document.getElementById('fDate').value,
+            marja: marjaEl.value.trim()
+        };
+    }
+    /** strict=true -> faqat qabul qilinadigan qatorlar (nom + miqdor > 0).
+        strict=false -> qoralama uchun: nimaiki yozilgan bo'lsa, o'shani. */
+    function collect(strict) {
+        const rows = [];
+        rowsBody.querySelectorAll('tr').forEach(function (tr) {
+            const g = c => tr.querySelector(c).value.trim();
+            const name = g('.row-name');
+            const qtyRaw = g('.row-qty');
+            const qty = num(qtyRaw) || 0;
+            if (strict) {
+                if (!name || qty <= 0) return;
+                rows.push({
+                    name: name, barcode: g('.row-barcode'), qty: qty,
+                    cost: num(g('.row-cost')) || 0,
+                    sale: num(g('.row-price')) || 0,
+                    category: g('.row-cat')
+                });
+            } else {
+                if (!name && !qtyRaw && !g('.row-barcode') && !g('.row-cost')) return;
+                rows.push({
+                    name: name, barcode: g('.row-barcode'), qty: qtyRaw,
+                    cost: g('.row-cost'), marja: g('.row-marja'),
+                    sale: g('.row-price'), category: g('.row-cat'),
+                    hint: (tr.querySelector('.row-hint').textContent || '').trim()
+                });
+            }
+        });
+        return rows;
+    }
+
+    // ---------- qoralama saqlash ----------
+    draftBtn.addEventListener('click', async function () {
+        const rows = collect(false);
+        if (!rows.length) { setStat(saveStat, 'Saqlash uchun qator yo\'q.', 'text-danger'); return; }
+        draftBtn.disabled = true;
+        setStat(saveStat, 'Qoralama saqlanmoqda...', 'text-muted');
+        try {
+            const fd = new FormData();
+            const p = meta(); p.rows = rows;
+            fd.append('payload', JSON.stringify(p));
+            const f = imgEl.files && imgEl.files[0];
+            if (f) fd.append('image', f);
+            const resp = await fetch('{% url "intake_photo_draft" %}', {
+                method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+            });
+            const data = await resp.json();
+            if (!data.ok) {
+                setStat(saveStat, data.error || 'Xatolik', 'text-danger');
+            } else {
+                draftId = data.id;
+                setStat(saveStat, '✓ Qoralama #' + data.id + ' saqlandi (' +
+                        data.rows + ' qator) — boshqa qurilmada davom ettirsangiz bo\'ladi.',
+                        'text-success');
+            }
+        } catch (e) {
+            setStat(saveStat, 'Tarmoq xatosi: ' + e.message, 'text-danger');
+        }
+        draftBtn.disabled = false;
+    });
+
     // ---------- saqlash ----------
     saveBtn.addEventListener('click', async function () {
         const branch = document.getElementById('fBranch').value;
         if (!branch) { setStat(saveStat, 'Filialni tanlang.', 'text-danger'); return; }
-        const rows = [];
-        rowsBody.querySelectorAll('tr').forEach(function (tr) {
-            const name = tr.querySelector('.row-name').value.trim();
-            const qty = num(tr.querySelector('.row-qty').value) || 0;
-            if (!name || qty <= 0) return;
-            rows.push({
-                name: name,
-                barcode: tr.querySelector('.row-barcode').value.trim(),
-                qty: qty,
-                cost: num(tr.querySelector('.row-cost').value) || 0,
-                sale: num(tr.querySelector('.row-price').value) || 0
-            });
-        });
+        const rows = collect(true);
         if (!rows.length) { setStat(saveStat, 'Saqlash uchun qator yo\'q.', 'text-danger'); return; }
         saveBtn.disabled = true;
         setStat(saveStat, 'Saqlanmoqda...', 'text-muted');
         try {
             const fd = new FormData();
-            fd.append('payload', JSON.stringify({
-                branch: branch,
-                category: document.getElementById('fCategory').value,
-                supplier: document.getElementById('fSupplier').value.trim(),
-                agent: document.getElementById('fAgent').value.trim(),
-                agent_phone: document.getElementById('fAgentPhone').value.trim(),
-                invoice_no: document.getElementById('fInvoice').value.trim(),
-                date: document.getElementById('fDate').value,
-                rows: rows
-            }));
+            const p = meta(); p.rows = rows;
+            fd.append('payload', JSON.stringify(p));
             const f = imgEl.files && imgEl.files[0];
             if (f) fd.append('image', f);
             const resp = await fetch('{% url "intake_photo_save" %}', {
@@ -560,6 +723,33 @@
             saveBtn.disabled = false;
         }
     });
+
+    // ---------- qoralamani ochish ----------
+    (function restoreDraft() {
+        const el = document.getElementById('draftData');
+        if (!el) return;
+        let d = null;
+        try { d = JSON.parse(el.textContent || 'null'); } catch (e) { return; }
+        if (!d) return;
+        draftId = d.id || null;
+        if (d.branch) document.getElementById('fBranch').value = d.branch;
+        document.getElementById('fSupplier').value = d.supplier || '';
+        document.getElementById('fAgent').value = d.agent || '';
+        document.getElementById('fAgentPhone').value = d.agent_phone || '';
+        document.getElementById('fInvoice').value = d.invoice_no || '';
+        if (d.date) document.getElementById('fDate').value = d.date;
+        marjaEl.value = d.marja || '';
+        lastDefMarja = marjaEl.value.trim();
+        rowsBody.innerHTML = '';
+        (d.rows || []).forEach(function (r) { addRow(r, false); });
+        if (!rowsBody.children.length) addRow({}, false);
+        recount();
+        wrap.style.display = 'block';
+        if (d.image_url) {
+            preview.src = d.image_url;
+            preview.style.display = 'block';
+        }
+    })();
 
     // ---------- Kamera skaner: nomga qarab ketma-ket ----------
     (function initCamScan() {

@@ -4,8 +4,17 @@ from .models import (
     User, Branch, Category, Product, ProductVariant,
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
-    Supplier, IntakeSession, ProductRequest, CashPayout,
+    Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
 )
+
+
+@admin.register(InvoiceDraft)
+class InvoiceDraftAdmin(admin.ModelAdmin):
+    list_display = ('id', 'supplier_text', 'invoice_number', 'branch',
+                    'row_count', 'total_qty', 'created_by', 'updated_at')
+    list_filter = ('branch',)
+    search_fields = ('supplier_text', 'invoice_number')
+    readonly_fields = ('created_at', 'updated_at')
 
 
 @admin.register(ProductRequest)

@@ -1146,3 +1146,53 @@ class CashPayout(models.Model):
 
     def __str__(self):
         return f"{self.amount} so'm — {self.get_category_display()}"
+
+
+class InvoiceDraft(models.Model):
+    """Faktura rasmidan qabul — tugallanmagan ish (qoralama).
+
+    Telefonda suratga olinadi va jadval to'ldiriladi, keyin kompyuterda
+    davom ettiriladi. Qoralama omborga TA'SIR QILMAYDI — qabul qilinganda
+    o'chiriladi.
+    """
+    branch = models.ForeignKey(
+        Branch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='invoice_drafts'
+    )
+    supplier_text = models.CharField(max_length=200, blank=True)
+    invoice_number = models.CharField(max_length=80, blank=True)
+    image = models.ImageField(upload_to='invoices/drafts/', blank=True, null=True)
+    payload = models.JSONField(
+        default=dict, help_text="Jadval qatorlari va sarlavha maydonlari"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='invoice_drafts'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Faktura qoralamasi'
+        verbose_name_plural = 'Faktura qoralamalari'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['-updated_at'], name='invdraft_updated_dt'),
+        ]
+
+    def __str__(self):
+        return f"Qoralama #{self.pk} — {self.supplier_text or '—'}"
+
+    @property
+    def row_count(self):
+        return len(self.payload.get('rows') or [])
+
+    @property
+    def total_qty(self):
+        total = 0
+        for r in (self.payload.get('rows') or []):
+            try:
+                total += int(float(r.get('qty') or 0))
+            except (TypeError, ValueError):
+                pass
+        return total

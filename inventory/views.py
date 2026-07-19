@@ -36,7 +36,7 @@ from .models import (
     Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
-    Supplier, IntakeSession, ProductRequest, CashPayout,
+    Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -2530,6 +2530,7 @@ def intake_new(request):
         'products': products,
         'recent_sessions': recent_sessions,
         'low_stock': low_stock,
+        'draft_count': InvoiceDraft.objects.count(),
     })
 
 
@@ -3369,12 +3370,92 @@ def intake_photo(request):
     foydalanuvchi tasdiqlagandan keyingina omborga yoziladi.
     """
     from .invoice_ai import is_enabled
+    draft = None
+    if request.GET.get('draft'):
+        draft = InvoiceDraft.objects.filter(pk=request.GET['draft']).first()
+    draft_data = None
+    if draft:
+        draft_data = dict(draft.payload or {})
+        draft_data['id'] = draft.pk
+        draft_data['image_url'] = draft.image.url if draft.image else ''
     return render(request, 'inventory/intake_photo.html', {
         'branches': Branch.objects.filter(is_active=True).order_by('name'),
         'categories': Category.objects.order_by('name'),
         'suppliers': Supplier.objects.filter(is_active=True).order_by('name'),
         'ai_enabled': is_enabled(),
+        'drafts': (InvoiceDraft.objects.select_related('branch', 'created_by')
+                   .exclude(pk=draft.pk if draft else 0)[:10]),
+        'draft': draft,
+        'draft_data': draft_data,
     })
+
+
+def _draft_payload(payload):
+    """Qoralama uchun tozalangan payload (hech qanday hisob-kitobsiz)."""
+    rows = []
+    for r in (payload.get('rows') or [])[:400]:
+        rows.append({
+            'name': str(r.get('name') or '')[:200],
+            'barcode': str(r.get('barcode') or '')[:64],
+            'qty': str(r.get('qty') or '')[:20],
+            'cost': str(r.get('cost') or '')[:20],
+            'marja': str(r.get('marja') or '')[:20],
+            'sale': str(r.get('sale') or '')[:20],
+            'category': str(r.get('category') or '')[:120],
+            'hint': str(r.get('hint') or '')[:200],
+        })
+    return {
+        'branch': str(payload.get('branch') or '')[:20],
+        'supplier': str(payload.get('supplier') or '')[:200],
+        'agent': str(payload.get('agent') or '')[:120],
+        'agent_phone': str(payload.get('agent_phone') or '')[:40],
+        'invoice_no': str(payload.get('invoice_no') or '')[:80],
+        'date': str(payload.get('date') or '')[:20],
+        'marja': str(payload.get('marja') or '')[:20],
+        'rows': rows,
+    }
+
+
+@admin_required
+def intake_photo_draft(request):
+    """Yarim ishni saqlash — telefonda boshlab, kompyuterda davom ettirish."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    try:
+        payload = _json.loads(request.POST.get('payload') or '{}')
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    data = _draft_payload(payload)
+    if not data['rows']:
+        return JsonResponse({'ok': False, 'error': "Saqlash uchun qator yo'q."},
+                            status=400)
+
+    draft = None
+    if payload.get('draft_id'):
+        draft = InvoiceDraft.objects.filter(pk=payload['draft_id']).first()
+    if draft is None:
+        draft = InvoiceDraft(created_by=request.user)
+    draft.branch = Branch.objects.filter(
+        pk=data['branch'] or 0, is_active=True).first()
+    draft.supplier_text = data['supplier']
+    draft.invoice_number = data['invoice_no']
+    draft.payload = data
+    draft.save()
+    if 'image' in request.FILES:
+        draft.image = request.FILES['image']
+        draft.save(update_fields=['image'])
+    return JsonResponse({'ok': True, 'id': draft.pk,
+                         'rows': len(data['rows']),
+                         'resume_url': reverse('intake_photo') + f'?draft={draft.pk}'})
+
+
+@admin_required
+def intake_photo_draft_delete(request, pk):
+    if request.method != 'POST':
+        return redirect('intake_photo')
+    InvoiceDraft.objects.filter(pk=pk).delete()
+    messages.success(request, "Qoralama o'chirildi.")
+    return redirect('intake_photo')
 
 
 @admin_required
@@ -3416,7 +3497,20 @@ def intake_photo_save(request):
         pk=payload.get('branch') or 0, is_active=True).first()
     if not branch:
         return JsonResponse({'ok': False, 'error': 'Filial tanlang.'}, status=400)
-    category = Category.objects.filter(pk=payload.get('category') or 0).first()
+
+    # Har qatorning o'z kategoriyasi bo'lishi mumkin — bitta yetkazib beruvchi
+    # turli toifadagi mahsulot keltiradi. Ro'yxatda yo'q nom yozilsa, yangi
+    # kategoriya yaratiladi (prefiks avtomatik chiqadi).
+    cat_cache = {c.name.casefold(): c for c in Category.objects.all()}
+
+    def resolve_category(text):
+        text = (text or '').strip()[:120]
+        if not text:
+            return None
+        key = text.casefold()
+        if key not in cat_cache:
+            cat_cache[key] = Category.objects.create(name=text)
+        return cat_cache[key]
 
     clean, errors, seen_barcodes = [], [], set()
     for idx, r in enumerate(payload.get('rows') or [], 1):
@@ -3446,7 +3540,8 @@ def intake_photo_save(request):
                 continue
             seen_barcodes.add(barcode)
         clean.append({'name': name[:200], 'qty': qty, 'cost': cost,
-                      'sale': sale, 'barcode': barcode, 'variant': None})
+                      'sale': sale, 'barcode': barcode, 'variant': None,
+                      'category': (r.get('category') or '').strip()[:120]})
 
     if not clean and not errors:
         return JsonResponse({'ok': False,
@@ -3511,8 +3606,15 @@ def intake_photo_save(request):
                 session.save(update_fields=['received_at'])
             except (ValueError, TypeError):
                 pass
+        draft = (InvoiceDraft.objects.filter(pk=payload.get('draft_id')).first()
+                 if payload.get('draft_id') else None)
         if 'image' in request.FILES:
             session.invoice_image = request.FILES['image']
+            session.save(update_fields=['invoice_image'])
+        elif draft and draft.image:
+            # Qoralama telefonda olingan — rasm serverda turibdi, shu faylni
+            # sessiyaga bog'laymiz (nusxa olmaymiz).
+            session.invoice_image.name = draft.image.name
             session.save(update_fields=['invoice_image'])
 
         created = 0
@@ -3528,7 +3630,7 @@ def intake_photo_save(request):
                 product = Product.objects.filter(name__iexact=r['name']).first()
                 if product is None:
                     product = Product.objects.create(
-                        name=r['name'], category=category,
+                        name=r['name'], category=resolve_category(r['category']),
                         default_sale_price=r['sale'])
                 elif r['sale'] > 0 and not product.default_sale_price:
                     product.default_sale_price = r['sale']
@@ -3552,6 +3654,12 @@ def intake_photo_save(request):
                 supplier=supplier_text, note='Faktura rasmidan (AI)',
                 received_by=request.user)
             created += 1
+
+        if draft:
+            # Rasm sessiyaga o'tdi — qoralamani o'chirganda fayl o'chmasin
+            draft.image = None
+            draft.save(update_fields=['image'])
+            draft.delete()
 
     from .notifications import notify_intake_session
     notify_intake_session(session)
