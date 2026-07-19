@@ -73,6 +73,25 @@ http://127.0.0.1:8000 ochiladi.
 | `/intake/` | Yangi qabul |
 | `/admin/` | Django built-in admin |
 
+## Deploy (production)
+
+Ishlab turgan sayt — **https://koreysbozor.uz** (o'z VPS'imizda, PostgreSQL).
+Deploy bitta buyruq bilan mahalliy kompyuterdan bajariladi:
+
+```bash
+./deploy.sh
+```
+
+`deploy.sh` ketma-ketligi:
+1. `manage.py check` — Django tekshiruvi
+2. `manage.py check_js` — barcha sahifalardagi inline JS sintaksisi (xato bo'lsa deploy TO'XTAYDI)
+3. `rsync` — kodni serverga ko'chirish
+4. serverda `yurit-deploy`: deploydan oldin `pg_dump` zaxira → `migrate` → `collectstatic` → restart
+5. smoke test: `https://koreysbozor.uz/login/`
+
+> Eslatma: loyiha avval Render'da ham turgan (`render.yaml` + `build.sh`).
+> Hozir production faqat VPS'da — Render ishlatilmaydi.
+
 ## Production'ga chiqarishdan oldin
 
 - [ ] `SECRET_KEY` env variable'ga ko'chirish
