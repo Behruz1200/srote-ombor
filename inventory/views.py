@@ -7180,55 +7180,76 @@ def price_labels(request):
         copies = 1
     price_param = request.GET.get('price')
 
-    # --- Mahsulotlarni yig'ish: codes= / code= / ids= (variant id) ---
-    products = []
+    # --- Turlarni yig'ish: codes= / code= (mahsulotning HAMMA turi) yoki
+    #     ids= (aniq turlar). Har turning o'z narxi bo'lgani uchun etiketka
+    #     MAHSULOTGA emas, TURGA chiqariladi.
+    variants = []
     seen = set()
 
-    def _add(p):
-        if p and p.id not in seen:
-            seen.add(p.id)
-            products.append(p)
+    def _add(v):
+        if v and v.pk not in seen:
+            seen.add(v.pk)
+            variants.append(v)
 
     raw_codes = (request.GET.get('codes') or request.GET.get('code') or '')
     codes = [c.strip() for c in raw_codes.split(',') if c.strip()]
+    products = []
     if codes:
         norm = [normalize_code(c.upper()) for c in codes]
         pmap = {p.code: p for p in Product.objects.filter(code__in=norm)}
         for c in norm:
-            _add(pmap.get(c))
+            p = pmap.get(c)
+            if not p:
+                continue
+            products.append(p)
+            for v in (ProductVariant.objects.filter(product=p)
+                      .select_related('product')
+                      .order_by('color', 'size')):
+                _add(v)
 
     ids = [int(i) for i in (request.GET.get('ids') or '').split(',')
            if i.strip().isdigit()]
     if ids:
-        for v in (ProductVariant.objects.filter(pk__in=ids)
-                  .select_related('product')):
-            _add(v.product)
+        vmap = {v.pk: v for v in ProductVariant.objects.filter(pk__in=ids)
+                .select_related('product')}
+        for i in ids:
+            _add(vmap.get(i))
 
-    # --- Har mahsulot uchun amaldagi sotuv narxi ---
+    # --- Har TURNING o'z sotuv narxi ---
+    branch = getattr(request.user, 'branch', None)
     labels = []
-    for p in products:
+    for v in variants:
         if price_param:
             price = price_param
         else:
-            st = (BranchStock.objects.filter(variant__product=p, sale_price__gt=0)
-                  .order_by('-sale_price').first())
-            price = st.sale_price if st else p.default_sale_price
-        # Etiketkada BarTender andozasi kabi vergul bilan: 60,000
+            qs = BranchStock.objects.filter(variant=v, sale_price__gt=0)
+            st = (qs.filter(branch=branch).first() if branch else None) or qs.first()
+            price = st.sale_price if st else v.product.default_sale_price
         try:
             price_str = f"{int(round(float(price))):,}"
         except (ValueError, TypeError):
             price_str = str(price)
-        labels.append({'product': p, 'price': price, 'price_str': price_str})
+        vtext = ' / '.join(x for x in (v.color, v.size) if x)
+        labels.append({'variant': v, 'product': v.product, 'vtext': vtext,
+                       'price': price, 'price_str': price_str})
 
     render_labels = []
     for lb in labels:
         for _ in range(copies):
             render_labels.append(lb)
 
+    # Yo'lak (toolbar) havolalari uchun manbani saqlaymiz
+    if ids:
+        src_qs = 'ids=' + ','.join(str(i) for i in ids)
+    else:
+        src_qs = 'codes=' + ','.join(p.code for p in products)
+
     return render(request, 'inventory/price_labels.html', {
-        'labels': render_labels, 'copies': copies, 'size': size,
+        'labels': render_labels, 'uniq_labels': labels,
+        'copies': copies, 'size': size,
         'w': w, 'h': h, 'n_products': len(labels),
         'codes': ','.join(p.code for p in products),
+        'src_qs': src_qs,
         'store_name': PRICE_LABEL_STORE_NAME,
     })
 

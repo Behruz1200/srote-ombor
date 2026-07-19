@@ -27,6 +27,7 @@
             overflow: hidden;
         }
         .plbl__name { font-weight: 700; text-transform: uppercase; line-height: 1.05; width: 100%; }
+        .plbl__var { width: 100%; line-height: 1.05; opacity: .85; }
         .plbl__mid { flex: 1; display: flex; align-items: center; justify-content: center; gap: 1mm; width: 100%; }
         .plbl__price { font-weight: 800; line-height: 1; }
         .plbl__cur { align-self: flex-end; }
@@ -34,14 +35,16 @@
 
         /* 58 × 40 mm */
         .sz-58x40 .plbl { width: 58mm; height: 40mm; padding: 3mm 2mm; }
-        .sz-58x40 .plbl__name { font-size: 12pt; }
-        .sz-58x40 .plbl__price { font-size: 26pt; }
+        .sz-58x40 .plbl__name { font-size: 11pt; }
+        .sz-58x40 .plbl__var { font-size: 9pt; }
+        .sz-58x40 .plbl__price { font-size: 24pt; }
         .sz-58x40 .plbl__cur { font-size: 9pt; margin-bottom: 3pt; }
         .sz-58x40 .plbl__store { font-size: 9pt; }
 
         /* 30 × 20 mm */
         .sz-30x20 .plbl { width: 30mm; height: 20mm; padding: 1mm; }
-        .sz-30x20 .plbl__name { font-size: 7pt; }
+        .sz-30x20 .plbl__name { font-size: 6.5pt; }
+        .sz-30x20 .plbl__var { font-size: 5pt; }
         .sz-30x20 .plbl__price { font-size: 13pt; }
         .sz-30x20 .plbl__cur { font-size: 5pt; margin-bottom: 1pt; }
         .sz-30x20 .plbl__store { font-size: 5pt; }
@@ -65,17 +68,21 @@
     <div class="toolbar no-print">
         <div>
             <strong>Narx etiketkasi</strong>
-            <span class="text-muted small">— {{ n_products }} mahsulot · {{ labels|length }} yorliq</span>
+            <span class="text-muted small">— {{ n_products }} tur · {{ labels|length }} yorliq</span>
         </div>
         <div class="grp">
             <div class="btn-group btn-group-sm" role="group">
-                <a href="?codes={{ codes }}&size=58x40&copies={{ copies }}"
+                <a href="?{{ src_qs }}&size=58x40&copies={{ copies }}"
                    class="btn {% if size == '58x40' %}btn-primary{% else %}btn-outline-primary{% endif %}">58 × 40 mm</a>
-                <a href="?codes={{ codes }}&size=30x20&copies={{ copies }}"
+                <a href="?{{ src_qs }}&size=30x20&copies={{ copies }}"
                    class="btn {% if size == '30x20' %}btn-primary{% else %}btn-outline-primary{% endif %}">30 × 20 mm</a>
             </div>
             <form method="get" class="d-flex gap-2 align-items-center mb-0">
-                <input type="hidden" name="codes" value="{{ codes }}">
+                {% if 'ids=' in src_qs %}
+                    <input type="hidden" name="ids" value="{{ src_qs|cut:'ids=' }}">
+                {% else %}
+                    <input type="hidden" name="codes" value="{{ codes }}">
+                {% endif %}
                 <input type="hidden" name="size" value="{{ size }}">
                 <label class="form-label mb-0 small">Nusxa:</label>
                 <input type="number" name="copies" value="{{ copies }}" min="1" max="200"
@@ -94,14 +101,39 @@
         <a href="#" id="usbRepick">Printerni qayta tanlash</a>
     </div>
 
+    {% if uniq_labels|length > 1 %}
+    <div class="no-print" style="padding:10px 18px; background:#fff; border-bottom:1px solid #eee;">
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+            <strong style="font-size:.9rem;">Qaysi turlar chop etilsin?</strong>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="vAll">Hammasi</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="vNone">Hech biri</button>
+            <span class="text-muted small ms-auto"><span id="vCount">0</span> ta tanlangan</span>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% for lb in uniq_labels %}
+            <label class="border rounded px-2 py-1 d-flex align-items-center gap-2"
+                   style="font-size:.82rem; cursor:pointer; background:#f8f9fa;">
+                <input type="checkbox" class="v-pick form-check-input mt-0"
+                       value="{{ lb.variant.pk }}" checked>
+                <span>
+                    <strong>{{ lb.vtext|default:"—" }}</strong>
+                    <span class="text-muted">· {{ lb.price_str }} so'm</span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     {% if not labels %}
     <div class="alert alert-warning m-4">Mahsulot topilmadi. Qabuldan qaytib, qayta urinib ko'ring.</div>
     {% endif %}
 
     <div class="plbl-sheet sz-{{ size }}">
         {% for lb in labels %}
-        <div class="plbl">
-            <div class="plbl__name">{{ lb.product.name|truncatechars:40 }}</div>
+        <div class="plbl" data-vid="{{ lb.variant.pk }}">
+            <div class="plbl__name">{{ lb.product.name|truncatechars:34 }}</div>
+            {% if lb.vtext %}<div class="plbl__var">{{ lb.vtext|truncatechars:30 }}</div>{% endif %}
             <div class="plbl__mid">
                 <span class="plbl__price">{{ lb.price_str }}</span>
                 <span class="plbl__cur">so'm</span>
@@ -110,6 +142,32 @@
         </div>
         {% endfor %}
     </div>
+
+    <script>
+    // Tur tanlash: belgilanmagan turning yorliqlari yashiriladi (chop etilmaydi)
+    (function () {
+        const picks = Array.prototype.slice.call(document.querySelectorAll('.v-pick'));
+        if (!picks.length) return;
+        const countEl = document.getElementById('vCount');
+        function apply() {
+            let n = 0;
+            picks.forEach(function (cb) {
+                if (cb.checked) n++;
+                document.querySelectorAll('.plbl[data-vid="' + cb.value + '"]')
+                    .forEach(function (el) { el.style.display = cb.checked ? '' : 'none'; });
+            });
+            countEl.textContent = n;
+        }
+        picks.forEach(function (cb) { cb.addEventListener('change', apply); });
+        document.getElementById('vAll').addEventListener('click', function () {
+            picks.forEach(function (cb) { cb.checked = true; }); apply();
+        });
+        document.getElementById('vNone').addEventListener('click', function () {
+            picks.forEach(function (cb) { cb.checked = false; }); apply();
+        });
+        apply();
+    })();
+    </script>
 
     <script>
     // Avtomatik chop etish: ?autoprint=1 bo'lsa, sahifa ochilishi bilan
@@ -177,7 +235,7 @@
                 await device.transferOut(epNum, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
             }
         }
-        function renderBitmap(name, price, store, size, invert) {
+        function renderBitmap(name, vtext, price, store, size, invert) {
             const dpmm = 8;
             const wmm = size === '30x20' ? 30 : 58;
             const hmm = size === '30x20' ? 20 : 40;
@@ -189,10 +247,14 @@
             ctx.fillStyle = '#000';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             const big = size !== '30x20';
-            ctx.font = 'bold ' + (big ? 34 : 20) + 'px Arial, sans-serif';
-            ctx.fillText(name, W / 2, big ? 48 : 28);
-            ctx.font = 'bold ' + (big ? 96 : 48) + 'px Arial, sans-serif';
-            ctx.fillText(price, W / 2, Math.round(H * 0.5));
+            ctx.font = 'bold ' + (big ? 30 : 18) + 'px Arial, sans-serif';
+            ctx.fillText(name, W / 2, big ? 40 : 24);
+            if (vtext) {
+                ctx.font = (big ? 22 : 12) + 'px Arial, sans-serif';
+                ctx.fillText(vtext, W / 2, big ? 70 : 40);
+            }
+            ctx.font = 'bold ' + (big ? 88 : 44) + 'px Arial, sans-serif';
+            ctx.fillText(price, W / 2, Math.round(H * (vtext ? 0.56 : 0.5)));
             ctx.font = (big ? 24 : 12) + 'px Arial, sans-serif';
             ctx.fillText(store, W / 2, H - (big ? 26 : 14));
             const pxd = ctx.getImageData(0, 0, W, H).data;
@@ -227,7 +289,8 @@
         }
         async function run(forcePrompt) {
             const sheet = document.querySelector('.plbl-sheet');
-            const plbls = Array.prototype.slice.call(document.querySelectorAll('.plbl'));
+            const plbls = Array.prototype.slice.call(document.querySelectorAll('.plbl'))
+                .filter(function (el) { return el.offsetParent !== null; });
             if (!plbls.length) { setMsg("Yorliq yo'q", true); return; }
             const size = sheet.classList.contains('sz-30x20') ? '30x20' : '58x40';
             const invert = !!(invertEl && invertEl.checked);
@@ -238,9 +301,12 @@
             try {
                 for (const el of plbls) {
                     const name = el.querySelector('.plbl__name').textContent.trim();
+                    const vEl = el.querySelector('.plbl__var');
+                    const vtext = vEl ? vEl.textContent.trim() : '';
                     const price = el.querySelector('.plbl__price').textContent.trim();
                     const store = el.querySelector('.plbl__store').textContent.trim();
-                    await sendBytes(device, buildTSPL(renderBitmap(name, price, store, size, invert)));
+                    await sendBytes(device, buildTSPL(
+                        renderBitmap(name, vtext, price, store, size, invert)));
                 }
                 setMsg('✓ Chop etildi (' + plbls.length + " ta, USB)", false);
             } catch (e) {
