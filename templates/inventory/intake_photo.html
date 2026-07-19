@@ -765,7 +765,7 @@
             setStat(saveStat, '✓ Qoralama #' + data.id + ' saqlandi', 'text-success');
             document.getElementById('doneDraftNo').textContent = '#' + data.id;
             document.getElementById('doneDraftRows').textContent = data.rows;
-            doneModal.show();
+            doneModal().show();
             return;                     // tugma o'chiq qoladi — takror bosilmasin
         } catch (e) {
             setStat(saveStat, 'Tarmoq xatosi: ' + e.message, 'text-danger');
@@ -773,9 +773,14 @@
         draftBtn.disabled = false;
     });
 
-    // Qoralama saqlangach: xabar oynasi yopilishi bilan qabul sahifasiga qaytamiz
+    // Qoralama saqlangach: xabar oynasi yopilishi bilan qabul sahifasiga qaytamiz.
+    // MUHIM: bootstrap.js shu inline script'dan KEYIN yuklanadi — shuning uchun
+    // Modal faqat kerak bo'lganda (bosilganda) yaratiladi.
     const doneEl = document.getElementById('draftDoneModal');
-    const doneModal = new bootstrap.Modal(doneEl);
+    let _doneBs = null;
+    function doneModal() {
+        return _doneBs || (_doneBs = new bootstrap.Modal(doneEl));
+    }
     doneEl.addEventListener('hidden.bs.modal', function () {
         window.location.href = '{% url "intake_new" %}';
     });
