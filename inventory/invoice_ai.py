@@ -40,6 +40,9 @@ Schema:
   "rows": [
     {
       "name": "the WHOLE product cell exactly as printed (keep original language)",
+      "product": "base product WITHOUT the flavour and WITHOUT the volume",
+      "type": "the flavour / variety / scent / colour, or \\"\\"",
+      "size": "the volume / weight / pack count, or \\"\\"",
       "qty": 0,
       "unit": "шт / крб / кг / dona, or \\"\\"",
       "per_case": 0,
@@ -74,6 +77,29 @@ Field rules:
 - "name" = copy the entire product cell: the leading generic word
   (Шампунь / Мыло / Паста / Сок), the brand, and the size or weight
   ("Шампунь Head&Shoulders 400мл"). Do not shorten it to just the brand.
+
+SPLITTING name INTO product / type / size — this matters most:
+A delivery note lists every flavour and every pack size on its own line, but
+the shop stores ONE product with many variants. Cut each name three ways:
+
+    "Влажные Салфетки ECO Aloelik Yashil 120шт"
+        product "Влажные Салфетки ECO"   type "Aloelik Yashil"   size "120шт"
+    "Влажные Салфетки ECO Kremli Oq 72шт"
+        product "Влажные Салфетки ECO"   type "Kremli Oq"        size "72шт"
+    "Зубная паста Colgate Fresh 100мл"
+        product "Зубная паста Colgate"   type "Fresh"            size "100мл"
+    "Мыло Safeguard 90г"
+        product "Мыло Safeguard"         type ""                 size "90г"
+
+- Read ALL the rows first, then decide where to cut. Rows belonging to the same
+  family MUST get a byte-identical "product" — that is what groups them.
+- "product" = the generic word + brand that the sibling rows share.
+- "type"    = what distinguishes this line from its siblings: flavour, scent,
+  colour, series, target user (Fresh, Lavanda, Antibacterial, Detskiy,
+  Erkaklar uchun, Ko'k). "" if the line has no such word.
+- "size"    = number + unit only (100мл, 72шт, 1.8кг, 5 dona). "" if absent.
+- NEVER leave the volume inside "product" or "type".
+- If a product genuinely has no siblings, still split off its size.
 - "qty"      = Количество / Кол-во / Soni for that row.
 - "cost"     = UNIT price (Цена / Нархи / Цена с переоценкой). NEVER the row total.
 - "line_sum" = row total (Сумма). Use 0 if the column is absent.
@@ -263,8 +289,13 @@ def extract_invoice(django_file, timeout=120):
         line_sum = _num(r.get('line_sum'))
         # kеys bo'lsa — jami dona
         total_qty = qty * per_case if per_case > 1 else qty
+        product = (r.get('product') or '').strip()[:200]
         rows.append({
             'name': name[:200],
+            # AI bo'lmagan/bo'sh qoldirgan bo'lsa — butun nom mahsulot bo'ladi
+            'product': product or name[:200],
+            'type': (r.get('type') or '').strip()[:120],
+            'size': (r.get('size') or '').strip()[:60],
             'qty': qty,
             'unit': (r.get('unit') or '').strip()[:20],
             'per_case': per_case,

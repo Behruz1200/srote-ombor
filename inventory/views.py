@@ -3382,6 +3382,8 @@ def intake_photo(request):
         'branches': Branch.objects.filter(is_active=True).order_by('name'),
         'categories': Category.objects.order_by('name'),
         'suppliers': Supplier.objects.filter(is_active=True).order_by('name'),
+        'product_names': list(Product.objects.order_by('name')
+                              .values_list('name', flat=True)),
         'ai_enabled': is_enabled(),
         'drafts': (InvoiceDraft.objects.select_related('branch', 'created_by')
                    .exclude(pk=draft.pk if draft else 0)[:10]),
@@ -3396,6 +3398,9 @@ def _draft_payload(payload):
     for r in (payload.get('rows') or [])[:400]:
         rows.append({
             'name': str(r.get('name') or '')[:200],
+            'product': str(r.get('product') or '')[:200],
+            'type': str(r.get('type') or '')[:120],
+            'size': str(r.get('size') or '')[:60],
             'barcode': str(r.get('barcode') or '')[:64],
             'qty': str(r.get('qty') or '')[:20],
             'cost': str(r.get('cost') or '')[:20],
@@ -3458,6 +3463,60 @@ def intake_photo_draft_delete(request, pk):
     return redirect('intake_photo')
 
 
+def _norm_name(s):
+    return re.sub(r'\s+', ' ', (s or '').strip()).casefold()
+
+
+_SIZE_RE = re.compile(
+    r'\b\d+[.,]?\d*\s*(?:ml|мл|l|л|g|gr|г|гр|kg|кг|шт|sht|dona|pcs|pc|%)\.?\b',
+    re.I)
+
+
+def _match_catalog(rows):
+    """AI ajratgan nomni do'kondagi mavjud mahsulotlarga moslaymiz.
+
+    Maqsad: bir xil tovar har qabulda BIR XIL mahsulot ostiga tushsin.
+    Mavjud mahsulot nomi qator nomining boshida tursa — o'sha nom olinadi
+    (eng uzun moslik ustun), qolgani tur/hajmga bo'linadi.
+    """
+    catalog = sorted(
+        ((_norm_name(p.name), p.name) for p in Product.objects.only('name')),
+        key=lambda t: -len(t[0]))
+    by_exact = {n: real for n, real in catalog}
+
+    for r in rows:
+        full = _norm_name(r.get('name'))
+        ai_product = (r.get('product') or '').strip()
+        r['matched'] = False
+
+        # 1) AI ajratgan nom aynan bazadagi mahsulot bo'lsa — o'shani olamiz
+        hit = by_exact.get(_norm_name(ai_product))
+        if hit:
+            r['product'] = hit
+            r['matched'] = True
+            continue
+
+        # 2) Butun qator nomi bazadagi mahsulot bilan boshlansa — eng uzunini
+        for norm, real in catalog:
+            if not norm or len(norm) < 3:
+                continue
+            if full == norm or full.startswith(norm + ' '):
+                rest = (r.get('name') or '')[len(norm):].strip(' -,.')
+                r['product'] = real
+                r['matched'] = True
+                # qolganini tur/hajmga ajratamiz (AI bermagan bo'lsa)
+                if rest and not (r.get('type') or r.get('size')):
+                    m = _SIZE_RE.search(rest)
+                    if m:
+                        r['size'] = m.group(0).strip()
+                        r['type'] = (rest[:m.start()] + ' '
+                                     + rest[m.end():]).strip(' -,.')
+                    else:
+                        r['type'] = rest
+                break
+    return rows
+
+
 @admin_required
 def intake_photo_extract(request):
     """POST rasm -> AI o'qigan qatorlar (JSON). Hech narsa saqlanmaydi."""
@@ -3478,6 +3537,7 @@ def intake_photo_extract(request):
     except Exception:
         logger.exception('intake_photo_extract failed')
         return JsonResponse({'ok': False, 'error': 'Kutilmagan xato.'}, status=500)
+    data['rows'] = _match_catalog(data.get('rows') or [])
     data['ok'] = True
     return JsonResponse(data)
 
@@ -3512,11 +3572,21 @@ def intake_photo_save(request):
             cat_cache[key] = Category.objects.create(name=text)
         return cat_cache[key]
 
-    clean, errors, seen_barcodes = [], [], set()
+    clean, errors, seen_barcodes, seen_keys = [], [], set(), set()
     for idx, r in enumerate(payload.get('rows') or [], 1):
-        name = smart_title((r.get('name') or '').strip())
+        # Mahsulot = guruh (Colgate), tur+hajm = variant (Fresh / 100ml).
+        # Bir xil "product" nomli qatorlar BITTA mahsulot ostiga yig'iladi.
+        name = smart_title((r.get('product') or r.get('name') or '').strip())
         if not name:
             continue
+        vtype = smart_title((r.get('type') or '').strip())[:120]
+        vsize = smart_title((r.get('size') or '').strip())[:60]
+        key = (_norm_name(name), _norm_name(vtype), _norm_name(vsize))
+        if key in seen_keys:
+            errors.append(
+                f"{idx}-qator: {name} / {vtype or '—'} / {vsize or '—'} takrorlangan.")
+            continue
+        seen_keys.add(key)
         try:
             qty = int(float(r.get('qty') or 0))
         except (TypeError, ValueError):
@@ -3539,8 +3609,9 @@ def intake_photo_save(request):
                 errors.append(f"{idx}-qator: shtrix-kod jadvalda takror ({barcode}).")
                 continue
             seen_barcodes.add(barcode)
-        clean.append({'name': name[:200], 'qty': qty, 'cost': cost,
-                      'sale': sale, 'barcode': barcode, 'variant': None,
+        clean.append({'name': name[:200], 'type': vtype, 'size': vsize,
+                      'qty': qty, 'cost': cost, 'sale': sale,
+                      'barcode': barcode, 'variant': None,
                       'category': (r.get('category') or '').strip()[:120]})
 
     if not clean and not errors:
@@ -3617,26 +3688,42 @@ def intake_photo_save(request):
             session.invoice_image.name = draft.image.name
             session.save(update_fields=['invoice_image'])
 
+        # Bir xil nomli qatorlar bitta mahsulot ostiga — har biri alohida tur.
+        # Kategoriya mahsulotga tegishli: guruhdagi birinchi to'ldirilgani.
+        products = {}
+
+        def group_product(row):
+            key = _norm_name(row['name'])
+            if key in products:
+                return products[key]
+            product = Product.objects.filter(name__iexact=row['name']).first()
+            if product is None:
+                cat = next((resolve_category(x['category']) for x in clean
+                            if _norm_name(x['name']) == key and x['category']),
+                           None)
+                product = Product.objects.create(
+                    name=row['name'], category=cat,
+                    default_sale_price=row['sale'])
+            elif row['sale'] > 0 and not product.default_sale_price:
+                product.default_sale_price = row['sale']
+                product.save(update_fields=['default_sale_price'])
+            products[key] = product
+            return product
+
         created = 0
         for r in clean:
             variant = r['variant']
             if variant is not None:
                 # Shtrix-kod orqali topildi — mavjud turga qo'shamiz
                 product = variant.product
+                products.setdefault(_norm_name(product.name), product)
                 if r['sale'] > 0 and not product.default_sale_price:
                     product.default_sale_price = r['sale']
                     product.save(update_fields=['default_sale_price'])
             else:
-                product = Product.objects.filter(name__iexact=r['name']).first()
-                if product is None:
-                    product = Product.objects.create(
-                        name=r['name'], category=resolve_category(r['category']),
-                        default_sale_price=r['sale'])
-                elif r['sale'] > 0 and not product.default_sale_price:
-                    product.default_sale_price = r['sale']
-                    product.save(update_fields=['default_sale_price'])
+                product = group_product(r)
                 variant, _ = ProductVariant.objects.get_or_create(
-                    product=product, size='', color='')
+                    product=product, size=r['size'], color=r['type'])
                 if r['barcode'] and not variant.barcode:
                     variant.barcode = r['barcode']
                     variant.save(update_fields=['barcode'])
@@ -3665,6 +3752,7 @@ def intake_photo_save(request):
     notify_intake_session(session)
     return JsonResponse({
         'ok': True, 'session_id': session.pk, 'lines': created,
+        'products': len(products),
         'redirect': reverse('intake_session_detail', args=[session.pk]),
     })
 

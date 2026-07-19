@@ -166,10 +166,15 @@
                     </button>
                 </div>
                 <div class="small text-muted mb-2">
+                    <i class="bi bi-diagram-3"></i>
+                    <strong>Mahsulot</strong> — guruh nomi (Colgate),
+                    <strong>Tur</strong> va <strong>Hajm</strong> — o'sha mahsulotning
+                    turlari (Fresh / 100ml). Bir xil <strong>Mahsulot</strong> yozilgan
+                    qatorlar bitta mahsulot ostiga yig'iladi.
+                    <br>
                     <i class="bi bi-info-circle"></i>
-                    Nomlar AI'dan keldi — endi shtrix-kodlarni skanerlang. Telefonda
-                    <strong>kamera</strong> tugmasini bosing; kompyuterda skaner qurilmasi
-                    kodni Shtrix-kod ustunidagi keyingi bo'sh katakka o'zi yozadi.
+                    Shtrix-kodni skanerlash: telefonda <strong>kamera</strong> tugmasi,
+                    kompyuterda skaner qurilmasi keyingi bo'sh katakka o'zi yozadi.
                 </div>
 
                 <div class="table-responsive">
@@ -177,8 +182,16 @@
                         <thead class="table-light">
                             <tr>
                                 <th style="width:44px" class="text-muted">#</th>
-                                <th style="min-width:220px">Nomi</th>
-                                <th style="min-width:160px">Shtrix-kod</th>
+                                <th style="min-width:200px">Mahsulot
+                                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                            data-col="row-name" tabindex="-1"
+                                            title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                        <i class="bi bi-arrow-down-square"></i>
+                                    </button>
+                                </th>
+                                <th style="min-width:130px">Tur</th>
+                                <th style="min-width:90px">Hajm</th>
+                                <th style="min-width:150px">Shtrix-kod</th>
                                 <th style="min-width:100px">Tannarx
                                     <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
                                             data-col="row-cost" tabindex="-1"
@@ -220,7 +233,8 @@
                         <i class="bi bi-plus-lg"></i> Qator qo'shish
                     </button>
                     <div class="small text-muted">
-                        <strong id="sumRows">0</strong> qator ·
+                        <strong id="sumProducts">0</strong> mahsulot ·
+                        <strong id="sumRows">0</strong> tur ·
                         <strong id="sumQty">0</strong> dona ·
                         tannarx jami: <strong id="sumCost">0</strong> so'm
                     </div>
@@ -252,7 +266,13 @@
 <template id="rowTpl">
     <tr>
         <td class="row-num text-muted small text-center align-middle"></td>
-        <td><input type="text" class="form-control form-control-sm row-name" placeholder="Mahsulot nomi"></td>
+        <td>
+            <input type="text" class="form-control form-control-sm row-name"
+                   list="prodOptions" placeholder="Colgate" autocomplete="off">
+            <div class="row-src text-muted" style="font-size:.72rem"></div>
+        </td>
+        <td><input type="text" class="form-control form-control-sm row-type" placeholder="Fresh"></td>
+        <td><input type="text" class="form-control form-control-sm row-size" placeholder="100ml"></td>
         <td><input type="text" class="form-control form-control-sm row-barcode" placeholder="Skanerlang"></td>
         <td><input type="text" class="form-control form-control-sm text-end row-cost" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" class="form-control form-control-sm text-end row-marja" inputmode="decimal" placeholder="%"></td>
@@ -322,8 +342,19 @@
   </div>
 </div>
 
+<style>
+/* Bir mahsulotning bir nechta turi — chap chekka bilan bog'lab ko'rsatamiz */
+#rowsBody tr.yrt-grouped td:first-child {
+    box-shadow: inset 3px 0 0 var(--bs-primary, #0d6efd);
+}
+#rowsBody .row-src { line-height: 1.15; margin-top: 2px; }
+</style>
+
 <datalist id="catOptions">
     {% for c in categories %}<option value="{{ c.name }}">{% endfor %}
+</datalist>
+<datalist id="prodOptions">
+    {% for n in product_names %}<option value="{{ n }}">{% endfor %}
 </datalist>
 {{ draft_data|json_script:"draftData" }}
 
@@ -434,7 +465,22 @@
     function addRow(r, focus) {
         r = r || {};
         const tr = rowTpl.content.firstElementChild.cloneNode(true);
-        tr.querySelector('.row-name').value = r.name || '';
+        tr.querySelector('.row-name').value = r.product || r.name || '';
+        tr.querySelector('.row-type').value = r.type || '';
+        tr.querySelector('.row-size').value = r.size || '';
+        // Fakturada qanday yozilgan edi — tekshirish uchun ostida ko'rsatamiz
+        const src = tr.querySelector('.row-src');
+        if (r.name && r.name !== (r.product || '')) {
+            src.textContent = r.name;
+            src.title = 'Fakturadagi to\'liq nom';
+        }
+        if (r.matched) {
+            const b = document.createElement('span');
+            b.className = 'text-success ms-1';
+            b.title = 'Bu mahsulot bazangizda bor — turi shunga qo\'shiladi';
+            b.innerHTML = ' <i class="bi bi-link-45deg"></i>bazada bor';
+            src.appendChild(b);
+        }
         const q = r.total_qty || r.qty;
         if (q) tr.querySelector('.row-qty').value = Math.round(q);
         if (r.cost) tr.querySelector('.row-cost').value = Math.round(r.cost);
@@ -474,16 +520,21 @@
 
     function recount() {
         let n = 0, i = 1, qty = 0, cost = 0;
+        const groups = new Map();
         rowsBody.querySelectorAll('tr').forEach(function (tr) {
             const numCell = tr.querySelector('.row-num');
             if (numCell) numCell.textContent = i++;
             const nm = tr.querySelector('.row-name');
-            if (nm && nm.value.trim()) n++;
+            const key = (nm ? nm.value : '').trim().toLowerCase();
+            if (key) { n++; groups.set(key, (groups.get(key) || 0) + 1); }
+            // Bir mahsulotning bir nechta turi — chap chekka bilan belgilaymiz
+            tr.classList.toggle('yrt-grouped', !!key && groups.get(key) > 1);
             const q = num(tr.querySelector('.row-qty').value) || 0;
             const c = num(tr.querySelector('.row-cost').value) || 0;
             if (q > 0) { qty += q; cost += q * c; }
         });
         document.getElementById('sumRows').textContent = n;
+        document.getElementById('sumProducts').textContent = groups.size;
         document.getElementById('sumQty').textContent = fmt(qty);
         document.getElementById('sumCost').textContent = fmt(cost);
     }
@@ -668,7 +719,8 @@
             if (strict) {
                 if (!name || qty <= 0) return;
                 rows.push({
-                    name: name, barcode: g('.row-barcode'), qty: qty,
+                    product: name, type: g('.row-type'), size: g('.row-size'),
+                    barcode: g('.row-barcode'), qty: qty,
                     cost: num(g('.row-cost')) || 0,
                     sale: num(g('.row-price')) || 0,
                     category: g('.row-cat')
@@ -676,7 +728,9 @@
             } else {
                 if (!name && !qtyRaw && !g('.row-barcode') && !g('.row-cost')) return;
                 rows.push({
-                    name: name, barcode: g('.row-barcode'), qty: qtyRaw,
+                    product: name, type: g('.row-type'), size: g('.row-size'),
+                    name: (tr.querySelector('.row-src').textContent || '').trim(),
+                    barcode: g('.row-barcode'), qty: qtyRaw,
                     cost: g('.row-cost'), marja: g('.row-marja'),
                     sale: g('.row-price'), category: g('.row-cat'),
                     hint: (tr.querySelector('.row-hint').textContent || '').trim()
@@ -749,7 +803,8 @@
                 saveBtn.disabled = false;
                 return;
             }
-            setStat(saveStat, '✓ ' + data.lines + ' qator qabul qilindi', 'text-success');
+            setStat(saveStat, '✓ ' + data.products + ' mahsulot, ' +
+                    data.lines + ' tur qabul qilindi', 'text-success');
             window.location.href = data.redirect;
         } catch (e) {
             setStat(saveStat, 'Tarmoq xatosi: ' + e.message, 'text-danger');
@@ -798,6 +853,11 @@
             statusEl.className = 'alert py-2 mb-2 alert-' + (type || 'info');
             statusEl.innerHTML = html;
         }
+        function rowLabel(tr) {
+            const g = c => (tr.querySelector(c).value || '').trim();
+            return [g('.row-name'), g('.row-type'), g('.row-size')]
+                .filter(Boolean).join(' · ');
+        }
         function showTarget() {
             const tr = nextEmptyBarcodeRow();
             if (!tr) {
@@ -806,7 +866,7 @@
                 targetEl.style.display = '';
                 return;
             }
-            const nm = (tr.querySelector('.row-name').value || '').trim();
+            const nm = rowLabel(tr);
             targetEl.className = 'alert alert-secondary py-2 mb-2';
             targetEl.innerHTML = '<span class="text-muted small">Hozir skanerlang:</span><br>' +
                 '<strong>' + (nm || '(nomsiz qator)') + '</strong>';
@@ -831,14 +891,14 @@
                 showTarget();
                 return;
             }
-            const nm = (tr.querySelector('.row-name').value || '').trim();
+            const nm = rowLabel(tr);
             tr.querySelector('.row-barcode').value = code;
             recount();
             count++;
             countEl.textContent = count;
             const chip = document.createElement('span');
             chip.className = 'badge bg-success-subtle text-success border';
-            chip.textContent = (nm ? nm.slice(0, 18) + ' · ' : '') + code;
+            chip.textContent = (nm ? nm.slice(0, 26) + ' · ' : '') + code;
             listEl.prepend(chip);
             setS('<i class="bi bi-check-circle"></i> <strong>' + (nm || code) +
                  '</strong> — qo\'shildi', 'success');
