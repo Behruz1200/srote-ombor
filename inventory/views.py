@@ -3407,6 +3407,8 @@ def _draft_payload(payload):
             'marja': str(r.get('marja') or '')[:20],
             'sale': str(r.get('sale') or '')[:20],
             'category': str(r.get('category') or '')[:120],
+            'line_sum': str(r.get('line_sum') or '')[:24],
+            'qty_note': str(r.get('qty_note') or '')[:80],
             'hint': str(r.get('hint') or '')[:200],
         })
     return {
@@ -3417,6 +3419,7 @@ def _draft_payload(payload):
         'invoice_no': str(payload.get('invoice_no') or '')[:80],
         'date': str(payload.get('date') or '')[:20],
         'marja': str(payload.get('marja') or '')[:20],
+        'total': str(payload.get('total') or '')[:24],
         'rows': rows,
     }
 

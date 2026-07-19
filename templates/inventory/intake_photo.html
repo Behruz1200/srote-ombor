@@ -246,6 +246,15 @@
                         tannarx jami: <strong id="sumCost">0</strong> so'm
                     </div>
                 </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+                    <label for="fTotal" class="small text-muted mb-0">
+                        Fakturadagi <strong>Итого</strong>:
+                    </label>
+                    <input type="text" id="fTotal" class="form-control form-control-sm text-end"
+                           style="max-width:160px" inputmode="decimal" placeholder="—"
+                           title="Qog'ozdagi umumiy summa. Xato o'qilgan bo'lsa to'g'rilang yoki bo'shating.">
+                    <span class="small text-muted">so'm</span>
+                </div>
                 <div id="sumCheck" class="small mt-2"></div>
 
                 <div class="d-flex gap-2 mt-3 flex-wrap">
@@ -442,6 +451,7 @@
     const rowsBody = document.getElementById('rowsBody');
     const rowTpl = document.getElementById('rowTpl');
     const marjaEl = document.getElementById('fMarja');
+    const totalEl = document.getElementById('fTotal');
     const saveBtn = document.getElementById('saveBtn');
     const draftBtn = document.getElementById('draftBtn');
     const saveStat = document.getElementById('saveStatus');
@@ -519,6 +529,10 @@
 
     // Standart marja: bo'sh (yoki avvalgi standart qiymatdagi) qatorlarga tarqaladi
     let lastDefMarja = '';
+    totalEl.addEventListener('input', function () {
+        invoiceTotal = num(totalEl.value) || 0;
+        recount();
+    });
     marjaEl.addEventListener('input', function () {
         const v = marjaEl.value.trim();
         rowsBody.querySelectorAll('tr').forEach(function (tr) {
@@ -579,6 +593,7 @@
         }
         tr.querySelector('.row-hint').innerHTML = bits.join(' · ');
 
+        if (r.line_sum) tr.dataset.lineSum = r.line_sum;
         rowsBody.appendChild(tr);
         if (!r.sale) priceCalc(tr, 'cost');
         markCat(tr.querySelector('.row-cat'));
@@ -616,15 +631,31 @@
         document.getElementById('sumQty').textContent = fmt(qty);
         document.getElementById('sumCost').textContent = fmt(cost);
 
-        // Fakturadagi Итого bilan solishtiramiz — miqdor/narx xatosi
-        // shu yerda darrov ko'rinadi.
+        // Uch tomonlama solishtirish:
+        //   jadval  = qatorlardagi miqdor x tannarx
+        //   qatorSum = fakturaning o'z "Сумма" ustuni (AI o'qigani)
+        //   Итого   = qog'ozdagi umumiy summa
+        // Jadval qator summalariga mos tushsa-yu Итого boshqa bo'lsa — demak
+        // xato qatorlarda emas, Итого noto'g'ri o'qilgan.
+        let lineSum = 0, haveLineSum = false;
+        rowsBody.querySelectorAll('tr').forEach(function (tr) {
+            const v = parseFloat(tr.dataset.lineSum || '');
+            if (!isNaN(v)) { lineSum += v; haveLineSum = true; }
+        });
         const chk = document.getElementById('sumCheck');
         if (!invoiceTotal) { chk.innerHTML = ''; return; }
+        const tol = Math.max(1, invoiceTotal * 0.005);
         const diff = Math.round(cost - invoiceTotal);
-        if (Math.abs(diff) <= Math.max(1, invoiceTotal * 0.005)) {
+        if (Math.abs(diff) <= tol) {
             chk.className = 'small mt-2 text-success';
-            chk.innerHTML = '<i class="bi bi-check-circle"></i> Fakturadagi <strong>Итого ' +
-                fmt(invoiceTotal) + '</strong> so\'m bilan mos keldi.';
+            chk.innerHTML = '<i class="bi bi-check-circle"></i> Jadval fakturadagi ' +
+                '<strong>Итого ' + fmt(invoiceTotal) + '</strong> so\'m bilan mos keldi.';
+        } else if (haveLineSum && Math.abs(cost - lineSum) <= tol) {
+            chk.className = 'small mt-2 text-warning';
+            chk.innerHTML = '<i class="bi bi-info-circle"></i> Qatorlar o\'zaro to\'g\'ri: ' +
+                'har bir qator o\'z summasiga mos (<strong>' + fmt(lineSum) + '</strong> so\'m). ' +
+                'Faqat <strong>Итого</strong> boshqacha o\'qilgan (' + fmt(invoiceTotal) + ') — ' +
+                'qog\'ozga qarab yuqoridagi Итого katagini to\'g\'rilang yoki bo\'shating.';
         } else {
             chk.className = 'small mt-2 text-danger';
             chk.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> ' +
@@ -780,6 +811,7 @@
             document.getElementById('fInvoice').value = data.invoice_no || '';
             if (data.date) document.getElementById('fDate').value = data.date;
             invoiceTotal = data.total || 0;
+            totalEl.value = invoiceTotal ? fmt(invoiceTotal) : '';
             recount();
             wrap.style.display = 'block';
             setStat(readStat, (data.rows || []).length + ' ta qator topildi — tekshiring.', 'text-success');
@@ -830,6 +862,7 @@
                     barcode: g('.row-barcode'), qty: qtyRaw,
                     cost: g('.row-cost'), marja: g('.row-marja'),
                     sale: g('.row-price'), category: g('.row-cat'),
+                    line_sum: tr.dataset.lineSum || '',
                     hint: (tr.querySelector('.row-hint').textContent || '').trim()
                 });
             }
@@ -1060,6 +1093,7 @@
         if (d.date) document.getElementById('fDate').value = d.date;
         marjaEl.value = d.marja || '';
         invoiceTotal = parseFloat(d.total) || 0;
+        totalEl.value = invoiceTotal ? fmt(invoiceTotal) : '';
         lastDefMarja = marjaEl.value.trim();
         rowsBody.innerHTML = '';
         (d.rows || []).forEach(function (r) { addRow(r, false); });
