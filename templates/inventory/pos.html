@@ -1430,6 +1430,20 @@ async function search(q) {
         const resp = await fetch(`/pos/lookup/?q=${encodeURIComponent(q)}`);
         const data = await resp.json();
         if (!data.found) {
+            // Tezkor sotuv toifasi yozilgan ("Paypoq", "Ich kiyim") — panelni
+            // ochib, o'sha toifaning narx tugmalarini ko'rsatamiz.
+            if (data.quick_sell) {
+                const qs = data.quick_sell;
+                if (typeof window.qsOpenByName === 'function' && window.qsOpenByName(qs.name)) {
+                    setStatus(`${qs.name} — narxni tanlang`, 'success');
+                } else if (qs.prices && qs.prices.length) {
+                    setStatus(`${qs.name} — Tezkor sotuv panelidan narxni tanlang`, 'success');
+                } else {
+                    setStatus(`${qs.name} uchun narx qo'yilmagan — "Boshqa summa"dan kiriting`, '');
+                }
+                scanInput.value = '';
+                return;
+            }
             if (data.suggestions && data.suggestions.length) {
                 setStatus(`${data.suggestions.length} ta mos topildi — birini tanlang:`, '');
                 suggestions.style.display = 'block';
@@ -2453,6 +2467,21 @@ function qsAdd(sid, name, price) {
             paintCats();
         });
     });
+
+    // Qidiruvdan chaqiriladi: "Paypoq" yozilsa shu toifa ochiladi
+    window.qsOpenByName = function (name) {
+        const target = (name || '').trim().toLowerCase();
+        const btn = cats.find(function (b) {
+            return (b.dataset.name || '').trim().toLowerCase() === target;
+        });
+        if (!btn) return false;
+        if (qsBody && qsBody.style.display === 'none') applyQsState(false);
+        active = btn.dataset.key;
+        showPrices(btn);
+        paintCats();
+        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return true;
+    };
 })();
 
 // Refocus scanner input after clicks anywhere except other inputs.

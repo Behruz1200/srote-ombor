@@ -4733,11 +4733,37 @@ def pos_lookup(request):
             matched_variant_id = _vm.id
 
     if not product:
-        # Name search
+        # "Paypoq", "Ich kiyim" kabi tezkor sotuv toifasi yozilgan bo'lishi
+        # mumkin — u oddiy mahsulot emas, shuning uchun panelga yo'naltiramiz.
+        # DIQQAT: icontains juda ochko'z — "Oq" rangi "Payp[oq]"ga tushib
+        # ketardi. Shuning uchun aniq moslik yoki (3+ harfda) boshlanishi.
+        qs_q = Q(name__iexact=q)
+        if len(q) >= 3:
+            qs_q |= Q(name__istartswith=q)
+        qs_item = (QuickSellItem.objects.filter(is_active=True)
+                   .filter(qs_q).first())
+        if qs_item:
+            variant, _ = ProductVariant.objects.get_or_create(
+                product=_open_price_product(), size='', color=qs_item.name)
+            stock, _ = BranchStock.objects.get_or_create(
+                variant=variant, branch=branch,
+                defaults={'stock_count': 0, 'sale_price': 0, 'cost_price': 0})
+            return JsonResponse({
+                'found': False,
+                'quick_sell': {
+                    'name': qs_item.name,
+                    'prices': qs_item.price_list,
+                    'sid': stock.id,
+                },
+            })
+
+        # Nom bo'yicha qidiruv — tur (rang/o'lcham) matni ham hisobga olinadi,
+        # masalan "Fresh" yoki "1.8 L". Ochiq narxli yashirin mahsulot chiqmaydi.
         matches = list(Product.objects.filter(
             Q(name__icontains=q) | Q(brand__icontains=q) |
-            Q(category__name__icontains=q)
-        )[:8])
+            Q(category__name__icontains=q) |
+            Q(variants__color__icontains=q) | Q(variants__size__icontains=q)
+        ).exclude(is_open_price=True).distinct()[:8])
         if len(matches) == 1:
             product = matches[0]
         elif matches:
