@@ -1,0 +1,115 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Narx tarixi — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero mb-3">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Nazorat</span>
+                <h1 class="dash-hero__title"><i class="bi bi-clock-history"></i> Narx tarixi</h1>
+                <p class="dash-hero__sub">Kim, qachon, qaysi narxni o'zgartirgan.</p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'price_list' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-tags"></i> <span>Narx va marja</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-9">
+                <label class="form-label small mb-1">Mahsulot bo'yicha qidirish</label>
+                <input type="text" name="q" value="{{ q }}" class="form-control"
+                       placeholder="Mahsulot nomi">
+            </div>
+            <div class="col-md-3 d-grid">
+                <button class="btn btn-primary"><i class="bi bi-search"></i> Qidirish</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="card p-0">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:140px">Vaqt</th>
+                        <th style="width:120px">Kim</th>
+                        <th>Mahsulot</th>
+                        <th>O'zgarish</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for log in logs %}
+                    <tr>
+                        <td class="small text-muted">{{ log.created_at|date:"d.m.Y H:i" }}</td>
+                        <td class="small">{{ log.username_snapshot|default:"—" }}</td>
+                        <td>
+                            {% if log.stock %}
+                                <a href="{% url 'product_detail' log.stock.variant.product.code %}"
+                                   class="text-decoration-none">
+                                    {{ log.stock.variant.product.name }}
+                                </a>
+                                <div class="small text-muted">
+                                    <code>{{ log.stock.variant.product.code }}</code>
+                                    {% if log.stock.variant.color %} · {{ log.stock.variant.color }}{% endif %}
+                                    {% if log.stock.variant.size %} · {{ log.stock.variant.size }}{% endif %}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">{{ log.object_repr }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for field, pair in log.changes.items %}
+                                {% if field == 'cost_price' or field == 'sale_price' or field == 'wholesale_price' %}
+                                <span class="badge bg-light text-dark border me-1">
+                                    {% if field == 'cost_price' %}Tannarx
+                                    {% elif field == 'sale_price' %}Sotuv
+                                    {% else %}Ulgurji{% endif %}:
+                                    <span class="text-muted">{{ pair.0|floatformat:0 }}</span>
+                                    →
+                                    <strong>{{ pair.1|floatformat:0 }}</strong>
+                                </span>
+                                {% endif %}
+                            {% empty %}
+                                <span class="text-muted small">—</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted py-4">
+                        Hali narx o'zgarishi yozilmagan.
+                    </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}">←</a>
+                </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}">→</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

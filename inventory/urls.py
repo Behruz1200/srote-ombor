@@ -94,6 +94,15 @@ urlpatterns = [
          name='intake_photo_draft_delete'),
     path('labels/variants/', views.variant_labels, name='variant_labels'),
     path('labels/price/', views.price_labels, name='price_labels'),
+
+    # --- Narxlar (narx / marja / ulgurji / aksiyalar) ---
+    path('prices/', views.price_list, name='price_list'),
+    path('prices/apply/', views.price_apply, name='price_apply'),
+    path('prices/history/', views.price_history, name='price_history'),
+    path('prices/promotions/', views.promotion_list, name='promotion_list'),
+    path('prices/promotions/save/', views.promotion_save, name='promotion_save'),
+    path('prices/promotions/<int:pk>/delete/', views.promotion_delete,
+         name='promotion_delete'),
     path('intake/import/', views.intake_import, name='intake_import'),
     path('intake/import/template/', views.intake_import_template,
          name='intake_import_template'),

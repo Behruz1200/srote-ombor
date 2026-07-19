@@ -3114,6 +3114,24 @@
                     </ul>
                 </li>
 
+                <!-- Narxlar guruhi -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">
+                        <i class="bi bi-tags"></i> Narxlar
+                    </a>
+                    <ul class="dropdown-menu shadow">
+                        <li><a class="dropdown-item" href="{% url 'price_list' %}">
+                            <i class="bi bi-table me-1 text-primary"></i> Narx va marja</a></li>
+                        <li><a class="dropdown-item" href="{% url 'price_list' %}?issue=zero">
+                            <i class="bi bi-exclamation-triangle me-1 text-warning"></i>
+                            <small>&#8627; Marjasiz mahsulotlar</small></a></li>
+                        <li><a class="dropdown-item" href="{% url 'promotion_list' %}">
+                            <i class="bi bi-percent me-1 text-success"></i> Aksiyalar</a></li>
+                        <li><a class="dropdown-item" href="{% url 'price_history' %}">
+                            <i class="bi bi-clock-history me-1 text-secondary"></i> Narx tarixi</a></li>
+                    </ul>
+                </li>
+
                 <!-- Hisobot guruhi -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">

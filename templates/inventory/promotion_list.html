@@ -1,0 +1,262 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Aksiyalar — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero mb-3">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Chegirmalar</span>
+                <h1 class="dash-hero__title"><i class="bi bi-percent"></i> Aksiyalar</h1>
+                <p class="dash-hero__sub">
+                    Kassada avtomatik qo'llanadi — sotuvchi hech narsa bosmaydi.
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'price_list' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-tags"></i> <span>Narx va marja</span>
+                </a>
+                <button type="button" class="dash-btn dash-btn--primary" id="newPromoBtn">
+                    <i class="bi bi-plus-lg"></i> <span>Yangi aksiya</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    {% if not promos %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i>
+        Hali aksiya yo'q. <strong>Yangi aksiya</strong> tugmasi bilan qo'shing —
+        kassada savat tuzilganda o'zi hisoblanadi.
+    </div>
+    {% endif %}
+
+    <div class="card p-0">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nomi</th>
+                        <th>Turi</th>
+                        <th class="text-end">Shart</th>
+                        <th>Qamrov</th>
+                        <th>Muddat</th>
+                        <th class="text-center">Holat</th>
+                        <th style="width:110px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in promos %}
+                    <tr>
+                        <td><strong>{{ p.name }}</strong></td>
+                        <td><span class="badge bg-light text-dark">{{ p.get_promo_type_display }}</span></td>
+                        <td class="text-end">
+                            {% if p.promo_type == 'percent_off' %}
+                                <strong>{{ p.percent|floatformat:"-2" }}%</strong>
+                                {% if p.qty_required > 1 %}
+                                    <div class="small text-muted">{{ p.qty_required }}+ dona olganda</div>
+                                {% endif %}
+                            {% elif p.promo_type == 'buy_x_get_y' %}
+                                <strong>{{ p.qty_required }} + {{ p.qty_free }} bepul</strong>
+                            {% else %}
+                                <strong>har {{ p.qty_required }}-chisiga {{ p.percent|floatformat:"-2" }}%</strong>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if p.category %}
+                                <i class="bi bi-folder"></i> {{ p.category.name }}
+                            {% elif p.target_products.count %}
+                                {{ p.target_products.count }} ta mahsulot
+                            {% else %}
+                                <span class="text-muted">Hamma mahsulot</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {{ p.valid_from|date:"d.m.Y" }} —
+                            {% if p.valid_until %}{{ p.valid_until|date:"d.m.Y" }}
+                            {% else %}<span class="text-muted">muddatsiz</span>{% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if p.is_running %}
+                                <span class="badge bg-success">Ishlayapti</span>
+                            {% elif p.is_active %}
+                                <span class="badge bg-secondary">Muddati emas</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark">O'chiq</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-primary edit-promo"
+                                    data-promo="{{ p.pk }}"
+                                    data-name="{{ p.name }}"
+                                    data-type="{{ p.promo_type }}"
+                                    data-percent="{{ p.percent|floatformat:"-2" }}"
+                                    data-qtyreq="{{ p.qty_required }}"
+                                    data-qtyfree="{{ p.qty_free }}"
+                                    data-category="{{ p.category_id|default:'' }}"
+                                    data-active="{{ p.is_active|yesno:'1,' }}"
+                                    data-from="{{ p.valid_from|date:'Y-m-d' }}"
+                                    data-until="{{ p.valid_until|date:'Y-m-d' }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="post" class="d-inline"
+                                  action="{% url 'promotion_delete' p.pk %}"
+                                  onsubmit="return confirm('&quot;{{ p.name|escapejs }}&quot; o\'chirilsinmi?')">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Aksiya formasi -->
+<div class="modal fade" id="promoModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <form method="post" action="{% url 'promotion_save' %}">
+        {% csrf_token %}
+        <input type="hidden" name="pk" id="pPk">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-percent"></i> <span id="pTitle">Yangi aksiya</span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label">Nomi <span class="text-danger">*</span></label>
+              <input type="text" name="name" id="pName" class="form-control" required
+                     placeholder="Masalan: Shanba chegirmasi">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Turi</label>
+              <select name="promo_type" id="pType" class="form-select">
+                {% for val, label in types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-4" id="wrapPercent">
+              <label class="form-label">Chegirma %</label>
+              <input type="text" name="percent" id="pPercent" class="form-control text-end"
+                     inputmode="decimal" value="0">
+            </div>
+            <div class="col-md-4" id="wrapQtyReq">
+              <label class="form-label" id="lblQtyReq">Minimal dona</label>
+              <input type="number" name="qty_required" id="pQtyReq" class="form-control text-end"
+                     min="1" value="1">
+            </div>
+            <div class="col-md-4" id="wrapQtyFree">
+              <label class="form-label">Bepul dona</label>
+              <input type="number" name="qty_free" id="pQtyFree" class="form-control text-end"
+                     min="0" value="0">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Kategoriya</label>
+              <select name="category" id="pCategory" class="form-select">
+                <option value="">— hamma mahsulot —</option>
+                {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+              </select>
+              <small class="text-muted">Bo'sh qoldirilsa — butun chekka qo'llanadi</small>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Boshlanish</label>
+              <input type="date" name="valid_from" id="pFrom" class="form-control">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Tugash</label>
+              <input type="date" name="valid_until" id="pUntil" class="form-control">
+              <small class="text-muted">Bo'sh — muddatsiz</small>
+            </div>
+
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="is_active"
+                       id="pActive" value="1" checked>
+                <label class="form-check-label" for="pActive">Faol (kassada ishlaydi)</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="alert alert-secondary mb-0 small" id="pExplain"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor</button>
+          <button class="btn btn-success"><i class="bi bi-check2"></i> Saqlash</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    // bootstrap.js shu skriptdan KEYIN yuklanadi — Modal kerak bo'lganda yaratiladi
+    const modalEl = document.getElementById('promoModal');
+    let _bs = null;
+    function modal() { return _bs || (_bs = new bootstrap.Modal(modalEl)); }
+
+    const typeEl = document.getElementById('pType');
+    const wrapPercent = document.getElementById('wrapPercent');
+    const wrapQtyReq = document.getElementById('wrapQtyReq');
+    const wrapQtyFree = document.getElementById('wrapQtyFree');
+    const lblQtyReq = document.getElementById('lblQtyReq');
+    const explain = document.getElementById('pExplain');
+
+    function syncType() {
+        const t = typeEl.value;
+        wrapPercent.style.display = (t === 'buy_x_get_y') ? 'none' : '';
+        wrapQtyFree.style.display = (t === 'buy_x_get_y') ? '' : 'none';
+        wrapQtyReq.style.display = '';
+        if (t === 'percent_off') {
+            lblQtyReq.textContent = 'Minimal dona';
+            explain.textContent = 'Chekdagi (yoki tanlangan kategoriyadagi) mahsulotlarga '
+                + 'foiz chegirma. Minimal dona shartini qo\'ysangiz — shuncha dona olinganda ishlaydi.';
+        } else if (t === 'buy_x_get_y') {
+            lblQtyReq.textContent = 'Nechta olganda (X)';
+            explain.textContent = 'X dona olganda Y donasi bepul. Bepul bo\'ladigan '
+                + 'mahsulot eng arzonidan tanlanadi.';
+        } else {
+            lblQtyReq.textContent = 'Har nechinchisiga (N)';
+            explain.textContent = 'Har N-chi mahsulotga foiz chegirma. '
+                + 'Masalan N=3, 20% — har uchinchisi 20% arzon.';
+        }
+    }
+    typeEl.addEventListener('change', syncType);
+
+    function openForm(d) {
+        document.getElementById('pPk').value = d.promo || '';
+        document.getElementById('pName').value = d.name || '';
+        typeEl.value = d.type || 'percent_off';
+        document.getElementById('pPercent').value = d.percent || '0';
+        document.getElementById('pQtyReq').value = d.qtyreq || '1';
+        document.getElementById('pQtyFree').value = d.qtyfree || '0';
+        document.getElementById('pCategory').value = d.category || '';
+        document.getElementById('pActive').checked = d.active !== '';
+        document.getElementById('pFrom').value = d.from || '';
+        document.getElementById('pUntil').value = d.until || '';
+        document.getElementById('pTitle').textContent =
+            d.promo ? 'Aksiyani tahrirlash' : 'Yangi aksiya';
+        syncType();
+        modal().show();
+    }
+
+    document.getElementById('newPromoBtn').addEventListener('click', function () {
+        openForm({ active: '1' });
+    });
+    document.querySelectorAll('.edit-promo').forEach(function (btn) {
+        btn.addEventListener('click', function () { openForm(btn.dataset); });
+    });
+})();
+</script>
+{% endblock %}

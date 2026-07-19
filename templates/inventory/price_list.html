@@ -1,0 +1,365 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Narx va marja — yurit{% endblock %}
+
+{% block content %}
+<div class="container-fluid dash-page">
+    <header class="dash-hero mb-3">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Narx boshqaruvi</span>
+                <h1 class="dash-hero__title"><i class="bi bi-tags"></i> Narx va marja</h1>
+                <p class="dash-hero__sub">
+                    Tannarx, marja %, chakana va ulgurji narx — bitta jadvalda.
+                    Ko'p qatorni birdan o'zgartirsa bo'ladi.
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'promotion_list' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-percent"></i> <span>Aksiyalar</span>
+                </a>
+                <a href="{% url 'price_history' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-clock-history"></i> <span>Narx tarixi</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Marja nazorati -->
+    <div class="row g-2 mb-3">
+        {% for key, label, hint, n in issue_cards %}
+        <div class="col-6 col-md-2">
+            <a href="?issue={{ key }}{% if cur.category %}&category={{ cur.category }}{% endif %}"
+               class="card p-2 h-100 text-decoration-none {% if cur.issue == key %}border-primary{% endif %}"
+               title="{{ hint }}">
+                <div class="small text-muted">{{ label }}</div>
+                <div class="fs-4 fw-bold {% if not n %}text-success{% elif key == 'loss' %}text-danger{% else %}text-warning{% endif %}">
+                    {{ n }}
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Filtrlar -->
+    <form method="get" class="card p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small mb-1">Qidirish</label>
+                <input type="text" name="q" value="{{ cur.q }}" class="form-control"
+                       placeholder="Nomi, kodi yoki shtrix-kod">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Kategoriya</label>
+                <select name="category" class="form-select">
+                    <option value="">— barchasi —</option>
+                    {% for c in categories %}
+                        <option value="{{ c.id }}" {% if cur.category == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Holat</label>
+                <select name="issue" class="form-select">
+                    <option value="">— barchasi —</option>
+                    {% for key, label, hint in issues %}
+                        <option value="{{ key }}" {% if cur.issue == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary"><i class="bi bi-search"></i> Filtr</button>
+            </div>
+        </div>
+        {% if cur.q or cur.category or cur.issue %}
+            <div class="mt-2">
+                <a href="{% url 'price_list' %}" class="small text-decoration-none">
+                    <i class="bi bi-x-circle"></i> Filtrni tozalash
+                </a>
+            </div>
+        {% endif %}
+    </form>
+
+    <form method="post" action="{% url 'price_apply' %}" id="priceForm">
+        {% csrf_token %}
+        <input type="hidden" name="back" value="{{ request.get_full_path }}">
+        <input type="hidden" name="mode" value="rows" id="modeField">
+        <input type="hidden" name="op" id="opField">
+        <input type="hidden" name="scope" id="scopeField" value="selected">
+        <input type="hidden" name="pct" id="pctField">
+        <!-- filtr qiymatlari: "filtrdagi hammasi" uchun serverga ham kerak -->
+        <input type="hidden" name="q" value="{{ cur.q }}">
+        <input type="hidden" name="category" value="{{ cur.category }}">
+        <input type="hidden" name="issue" value="{{ cur.issue }}">
+
+        <!-- Ommaviy amallar -->
+        <div class="card p-3 mb-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <strong><i class="bi bi-lightning"></i> Ommaviy amal</strong>
+                <span class="text-muted small">
+                    <span id="selCount">0</span> ta tanlangan / {{ total_count }} ta filtrda
+                </span>
+            </div>
+            <div class="row g-2 mt-1 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small mb-1">Amal</label>
+                    <select id="bulkOp" class="form-select">
+                        <option value="cost_from_sale">Tannarxni sotuv narxidan hisoblash (marja %)</option>
+                        <option value="margin_from_cost">Sotuv narxini tannarxdan hisoblash (marja %)</option>
+                        <option value="wholesale_from_cost">Ulgurji narxni tannarxdan hisoblash (marja %)</option>
+                        <option value="bump_sale">Sotuv narxini foizga o'zgartirish</option>
+                        <option value="bump_wholesale">Ulgurji narxni foizga o'zgartirish</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Foiz %</label>
+                    <input type="text" id="bulkPct" class="form-control text-end"
+                           inputmode="decimal" placeholder="20">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Qayerga</label>
+                    <select id="bulkScope" class="form-select">
+                        <option value="selected">Faqat tanlanganlarga</option>
+                        <option value="filtered">Filtrdagi hammasiga ({{ total_count }})</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-grid">
+                    <button type="button" class="btn btn-warning" id="bulkBtn">
+                        <i class="bi bi-check2-all"></i> Qo'llash
+                    </button>
+                </div>
+            </div>
+            <div class="small text-muted mt-2" id="bulkHint"></div>
+        </div>
+
+        <div class="card p-0">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" id="priceTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:34px">
+                                <input type="checkbox" class="form-check-input" id="selAll">
+                            </th>
+                            <th style="min-width:220px">Mahsulot</th>
+                            <th style="width:70px" class="text-end">Zaxira</th>
+                            <th style="width:120px" class="text-end">Tannarx</th>
+                            <th style="width:90px" class="text-end">Marja %</th>
+                            <th style="width:120px" class="text-end">Sotuv narx</th>
+                            <th style="width:120px" class="text-end">Ulgurji</th>
+                            <th style="width:90px" class="text-end">Ulg. marja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in rows %}
+                        <tr data-id="{{ s.pk }}">
+                            <td>
+                                <input type="checkbox" class="form-check-input row-sel"
+                                       name="sel" value="{{ s.pk }}">
+                                <input type="hidden" name="row_id" value="{{ s.pk }}">
+                            </td>
+                            <td>
+                                <a href="{% url 'product_detail' s.variant.product.code %}"
+                                   class="text-decoration-none">
+                                    <strong>{{ s.variant.product.name }}</strong>
+                                </a>
+                                <div class="small text-muted">
+                                    <code>{{ s.variant.product.code }}</code>
+                                    {% if s.variant.color %} · {{ s.variant.color }}{% endif %}
+                                    {% if s.variant.size %} · {{ s.variant.size }}{% endif %}
+                                    {% if s.variant.product.category %}
+                                        · {{ s.variant.product.category.name }}
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                <span class="badge bg-{% if s.stock_count == 0 %}secondary{% else %}light text-dark{% endif %}">
+                                    {{ s.stock_count }}
+                                </span>
+                            </td>
+                            <td>
+                                <input type="text" name="row_cost" inputmode="decimal"
+                                       class="form-control form-control-sm text-end p-cost"
+                                       value="{{ s.cost_price|floatformat:0 }}">
+                            </td>
+                            <td>
+                                <input type="text" inputmode="decimal"
+                                       class="form-control form-control-sm text-end p-marja"
+                                       placeholder="%">
+                            </td>
+                            <td>
+                                <input type="text" name="row_sale" inputmode="decimal"
+                                       class="form-control form-control-sm text-end p-sale"
+                                       value="{{ s.sale_price|floatformat:0 }}">
+                            </td>
+                            <td>
+                                <input type="text" name="row_ws" inputmode="decimal"
+                                       class="form-control form-control-sm text-end p-ws"
+                                       value="{{ s.wholesale_price|floatformat:0 }}">
+                            </td>
+                            <td class="text-end small text-muted p-wsmarja">—</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="8" class="text-center text-muted py-4">
+                            Filtrga mos qator topilmadi.
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if rows %}
+        <div class="d-flex gap-2 my-3 flex-wrap align-items-center">
+            <button type="submit" class="btn btn-success btn-lg" id="saveRowsBtn">
+                <i class="bi bi-check2-circle"></i> O'zgarishlarni saqlash
+            </button>
+            <span class="small text-muted">
+                Faqat qo'lda o'zgartirilgan kataklar yoziladi. Har o'zgarish tarixga tushadi.
+            </span>
+        </div>
+        {% endif %}
+    </form>
+
+    {% if page_obj.has_other_pages %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center flex-wrap">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ querystring }}">←</a>
+                </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                    ({{ total_count }} qator)
+                </span>
+            </li>
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ querystring }}">→</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    const table = document.getElementById('priceTable');
+    if (!table) return;
+    const body = table.querySelector('tbody');
+
+    function num(s) {
+        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
+        if (s === '' || s === '-' || s === '.') return null;
+        const v = parseFloat(s);
+        return isNaN(v) ? null : v;
+    }
+    const asInt = v => String(Math.round(v));
+    function asMarja(v) {
+        const r = Math.round(v * 10) / 10;
+        return (r % 1 === 0) ? String(r) : r.toFixed(1);
+    }
+
+    // Har qator uchun marjani tannarx/sotuvdan chiqaramiz
+    function refresh(tr) {
+        const c = num(tr.querySelector('.p-cost').value);
+        const s = num(tr.querySelector('.p-sale').value);
+        const w = num(tr.querySelector('.p-ws').value);
+        const m = tr.querySelector('.p-marja');
+        const wm = tr.querySelector('.p-wsmarja');
+        if (c && s !== null) {
+            const v = (s / c - 1) * 100;
+            m.value = asMarja(v);
+            m.classList.toggle('is-invalid', v < 0);
+            m.classList.toggle('text-success', v >= 10);
+        } else {
+            m.value = '';
+            m.classList.remove('is-invalid', 'text-success');
+        }
+        if (c && w) {
+            const v = (w / c - 1) * 100;
+            wm.textContent = asMarja(v) + '%';
+            wm.className = 'text-end small p-wsmarja ' +
+                (v < 0 ? 'text-danger' : 'text-muted');
+        } else {
+            wm.textContent = '—';
+            wm.className = 'text-end small text-muted p-wsmarja';
+        }
+    }
+    body.querySelectorAll('tr[data-id]').forEach(refresh);
+
+    // Tannarx/sotuv o'zgarsa marja qayta hisoblanadi;
+    // marja yozilsa — sotuv narx undan chiqadi (ikki tomonlama).
+    body.addEventListener('input', function (e) {
+        const tr = e.target.closest('tr[data-id]');
+        if (!tr) return;
+        if (e.target.classList.contains('p-marja')) {
+            const c = num(tr.querySelector('.p-cost').value);
+            const m = num(e.target.value);
+            if (c && m !== null) {
+                tr.querySelector('.p-sale').value = asInt(c * (1 + m / 100));
+            }
+            const w = num(tr.querySelector('.p-ws').value);
+            const wm = tr.querySelector('.p-wsmarja');
+            if (c && w) wm.textContent = asMarja((w / c - 1) * 100) + '%';
+            return;
+        }
+        refresh(tr);
+    });
+
+    // ---- tanlash ----
+    const selAll = document.getElementById('selAll');
+    const selCount = document.getElementById('selCount');
+    function updateCount() {
+        selCount.textContent = body.querySelectorAll('.row-sel:checked').length;
+    }
+    selAll.addEventListener('change', function () {
+        body.querySelectorAll('.row-sel').forEach(function (c) {
+            c.checked = selAll.checked;
+        });
+        updateCount();
+    });
+    body.addEventListener('change', function (e) {
+        if (e.target.classList.contains('row-sel')) updateCount();
+    });
+    updateCount();
+
+    // ---- ommaviy amal ----
+    const opSel = document.getElementById('bulkOp');
+    const pctEl = document.getElementById('bulkPct');
+    const scopeSel = document.getElementById('bulkScope');
+    const hint = document.getElementById('bulkHint');
+    const HINTS = {
+        cost_from_sale: "tannarx = sotuv narxi ÷ (1 + %). Sotuv narxi to'g'ri, tannarx qo'yilmagan bo'lsa shuni tanlang.",
+        margin_from_cost: "sotuv narxi = tannarx × (1 + %). Tannarx to'g'ri bo'lsa.",
+        wholesale_from_cost: "ulgurji narx = tannarx × (1 + %).",
+        bump_sale: "sotuv narxi shu foizga oshadi/kamayadi (manfiy ham yozsa bo'ladi).",
+        bump_wholesale: "ulgurji narx shu foizga oshadi/kamayadi."
+    };
+    function showHint() { hint.textContent = HINTS[opSel.value] || ''; }
+    opSel.addEventListener('change', showHint);
+    showHint();
+
+    document.getElementById('bulkBtn').addEventListener('click', function () {
+        const pct = num(pctEl.value);
+        if (pct === null) { alert('Foiz qiymatini kiriting.'); pctEl.focus(); return; }
+        const scope = scopeSel.value;
+        const n = scope === 'selected'
+            ? body.querySelectorAll('.row-sel:checked').length
+            : {{ total_count }};
+        if (!n) { alert('Avval qatorlarni tanlang.'); return; }
+        const opText = opSel.options[opSel.selectedIndex].text;
+        if (!confirm(n + ' ta qatorga qo\'llanadi:\n\n' + opText + ' — ' + pct + '%\n\nDavom etamizmi?')) return;
+        document.getElementById('modeField').value = 'bulk';
+        document.getElementById('opField').value = opSel.value;
+        document.getElementById('scopeField').value = scope;
+        document.getElementById('pctField').value = pct;
+        document.getElementById('priceForm').submit();
+    });
+})();
+</script>
+{% endblock %}

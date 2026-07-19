@@ -8300,3 +8300,374 @@ def product_request_resolve(request):
     else:
         messages.info(request, f"\"{name}\" — rad etildi ({n} ta so'rov).")
     return redirect('product_requests')
+
+
+# ==================== NARXLAR (narx / marja / ulgurji) ====================
+
+PRICE_PAGE_SIZE = 100
+
+#: marja holati bo'yicha filtrlar — panel va ro'yxat shu kalitlarni ishlatadi
+PRICE_ISSUES = [
+    ('no_cost',   "Tannarx yo'q",      'Tannarx 0 — foyda hisoblanmaydi'),
+    ('zero',      "Marja 0%",          'Sotuv narxi tannarxga teng'),
+    ('loss',      "Zararga",           'Sotuv narxi tannarxdan past'),
+    ('no_sale',   "Sotuv narxi yo'q",  'Sotuv narxi 0'),
+    ('low',       "Marja past (<10%)", "Marja 10% dan kam"),
+    ('no_ws',     "Ulgurji yo'q",      "Ulgurji narx qo'yilmagan"),
+]
+
+
+def _price_qs(request):
+    """Filtrlangan BranchStock queryset + tanlangan filtr qiymatlari."""
+    from decimal import Decimal
+    qs = (BranchStock.objects
+          .select_related('variant__product__category', 'branch')
+          .order_by('variant__product__name', 'variant__color', 'variant__size'))
+
+    branch_id = (request.GET.get('branch') or '').strip()
+    if branch_id:
+        qs = qs.filter(branch_id=branch_id)
+    elif getattr(request.user, 'branch_id', None) and request.user.role != 'admin':
+        qs = qs.filter(branch=request.user.branch)
+
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        qs = qs.filter(Q(variant__product__name__icontains=q)
+                       | Q(variant__product__code__icontains=q)
+                       | Q(variant__barcode__icontains=q)
+                       | Q(variant__color__icontains=q)
+                       | Q(variant__size__icontains=q))
+
+    cat = (request.GET.get('category') or '').strip()
+    if cat:
+        qs = qs.filter(variant__product__category_id=cat)
+
+    issue = (request.GET.get('issue') or '').strip()
+    if issue == 'no_cost':
+        qs = qs.filter(cost_price__lte=0)
+    elif issue == 'zero':
+        qs = qs.filter(cost_price__gt=0, sale_price=F('cost_price'))
+    elif issue == 'loss':
+        qs = qs.filter(cost_price__gt=0, sale_price__gt=0,
+                       sale_price__lt=F('cost_price'))
+    elif issue == 'no_sale':
+        qs = qs.filter(sale_price__lte=0)
+    elif issue == 'low':
+        qs = qs.filter(cost_price__gt=0, sale_price__gt=0,
+                       sale_price__lt=F('cost_price') * Decimal('1.10'))
+    elif issue == 'no_ws':
+        qs = qs.filter(wholesale_price__lte=0)
+    return qs
+
+
+@admin_required
+def price_list(request):
+    """Narx/marja jadvali — filtr, qatorlab tahrir, ommaviy qo'llash."""
+    from decimal import Decimal
+    from django.core.paginator import Paginator
+    qs = _price_qs(request)
+
+    base = BranchStock.objects.all()
+    branch_id = (request.GET.get('branch') or '').strip()
+    if branch_id:
+        base = base.filter(branch_id=branch_id)
+    counts = {
+        'no_cost': base.filter(cost_price__lte=0).count(),
+        'zero': base.filter(cost_price__gt=0, sale_price=F('cost_price')).count(),
+        'loss': base.filter(cost_price__gt=0, sale_price__gt=0,
+                            sale_price__lt=F('cost_price')).count(),
+        'no_sale': base.filter(sale_price__lte=0).count(),
+        'low': base.filter(cost_price__gt=0, sale_price__gt=0,
+                           sale_price__lt=F('cost_price') * Decimal('1.10')).count(),
+        'no_ws': base.filter(wholesale_price__lte=0).count(),
+    }
+
+    issue_cards = [(k, label, hint, counts.get(k, 0))
+                   for k, label, hint in PRICE_ISSUES]
+
+    paginator = Paginator(qs, PRICE_PAGE_SIZE)
+    page = paginator.get_page(request.GET.get('page'))
+
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(request, 'inventory/price_list.html', {
+        'page_obj': page,
+        'rows': page.object_list,
+        'total_count': paginator.count,
+        'categories': Category.objects.order_by('name'),
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'issues': PRICE_ISSUES,
+        'issue_cards': issue_cards,
+        'cur': {
+            'q': request.GET.get('q', ''),
+            'category': request.GET.get('category', ''),
+            'branch': branch_id,
+            'issue': request.GET.get('issue', ''),
+        },
+        'querystring': params.urlencode(),
+    })
+
+
+# Eslatma: BranchStock o'zgarishini signals.py avtomatik AuditLog'ga yozadi
+# ({field: [old, new]} ko'rinishida), shuning uchun bu yerda qo'shimcha yozuv
+# yaratilmaydi — aks holda tarixda dublikat chiqadi.
+
+
+@admin_required
+def price_apply(request):
+    """Qatorlab tahrir + ommaviy amal (marja qo'llash, narxni foizga o'zgartirish)."""
+    from decimal import Decimal, InvalidOperation
+    if request.method != 'POST':
+        return redirect('price_list')
+    back = request.POST.get('back') or reverse('price_list')
+
+    def dec(v, allow_negative=False):
+        """Narxlar manfiy bo'lmaydi; foiz esa manfiy bo'lishi mumkin (-5%)."""
+        try:
+            d = Decimal(str(v).replace(' ', '').replace(',', '.') or '0')
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+        if not allow_negative and d < 0:
+            return None
+        return d
+
+    mode = request.POST.get('mode') or 'rows'
+    changed = 0
+
+    if mode == 'rows':
+        # Jadvalda qo'lda o'zgartirilgan kataklar
+        ids = request.POST.getlist('row_id')
+        with transaction.atomic():
+            for i, sid in enumerate(ids):
+                stock = BranchStock.objects.select_for_update().filter(pk=sid).first()
+                if not stock:
+                    continue
+                get = lambda n: (request.POST.getlist(n)[i]
+                                 if i < len(request.POST.getlist(n)) else '')
+                new_cost = dec(get('row_cost'))
+                new_sale = dec(get('row_sale'))
+                new_ws = dec(get('row_ws'))
+                ch = {}
+                if new_cost is not None and new_cost != stock.cost_price:
+                    ch['tannarx'] = [str(stock.cost_price), str(new_cost)]
+                    stock.cost_price = new_cost
+                if new_sale is not None and new_sale != stock.sale_price:
+                    ch['sotuv'] = [str(stock.sale_price), str(new_sale)]
+                    stock.sale_price = new_sale
+                if new_ws is not None and new_ws != stock.wholesale_price:
+                    ch['ulgurji'] = [str(stock.wholesale_price), str(new_ws)]
+                    stock.wholesale_price = new_ws
+                if ch:
+                    stock.save(update_fields=['cost_price', 'sale_price',
+                                              'wholesale_price'])
+                    changed += 1
+        messages.success(request, f"{changed} ta qator yangilandi.")
+        return redirect(back)
+
+    # ---- ommaviy amal ----
+    op = request.POST.get('op') or ''
+    pct = dec(request.POST.get('pct'), allow_negative=True)
+    if pct is None:
+        messages.error(request, "Foiz qiymati noto'g'ri.")
+        return redirect(back)
+
+    scope = request.POST.get('scope') or 'selected'
+    if scope == 'selected':
+        sel = request.POST.getlist('sel')
+        if not sel:
+            messages.error(request, "Hech qanday qator tanlanmagan.")
+            return redirect(back)
+        targets = BranchStock.objects.filter(pk__in=sel)
+    else:
+        targets = _price_qs(request)      # filtrdagi HAMMA qator
+
+    targets = targets.select_related('variant__product')
+    factor = Decimal('1') + pct / Decimal('100')
+    q2 = Decimal('0.01')
+
+    with transaction.atomic():
+        for stock in targets.select_for_update():
+            ch = {}
+            if op == 'margin_from_cost':
+                # tannarx bor -> sotuv = tannarx × (1 + marja)
+                if stock.cost_price > 0:
+                    new = (stock.cost_price * factor).quantize(q2)
+                    if new != stock.sale_price:
+                        ch['sotuv'] = [str(stock.sale_price), str(new)]
+                        stock.sale_price = new
+            elif op == 'cost_from_sale':
+                # sotuv narxi to'g'ri -> tannarx = sotuv / (1 + marja)
+                if stock.sale_price > 0 and factor > 0:
+                    new = (stock.sale_price / factor).quantize(q2)
+                    if new != stock.cost_price:
+                        ch['tannarx'] = [str(stock.cost_price), str(new)]
+                        stock.cost_price = new
+            elif op == 'wholesale_from_cost':
+                if stock.cost_price > 0:
+                    new = (stock.cost_price * factor).quantize(q2)
+                    if new != stock.wholesale_price:
+                        ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
+                        stock.wholesale_price = new
+            elif op == 'bump_sale':
+                if stock.sale_price > 0:
+                    new = (stock.sale_price * factor).quantize(q2)
+                    if new != stock.sale_price:
+                        ch['sotuv'] = [str(stock.sale_price), str(new)]
+                        stock.sale_price = new
+            elif op == 'bump_wholesale':
+                if stock.wholesale_price > 0:
+                    new = (stock.wholesale_price * factor).quantize(q2)
+                    if new != stock.wholesale_price:
+                        ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
+                        stock.wholesale_price = new
+            if ch:
+                stock.save(update_fields=['cost_price', 'sale_price',
+                                          'wholesale_price'])
+                changed += 1
+
+    messages.success(request, f"{changed} ta narx yangilandi.")
+    return redirect(back)
+
+
+@admin_required
+def price_history(request):
+    """Narx o'zgarishlari tarixi (AuditLog'dan)."""
+    from django.core.paginator import Paginator
+    logs = (AuditLog.objects
+            .filter(model_name='BranchStock')
+            .filter(changes__has_any_keys=['cost_price', 'sale_price',
+                                           'wholesale_price'])
+            .select_related('user')
+            .order_by('-created_at'))
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        # object_repr'da mahsulot KODI turadi — nom bo'yicha qidirish uchun
+        # avval mos zaxira yozuvlarini topamiz.
+        ids = list(BranchStock.objects
+                   .filter(Q(variant__product__name__icontains=q)
+                           | Q(variant__product__code__icontains=q))
+                   .values_list('pk', flat=True)[:5000])
+        logs = logs.filter(Q(object_repr__icontains=q)
+                           | Q(object_id__in=[str(i) for i in ids]))
+    page = Paginator(logs, 80).get_page(request.GET.get('page'))
+
+    # object_id -> BranchStock: nomni chiroyli ko'rsatish uchun
+    oids = [l.object_id for l in page.object_list if (l.object_id or '').isdigit()]
+    stocks = {str(s.pk): s for s in BranchStock.objects
+              .filter(pk__in=oids)
+              .select_related('variant__product', 'branch')}
+    for l in page.object_list:
+        l.stock = stocks.get(l.object_id)
+
+    return render(request, 'inventory/price_history.html', {
+        'page_obj': page, 'logs': page.object_list, 'q': q,
+    })
+
+
+# ---------- AKSIYALAR (Promotion) ----------
+
+@admin_required
+def promotion_list(request):
+    """Aksiyalar ro'yxati. Model va POS mantiqi bor edi — endi boshqaruvi ham."""
+    promos = (Promotion.objects
+              .select_related('category')
+              .prefetch_related('target_products')
+              .order_by('-is_active', '-created_at'))
+    now = timezone.now()
+    for p in promos:
+        p.is_running = (p.is_active and p.valid_from <= now
+                        and (p.valid_until is None or p.valid_until >= now))
+    return render(request, 'inventory/promotion_list.html', {
+        'promos': promos,
+        'types': Promotion.Type.choices,
+        'categories': Category.objects.order_by('name'),
+        'now': now,
+    })
+
+
+@admin_required
+def promotion_save(request):
+    """Aksiya yaratish yoki tahrirlash (bitta forma)."""
+    from decimal import Decimal, InvalidOperation
+    if request.method != 'POST':
+        return redirect('promotion_list')
+    pk = (request.POST.get('pk') or '').strip()
+    promo = Promotion.objects.filter(pk=pk).first() if pk else Promotion()
+
+    name = (request.POST.get('name') or '').strip()[:120]
+    if not name:
+        messages.error(request, "Aksiya nomini kiriting.")
+        return redirect('promotion_list')
+
+    ptype = request.POST.get('promo_type') or Promotion.Type.PERCENT_OFF
+    if ptype not in dict(Promotion.Type.choices):
+        ptype = Promotion.Type.PERCENT_OFF
+
+    def num(v, default=0):
+        try:
+            return Decimal(str(v).replace(',', '.') or default)
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal(default)
+
+    percent = num(request.POST.get('percent'))
+    percent = max(Decimal('0'), min(Decimal('100'), percent))
+    try:
+        qty_required = max(1, int(request.POST.get('qty_required') or 1))
+    except (TypeError, ValueError):
+        qty_required = 1
+    try:
+        qty_free = max(0, int(request.POST.get('qty_free') or 0))
+    except (TypeError, ValueError):
+        qty_free = 0
+
+    promo.name = name
+    promo.promo_type = ptype
+    promo.percent = percent
+    promo.qty_required = qty_required
+    promo.qty_free = qty_free
+    promo.category = Category.objects.filter(
+        pk=request.POST.get('category') or 0).first()
+    promo.is_active = bool(request.POST.get('is_active'))
+
+    vf = (request.POST.get('valid_from') or '').strip()
+    vu = (request.POST.get('valid_until') or '').strip()
+    tz = timezone.get_current_timezone()
+    if vf:
+        try:
+            promo.valid_from = timezone.make_aware(
+                datetime.strptime(vf, '%Y-%m-%d'), tz)
+        except (ValueError, TypeError):
+            pass
+    promo.valid_until = None
+    if vu:
+        try:
+            promo.valid_until = timezone.make_aware(
+                datetime.strptime(vu, '%Y-%m-%d').replace(hour=23, minute=59), tz)
+        except (ValueError, TypeError):
+            pass
+    promo.save()
+
+    AuditLog.objects.create(
+        user=request.user, username_snapshot=request.user.username,
+        action=(AuditLog.Action.UPDATE if pk else AuditLog.Action.CREATE),
+        model_name='Promotion', object_id=str(promo.pk),
+        object_repr=f'Aksiya: {promo.name}'[:300],
+    )
+    messages.success(request, f"\"{promo.name}\" saqlandi.")
+    return redirect('promotion_list')
+
+
+@admin_required
+def promotion_delete(request, pk):
+    if request.method != 'POST':
+        return redirect('promotion_list')
+    promo = get_object_or_404(Promotion, pk=pk)
+    name = promo.name
+    AuditLog.objects.create(
+        user=request.user, username_snapshot=request.user.username,
+        action=AuditLog.Action.DELETE, model_name='Promotion',
+        object_id=str(pk), object_repr=f'Aksiya: {name}'[:300],
+    )
+    promo.delete()
+    messages.success(request, f"\"{name}\" o'chirildi.")
+    return redirect('promotion_list')
