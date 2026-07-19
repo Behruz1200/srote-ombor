@@ -1184,6 +1184,10 @@ class InvoiceDraft(models.Model):
         return f"Qoralama #{self.pk} — {self.supplier_text or '—'}"
 
     @property
+    def page_count(self):
+        return self.pages.count()
+
+    @property
     def row_count(self):
         return len(self.payload.get('rows') or [])
 
@@ -1196,3 +1200,31 @@ class InvoiceDraft(models.Model):
             except (TypeError, ValueError):
                 pass
         return total
+
+
+class InvoiceImage(models.Model):
+    """Faktura sahifasi — nakladnoy bir necha varaqdan iborat bo'lishi mumkin.
+
+    Bitta rasm ham qoralamaga (hali qabul qilinmagan), ham qabul sessiyasiga
+    tegishli bo'lishi mumkin: qoralama qabul qilinganda sahifalar sessiyaga
+    ko'chiriladi.
+    """
+    draft = models.ForeignKey(
+        InvoiceDraft, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='pages'
+    )
+    session = models.ForeignKey(
+        IntakeSession, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='pages'
+    )
+    image = models.ImageField(upload_to='invoices/pages/')
+    order = models.PositiveIntegerField(default=1, help_text='Sahifa raqami')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Faktura sahifasi'
+        verbose_name_plural = 'Faktura sahifalari'
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f'{self.order}-sahifa'

@@ -5,7 +5,14 @@ from .models import (
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
+    InvoiceImage,
 )
+
+
+@admin.register(InvoiceImage)
+class InvoiceImageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'order', 'draft', 'session', 'created_at')
+    list_filter = ('created_at',)
 
 
 @admin.register(InvoiceDraft)

@@ -37,6 +37,7 @@ from .models import (
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
+    InvoiceImage,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -3378,6 +3379,10 @@ def intake_photo(request):
         draft_data = dict(draft.payload or {})
         draft_data['id'] = draft.pk
         draft_data['image_url'] = draft.image.url if draft.image else ''
+        # nakladnoy bir necha varaq bo'lishi mumkin
+        draft_data['pages'] = [p.image.url for p in draft.pages.all() if p.image]
+        if not draft_data['pages'] and draft_data['image_url']:
+            draft_data['pages'] = [draft_data['image_url']]
     return render(request, 'inventory/intake_photo.html', {
         'branches': Branch.objects.filter(is_active=True).order_by('name'),
         'categories': Category.objects.order_by('name'),
@@ -3449,10 +3454,17 @@ def intake_photo_draft(request):
     draft.invoice_number = data['invoice_no']
     draft.payload = data
     draft.save()
-    if 'image' in request.FILES:
-        draft.image = request.FILES['image']
-        draft.save(update_fields=['image'])
+    # Yangi yuborilgan sahifalarni qo'shamiz (eskilari saqlanib qoladi).
+    files = request.FILES.getlist('image')
+    if files:
+        start = draft.pages.count()
+        for i, f in enumerate(files, start=1):
+            InvoiceImage.objects.create(draft=draft, image=f, order=start + i)
+        if not draft.image:
+            draft.image = draft.pages.first().image
+            draft.save(update_fields=['image'])
     return JsonResponse({'ok': True, 'id': draft.pk,
+                         'pages': draft.pages.count(),
                          'rows': len(data['rows']),
                          'resume_url': reverse('intake_photo') + f'?draft={draft.pk}'})
 
@@ -3682,12 +3694,26 @@ def intake_photo_save(request):
                 pass
         draft = (InvoiceDraft.objects.filter(pk=payload.get('draft_id')).first()
                  if payload.get('draft_id') else None)
-        if 'image' in request.FILES:
-            session.invoice_image = request.FILES['image']
+        # --- faktura sahifalari (nakladnoy bir necha varaq bo'lishi mumkin) ---
+        files = request.FILES.getlist('image')
+        order = 0
+        for f in files:
+            order += 1
+            InvoiceImage.objects.create(session=session, image=f, order=order)
+        if draft:
+            # Qoralamadagi sahifalar serverda turibdi — faylni ko'chirmasdan
+            # shunchaki sessiyaga biriktiramiz.
+            for pg in draft.pages.all():
+                order += 1
+                pg.draft = None
+                pg.session = session
+                pg.order = order
+                pg.save(update_fields=['draft', 'session', 'order'])
+        first = session.pages.first()
+        if first:
+            session.invoice_image.name = first.image.name
             session.save(update_fields=['invoice_image'])
         elif draft and draft.image:
-            # Qoralama telefonda olingan — rasm serverda turibdi, shu faylni
-            # sessiyaga bog'laymiz (nusxa olmaymiz).
             session.invoice_image.name = draft.image.name
             session.save(update_fields=['invoice_image'])
 
@@ -3746,7 +3772,7 @@ def intake_photo_save(request):
             created += 1
 
         if draft:
-            # Rasm sessiyaga o'tdi — qoralamani o'chirganda fayl o'chmasin
+            # Rasm(lar) sessiyaga o'tdi — qoralamani o'chirganda fayl o'chmasin
             draft.image = None
             draft.save(update_fields=['image'])
             draft.delete()

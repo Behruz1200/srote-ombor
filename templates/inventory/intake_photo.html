@@ -44,6 +44,9 @@
                                 {% endif %}
                                 <div class="small text-muted">
                                     {{ d.row_count }} qator · {{ d.total_qty }} dona
+                                    {% if d.page_count > 1 %}
+                                        · <i class="bi bi-files"></i> {{ d.page_count }} varaq
+                                    {% endif %}
                                     {% if d.branch %} · {{ d.branch.name }}{% endif %}
                                     · {{ d.created_by.username }}
                                     · {{ d.updated_at|date:"d.m H:i" }}
@@ -91,25 +94,27 @@
     <article class="dash-card mb-3">
         <header class="dash-card__head">
             <h2 class="dash-card__title"><i class="bi bi-1-circle"></i> Faktura rasmi</h2>
-            <p class="dash-card__sub">Telefonda — kamera ochiladi. Yorug' va to'g'ri oling.</p>
+            <p class="dash-card__sub">
+                Nakladnoy bir necha varaq bo'lsa — hammasini tanlang yoki
+                bittalab qo'shavering. Har varaq qatorlari jadvalga qo'shiladi.
+            </p>
         </header>
         <div class="dash-card__body">
             <div class="d-flex flex-wrap gap-2 align-items-center">
                 <input type="file" id="invImage" accept="image/*" capture="environment"
-                       class="form-control" style="max-width:340px;">
+                       multiple class="form-control" style="max-width:340px;">
                 <button type="button" id="readBtn" class="dash-btn dash-btn--primary" {% if not ai_enabled %}disabled{% endif %}>
                     <i class="bi bi-magic"></i> <span>Rasmni o'qish</span>
                 </button>
                 <span id="readStatus" class="small text-muted"></span>
             </div>
-            <div id="invPreviewWrap" style="display:none; margin-top:12px;">
-                <img id="invPreview" alt="Faktura rasmi"
-                     title="Kattalashtirish uchun bosing"
-                     style="max-width:280px; cursor:zoom-in; display:block;
-                            border:1px solid var(--yrt-border); border-radius:8px;">
-                <div class="small text-muted mt-1">
-                    <i class="bi bi-zoom-in"></i> Kattalashtirish uchun rasmni bosing
-                </div>
+
+            <!-- Qo'shilgan varaqlar -->
+            <div id="pageChips" class="d-flex flex-wrap gap-2 mt-3"></div>
+            <div id="invPreviewWrap" class="d-flex flex-wrap gap-2 mt-2" style="display:none!important;"></div>
+            <div class="small text-muted mt-2" id="pageHint" style="display:none;">
+                <i class="bi bi-zoom-in"></i> Kattalashtirish uchun varaqni bosing ·
+                <i class="bi bi-x-circle"></i> varaqni o'chirsangiz uning qatorlari ham o'chadi
             </div>
         </div>
     </article>
@@ -443,8 +448,11 @@
 (function () {
     const CSRF = document.querySelector('#csrfForm input[name=csrfmiddlewaretoken]').value;
     const imgEl = document.getElementById('invImage');
-    const preview = document.getElementById('invPreview');
     const previewWrap = document.getElementById('invPreviewWrap');
+    const chipsEl = document.getElementById('pageChips');
+    const pageHint = document.getElementById('pageHint');
+    let pages = [];        // {n, file|null, url}
+    let pageSeq = 0;
     const readBtn = document.getElementById('readBtn');
     const readStat = document.getElementById('readStatus');
     const wrap = document.getElementById('reviewWrap');
@@ -478,12 +486,76 @@
     }
 
     imgEl.addEventListener('change', function () {
-        const f = imgEl.files && imgEl.files[0];
-        if (!f) { previewWrap.style.display = 'none'; return; }
-        preview.src = URL.createObjectURL(f);
-        previewWrap.style.display = 'block';
-        setStat(readStat, '', '');
+        const n = (imgEl.files || []).length;
+        setStat(readStat, n ? (n + ' ta varaq tanlandi — "Rasmni o\'qish"ni bosing') : '',
+                'text-muted');
     });
+
+    // ---------- varaqlar (ko'p sahifali nakladnoy) ----------
+    function renderPages() {
+        chipsEl.innerHTML = '';
+        previewWrap.innerHTML = '';
+        pages.forEach(function (pg) {
+            const chip = document.createElement('span');
+            chip.className = 'badge bg-primary-subtle text-primary border d-inline-flex align-items-center gap-1';
+            const cnt = rowsBody.querySelectorAll('tr[data-page="' + pg.n + '"]').length;
+            chip.innerHTML = '<i class="bi bi-file-earmark-image"></i> ' + pg.n +
+                             '-varaq <span class="text-muted">(' + cnt + ' qator)</span>';
+            const x = document.createElement('button');
+            x.type = 'button';
+            x.className = 'btn-close btn-close-sm ms-1';
+            x.style.fontSize = '.6rem';
+            x.title = 'Bu varaqni va uning qatorlarini o\'chirish';
+            x.addEventListener('click', function () { removePage(pg.n); });
+            chip.appendChild(x);
+            chipsEl.appendChild(chip);
+
+            const im = document.createElement('img');
+            im.src = pg.url;
+            im.alt = pg.n + '-varaq';
+            im.title = 'Kattalashtirish uchun bosing';
+            im.style.cssText = 'width:110px; height:150px; object-fit:cover; cursor:zoom-in;' +
+                'border:1px solid var(--yrt-border); border-radius:8px;';
+            im.addEventListener('click', function () { zOpen(pg.url); });
+            previewWrap.appendChild(im);
+        });
+        const has = pages.length > 0;
+        previewWrap.style.display = has ? 'flex' : 'none';
+        pageHint.style.display = has ? '' : 'none';
+    }
+    function addPage(file, url) {
+        const n = ++pageSeq;
+        pages.push({ n: n, file: file || null, url: url });
+        return n;
+    }
+    function removePage(n) {
+        const cnt = rowsBody.querySelectorAll('tr[data-page="' + n + '"]').length;
+        if (cnt && !confirm(n + '-varaq va uning ' + cnt + ' ta qatori o\'chirilsinmi?')) return;
+        rowsBody.querySelectorAll('tr[data-page="' + n + '"]').forEach(function (tr) {
+            tr.remove();
+        });
+        pages = pages.filter(function (p) { return p.n !== n; });
+        renderPages();
+        recount();
+    }
+    // Sarlavha maydonlari: bo'shini to'ldiramiz, to'ldirilganini buzmaymiz.
+    // Итого odatda OXIRGI varaqda — eng kattasini olamiz.
+    function mergeHeader(data) {
+        const set = function (id, val) {
+            const el = document.getElementById(id);
+            if (val && !el.value.trim()) el.value = val;
+        };
+        set('fSupplier', data.supplier);
+        set('fAgent', data.agent);
+        set('fAgentPhone', data.agent_phone);
+        set('fInvoice', data.invoice_no);
+        set('fDate', data.date);
+        const t = parseFloat(data.total) || 0;
+        if (t > invoiceTotal) {
+            invoiceTotal = t;
+            totalEl.value = fmt(t);
+        }
+    }
 
     // ---------- Tannarx ↔ Marja % ↔ Sotuv narx (qabul jadvali bilan bir xil) ----------
     //   tannarx + marja -> sotuv = tannarx × (1 + marja/100)
@@ -609,6 +681,7 @@
         btn.closest('tr').remove();
         if (!rowsBody.children.length) addRow({}, false);
         recount();
+        renderPages();
     });
 
     function recount() {
@@ -786,38 +859,44 @@
 
     // ---------- AI o'qish ----------
     readBtn.addEventListener('click', async function () {
-        const f = imgEl.files && imgEl.files[0];
-        if (!f) { setStat(readStat, 'Avval rasm tanlang.', 'text-danger'); return; }
+        const files = Array.from(imgEl.files || []);
+        if (!files.length) { setStat(readStat, 'Avval rasm tanlang.', 'text-danger'); return; }
         readBtn.disabled = true;
-        setStat(readStat, 'AI o\'qiyapti — 10-30 soniya...', 'text-muted');
-        try {
-            const fd = new FormData();
-            fd.append('image', f);
-            const resp = await fetch('{% url "intake_photo_extract" %}', {
-                method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
-            });
-            const data = await resp.json();
-            if (!data.ok) {
-                setStat(readStat, data.error || 'Xatolik', 'text-danger');
-                readBtn.disabled = false;
-                return;
+        let okPages = 0, failed = 0, newRows = 0;
+        for (let i = 0; i < files.length; i++) {
+            setStat(readStat, (i + 1) + '/' + files.length + '-varaq o\'qilyapti — 10-30 soniya...',
+                    'text-muted');
+            try {
+                const fd = new FormData();
+                fd.append('image', files[i]);
+                const resp = await fetch('{% url "intake_photo_extract" %}', {
+                    method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+                });
+                const data = await resp.json();
+                if (!data.ok) { failed++; continue; }
+                const n = addPage(files[i], URL.createObjectURL(files[i]));
+                (data.rows || []).forEach(function (r) {
+                    const tr = addRow(r, false);
+                    tr.dataset.page = n;
+                    newRows++;
+                });
+                mergeHeader(data);
+                okPages++;
+            } catch (e) {
+                failed++;
             }
-            rowsBody.innerHTML = '';
-            (data.rows || []).forEach(function (r) { addRow(r, false); });
-            if (!data.rows || !data.rows.length) addRow({}, false);
-            document.getElementById('fSupplier').value = data.supplier || '';
-            document.getElementById('fAgent').value = data.agent || '';
-            document.getElementById('fAgentPhone').value = data.agent_phone || '';
-            document.getElementById('fInvoice').value = data.invoice_no || '';
-            if (data.date) document.getElementById('fDate').value = data.date;
-            invoiceTotal = data.total || 0;
-            totalEl.value = invoiceTotal ? fmt(invoiceTotal) : '';
-            recount();
+        }
+        renderPages();
+        recount();
+        imgEl.value = '';          // yana varaq qo'shsa bo'lsin
+        if (okPages) {
             wrap.style.display = 'block';
-            setStat(readStat, (data.rows || []).length + ' ta qator topildi — tekshiring.', 'text-success');
+            let msg = okPages + ' ta varaq o\'qildi, ' + newRows + ' ta qator qo\'shildi.';
+            if (failed) msg += ' ' + failed + ' ta varaq o\'qilmadi.';
+            setStat(readStat, msg, failed ? 'text-warning' : 'text-success');
             wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } catch (e) {
-            setStat(readStat, 'Tarmoq xatosi: ' + e.message, 'text-danger');
+        } else {
+            setStat(readStat, 'Hech bir varaq o\'qilmadi. Rasmni aniqroq oling.', 'text-danger');
         }
         readBtn.disabled = false;
     });
@@ -880,8 +959,7 @@
             const fd = new FormData();
             const p = meta(); p.rows = rows;
             fd.append('payload', JSON.stringify(p));
-            const f = imgEl.files && imgEl.files[0];
-            if (f) fd.append('image', f);
+            pages.forEach(function (pg) { if (pg.file) fd.append('image', pg.file); });
             const resp = await fetch('{% url "intake_photo_draft" %}', {
                 method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
             });
@@ -892,6 +970,7 @@
                 return;
             }
             draftId = data.id;
+            pages.forEach(function (pg) { pg.file = null; });   // serverda saqlandi
             setStat(saveStat, '✓ Qoralama #' + data.id + ' saqlandi', 'text-success');
             document.getElementById('doneDraftNo').textContent = '#' + data.id;
             document.getElementById('doneDraftRows').textContent = data.rows;
@@ -927,8 +1006,7 @@
             const fd = new FormData();
             const p = meta(); p.rows = rows;
             fd.append('payload', JSON.stringify(p));
-            const f = imgEl.files && imgEl.files[0];
-            if (f) fd.append('image', f);
+            pages.forEach(function (pg) { if (pg.file) fd.append('image', pg.file); });
             const resp = await fetch('{% url "intake_photo_save" %}', {
                 method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
             });
@@ -997,7 +1075,7 @@
         document.body.style.overflow = '';
     }
 
-    preview.addEventListener('click', function () { zOpen(preview.src); });
+    // Varaq rasmlari renderPages() ichida zOpen() ga bog'lanadi.
 
     zoomEl.addEventListener('click', function (e) {
         const btn = e.target.closest('[data-z]');
@@ -1100,10 +1178,16 @@
         if (!rowsBody.children.length) addRow({}, false);
         recount();
         wrap.style.display = 'block';
-        if (d.image_url) {
-            preview.src = d.image_url;
-            previewWrap.style.display = 'block';
+        const urls = (d.pages && d.pages.length) ? d.pages
+                   : (d.image_url ? [d.image_url] : []);
+        urls.forEach(function (u) { addPage(null, u); });
+        // qoralamada qator qaysi varaqdan kelgani saqlanmaydi — birinchisiga bog'laymiz
+        if (pages.length) {
+            rowsBody.querySelectorAll('tr').forEach(function (tr) {
+                if (!tr.dataset.page) tr.dataset.page = pages[0].n;
+            });
         }
+        renderPages();
     })();
 
     // ---------- Kamera skaner: nomga qarab ketma-ket ----------
