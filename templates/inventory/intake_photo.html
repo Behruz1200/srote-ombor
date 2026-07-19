@@ -53,7 +53,7 @@
                 <p class="dash-card__sub">AI xato o'qishi mumkin — raqamlarni solishtiring.</p>
             </header>
             <div class="dash-card__body">
-                <div class="row g-2 mb-3">
+                <div class="row g-2 mb-2">
                     <div class="col-md-3">
                         <label class="form-label small mb-1">Filial <span class="text-danger">*</span></label>
                         <select id="fBranch" class="form-select">
@@ -77,6 +77,14 @@
                         <input type="date" id="fDate" class="form-control">
                     </div>
                     <div class="col-md-2">
+                        <label class="form-label small mb-1">Standart marja %</label>
+                        <input type="text" id="fMarja" class="form-control" inputmode="decimal"
+                               placeholder="0"
+                               title="Barcha qatorlarga qo'llanadi. Har qatorda alohida o'zgartirsa bo'ladi.">
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
                         <label class="form-label small mb-1">Yangi mahsulot kategoriyasi</label>
                         <select id="fCategory" class="form-select">
                             <option value="">— yo'q —</option>
@@ -85,17 +93,50 @@
                     </div>
                 </div>
 
+                <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+                    <strong><i class="bi bi-list-ol"></i> Qatorlar</strong>
+                    <button type="button" class="btn btn-success btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#invScanModal">
+                        <i class="bi bi-camera"></i> Kamera bilan skanerlash
+                    </button>
+                </div>
+                <div class="small text-muted mb-2">
+                    <i class="bi bi-info-circle"></i>
+                    Nomlar AI'dan keldi — endi shtrix-kodlarni skanerlang. Telefonda
+                    <strong>kamera</strong> tugmasini bosing; kompyuterda skaner qurilmasi
+                    kodni Shtrix-kod ustunidagi keyingi bo'sh katakka o'zi yozadi.
+                </div>
+
                 <div class="table-responsive">
                     <table class="table table-sm align-middle" id="rowsTable">
                         <thead class="table-light">
                             <tr>
-                                <th style="width:38px" class="text-muted">#</th>
+                                <th style="width:44px" class="text-muted">#</th>
                                 <th style="min-width:220px">Nomi</th>
-                                <th style="width:100px">Miqdor</th>
-                                <th style="width:120px">Tannarx</th>
-                                <th style="width:120px">Sotuv narx</th>
-                                <th style="width:130px">Faktura summasi</th>
-                                <th style="width:40px"></th>
+                                <th style="min-width:160px">Shtrix-kod</th>
+                                <th style="min-width:100px">Tannarx
+                                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                            data-col="row-cost" tabindex="-1"
+                                            title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                        <i class="bi bi-arrow-down-square"></i>
+                                    </button>
+                                </th>
+                                <th style="min-width:90px">Marja %
+                                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                            data-col="row-marja" tabindex="-1"
+                                            title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                        <i class="bi bi-arrow-down-square"></i>
+                                    </button>
+                                </th>
+                                <th style="min-width:110px">Sotuv narx
+                                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline col-fill"
+                                            data-col="row-price" tabindex="-1"
+                                            title="Birinchi to'ldirilgan qiymatni hamma qatorga qo'llash">
+                                        <i class="bi bi-arrow-down-square"></i>
+                                    </button>
+                                </th>
+                                <th style="min-width:80px">Miqdor</th>
+                                <th style="width:36px"></th>
                             </tr>
                         </thead>
                         <tbody id="rowsBody"></tbody>
@@ -127,6 +168,50 @@
 
 <form id="csrfForm" style="display:none">{% csrf_token %}</form>
 
+<template id="rowTpl">
+    <tr>
+        <td class="row-num text-muted small text-center align-middle"></td>
+        <td><input type="text" class="form-control form-control-sm row-name" placeholder="Mahsulot nomi"></td>
+        <td><input type="text" class="form-control form-control-sm row-barcode" placeholder="Skanerlang"></td>
+        <td><input type="text" class="form-control form-control-sm text-end row-cost" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" class="form-control form-control-sm text-end row-marja" inputmode="decimal" placeholder="%"></td>
+        <td><input type="text" class="form-control form-control-sm text-end row-price" inputmode="decimal" placeholder="0"></td>
+        <td>
+            <input type="text" class="form-control form-control-sm text-end row-qty" inputmode="numeric" placeholder="0">
+            <div class="row-hint text-muted" style="font-size:.72rem"></div>
+        </td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger row-del" tabindex="-1">✕</button></td>
+    </tr>
+</template>
+
+<!-- Kamera skaner modali (telefon uchun) -->
+<div class="modal fade" id="invScanModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-camera"></i> Kamera bilan skanerlash</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="invScanTarget" class="alert alert-secondary py-2 mb-2" style="display:none;"></div>
+        <div id="invScanStatus" class="alert alert-info py-2 mb-2">
+          <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
+        </div>
+        <div id="invScanReader" style="width:100%; max-width:480px; margin:0 auto;"></div>
+        <div class="text-center mt-2 small text-muted">
+          Har bir kod ro'yxatdagi keyingi bo'sh katakka tushadi — tepadan pastga.
+        </div>
+        <div id="invScanList" class="d-flex flex-wrap gap-1 mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <span class="me-auto small text-muted"><strong id="invScanCount">0</strong> ta skanerlandi</span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tugatish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function () {
     const CSRF = document.querySelector('#csrfForm input[name=csrfmiddlewaretoken]').value;
@@ -135,14 +220,17 @@
     const readBtn = document.getElementById('readBtn');
     const readStat = document.getElementById('readStatus');
     const wrap = document.getElementById('reviewWrap');
-    const body = document.getElementById('rowsBody');
+    const rowsBody = document.getElementById('rowsBody');
+    const rowTpl = document.getElementById('rowTpl');
+    const marjaEl = document.getElementById('fMarja');
     const saveBtn = document.getElementById('saveBtn');
     const saveStat = document.getElementById('saveStatus');
 
     function num(s) {
         s = (s || '').toString().replace(/[^0-9.\-]/g, '');
+        if (s === '' || s === '-' || s === '.') return null;
         const v = parseFloat(s);
-        return isNaN(v) ? 0 : v;
+        return isNaN(v) ? null : v;
     }
     function fmt(n) {
         return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
@@ -160,86 +248,223 @@
         setStat(readStat, '', '');
     });
 
-    function addRow(r) {
-        r = r || {};
-        const tr = document.createElement('tr');
-
-        const tdNum = document.createElement('td');
-        tdNum.className = 'row-num text-muted small text-center';
-
-        function cell(value, cls, mode) {
-            const td = document.createElement('td');
-            const i = document.createElement('input');
-            i.type = 'text';
-            i.className = 'form-control form-control-sm ' + (cls || '');
-            if (mode) i.inputMode = mode;
-            i.value = value === undefined || value === null ? '' : value;
-            td.appendChild(i);
-            return td;
-        }
-        const tdName = cell(r.name || '', 'r-name');
-        const tdQty = cell(r.total_qty || r.qty || '', 'r-qty text-end', 'numeric');
-        const tdCost = cell(r.cost ? Math.round(r.cost) : '', 'r-cost text-end', 'decimal');
-        const tdSale = cell('', 'r-sale text-end', 'decimal');
-
-        // Faktura summasi — faqat ko'rsatish + tekshiruv
-        const tdSum = document.createElement('td');
-        tdSum.className = 'small';
-        if (r.line_sum) {
-            tdSum.textContent = fmt(r.line_sum);
-            if (r.sum_ok === false) {
-                const b = document.createElement('span');
-                b.className = 'badge bg-warning text-dark ms-1';
-                b.title = 'Miqdor × tannarx faktura summasiga to\'g\'ri kelmadi — tekshiring';
-                b.textContent = '!';
-                tdSum.appendChild(b);
-            }
+    // ---------- Tannarx ↔ Marja % ↔ Sotuv narx (qabul jadvali bilan bir xil) ----------
+    //   tannarx + marja -> sotuv = tannarx × (1 + marja/100)
+    //   tannarx + sotuv -> marja = (sotuv/tannarx − 1) × 100
+    const asInt = v => String(Math.round(v));
+    function asMarja(v) {
+        const r = Math.round(v * 10) / 10;
+        return (r % 1 === 0) ? String(r) : r.toFixed(1);
+    }
+    function priceCalc(tr, src) {
+        if (!tr) return;
+        const costEl = tr.querySelector('.row-cost');
+        const mEl = tr.querySelector('.row-marja');
+        const saleEl = tr.querySelector('.row-price');
+        if (!costEl || !mEl || !saleEl) return;
+        const cost = num(costEl.value), marja = num(mEl.value), sale = num(saleEl.value);
+        if (src === 'marja') {
+            if (cost !== null && marja !== null) saleEl.value = asInt(cost * (1 + marja / 100));
+        } else if (src === 'sale') {
+            if (cost) mEl.value = asMarja((sale / cost - 1) * 100);
         } else {
-            tdSum.innerHTML = '<span class="text-muted">—</span>';
+            if (marja !== null) { if (cost !== null) saleEl.value = asInt(cost * (1 + marja / 100)); }
+            else if (sale !== null && cost) { mEl.value = asMarja((sale / cost - 1) * 100); }
         }
-        if (r.per_case > 1) {
-            const hint = document.createElement('div');
-            hint.className = 'text-muted';
-            hint.style.fontSize = '0.72rem';
-            hint.textContent = (r.qty || 0) + ' × ' + r.per_case + ' dona';
-            tdSum.appendChild(hint);
+    }
+    rowsBody.addEventListener('input', function (e) {
+        const t = e.target;
+        if (!t.classList) return;
+        if (t.classList.contains('row-cost')) priceCalc(t.closest('tr'), 'cost');
+        else if (t.classList.contains('row-marja')) priceCalc(t.closest('tr'), 'marja');
+        else if (t.classList.contains('row-price')) priceCalc(t.closest('tr'), 'sale');
+    });
+
+    // Standart marja: bo'sh (yoki avvalgi standart qiymatdagi) qatorlarga tarqaladi
+    let lastDefMarja = '';
+    marjaEl.addEventListener('input', function () {
+        const v = marjaEl.value.trim();
+        rowsBody.querySelectorAll('tr').forEach(function (tr) {
+            const m = tr.querySelector('.row-marja');
+            if (!m) return;
+            const cur = m.value.trim();
+            if (cur === '' || cur === lastDefMarja) {
+                m.value = v;
+                priceCalc(tr, 'marja');
+            }
+        });
+        lastDefMarja = v;
+        recount();
+    });
+
+    // ---------- qatorlar ----------
+    function addRow(r, focus) {
+        r = r || {};
+        const tr = rowTpl.content.firstElementChild.cloneNode(true);
+        tr.querySelector('.row-name').value = r.name || '';
+        const q = r.total_qty || r.qty;
+        if (q) tr.querySelector('.row-qty').value = Math.round(q);
+        if (r.cost) tr.querySelector('.row-cost').value = Math.round(r.cost);
+        const dm = marjaEl.value.trim();
+        if (dm) tr.querySelector('.row-marja').value = dm;
+
+        const bits = [];
+        if (r.per_case > 1) bits.push((r.qty || 0) + ' × ' + r.per_case + ' dona');
+        if (r.sum_ok === false) {
+            bits.push('<span class="text-warning" title="Miqdor × tannarx faktura summasiga ' +
+                      'to\'g\'ri kelmadi — tekshiring"><i class="bi bi-exclamation-triangle-fill"></i>' +
+                      ' summa mos emas</span>');
         }
+        tr.querySelector('.row-hint').innerHTML = bits.join(' · ');
 
-        const tdDel = document.createElement('td');
-        const del = document.createElement('button');
-        del.type = 'button';
-        del.className = 'btn btn-sm btn-outline-danger';
-        del.textContent = '✕';
-        del.addEventListener('click', function () { tr.remove(); recount(); });
-        tdDel.appendChild(del);
-
-        tr.appendChild(tdNum); tr.appendChild(tdName); tr.appendChild(tdQty);
-        tr.appendChild(tdCost); tr.appendChild(tdSale); tr.appendChild(tdSum);
-        tr.appendChild(tdDel);
-        body.appendChild(tr);
+        rowsBody.appendChild(tr);
+        priceCalc(tr, 'cost');
+        if (focus) tr.querySelector('input').focus();
         return tr;
     }
+    document.getElementById('addRowBtn').addEventListener('click', function () {
+        addRow({}, true); recount();
+    });
+    rowsBody.addEventListener('click', function (e) {
+        const btn = e.target.closest('.row-del');
+        if (!btn) return;
+        btn.closest('tr').remove();
+        if (!rowsBody.children.length) addRow({}, false);
+        recount();
+    });
 
     function recount() {
-        let n = 0, qty = 0, cost = 0;
-        body.querySelectorAll('tr').forEach(function (tr, i) {
+        let n = 0, i = 1, qty = 0, cost = 0;
+        rowsBody.querySelectorAll('tr').forEach(function (tr) {
             const numCell = tr.querySelector('.row-num');
-            if (numCell) numCell.textContent = i + 1;
-            const nm = tr.querySelector('.r-name');
+            if (numCell) numCell.textContent = i++;
+            const nm = tr.querySelector('.row-name');
             if (nm && nm.value.trim()) n++;
-            const q = num(tr.querySelector('.r-qty').value);
-            const c = num(tr.querySelector('.r-cost').value);
+            const q = num(tr.querySelector('.row-qty').value) || 0;
+            const c = num(tr.querySelector('.row-cost').value) || 0;
             if (q > 0) { qty += q; cost += q * c; }
         });
         document.getElementById('sumRows').textContent = n;
         document.getElementById('sumQty').textContent = fmt(qty);
         document.getElementById('sumCost').textContent = fmt(cost);
     }
-    body.addEventListener('input', recount);
-    document.getElementById('addRowBtn').addEventListener('click', function () {
-        addRow({}); recount();
+    rowsBody.addEventListener('input', recount);
+
+    // "Hammasiga qo'llash" — birinchi to'ldirilgan qiymatni ustun bo'ylab nusxalash
+    document.querySelectorAll('.col-fill').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const col = btn.dataset.col;
+            const inputs = [...rowsBody.querySelectorAll('input.' + col)];
+            const src = inputs.find(i => i.value.trim());
+            if (!src) return;
+            const val = src.value.trim();
+            const kind = col === 'row-cost' ? 'cost' : (col === 'row-marja' ? 'marja' : 'sale');
+            inputs.forEach(function (i) {
+                i.value = val;
+                priceCalc(i.closest('tr'), kind);
+            });
+            recount();
+        });
     });
 
+    // ---------- jadval ichida strelkalar bilan yurish (Excel kabi) ----------
+    function arrowNav(e, t) {
+        const tr = t.closest('#rowsBody tr');
+        if (!tr) return false;
+        const rowInputs = [...tr.querySelectorAll('input')];
+        const col = rowInputs.indexOf(t);
+        if (col < 0) return false;
+        const go = (input, selectAll) => {
+            e.preventDefault();
+            input.focus();
+            if (selectAll && input.select) input.select();
+        };
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            let target = e.key === 'ArrowUp'
+                ? tr.previousElementSibling : tr.nextElementSibling;
+            if (!target && e.key === 'ArrowDown') { target = addRow({}, false); recount(); }
+            if (target) {
+                const ti = target.querySelectorAll('input')[col];
+                if (ti) go(ti, true);
+            }
+            return true;
+        }
+        const len = (t.value || '').length;
+        const atStart = t.selectionStart === 0 && t.selectionEnd === 0;
+        const atEnd = t.selectionStart === len && t.selectionEnd === len;
+        if (e.key === 'ArrowLeft' && atStart && col > 0) { go(rowInputs[col - 1], true); return true; }
+        if (e.key === 'ArrowRight' && atEnd && col + 1 < rowInputs.length) {
+            go(rowInputs[col + 1], true); return true;
+        }
+        return false;
+    }
+
+    // ---------- USB skaner aniqlash (tez "portlash" + Enter) ----------
+    const SCAN_GAP = 90, SCAN_MIN = 8;
+    let scanBuf = [], lastKeyTs = 0;
+
+    function nextEmptyBarcodeRow() {
+        for (const i of rowsBody.querySelectorAll('input.row-barcode')) {
+            if (!i.value.trim()) return i.closest('tr');
+        }
+        return null;
+    }
+    function nextEmptyBarcodeCell() {
+        const tr = nextEmptyBarcodeRow() || addRow({}, false);
+        return tr.querySelector('input.row-barcode');
+    }
+
+    wrap.addEventListener('keydown', function (e) {
+        const t = e.target;
+        const now = Date.now();
+        if (e.key.length === 1) {
+            if (now - lastKeyTs > SCAN_GAP) scanBuf = [];
+            scanBuf.push(e.key);
+            lastKeyTs = now;
+        }
+        if (t.tagName !== 'INPUT') { if (e.key === 'Enter') scanBuf = []; return; }
+        if (e.key.startsWith('Arrow')) { arrowNav(e, t); return; }
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+
+        const isScan = scanBuf.length >= SCAN_MIN && (now - lastKeyTs) <= SCAN_GAP;
+        const code = scanBuf.join('');
+        scanBuf = [];
+        if (isScan) {
+            if (t.classList.contains('row-barcode')) {
+                t.value = code;
+                let tr = t.closest('tr').nextElementSibling;
+                if (!tr) { tr = addRow({}, false); }
+                const bc = tr.querySelector('.row-barcode');
+                if (bc) { bc.focus(); bc.select && bc.select(); }
+            } else {
+                if (t.value.endsWith(code))
+                    t.value = t.value.slice(0, t.value.length - code.length);
+                const cell = nextEmptyBarcodeCell();
+                if (cell) cell.value = code;
+            }
+            recount();
+            return;
+        }
+
+        if (t.classList.contains('row-barcode')) {
+            let tr = t.closest('tr').nextElementSibling;
+            if (!tr) tr = addRow({}, false);
+            const bc = tr.querySelector('.row-barcode');
+            if (bc) { bc.focus(); bc.select && bc.select(); }
+            recount();
+            return;
+        }
+        if (t.classList.contains('row-qty') && t.closest('tr') === rowsBody.lastElementChild) {
+            addRow({}, true); recount(); return;
+        }
+        const inputs = [...wrap.querySelectorAll('input:not([type=hidden])')]
+            .filter(i => i.offsetParent !== null);
+        const idx = inputs.indexOf(t);
+        if (idx >= 0 && idx + 1 < inputs.length) inputs[idx + 1].focus();
+    });
+
+    // ---------- AI o'qish ----------
     readBtn.addEventListener('click', async function () {
         const f = imgEl.files && imgEl.files[0];
         if (!f) { setStat(readStat, 'Avval rasm tanlang.', 'text-danger'); return; }
@@ -257,9 +482,9 @@
                 readBtn.disabled = false;
                 return;
             }
-            body.innerHTML = '';
-            (data.rows || []).forEach(addRow);
-            if (!data.rows || !data.rows.length) addRow({});
+            rowsBody.innerHTML = '';
+            (data.rows || []).forEach(function (r) { addRow(r, false); });
+            if (!data.rows || !data.rows.length) addRow({}, false);
             document.getElementById('fSupplier').value = data.supplier || '';
             document.getElementById('fInvoice').value = data.invoice_no || '';
             if (data.date) document.getElementById('fDate').value = data.date;
@@ -273,19 +498,21 @@
         readBtn.disabled = false;
     });
 
+    // ---------- saqlash ----------
     saveBtn.addEventListener('click', async function () {
         const branch = document.getElementById('fBranch').value;
         if (!branch) { setStat(saveStat, 'Filialni tanlang.', 'text-danger'); return; }
         const rows = [];
-        body.querySelectorAll('tr').forEach(function (tr) {
-            const name = tr.querySelector('.r-name').value.trim();
-            const qty = num(tr.querySelector('.r-qty').value);
+        rowsBody.querySelectorAll('tr').forEach(function (tr) {
+            const name = tr.querySelector('.row-name').value.trim();
+            const qty = num(tr.querySelector('.row-qty').value) || 0;
             if (!name || qty <= 0) return;
             rows.push({
                 name: name,
+                barcode: tr.querySelector('.row-barcode').value.trim(),
                 qty: qty,
-                cost: num(tr.querySelector('.r-cost').value),
-                sale: num(tr.querySelector('.r-sale').value)
+                cost: num(tr.querySelector('.row-cost').value) || 0,
+                sale: num(tr.querySelector('.row-price').value) || 0
             });
         });
         if (!rows.length) { setStat(saveStat, 'Saqlash uchun qator yo\'q.', 'text-danger'); return; }
@@ -319,6 +546,95 @@
             saveBtn.disabled = false;
         }
     });
+
+    // ---------- Kamera skaner: nomga qarab ketma-ket ----------
+    (function initCamScan() {
+        const modalEl = document.getElementById('invScanModal');
+        if (!modalEl || typeof Html5Qrcode === 'undefined') return;
+        const statusEl = document.getElementById('invScanStatus');
+        const targetEl = document.getElementById('invScanTarget');
+        const listEl = document.getElementById('invScanList');
+        const countEl = document.getElementById('invScanCount');
+        let qr = null, count = 0, lastCode = '', lastSeenTs = 0, resetTimer = null;
+
+        function setS(html, type) {
+            statusEl.className = 'alert py-2 mb-2 alert-' + (type || 'info');
+            statusEl.innerHTML = html;
+        }
+        function showTarget() {
+            const tr = nextEmptyBarcodeRow();
+            if (!tr) {
+                targetEl.className = 'alert alert-success py-2 mb-2';
+                targetEl.innerHTML = '<i class="bi bi-check-circle"></i> Hamma qatorda shtrix-kod bor.';
+                targetEl.style.display = '';
+                return;
+            }
+            const nm = (tr.querySelector('.row-name').value || '').trim();
+            targetEl.className = 'alert alert-secondary py-2 mb-2';
+            targetEl.innerHTML = '<span class="text-muted small">Hozir skanerlang:</span><br>' +
+                '<strong>' + (nm || '(nomsiz qator)') + '</strong>';
+            targetEl.style.display = '';
+        }
+        function onDecode(code) {
+            code = (code || '').trim();
+            if (!code) return;
+            const now = Date.now();
+            if (code === lastCode) { lastSeenTs = now; return; }
+            lastCode = code; lastSeenTs = now;
+            const exists = [...rowsBody.querySelectorAll('input.row-barcode')]
+                .some(i => i.value.trim() === code);
+            if (exists) {
+                setS('<i class="bi bi-exclamation-circle"></i> Bu kod allaqachon jadvalda: <strong>' +
+                     code + '</strong>', 'warning');
+                return;
+            }
+            const tr = nextEmptyBarcodeRow();
+            if (!tr) {
+                setS('<i class="bi bi-check-circle"></i> Bo\'sh katak qolmadi.', 'success');
+                showTarget();
+                return;
+            }
+            const nm = (tr.querySelector('.row-name').value || '').trim();
+            tr.querySelector('.row-barcode').value = code;
+            recount();
+            count++;
+            countEl.textContent = count;
+            const chip = document.createElement('span');
+            chip.className = 'badge bg-success-subtle text-success border';
+            chip.textContent = (nm ? nm.slice(0, 18) + ' · ' : '') + code;
+            listEl.prepend(chip);
+            setS('<i class="bi bi-check-circle"></i> <strong>' + (nm || code) +
+                 '</strong> — qo\'shildi', 'success');
+            if (navigator.vibrate) navigator.vibrate(40);
+            showTarget();
+        }
+        function stop() {
+            if (resetTimer) { clearInterval(resetTimer); resetTimer = null; }
+            if (qr && qr.isScanning) {
+                qr.stop().catch(() => {}).finally(() => { qr.clear(); qr = null; });
+            }
+        }
+        modalEl.addEventListener('shown.bs.modal', function () {
+            count = 0; lastCode = ''; lastSeenTs = 0;
+            countEl.textContent = '0'; listEl.innerHTML = '';
+            showTarget();
+            if (resetTimer) clearInterval(resetTimer);
+            resetTimer = setInterval(function () {
+                if (lastCode && Date.now() - lastSeenTs > 900) lastCode = '';
+            }, 250);
+            setS('<i class="bi bi-camera-video"></i> Kamerani yuklayapti...', 'info');
+            qr = new Html5Qrcode('invScanReader');
+            qr.start(yuritScan.camera(), yuritScan.config(), onDecode, function () {})
+              .then(function () {
+                  yuritScan.addTorch(qr, 'invScanReader');
+                  setS('<i class="bi bi-camera-video"></i> Tayyor — kodni kameraga to\'g\'rilang', 'info');
+              })
+              .catch(function (err) {
+                  setS('<i class="bi bi-exclamation-triangle"></i> Kamera ochilmadi: ' + err, 'danger');
+              });
+        });
+        modalEl.addEventListener('hide.bs.modal', stop);
+    })();
 })();
 </script>
 {% endblock %}

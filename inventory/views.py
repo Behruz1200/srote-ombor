@@ -3418,8 +3418,8 @@ def intake_photo_save(request):
         return JsonResponse({'ok': False, 'error': 'Filial tanlang.'}, status=400)
     category = Category.objects.filter(pk=payload.get('category') or 0).first()
 
-    clean = []
-    for r in (payload.get('rows') or []):
+    clean, errors, seen_barcodes = [], [], set()
+    for idx, r in enumerate(payload.get('rows') or [], 1):
         name = smart_title((r.get('name') or '').strip())
         if not name:
             continue
@@ -3439,12 +3439,38 @@ def intake_photo_save(request):
             sale = Decimal('0')
         if cost < 0 or sale < 0:
             continue
-        clean.append({'name': name[:200], 'qty': qty, 'cost': cost, 'sale': sale})
+        barcode = (r.get('barcode') or '').strip()[:64]
+        if barcode:
+            if barcode in seen_barcodes:
+                errors.append(f"{idx}-qator: shtrix-kod jadvalda takror ({barcode}).")
+                continue
+            seen_barcodes.add(barcode)
+        clean.append({'name': name[:200], 'qty': qty, 'cost': cost,
+                      'sale': sale, 'barcode': barcode, 'variant': None})
 
-    if not clean:
+    if not clean and not errors:
         return JsonResponse({'ok': False,
                              'error': "Saqlash uchun qator yo'q (miqdor > 0 bo'lsin)."},
                             status=400)
+
+    # Shtrix-kod bazada bo'lsa — o'sha turga qabul qilamiz (kod = haqiqat manbai).
+    # Boshqa mahsulotga biriktirilgan bo'lsa — jim o'g'irlamay, xato qaytaramiz.
+    for r in clean:
+        if not r['barcode']:
+            continue
+        v = (ProductVariant.objects.filter(barcode=r['barcode'])
+             .select_related('product').first())
+        if v:
+            r['variant'] = v
+            r['name'] = v.product.name      # bazadagi nom AI o'qiganidan ustun
+            continue
+        p_clash = Product.objects.filter(external_barcode=r['barcode']).first()
+        if p_clash:
+            errors.append(f"Shtrix-kod {r['barcode']} "
+                          f"'{p_clash.name}' mahsulotiga biriktirilgan.")
+
+    if errors:
+        return JsonResponse({'ok': False, 'error': ' '.join(errors[:5])}, status=400)
 
     supplier_text = (payload.get('supplier') or '').strip()[:200]
     supplier_obj = (Supplier.objects.filter(name__iexact=supplier_text).first()
@@ -3475,16 +3501,27 @@ def intake_photo_save(request):
 
         created = 0
         for r in clean:
-            product = Product.objects.filter(name__iexact=r['name']).first()
-            if product is None:
-                product = Product.objects.create(
-                    name=r['name'], category=category,
-                    default_sale_price=r['sale'])
-            elif r['sale'] > 0 and not product.default_sale_price:
-                product.default_sale_price = r['sale']
-                product.save(update_fields=['default_sale_price'])
-            variant, _ = ProductVariant.objects.get_or_create(
-                product=product, size='', color='')
+            variant = r['variant']
+            if variant is not None:
+                # Shtrix-kod orqali topildi — mavjud turga qo'shamiz
+                product = variant.product
+                if r['sale'] > 0 and not product.default_sale_price:
+                    product.default_sale_price = r['sale']
+                    product.save(update_fields=['default_sale_price'])
+            else:
+                product = Product.objects.filter(name__iexact=r['name']).first()
+                if product is None:
+                    product = Product.objects.create(
+                        name=r['name'], category=category,
+                        default_sale_price=r['sale'])
+                elif r['sale'] > 0 and not product.default_sale_price:
+                    product.default_sale_price = r['sale']
+                    product.save(update_fields=['default_sale_price'])
+                variant, _ = ProductVariant.objects.get_or_create(
+                    product=product, size='', color='')
+                if r['barcode'] and not variant.barcode:
+                    variant.barcode = r['barcode']
+                    variant.save(update_fields=['barcode'])
             stock, _ = BranchStock.objects.get_or_create(
                 variant=variant, branch=branch,
                 defaults={'cost_price': r['cost'], 'sale_price': r['sale']})
