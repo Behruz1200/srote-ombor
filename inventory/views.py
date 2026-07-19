@@ -7847,7 +7847,6 @@ def product_request_add(request):
         branch=_request_branch(request),
         requested_by=request.user,
     )
-    cache.delete('nav:pending_requests')
 
     # How many times has this item been asked (still pending)?
     same = ProductRequest.objects.filter(
@@ -7895,7 +7894,6 @@ def product_request_resolve(request):
          .update(status=new_status,
                  resolved_by=request.user,
                  resolved_at=timezone.now()))
-    cache.delete('nav:pending_requests')
     if action == 'stock':
         messages.success(request, f"\"{name}\" — keltirildi deb belgilandi ({n} ta so'rov).")
     else:
