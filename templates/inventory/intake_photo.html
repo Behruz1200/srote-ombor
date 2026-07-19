@@ -246,6 +246,7 @@
                         tannarx jami: <strong id="sumCost">0</strong> so'm
                     </div>
                 </div>
+                <div id="sumCheck" class="small mt-2"></div>
 
                 <div class="d-flex gap-2 mt-3 flex-wrap">
                     <button type="button" class="dash-btn dash-btn--primary" id="saveBtn">
@@ -445,6 +446,7 @@
     const draftBtn = document.getElementById('draftBtn');
     const saveStat = document.getElementById('saveStatus');
     let draftId = null;
+    let invoiceTotal = 0;   // fakturadagi Итого
 
     // Mavjud kategoriyalar — yozilgani ro'yxatda bo'lmasa "yangi" deb belgilaymiz
     const KNOWN_CATS = new Set(
@@ -608,6 +610,23 @@
         document.getElementById('sumProducts').textContent = groups.size;
         document.getElementById('sumQty').textContent = fmt(qty);
         document.getElementById('sumCost').textContent = fmt(cost);
+
+        // Fakturadagi Итого bilan solishtiramiz — miqdor/narx xatosi
+        // shu yerda darrov ko'rinadi.
+        const chk = document.getElementById('sumCheck');
+        if (!invoiceTotal) { chk.innerHTML = ''; return; }
+        const diff = Math.round(cost - invoiceTotal);
+        if (Math.abs(diff) <= Math.max(1, invoiceTotal * 0.005)) {
+            chk.className = 'small mt-2 text-success';
+            chk.innerHTML = '<i class="bi bi-check-circle"></i> Fakturadagi <strong>Итого ' +
+                fmt(invoiceTotal) + '</strong> so\'m bilan mos keldi.';
+        } else {
+            chk.className = 'small mt-2 text-danger';
+            chk.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> ' +
+                'Fakturada <strong>Итого ' + fmt(invoiceTotal) + '</strong> so\'m, ' +
+                'jadvalda <strong>' + fmt(cost) + '</strong> so\'m — farq <strong>' +
+                fmt(Math.abs(diff)) + '</strong> so\'m. Miqdor va tannarxni tekshiring.';
+        }
     }
     rowsBody.addEventListener('input', recount);
 
@@ -755,6 +774,7 @@
             document.getElementById('fAgentPhone').value = data.agent_phone || '';
             document.getElementById('fInvoice').value = data.invoice_no || '';
             if (data.date) document.getElementById('fDate').value = data.date;
+            invoiceTotal = data.total || 0;
             recount();
             wrap.style.display = 'block';
             setStat(readStat, (data.rows || []).length + ' ta qator topildi — tekshiring.', 'text-success');
@@ -775,7 +795,8 @@
             agent_phone: document.getElementById('fAgentPhone').value.trim(),
             invoice_no: document.getElementById('fInvoice').value.trim(),
             date: document.getElementById('fDate').value,
-            marja: marjaEl.value.trim()
+            marja: marjaEl.value.trim(),
+            total: invoiceTotal
         };
     }
     /** strict=true -> faqat qabul qilinadigan qatorlar (nom + miqdor > 0).
@@ -1033,6 +1054,7 @@
         document.getElementById('fInvoice').value = d.invoice_no || '';
         if (d.date) document.getElementById('fDate').value = d.date;
         marjaEl.value = d.marja || '';
+        invoiceTotal = parseFloat(d.total) || 0;
         lastDefMarja = marjaEl.value.trim();
         rowsBody.innerHTML = '';
         (d.rows || []).forEach(function (r) { addRow(r, false); });

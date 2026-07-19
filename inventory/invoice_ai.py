@@ -36,7 +36,8 @@ Schema:
   "agent": "PERSON who delivered it, or \\"\\"",
   "agent_phone": "that person's phone number as printed, or \\"\\"",
   "invoice_no": "Номер накладной / Расход № / Накладная №, or \\"\\"",
-  "date": "YYYY-MM-DD if a shipment date is printed, else \\"\\"",
+  "date": "YYYY-MM-DD shipment date, else \\"\\"",
+  "total": 0,
   "rows": [
     {
       "name": "the WHOLE product cell exactly as printed (keep original language)",
@@ -54,10 +55,14 @@ Schema:
 
 Field rules:
 - "supplier" = the SELLING COMPANY (Поставщик / Продавец / Yetkazib beruvchi /
-  the letterhead name at the top). Never the buyer.
+  the distributor's letterhead or logo). Never the buyer.
+  WATCH OUT: on many Uzbek delivery notes the block at the top is the BUYER's
+  own outlet — "Наименование", "Получатель", "Адрес", "Код" all describe the
+  shop receiving the goods. Do NOT copy those into "supplier". If the seller is
+  not printed anywhere, return "".
 - "agent" = a PERSON's name printed on a line labelled Агент / Торговый агент /
-  Экспедитор / Менеджер / Представитель / Водитель / Отпустил / Сдал / Agent /
-  Savdo agenti. Usually a surname + initials ("Каримов А.А."). It may be
+  ТП / Торговый представитель / Экспедитор / Менеджер / Представитель /
+  Водитель / Отпустил / Сдал / Agent / Savdo agenti. Usually a surname + initials ("Каримов А.А."). It may be
   handwritten next to a signature — read it if legible.
   HARD RULES: the agent is NEVER the buyer (Покупатель / Получатель / Кому),
   NEVER the supplier, and NEVER a company name. If no line carries one of
@@ -71,8 +76,9 @@ Field rules:
 - "invoice_no" = the document number from the line reading НАКЛАДНАЯ / Расход /
   Счёт-фактура / Hisob-faktura, e.g. "N RN-004521" -> "RN-004521".
   HARD RULE: never return an ИНН / СТИР / tax id, ОКЭД, bank account, phone
-  number, contract number or date here. If no document number is printed,
-  return "".
+  number, contract number or date here. In particular "Код:" near the buyer's
+  name is the CUSTOMER code, not the invoice number — never use it. If no
+  document number is printed, return "".
 - Never guess a name, phone or number that is not written on the document.
 - "name" = copy the entire product cell: the leading generic word
   (Шампунь / Мыло / Паста / Сок), the brand, and the size or weight
@@ -103,9 +109,15 @@ the shop stores ONE product with many variants. Cut each name three ways:
 - "qty"      = Количество / Кол-во / Soni for that row.
 - "cost"     = UNIT price (Цена / Нархи / Цена с переоценкой). NEVER the row total.
 - "line_sum" = row total (Сумма). Use 0 if the column is absent.
-- "per_case" = units inside one case when the row states it (e.g. "5 шт" in a
-  "Количество в кейсе" column, or a trailing "/48" or "*300" in the name).
-  Use 0 when the row is plain pieces.
+- "date"  = the SHIPMENT date (Дата отгрузки / Отгружено). If only an order
+  date (Дата заказа) exists, use that. Uzbek notes print DD.MM.YYYY, so
+  "04.06.2026" is 2026-06-04 — never swap day and month.
+- "total" = the grand total printed on the Итого / ВСЕГО / Jami line, as a
+  number. 0 if absent. Do not compute it yourself — copy what is printed.
+- "per_case" = units inside one pack when the NAME states it ("12X1Л", "/16",
+  "280/12", "28X500МЛ"). Informational only — NEVER multiply "qty" by it.
+  "qty" must stay exactly the number billed in the Количество column, so that
+  qty x cost equals the printed Сумма. Use 0 when there is no pack marking.
 - Numbers: strip spaces/apostrophes used as thousand separators and convert the
   decimal comma to a dot. "23 508,8" -> 23508.8 ; "1 656 000,00" -> 1656000.0
 - Skip total/summary rows (Итого, ВСЕГО, Jami, Общая сумма, Сумма без
@@ -287,8 +299,11 @@ def extract_invoice(django_file, timeout=120):
         per_case = _num(r.get('per_case'))
         cost = _num(r.get('cost'))
         line_sum = _num(r.get('line_sum'))
-        # kеys bo'lsa — jami dona
-        total_qty = qty * per_case if per_case > 1 else qty
+        # MIQDOR — fakturada YOZILGANICHA. Nomdagi "12X1Л" yoki "/16" paket
+        # belgisi bo'lib, uni ko'paytirish summani buzadi: qog'ozda
+        # 5 x 34 000 = 170 000, ko'paytirsak 60 x 34 000 = 2 040 000.
+        # Paket ma'lumoti faqat izoh sifatida ko'rsatiladi.
+        total_qty = qty
         product = (r.get('product') or '').strip()[:200]
         rows.append({
             'name': name[:200],
@@ -313,5 +328,6 @@ def extract_invoice(django_file, timeout=120):
         'agent_phone': _phone(data.get('agent_phone')),
         'invoice_no': (data.get('invoice_no') or '').strip()[:80],
         'date': (data.get('date') or '').strip()[:20],
+        'total': _num(data.get('total')),
         'rows': rows,
     }
