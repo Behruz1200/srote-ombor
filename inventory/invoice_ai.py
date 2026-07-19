@@ -106,18 +106,24 @@ the shop stores ONE product with many variants. Cut each name three ways:
 - "size"    = number + unit only (100мл, 72шт, 1.8кг, 5 dona). "" if absent.
 - NEVER leave the volume inside "product" or "type".
 - If a product genuinely has no siblings, still split off its size.
-- "qty"      = Количество / Кол-во / Soni for that row.
-- "cost"     = UNIT price (Цена / Нархи / Цена с переоценкой). NEVER the row total.
-- "line_sum" = row total (Сумма). Use 0 if the column is absent.
+- "qty"      = the number in the Количество / Кол-во / Soni column, EXACTLY as
+  printed, together with its unit. Do not convert it.
+- "unit"     = the unit written next to it: шт (pieces), крб / кор / коробка /
+  кейс (a BOX), кг, л, dona. Copy it — it tells us whether qty counts pieces
+  or boxes.
+- "cost"     = the price in the Цена column. This is normally the price of ONE
+  PIECE even when the quantity is given in boxes. NEVER the row total.
+- "line_sum" = row total (Сумма). Copy it carefully — the app divides it by the
+  price to work out how many pieces a box holds, so an error here is costly.
 - "date"  = the SHIPMENT date (Дата отгрузки / Отгружено). If only an order
   date (Дата заказа) exists, use that. Uzbek notes print DD.MM.YYYY, so
   "04.06.2026" is 2026-06-04 — never swap day and month.
 - "total" = the grand total printed on the Итого / ВСЕГО / Jami line, as a
   number. 0 if absent. Do not compute it yourself — copy what is printed.
-- "per_case" = units inside one pack when the NAME states it ("12X1Л", "/16",
-  "280/12", "28X500МЛ"). Informational only — NEVER multiply "qty" by it.
-  "qty" must stay exactly the number billed in the Количество column, so that
-  qty x cost equals the printed Сумма. Use 0 when there is no pack marking.
+- "per_case" = units inside one pack ONLY if the row states it in a separate
+  column. Pack markings inside the NAME ("12X1Л", "/16", "280/12") are part of
+  the product name — do NOT turn them into per_case and never multiply "qty"
+  by them. The app derives the real piece count from Сумма / Цена instead.
 - Numbers: strip spaces/apostrophes used as thousand separators and convert the
   decimal comma to a dot. "23 508,8" -> 23508.8 ; "1 656 000,00" -> 1656000.0
 - Skip total/summary rows (Итого, ВСЕГО, Jami, Общая сумма, Сумма без
@@ -192,6 +198,32 @@ def _num(v):
     except ValueError:
         return 0.0
     return -val if neg else val
+
+
+def _units(qty, cost, line_sum):
+    """Fakturaning O'Z arifmetikasidan haqiqiy DONA sonini chiqaramiz.
+
+    "Цена" deyarli har doim bitta donaning narxi, "Сумма" esa qator jami.
+    Demak:  dona = Сумма / Цена.  Bu ikkala yozuv uslubini ham hal qiladi:
+
+        "5 шт  x 34 000 = 170 000"  -> 170000/34000 =  5 dona  (qty = dona)
+        "1 крб x  4 120 = 296 640"  -> 296640/4120  = 72 dona  (qty = QUTI)
+
+    Ya'ni "1 крб" bitta quti, ichida 72 dona. Nomdagi "12X1Л" kabi
+    belgilarga ISHONMAYMIZ — faqat qog'ozdagi raqamlar hal qiladi.
+
+    Qaytaradi: (dona, quti_ichida, ishonchli_mi)
+    """
+    if cost > 0 and line_sum > 0:
+        n = line_sum / cost
+        r = round(n)
+        # butun songa yaqin bo'lsa — ishonamiz
+        if r >= 1 and abs(n - r) <= max(0.02, n * 0.005):
+            per_box = (r / qty) if qty > 0 else 0
+            return float(r), (per_box if per_box > 1.001 else 0), True
+        return qty, 0, False          # bo'linmadi — foydalanuvchi tekshirsin
+    # narx yoki summa yo'q (masalan bonus tovar) — qty o'zi
+    return qty, 0, True
 
 
 def _phone(v):
@@ -296,14 +328,14 @@ def extract_invoice(django_file, timeout=120):
         if not name:
             continue
         qty = _num(r.get('qty'))
-        per_case = _num(r.get('per_case'))
         cost = _num(r.get('cost'))
         line_sum = _num(r.get('line_sum'))
-        # MIQDOR — fakturada YOZILGANICHA. Nomdagi "12X1Л" yoki "/16" paket
-        # belgisi bo'lib, uni ko'paytirish summani buzadi: qog'ozda
-        # 5 x 34 000 = 170 000, ko'paytirsak 60 x 34 000 = 2 040 000.
-        # Paket ma'lumoti faqat izoh sifatida ko'rsatiladi.
-        total_qty = qty
+        unit = (r.get('unit') or '').strip()[:20]
+        # Miqdorni qog'ozning o'z hisobidan chiqaramiz (izohga qarang).
+        total_qty, per_case, sum_ok = _units(qty, cost, line_sum)
+        qty_note = ''
+        if per_case > 1:
+            qty_note = '%g %s × %g dona' % (qty, unit or 'quti', per_case)
         product = (r.get('product') or '').strip()[:200]
         rows.append({
             'name': name[:200],
@@ -312,14 +344,13 @@ def extract_invoice(django_file, timeout=120):
             'type': (r.get('type') or '').strip()[:120],
             'size': (r.get('size') or '').strip()[:60],
             'qty': qty,
-            'unit': (r.get('unit') or '').strip()[:20],
+            'unit': unit,
             'per_case': per_case,
             'total_qty': total_qty,
+            'qty_note': qty_note,
             'cost': cost,
             'line_sum': line_sum,
-            # сумма ustuni bo'lsa — qty × cost bilan solishtiramiz
-            'sum_ok': (line_sum <= 0 or cost <= 0 or qty <= 0
-                       or abs(qty * cost - line_sum) <= max(1.0, line_sum * 0.02)),
+            'sum_ok': sum_ok,
         })
 
     return {

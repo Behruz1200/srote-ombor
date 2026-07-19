@@ -566,11 +566,16 @@
 
         const bits = [];
         if (r.hint) bits.push(r.hint);
-        if (r.per_case > 1) bits.push((r.qty || 0) + ' × ' + r.per_case + ' dona');
+        // "1 крб × 72 dona" — quti fakturadan hisoblab chiqarilgan
+        if (r.qty_note) {
+            bits.push('<span class="text-info" title="Fakturada quti bilan yozilgan; ' +
+                      'dona soni Сумма ÷ Цена dan chiqarildi">' +
+                      '<i class="bi bi-box-seam"></i> ' + r.qty_note + '</span>');
+        }
         if (r.sum_ok === false) {
-            bits.push('<span class="text-warning" title="Miqdor × tannarx faktura summasiga ' +
-                      'to\'g\'ri kelmadi — tekshiring"><i class="bi bi-exclamation-triangle-fill"></i>' +
-                      ' summa mos emas</span>');
+            bits.push('<span class="text-warning" title="Сумма ÷ Цена butun son chiqmadi — ' +
+                      'miqdor yoki narx xato o\'qilgan bo\'lishi mumkin">' +
+                      '<i class="bi bi-exclamation-triangle-fill"></i> tekshiring</span>');
         }
         tr.querySelector('.row-hint').innerHTML = bits.join(' · ');
 
