@@ -1246,6 +1246,11 @@ class QuickSellItem(models.Model):
         max_length=40, blank=True, default='bi-bag',
         help_text="Bootstrap ikonka klassi (bi-bag, bi-person, bi-handbag)"
     )
+    product = models.ForeignKey(
+        'Product', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='quick_sell_items',
+        help_text="Ombor yuritiladigan mahsulot (Kiyim Kechak kategoriyasida)"
+    )
     order = models.PositiveIntegerField(default=100)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

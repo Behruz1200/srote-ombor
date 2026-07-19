@@ -4555,23 +4555,73 @@ def _open_price_stock(branch):
     return stock
 
 
+QUICK_SELL_CATEGORY = 'Kiyim Kechak'
+
+
+def _quick_sell_product(item):
+    """Toifaning ombor yuritiladigan mahsuloti (Kiyim Kechak kategoriyasida)."""
+    if item.product_id:
+        return item.product
+    cat, _ = Category.objects.get_or_create(
+        name=QUICK_SELL_CATEGORY, defaults={'prefix': 'KIY'})
+    product = (Product.objects.filter(name__iexact=item.name, category=cat).first()
+               or Product.objects.create(name=item.name, category=cat))
+    item.product = product
+    item.save(update_fields=['product'])
+    return product
+
+
+def _quick_sell_sync(item, branch=None):
+    """Har NARX uchun alohida tur + zaxira yozuvi bo'lishini ta'minlaymiz.
+
+    2500 so'mlik paypoq va 5000 so'mlik paypoq — boshqa-boshqa tovar, shuning
+    uchun har narx alohida tur. Shunda qabul (miqdor/tannarx/marja) va ombor
+    oddiy mahsulotdek ishlaydi.
+    """
+    product = _quick_sell_product(item)
+    branches = ([branch] if branch is not None
+                else list(Branch.objects.filter(is_active=True)))
+    for price in item.price_list:
+        variant, _ = ProductVariant.objects.get_or_create(
+            product=product, size=str(price), color='')
+        for b in branches:
+            BranchStock.objects.get_or_create(
+                variant=variant, branch=b,
+                defaults={'stock_count': 0, 'sale_price': price,
+                          'cost_price': 0, 'wholesale_price': 0})
+    return product
+
+
 def _quick_sell_items(branch):
-    """Faol toifalar + har biriga o'z turi va shu filialdagi stock id.
+    """Faol toifalar + har narx uchun tur, zaxira va stock id.
 
     Toifalar bazadan o'qiladi (Narxlar -> Tezkor sotuv sahifasida
-    tahrirlanadi), shuning uchun narx o'zgartirish uchun kod tegilmaydi.
+    tahrirlanadi), narxlar esa endi haqiqiy tur bo'lgani uchun ombor
+    hisobga olinadi.
     """
-    product = _open_price_product()
     out = []
-    for item in QuickSellItem.objects.filter(is_active=True):
-        variant, _ = ProductVariant.objects.get_or_create(
-            product=product, size='', color=item.name)
-        stock, _ = BranchStock.objects.get_or_create(
-            variant=variant, branch=branch,
-            defaults={'stock_count': 0, 'sale_price': 0, 'cost_price': 0})
-        out.append({'key': f'qs{item.pk}', 'name': item.name,
-                    'icon': item.icon or 'bi-bag',
-                    'prices': item.price_list, 'sid': stock.id})
+    for item in (QuickSellItem.objects.filter(is_active=True)
+                 .select_related('product')):
+        product = _quick_sell_sync(item, branch)
+        rows = []
+        stocks = {
+            s.variant.size: s
+            for s in BranchStock.objects.filter(
+                variant__product=product, branch=branch).select_related('variant')
+        }
+        for price in item.price_list:
+            st = stocks.get(str(price))
+            if st is None:
+                continue
+            rows.append({'price': price, 'sid': st.id,
+                         'stock': st.stock_count})
+        out.append({
+            'key': f'qs{item.pk}',
+            'name': item.name,
+            'icon': item.icon or 'bi-bag',
+            'code': product.code,
+            'prices': rows,
+        })
     return out
 
 
@@ -8817,12 +8867,13 @@ def quick_sell_settings(request):
                 messages.error(request, f"\"{name}\" allaqachon bor.")
             else:
                 last = QuickSellItem.objects.order_by('-order').first()
-                QuickSellItem.objects.create(
+                item = QuickSellItem.objects.create(
                     name=name,
                     prices=_parse_prices(request.POST.get('new_prices')),
                     icon=(request.POST.get('new_icon') or 'bi-bag').strip()[:40],
                     order=(last.order + 10) if last else 10,
                 )
+                _quick_sell_sync(item)
                 messages.success(request, f"\"{name}\" qo'shildi.")
             return redirect('quick_sell_settings')
 
@@ -8857,12 +8908,17 @@ def quick_sell_settings(request):
                 item.order = order
                 item.is_active = active
                 item.save()
+                _quick_sell_sync(item)      # yangi narxga tur + zaxira
                 n += 1
         messages.success(request, f"{n} ta toifa yangilandi.")
         return redirect('quick_sell_settings')
 
+    items = list(QuickSellItem.objects.select_related('product'))
+    for it in items:
+        _quick_sell_sync(it)
     return render(request, 'inventory/quick_sell_settings.html', {
-        'items': QuickSellItem.objects.all(),
+        'items': items,
+        'category_name': QUICK_SELL_CATEGORY,
     })
 
 
