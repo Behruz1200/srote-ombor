@@ -37,7 +37,7 @@ from .models import (
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
-    InvoiceImage,
+    InvoiceImage, QuickSellItem,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -4530,18 +4530,6 @@ def pos_customer_display(request):
     })
 
 
-#: POS "Tezkor sotuv" — kodsiz, o'lchamsiz tovarlar. Har toifa ochiq narxli
-#: mahsulotning alohida turi bo'ladi, shuning uchun hisobotda ajralib turadi.
-POS_QUICK_SELL = [
-    {'key': 'socks',     'name': 'Paypoq',      'icon': 'bi-bag',
-     'prices': [2500, 3000, 5000]},
-    {'key': 'underwear', 'name': 'Ich kiyim',   'icon': 'bi-person',
-     'prices': [8000, 10000, 17000]},
-    {'key': 'caps',      'name': 'Bosh kiyim',  'icon': 'bi-handbag',
-     'prices': []},
-]
-
-
 def _open_price_product():
     """Yashirin 'ochiq narx' mahsuloti (kodsiz kiyim/poyabzal sotuvi)."""
     product = Product.objects.filter(is_open_price=True).first()
@@ -4568,16 +4556,22 @@ def _open_price_stock(branch):
 
 
 def _quick_sell_items(branch):
-    """Har toifaga o'z turi + shu filialdagi stock id."""
+    """Faol toifalar + har biriga o'z turi va shu filialdagi stock id.
+
+    Toifalar bazadan o'qiladi (Narxlar -> Tezkor sotuv sahifasida
+    tahrirlanadi), shuning uchun narx o'zgartirish uchun kod tegilmaydi.
+    """
     product = _open_price_product()
     out = []
-    for item in POS_QUICK_SELL:
+    for item in QuickSellItem.objects.filter(is_active=True):
         variant, _ = ProductVariant.objects.get_or_create(
-            product=product, size='', color=item['name'])
+            product=product, size='', color=item.name)
         stock, _ = BranchStock.objects.get_or_create(
             variant=variant, branch=branch,
             defaults={'stock_count': 0, 'sale_price': 0, 'cost_price': 0})
-        out.append(dict(item, sid=stock.id))
+        out.append({'key': f'qs{item.pk}', 'name': item.name,
+                    'icon': item.icon or 'bi-bag',
+                    'prices': item.price_list, 'sid': stock.id})
     return out
 
 
@@ -8779,3 +8773,84 @@ def promotion_delete(request, pk):
     promo.delete()
     messages.success(request, f"\"{name}\" o'chirildi.")
     return redirect('promotion_list')
+
+
+# ---------- TEZKOR SOTUV toifalari (POS paneli sozlamasi) ----------
+
+@admin_required
+def quick_sell_settings(request):
+    """POS 'Tezkor sotuv' toifalari va narxlarini tahrirlash."""
+    if request.method == 'POST':
+        action = request.POST.get('action') or 'save'
+
+        if action == 'add':
+            name = (request.POST.get('new_name') or '').strip()[:60]
+            if not name:
+                messages.error(request, "Toifa nomini kiriting.")
+            elif QuickSellItem.objects.filter(name__iexact=name).exists():
+                messages.error(request, f"\"{name}\" allaqachon bor.")
+            else:
+                last = QuickSellItem.objects.order_by('-order').first()
+                QuickSellItem.objects.create(
+                    name=name,
+                    prices=_parse_prices(request.POST.get('new_prices')),
+                    icon=(request.POST.get('new_icon') or 'bi-bag').strip()[:40],
+                    order=(last.order + 10) if last else 10,
+                )
+                messages.success(request, f"\"{name}\" qo'shildi.")
+            return redirect('quick_sell_settings')
+
+        if action == 'delete':
+            item = QuickSellItem.objects.filter(pk=request.POST.get('pk')).first()
+            if item:
+                name = item.name
+                item.delete()
+                messages.success(request, f"\"{name}\" o'chirildi.")
+            return redirect('quick_sell_settings')
+
+        # ---- qatorlab saqlash ----
+        n = 0
+        for item in QuickSellItem.objects.all():
+            pk = str(item.pk)
+            name = (request.POST.get(f'name_{pk}') or '').strip()[:60]
+            if not name:
+                continue
+            prices = _parse_prices(request.POST.get(f'prices_{pk}'))
+            icon = (request.POST.get(f'icon_{pk}') or 'bi-bag').strip()[:40]
+            try:
+                order = int(request.POST.get(f'order_{pk}') or item.order)
+            except (TypeError, ValueError):
+                order = item.order
+            active = bool(request.POST.get(f'active_{pk}'))
+            if (name != item.name or prices != item.price_list
+                    or icon != item.icon or order != item.order
+                    or active != item.is_active):
+                item.name = name
+                item.prices = prices
+                item.icon = icon
+                item.order = order
+                item.is_active = active
+                item.save()
+                n += 1
+        messages.success(request, f"{n} ta toifa yangilandi.")
+        return redirect('quick_sell_settings')
+
+    return render(request, 'inventory/quick_sell_settings.html', {
+        'items': QuickSellItem.objects.all(),
+    })
+
+
+def _parse_prices(text):
+    """"2500, 3000; 5000" -> [2500, 3000, 5000]"""
+    out = []
+    for chunk in re.split(r'[,;\s]+', (text or '').strip()):
+        chunk = re.sub(r'[^0-9.]', '', chunk)
+        if not chunk:
+            continue
+        try:
+            v = int(float(chunk))
+        except ValueError:
+            continue
+        if v > 0 and v not in out:
+            out.append(v)
+    return sorted(out)

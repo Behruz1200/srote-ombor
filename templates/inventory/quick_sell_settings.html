@@ -1,0 +1,140 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Tezkor sotuv — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero mb-3">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> POS paneli</span>
+                <h1 class="dash-hero__title"><i class="bi bi-lightning-charge-fill"></i> Tezkor sotuv</h1>
+                <p class="dash-hero__sub">
+                    Kassadagi kodsiz tovarlar: paypoq, ich kiyim, bosh kiyim.
+                    Bu yerda o'zgartirsangiz — kassada darrov ko'rinadi.
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'price_list' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-tags"></i> <span>Narx va marja</span>
+                </a>
+                <a href="{% url 'pos_terminal' %}" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-shop"></i> <span>Kassaga</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="alert alert-info d-flex align-items-start gap-2">
+        <i class="bi bi-info-circle mt-1"></i>
+        <div class="small">
+            Har toifa kassada alohida tugma bo'ladi. Narxlarni vergul bilan yozing:
+            <code>2500, 3000, 5000</code>. Narx qo'yilmagan toifa uchun sotuvchi
+            <strong>Boshqa summa</strong> tugmasidan qo'lda kiritadi.
+            Har toifa sotuvi hisobotda alohida chiqadi.
+        </div>
+    </div>
+
+    <form method="post" class="card p-0 mb-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:70px">Tartib</th>
+                        <th style="min-width:150px">Nomi</th>
+                        <th style="min-width:230px">Narxlar (so'm)</th>
+                        <th style="width:150px">Ikonka</th>
+                        <th style="width:80px" class="text-center">Faol</th>
+                        <th style="width:60px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for it in items %}
+                    <tr>
+                        <td>
+                            <input type="number" name="order_{{ it.pk }}" value="{{ it.order }}"
+                                   class="form-control form-control-sm text-end" min="0">
+                        </td>
+                        <td>
+                            <input type="text" name="name_{{ it.pk }}" value="{{ it.name }}"
+                                   class="form-control form-control-sm" maxlength="60">
+                        </td>
+                        <td>
+                            <input type="text" name="prices_{{ it.pk }}" value="{{ it.prices_text }}"
+                                   class="form-control form-control-sm"
+                                   placeholder="2500, 3000, 5000">
+                        </td>
+                        <td>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="bi {{ it.icon|default:'bi-bag' }}"></i></span>
+                                <input type="text" name="icon_{{ it.pk }}" value="{{ it.icon }}"
+                                       class="form-control form-control-sm" placeholder="bi-bag">
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" name="active_{{ it.pk }}" value="1"
+                                   class="form-check-input" {% if it.is_active %}checked{% endif %}>
+                        </td>
+                        <td class="text-end">
+                            <button type="submit" form="qsDelForm" name="pk" value="{{ it.pk }}"
+                                    formnovalidate class="btn btn-sm btn-outline-danger"
+                                    onclick="return confirm('&quot;{{ it.name|escapejs }}&quot; o\'chirilsinmi?')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">
+                        Hali toifa yo'q — quyidan qo'shing.
+                    </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="p-3 border-top">
+            <button class="btn btn-success">
+                <i class="bi bi-check2-circle"></i> Saqlash
+            </button>
+            <span class="small text-muted ms-2">
+                Kassada darrov qo'llanadi — sahifani yangilash kifoya.
+            </span>
+        </div>
+    </form>
+
+    <!-- o'chirish alohida forma: bitta so'rovda bitta amal -->
+    <form method="post" id="qsDelForm" class="d-none">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+    </form>
+
+    <form method="post" class="card p-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add">
+        <strong class="mb-2 d-block"><i class="bi bi-plus-lg"></i> Yangi toifa</strong>
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Nomi</label>
+                <input type="text" name="new_name" class="form-control"
+                       placeholder="Masalan: Qo'lqop" maxlength="60" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-1">Narxlar</label>
+                <input type="text" name="new_prices" class="form-control"
+                       placeholder="2500, 3000, 5000">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Ikonka</label>
+                <input type="text" name="new_icon" class="form-control"
+                       placeholder="bi-bag" value="bi-bag">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary"><i class="bi bi-plus-lg"></i> Qo'shish</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

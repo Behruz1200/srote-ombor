@@ -5,8 +5,15 @@ from .models import (
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
-    InvoiceImage,
+    InvoiceImage, QuickSellItem,
 )
+
+
+@admin.register(QuickSellItem)
+class QuickSellItemAdmin(admin.ModelAdmin):
+    list_display = ('order', 'name', 'prices_text', 'icon', 'is_active')
+    list_editable = ('name', 'is_active')
+    ordering = ('order', 'name')
 
 
 @admin.register(InvoiceImage)

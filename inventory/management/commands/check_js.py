@@ -73,6 +73,7 @@ class Command(BaseCommand):
             '/intake/import/', '/intake/quick/', '/intake/photo/', '/intake/suppliers/',
             '/reorder/', '/sales/', '/cart/',
             '/prices/', '/prices/?issue=zero', '/prices/promotions/', '/prices/history/',
+            '/prices/quick-sell/',
             '/categories/', '/branches/', '/branches/new/', '/users/', '/users/new/',
             '/customers/', '/reports/?report_type=sales&period=month', '/insights/', '/audit/',
             '/labels/', f'/labels/variants/?ids={vid}&copies=1',

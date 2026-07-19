@@ -1228,3 +1228,49 @@ class InvoiceImage(models.Model):
 
     def __str__(self):
         return f'{self.order}-sahifa'
+
+
+class QuickSellItem(models.Model):
+    """POS 'Tezkor sotuv' toifasi — kodsiz tovar (paypoq, ich kiyim, bosh kiyim).
+
+    Har toifa ochiq narxli mahsulotning alohida turi bo'ladi, shuning uchun
+    hisobotda ajralib turadi. Narxlar shu yerda tahrirlanadi.
+    """
+    name = models.CharField(max_length=60, unique=True,
+                            help_text="POS'da tugma nomi (masalan: Paypoq)")
+    prices = models.JSONField(
+        default=list, blank=True,
+        help_text="Narx tugmalari, masalan [2500, 3000, 5000]"
+    )
+    icon = models.CharField(
+        max_length=40, blank=True, default='bi-bag',
+        help_text="Bootstrap ikonka klassi (bi-bag, bi-person, bi-handbag)"
+    )
+    order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Tezkor sotuv toifasi'
+        verbose_name_plural = 'Tezkor sotuv toifalari'
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def price_list(self):
+        """Tozalangan, tartiblangan narxlar."""
+        out = []
+        for p in (self.prices or []):
+            try:
+                v = int(float(p))
+            except (TypeError, ValueError):
+                continue
+            if v > 0 and v not in out:
+                out.append(v)
+        return sorted(out)
+
+    @property
+    def prices_text(self):
+        return ', '.join(str(p) for p in self.price_list)

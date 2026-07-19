@@ -99,6 +99,7 @@ urlpatterns = [
     path('prices/', views.price_list, name='price_list'),
     path('prices/apply/', views.price_apply, name='price_apply'),
     path('prices/history/', views.price_history, name='price_history'),
+    path('prices/quick-sell/', views.quick_sell_settings, name='quick_sell_settings'),
     path('prices/promotions/', views.promotion_list, name='promotion_list'),
     path('prices/promotions/save/', views.promotion_save, name='promotion_save'),
     path('prices/promotions/<int:pk>/delete/', views.promotion_delete,
