@@ -516,11 +516,6 @@
                 </div>
                 <div id="searchStatus" class="small text-muted mt-1"></div>
 
-                <button type="button" class="btn btn-warning w-100 mt-2 fw-semibold open-price-btn"
-                        id="openPriceBtn" data-bs-toggle="modal" data-bs-target="#keypadModal">
-                    <i class="bi bi-bag-plus"></i> Kiyim / Poyabzal — qo'lda summa
-                </button>
-
                 <!-- Variant picker (shown when product has multiple variants) -->
                 <div id="variantPicker" class="mt-2" style="display:none;">
                     <div class="small text-muted mb-1">
@@ -541,36 +536,37 @@
                 </div>
             </div>
 
-            {% if favorites %}
-            <div class="card p-3 mb-3" id="favoritesCard">
+            <!-- Tezkor sotuv: kodsiz tovarlar (paypoq, ich kiyim, bosh kiyim) -->
+            <div class="card p-3 mb-3" id="quickSellCard">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0 text-uppercase small text-muted">
-                        <i class="bi bi-star-fill text-warning"></i>
-                        Tez sotiluvchilar
-                        <span class="text-muted ms-1">(so'nggi 30 kun)</span>
+                        <i class="bi bi-lightning-charge-fill text-warning"></i>
+                        Tezkor sotuv
+                        <span class="text-muted ms-1">(kodsiz tovarlar)</span>
                     </h6>
                     <button type="button" class="btn btn-sm btn-outline-secondary"
-                            id="favToggleBtn" aria-expanded="true">
-                        <i class="bi bi-chevron-up" id="favToggleIcon"></i>
+                            id="qsToggleBtn" aria-expanded="true">
+                        <i class="bi bi-chevron-up" id="qsToggleIcon"></i>
                     </button>
                 </div>
-                <div id="favoritesBody" class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2">
-                    {% for f in favorites %}
-                        <div class="col">
-                            <button type="button" class="btn btn-outline-primary w-100 h-100 fav-btn p-2 text-start"
-                                    data-code="{{ f.code }}"
-                                    title="{{ f.name }} ({{ f.sold_qty }} ta sotilgan)">
-                                <div class="fw-bold text-truncate" style="font-size: 0.85rem;">{{ f.name }}</div>
-                                <div class="small text-muted">
-                                    <code>{{ f.code }}</code>
-                                </div>
-                                <div class="small fw-bold text-primary">{{ f.price|floatformat:0 }} so'm</div>
-                            </button>
-                        </div>
-                    {% endfor %}
+                <div id="quickSellBody">
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for q in quick_sell %}
+                        <button type="button" class="btn btn-outline-primary qs-cat fw-semibold"
+                                data-key="{{ q.key }}" data-sid="{{ q.sid }}"
+                                data-name="{{ q.name }}"
+                                data-prices="{{ q.prices|join:',' }}">
+                            <i class="bi {{ q.icon }}"></i> {{ q.name }}
+                        </button>
+                        {% endfor %}
+                        <button type="button" class="btn btn-warning fw-semibold"
+                                id="openPriceBtn" data-bs-toggle="modal" data-bs-target="#keypadModal">
+                            <i class="bi bi-calculator"></i> Boshqa summa
+                        </button>
+                    </div>
+                    <div id="qsPrices" class="mt-3" style="display:none;"></div>
                 </div>
             </div>
-            {% endif %}
 
             <div class="card p-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -2356,36 +2352,108 @@ function wireParkedChip(chip) {
 }
 document.querySelectorAll('.parked-item').forEach(wireParkedChip);
 
-// Favorites grid: clicking a tile reuses the search flow so variant-picker
-// behavior (single-variant auto-add, multi-variant picker) stays consistent.
-document.querySelectorAll('.fav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const code = btn.dataset.code;
-        if (!code) return;
-        scanInput.value = code;
-        search(code);
-    });
-});
+// ---- Tezkor sotuv: kodsiz tovarlar (paypoq, ich kiyim, bosh kiyim) ----
+// Toifa bosiladi -> shu toifaning narx tugmalari chiqadi -> narx bosilsa
+// savatga 1 dona qo'shiladi. Bir narx qayta bosilsa — soni oshadi.
+const qsBody = document.getElementById('quickSellBody');
+const qsToggleBtn = document.getElementById('qsToggleBtn');
+const qsToggleIcon = document.getElementById('qsToggleIcon');
+const qsPricesEl = document.getElementById('qsPrices');
+const QS_KEY = 'pos_quicksell_collapsed';
 
-// Collapse toggle for the favorites grid — remembered per browser.
-const favBody = document.getElementById('favoritesBody');
-const favToggleBtn = document.getElementById('favToggleBtn');
-const favToggleIcon = document.getElementById('favToggleIcon');
-const FAV_KEY = 'pos_favorites_collapsed';
-function applyFavState(collapsed) {
-    if (!favBody) return;
-    favBody.style.display = collapsed ? 'none' : '';
-    favToggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    favToggleIcon.className = collapsed ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+function applyQsState(collapsed) {
+    if (!qsBody) return;
+    qsBody.style.display = collapsed ? 'none' : '';
+    qsToggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    qsToggleIcon.className = collapsed ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
 }
-if (favToggleBtn) {
-    applyFavState(lsGet(FAV_KEY) === '1');
-    favToggleBtn.addEventListener('click', () => {
-        const collapsed = favBody.style.display !== 'none';
-        applyFavState(collapsed);
-        lsSet(FAV_KEY, collapsed ? '1' : '0');
+if (qsToggleBtn) {
+    applyQsState(lsGet(QS_KEY) === '1');
+    qsToggleBtn.addEventListener('click', () => {
+        const collapsed = qsBody.style.display !== 'none';
+        applyQsState(collapsed);
+        lsSet(QS_KEY, collapsed ? '1' : '0');
     });
 }
+
+function qsAdd(sid, name, price) {
+    const key = 'qs:' + sid + ':' + price;
+    if (cart[key]) {
+        cart[key].qty += 1;
+    } else {
+        cart[key] = {
+            stock_id: sid, product_code: '', product_name: name,
+            size: '', color: name, qty: 1, sale_price: price,
+            max: 9999, open: true,
+        };
+    }
+    renderCart();
+    setStatus("\u2713 " + name + " \u2014 " + fmt(price) + " so'm qo'shildi", 'success');
+    refocus();
+}
+
+(function initQuickSell() {
+    const cats = Array.prototype.slice.call(document.querySelectorAll('.qs-cat'));
+    if (!cats.length || !qsPricesEl) return;
+    let active = null;
+
+    function paintCats() {
+        cats.forEach(function (b) {
+            const on = b.dataset.key === active;
+            b.classList.toggle('btn-primary', on);
+            b.classList.toggle('btn-outline-primary', !on);
+        });
+    }
+    function showPrices(btn) {
+        const name = btn.dataset.name;
+        const sid = parseInt(btn.dataset.sid, 10);
+        const list = (btn.dataset.prices || '').split(',')
+            .map(function (x) { return parseInt(x, 10); })
+            .filter(function (x) { return x > 0; });
+        qsPricesEl.innerHTML = '';
+
+        const head = document.createElement('div');
+        head.className = 'small text-muted mb-2';
+        head.textContent = name + ' — narxni tanlang:';
+        qsPricesEl.appendChild(head);
+
+        if (!list.length) {
+            const warn = document.createElement('div');
+            warn.className = 'alert alert-warning py-2 mb-0 small';
+            warn.innerHTML = '<i class="bi bi-info-circle"></i> ' + name +
+                ' uchun narxlar hali qo\'shilmagan — <strong>Boshqa summa</strong> ' +
+                'tugmasi bilan qo\'lda kiriting.';
+            qsPricesEl.appendChild(warn);
+            qsPricesEl.style.display = '';
+            return;
+        }
+        const row = document.createElement('div');
+        row.className = 'd-flex flex-wrap gap-2';
+        list.forEach(function (price) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn btn-success fw-bold px-4 py-3';
+            b.style.fontSize = '1.05rem';
+            b.textContent = fmt(price) + " so'm";
+            b.addEventListener('click', function () { qsAdd(sid, name, price); });
+            row.appendChild(b);
+        });
+        qsPricesEl.appendChild(row);
+        qsPricesEl.style.display = '';
+    }
+    cats.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (active === btn.dataset.key) {       // qayta bosilsa — yopiladi
+                active = null;
+                qsPricesEl.style.display = 'none';
+            } else {
+                active = btn.dataset.key;
+                showPrices(btn);
+            }
+            paintCats();
+        });
+    });
+})();
 
 // Refocus scanner input after clicks anywhere except other inputs.
 // Exclude SELECT/TEXTAREA/LABEL and any element inside a form/dropdown/modal

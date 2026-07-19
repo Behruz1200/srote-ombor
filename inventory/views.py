@@ -4530,21 +4530,55 @@ def pos_customer_display(request):
     })
 
 
-def _open_price_stock(branch):
-    """Get/create the hidden 'open price' product (manual clothes/shoes sale)
-    and return its BranchStock for this branch. Ombor tekshirilmaydi."""
+#: POS "Tezkor sotuv" — kodsiz, o'lchamsiz tovarlar. Har toifa ochiq narxli
+#: mahsulotning alohida turi bo'ladi, shuning uchun hisobotda ajralib turadi.
+POS_QUICK_SELL = [
+    {'key': 'socks',     'name': 'Paypoq',      'icon': 'bi-bag',
+     'prices': [2500, 3000, 5000]},
+    {'key': 'underwear', 'name': 'Ich kiyim',   'icon': 'bi-person',
+     'prices': [8000, 10000, 17000]},
+    {'key': 'caps',      'name': 'Bosh kiyim',  'icon': 'bi-handbag',
+     'prices': []},
+]
+
+
+def _open_price_product():
+    """Yashirin 'ochiq narx' mahsuloti (kodsiz kiyim/poyabzal sotuvi)."""
     product = Product.objects.filter(is_open_price=True).first()
     if product is None:
         product = Product.objects.create(
             name='Kiyim / Poyabzal', is_open_price=True,
             default_sale_price=0, markup_percent=0)
-    variant = product.variants.first()
-    if variant is None:
-        variant = ProductVariant.objects.create(product=product, size='', color='')
+    return product
+
+
+def _open_price_stock(branch):
+    """Qo'lda summa uchun BranchStock. Ombor tekshirilmaydi.
+
+    DIQQAT: tezkor sotuv toifalari ham shu mahsulotning turlari bo'lgani uchun
+    bo'sh turni ANIQ tanlaymiz (.first() toifa turini qaytarib yuborishi mumkin).
+    """
+    product = _open_price_product()
+    variant, _ = ProductVariant.objects.get_or_create(
+        product=product, size='', color='')
     stock, _ = BranchStock.objects.get_or_create(
         variant=variant, branch=branch,
         defaults={'stock_count': 0, 'sale_price': 0, 'cost_price': 0})
     return stock
+
+
+def _quick_sell_items(branch):
+    """Har toifaga o'z turi + shu filialdagi stock id."""
+    product = _open_price_product()
+    out = []
+    for item in POS_QUICK_SELL:
+        variant, _ = ProductVariant.objects.get_or_create(
+            product=product, size='', color=item['name'])
+        stock, _ = BranchStock.objects.get_or_create(
+            variant=variant, branch=branch,
+            defaults={'stock_count': 0, 'sale_price': 0, 'cost_price': 0})
+        out.append(dict(item, sid=stock.id))
+    return out
 
 
 @login_required
@@ -4652,6 +4686,7 @@ def pos_terminal(request):
     return render(request, 'inventory/pos.html', {
         'branch': branch,
         'open_price_sid': _open_price_stock(branch).id,
+        'quick_sell': _quick_sell_items(branch),
         'shift': open_shift,
         'recent_txns': recent_txns,
         'favorites': favorites,
