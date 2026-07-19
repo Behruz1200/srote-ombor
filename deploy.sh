@@ -8,7 +8,7 @@ echo "== Django check =="
 echo "== JS syntax check (inline <script> on all pages) =="
 ./venv/bin/python manage.py check_js
 echo "== Kod sinxron (rsync) =="
-rsync -az --delete \
+rsync -az --delete --chmod=Da+rx,Fa+r \
   --exclude venv --exclude .git --exclude __pycache__ --exclude '*.pyc' \
   --exclude db.sqlite3 --exclude 'db.sqlite3-*' --exclude staticfiles --exclude .DS_Store \
   ./ root@45.138.159.120:/opt/yurit/app/
