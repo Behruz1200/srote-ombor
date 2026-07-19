@@ -45,6 +45,26 @@
             </a>
         </div>
         <div class="col-md-3">
+            <a href="{% url 'intake_photo' %}" class="card text-decoration-none h-100 p-4 border-primary hover-shadow">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
+                        <i class="bi bi-camera text-primary" style="font-size: 1.8rem;"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0 text-dark">
+                            Faktura rasmidan
+                            <span class="badge bg-primary align-middle" style="font-size:0.6rem;">AI</span>
+                        </h5>
+                        <small class="text-muted">suratga oling — o'zi o'qiydi</small>
+                    </div>
+                </div>
+                <p class="small text-muted mb-0">
+                    Nakladnoyni suratga oling: nomi, miqdori va tannarxi
+                    jadvalga tushadi. Saqlashdan oldin tekshirasiz.
+                </p>
+            </a>
+        </div>
+        <div class="col-md-3">
             <a href="{% url 'clothes_intake' %}" class="card text-decoration-none h-100 p-4 hover-shadow">
                 <div class="d-flex align-items-center mb-2">
                     <div class="bg-warning bg-opacity-10 rounded p-2 me-3">
@@ -56,7 +76,7 @@
                     </div>
                 </div>
                 <p class="small text-muted mb-0">
-                    O'lcham × rang jadvali. Har biriga avtomatik EAN-13 kod
+                    O'lchamlar jadvali. Har biriga avtomatik EAN-13 kod
                     va termal etiketka (barcode + QR + narx).
                 </p>
             </a>
