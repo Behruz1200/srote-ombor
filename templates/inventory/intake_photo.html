@@ -1,0 +1,324 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Faktura rasmidan qabul — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero mb-3">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner" style="display:block;">
+            <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> AI yordamida</span>
+            <h1 class="dash-hero__title"><i class="bi bi-camera"></i> Faktura rasmidan qabul</h1>
+            <p class="dash-hero__sub">
+                Yetkazib beruvchining nakladnoysini suratga oling — nomi, miqdori va
+                tannarxi jadvalga o'zi tushadi. Saqlashdan oldin tekshirasiz.
+            </p>
+        </div>
+    </header>
+
+    {% if not ai_enabled %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>AI kaliti sozlanmagan.</strong>
+        Bu funksiya ishlashi uchun serverga <code>ANTHROPIC_API_KEY</code> qo'shilishi kerak.
+    </div>
+    {% endif %}
+
+    <!-- 1-qadam: rasm -->
+    <article class="dash-card mb-3">
+        <header class="dash-card__head">
+            <h2 class="dash-card__title"><i class="bi bi-1-circle"></i> Faktura rasmi</h2>
+            <p class="dash-card__sub">Telefonda — kamera ochiladi. Yorug' va to'g'ri oling.</p>
+        </header>
+        <div class="dash-card__body">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <input type="file" id="invImage" accept="image/*" capture="environment"
+                       class="form-control" style="max-width:340px;">
+                <button type="button" id="readBtn" class="dash-btn dash-btn--primary" {% if not ai_enabled %}disabled{% endif %}>
+                    <i class="bi bi-magic"></i> <span>Rasmni o'qish</span>
+                </button>
+                <span id="readStatus" class="small text-muted"></span>
+            </div>
+            <img id="invPreview" alt="" style="display:none; max-width:280px; margin-top:12px;
+                 border:1px solid var(--yrt-border); border-radius:8px;">
+        </div>
+    </article>
+
+    <!-- 2-qadam: tekshirish -->
+    <div id="reviewWrap" style="display:none;">
+        <article class="dash-card mb-3">
+            <header class="dash-card__head">
+                <h2 class="dash-card__title"><i class="bi bi-2-circle"></i> Tekshiring va to'g'rilang</h2>
+                <p class="dash-card__sub">AI xato o'qishi mumkin — raqamlarni solishtiring.</p>
+            </header>
+            <div class="dash-card__body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Filial <span class="text-danger">*</span></label>
+                        <select id="fBranch" class="form-select">
+                            <option value="">— tanlang —</option>
+                            {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Yetkazib beruvchi</label>
+                        <input type="text" id="fSupplier" class="form-control" list="supList">
+                        <datalist id="supList">
+                            {% for s in suppliers %}<option value="{{ s.name }}">{% endfor %}
+                        </datalist>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Faktura №</label>
+                        <input type="text" id="fInvoice" class="form-control">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Sana</label>
+                        <input type="date" id="fDate" class="form-control">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Yangi mahsulot kategoriyasi</label>
+                        <select id="fCategory" class="form-select">
+                            <option value="">— yo'q —</option>
+                            {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle" id="rowsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:38px" class="text-muted">#</th>
+                                <th style="min-width:220px">Nomi</th>
+                                <th style="width:100px">Miqdor</th>
+                                <th style="width:120px">Tannarx</th>
+                                <th style="width:120px">Sotuv narx</th>
+                                <th style="width:130px">Faktura summasi</th>
+                                <th style="width:40px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="rowsBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="addRowBtn">
+                        <i class="bi bi-plus-lg"></i> Qator qo'shish
+                    </button>
+                    <div class="small text-muted">
+                        <strong id="sumRows">0</strong> qator ·
+                        <strong id="sumQty">0</strong> dona ·
+                        tannarx jami: <strong id="sumCost">0</strong> so'm
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="button" class="dash-btn dash-btn--primary" id="saveBtn">
+                        <i class="bi bi-check2-circle"></i> <span>Qabul qilish</span>
+                    </button>
+                    <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost"><span>Bekor</span></a>
+                    <span id="saveStatus" class="small align-self-center"></span>
+                </div>
+            </div>
+        </article>
+    </div>
+</div>
+
+<form id="csrfForm" style="display:none">{% csrf_token %}</form>
+
+<script>
+(function () {
+    const CSRF = document.querySelector('#csrfForm input[name=csrfmiddlewaretoken]').value;
+    const imgEl = document.getElementById('invImage');
+    const preview = document.getElementById('invPreview');
+    const readBtn = document.getElementById('readBtn');
+    const readStat = document.getElementById('readStatus');
+    const wrap = document.getElementById('reviewWrap');
+    const body = document.getElementById('rowsBody');
+    const saveBtn = document.getElementById('saveBtn');
+    const saveStat = document.getElementById('saveStatus');
+
+    function num(s) {
+        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
+        const v = parseFloat(s);
+        return isNaN(v) ? 0 : v;
+    }
+    function fmt(n) {
+        return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+    }
+    function setStat(el, msg, cls) {
+        el.textContent = msg;
+        el.className = 'small ' + (cls || 'text-muted');
+    }
+
+    imgEl.addEventListener('change', function () {
+        const f = imgEl.files && imgEl.files[0];
+        if (!f) { preview.style.display = 'none'; return; }
+        preview.src = URL.createObjectURL(f);
+        preview.style.display = 'block';
+        setStat(readStat, '', '');
+    });
+
+    function addRow(r) {
+        r = r || {};
+        const tr = document.createElement('tr');
+
+        const tdNum = document.createElement('td');
+        tdNum.className = 'row-num text-muted small text-center';
+
+        function cell(value, cls, mode) {
+            const td = document.createElement('td');
+            const i = document.createElement('input');
+            i.type = 'text';
+            i.className = 'form-control form-control-sm ' + (cls || '');
+            if (mode) i.inputMode = mode;
+            i.value = value === undefined || value === null ? '' : value;
+            td.appendChild(i);
+            return td;
+        }
+        const tdName = cell(r.name || '', 'r-name');
+        const tdQty = cell(r.total_qty || r.qty || '', 'r-qty text-end', 'numeric');
+        const tdCost = cell(r.cost ? Math.round(r.cost) : '', 'r-cost text-end', 'decimal');
+        const tdSale = cell('', 'r-sale text-end', 'decimal');
+
+        // Faktura summasi — faqat ko'rsatish + tekshiruv
+        const tdSum = document.createElement('td');
+        tdSum.className = 'small';
+        if (r.line_sum) {
+            tdSum.textContent = fmt(r.line_sum);
+            if (r.sum_ok === false) {
+                const b = document.createElement('span');
+                b.className = 'badge bg-warning text-dark ms-1';
+                b.title = 'Miqdor × tannarx faktura summasiga to\'g\'ri kelmadi — tekshiring';
+                b.textContent = '!';
+                tdSum.appendChild(b);
+            }
+        } else {
+            tdSum.innerHTML = '<span class="text-muted">—</span>';
+        }
+        if (r.per_case > 1) {
+            const hint = document.createElement('div');
+            hint.className = 'text-muted';
+            hint.style.fontSize = '0.72rem';
+            hint.textContent = (r.qty || 0) + ' × ' + r.per_case + ' dona';
+            tdSum.appendChild(hint);
+        }
+
+        const tdDel = document.createElement('td');
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn btn-sm btn-outline-danger';
+        del.textContent = '✕';
+        del.addEventListener('click', function () { tr.remove(); recount(); });
+        tdDel.appendChild(del);
+
+        tr.appendChild(tdNum); tr.appendChild(tdName); tr.appendChild(tdQty);
+        tr.appendChild(tdCost); tr.appendChild(tdSale); tr.appendChild(tdSum);
+        tr.appendChild(tdDel);
+        body.appendChild(tr);
+        return tr;
+    }
+
+    function recount() {
+        let n = 0, qty = 0, cost = 0;
+        body.querySelectorAll('tr').forEach(function (tr, i) {
+            const numCell = tr.querySelector('.row-num');
+            if (numCell) numCell.textContent = i + 1;
+            const nm = tr.querySelector('.r-name');
+            if (nm && nm.value.trim()) n++;
+            const q = num(tr.querySelector('.r-qty').value);
+            const c = num(tr.querySelector('.r-cost').value);
+            if (q > 0) { qty += q; cost += q * c; }
+        });
+        document.getElementById('sumRows').textContent = n;
+        document.getElementById('sumQty').textContent = fmt(qty);
+        document.getElementById('sumCost').textContent = fmt(cost);
+    }
+    body.addEventListener('input', recount);
+    document.getElementById('addRowBtn').addEventListener('click', function () {
+        addRow({}); recount();
+    });
+
+    readBtn.addEventListener('click', async function () {
+        const f = imgEl.files && imgEl.files[0];
+        if (!f) { setStat(readStat, 'Avval rasm tanlang.', 'text-danger'); return; }
+        readBtn.disabled = true;
+        setStat(readStat, 'AI o\'qiyapti — 10-30 soniya...', 'text-muted');
+        try {
+            const fd = new FormData();
+            fd.append('image', f);
+            const resp = await fetch('{% url "intake_photo_extract" %}', {
+                method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+            });
+            const data = await resp.json();
+            if (!data.ok) {
+                setStat(readStat, data.error || 'Xatolik', 'text-danger');
+                readBtn.disabled = false;
+                return;
+            }
+            body.innerHTML = '';
+            (data.rows || []).forEach(addRow);
+            if (!data.rows || !data.rows.length) addRow({});
+            document.getElementById('fSupplier').value = data.supplier || '';
+            document.getElementById('fInvoice').value = data.invoice_no || '';
+            if (data.date) document.getElementById('fDate').value = data.date;
+            recount();
+            wrap.style.display = 'block';
+            setStat(readStat, (data.rows || []).length + ' ta qator topildi — tekshiring.', 'text-success');
+            wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) {
+            setStat(readStat, 'Tarmoq xatosi: ' + e.message, 'text-danger');
+        }
+        readBtn.disabled = false;
+    });
+
+    saveBtn.addEventListener('click', async function () {
+        const branch = document.getElementById('fBranch').value;
+        if (!branch) { setStat(saveStat, 'Filialni tanlang.', 'text-danger'); return; }
+        const rows = [];
+        body.querySelectorAll('tr').forEach(function (tr) {
+            const name = tr.querySelector('.r-name').value.trim();
+            const qty = num(tr.querySelector('.r-qty').value);
+            if (!name || qty <= 0) return;
+            rows.push({
+                name: name,
+                qty: qty,
+                cost: num(tr.querySelector('.r-cost').value),
+                sale: num(tr.querySelector('.r-sale').value)
+            });
+        });
+        if (!rows.length) { setStat(saveStat, 'Saqlash uchun qator yo\'q.', 'text-danger'); return; }
+        saveBtn.disabled = true;
+        setStat(saveStat, 'Saqlanmoqda...', 'text-muted');
+        try {
+            const fd = new FormData();
+            fd.append('payload', JSON.stringify({
+                branch: branch,
+                category: document.getElementById('fCategory').value,
+                supplier: document.getElementById('fSupplier').value.trim(),
+                invoice_no: document.getElementById('fInvoice').value.trim(),
+                date: document.getElementById('fDate').value,
+                rows: rows
+            }));
+            const f = imgEl.files && imgEl.files[0];
+            if (f) fd.append('image', f);
+            const resp = await fetch('{% url "intake_photo_save" %}', {
+                method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+            });
+            const data = await resp.json();
+            if (!data.ok) {
+                setStat(saveStat, data.error || 'Xatolik', 'text-danger');
+                saveBtn.disabled = false;
+                return;
+            }
+            setStat(saveStat, '✓ ' + data.lines + ' qator qabul qilindi', 'text-success');
+            window.location.href = data.redirect;
+        } catch (e) {
+            setStat(saveStat, 'Tarmoq xatosi: ' + e.message, 'text-danger');
+            saveBtn.disabled = false;
+        }
+    });
+})();
+</script>
+{% endblock %}

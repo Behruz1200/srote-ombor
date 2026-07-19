@@ -85,6 +85,10 @@ urlpatterns = [
     path('intake/', views.intake_new, name='intake_new'),
     path('intake/variants/', views.intake_variants, name='intake_variants'),
     path('intake/clothes/', views.clothes_intake, name='clothes_intake'),
+    # Faktura rasmidan qabul (AI o'qiydi, foydalanuvchi tasdiqlaydi)
+    path('intake/photo/', views.intake_photo, name='intake_photo'),
+    path('intake/photo/extract/', views.intake_photo_extract, name='intake_photo_extract'),
+    path('intake/photo/save/', views.intake_photo_save, name='intake_photo_save'),
     path('labels/variants/', views.variant_labels, name='variant_labels'),
     path('labels/price/', views.price_labels, name='price_labels'),
     path('intake/import/', views.intake_import, name='intake_import'),

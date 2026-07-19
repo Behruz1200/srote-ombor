@@ -53,6 +53,11 @@ if _render_host:
 
 # ---------- Telegram (optional) ----------
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+# ---------- AI: faktura rasmidan qatorlarni o'qish ----------
+# Kalit bo'lmasa funksiya o'chiq turadi (sahifa ogohlantirish ko'rsatadi).
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+ANTHROPIC_MODEL = os.environ.get('ANTHROPIC_MODEL', 'claude-sonnet-4-5')
 TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')
 
 # ---------- Soliq.uz / OFD fiscal integration (optional) ----------

@@ -3359,6 +3359,155 @@ def supplier_list(request):
 
 # ---------- INTAKE SESSION DETAIL ----------
 
+# ---------- FAKTURA RASMIDAN QABUL (AI) ----------
+
+@admin_required
+def intake_photo(request):
+    """Yetkazib beruvchi fakturasini suratga olib qabul qilish.
+
+    AI faqat O'QIYDI — natija tahrirlanadigan jadvalga tushadi va
+    foydalanuvchi tasdiqlagandan keyingina omborga yoziladi.
+    """
+    from .invoice_ai import is_enabled
+    return render(request, 'inventory/intake_photo.html', {
+        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'categories': Category.objects.order_by('name'),
+        'suppliers': Supplier.objects.filter(is_active=True).order_by('name'),
+        'ai_enabled': is_enabled(),
+    })
+
+
+@admin_required
+def intake_photo_extract(request):
+    """POST rasm -> AI o'qigan qatorlar (JSON). Hech narsa saqlanmaydi."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    f = request.FILES.get('image')
+    if not f:
+        return JsonResponse({'ok': False, 'error': 'Rasm yuborilmadi.'}, status=400)
+    if f.size > 20 * 1024 * 1024:
+        return JsonResponse({'ok': False,
+                             'error': "Rasm juda katta (20 MB dan kichik bo'lsin)."},
+                            status=400)
+    from .invoice_ai import extract_invoice, InvoiceAIError
+    try:
+        data = extract_invoice(f)
+    except InvoiceAIError as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+    except Exception:
+        logger.exception('intake_photo_extract failed')
+        return JsonResponse({'ok': False, 'error': 'Kutilmagan xato.'}, status=500)
+    data['ok'] = True
+    return JsonResponse(data)
+
+
+@admin_required
+def intake_photo_save(request):
+    """Tekshirilgan qatorlarni omborga yozamiz (bitta qabul sessiyasi)."""
+    from decimal import Decimal, InvalidOperation
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    try:
+        payload = _json.loads(request.POST.get('payload') or '{}')
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+
+    branch = Branch.objects.filter(
+        pk=payload.get('branch') or 0, is_active=True).first()
+    if not branch:
+        return JsonResponse({'ok': False, 'error': 'Filial tanlang.'}, status=400)
+    category = Category.objects.filter(pk=payload.get('category') or 0).first()
+
+    clean = []
+    for r in (payload.get('rows') or []):
+        name = smart_title((r.get('name') or '').strip())
+        if not name:
+            continue
+        try:
+            qty = int(float(r.get('qty') or 0))
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0:
+            continue
+        try:
+            cost = Decimal(str(r.get('cost') or 0)).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError, ValueError):
+            cost = Decimal('0')
+        try:
+            sale = Decimal(str(r.get('sale') or 0)).quantize(Decimal('0.01'))
+        except (InvalidOperation, TypeError, ValueError):
+            sale = Decimal('0')
+        if cost < 0 or sale < 0:
+            continue
+        clean.append({'name': name[:200], 'qty': qty, 'cost': cost, 'sale': sale})
+
+    if not clean:
+        return JsonResponse({'ok': False,
+                             'error': "Saqlash uchun qator yo'q (miqdor > 0 bo'lsin)."},
+                            status=400)
+
+    supplier_text = (payload.get('supplier') or '').strip()[:200]
+    supplier_obj = (Supplier.objects.filter(name__iexact=supplier_text).first()
+                    if supplier_text else None)
+
+    with transaction.atomic():
+        session = IntakeSession.objects.create(
+            branch=branch,
+            supplier=supplier_obj,
+            supplier_text='' if supplier_obj else supplier_text,
+            received_by=request.user,
+            invoice_number=(payload.get('invoice_no') or '').strip()[:80],
+            note=(payload.get('note') or '').strip()[:500] or 'Faktura rasmidan (AI)',
+        )
+        # Faktura sanasi berilgan bo'lsa — sessiya sanasini o'shanga qo'yamiz
+        d = (payload.get('date') or '').strip()
+        if d:
+            try:
+                dt = datetime.strptime(d, '%Y-%m-%d')
+                session.received_at = timezone.make_aware(
+                    dt.replace(hour=12), timezone.get_current_timezone())
+                session.save(update_fields=['received_at'])
+            except (ValueError, TypeError):
+                pass
+        if 'image' in request.FILES:
+            session.invoice_image = request.FILES['image']
+            session.save(update_fields=['invoice_image'])
+
+        created = 0
+        for r in clean:
+            product = Product.objects.filter(name__iexact=r['name']).first()
+            if product is None:
+                product = Product.objects.create(
+                    name=r['name'], category=category,
+                    default_sale_price=r['sale'])
+            elif r['sale'] > 0 and not product.default_sale_price:
+                product.default_sale_price = r['sale']
+                product.save(update_fields=['default_sale_price'])
+            variant, _ = ProductVariant.objects.get_or_create(
+                product=product, size='', color='')
+            stock, _ = BranchStock.objects.get_or_create(
+                variant=variant, branch=branch,
+                defaults={'cost_price': r['cost'], 'sale_price': r['sale']})
+            stock.cost_price = r['cost']
+            if r['sale'] > 0:
+                stock.sale_price = r['sale']
+            stock.stock_count = F('stock_count') + r['qty']
+            stock.save()
+            Intake.objects.create(
+                session=session, variant=variant, branch=branch,
+                quantity=r['qty'], cost_per_unit=r['cost'],
+                supplier=supplier_text, note='Faktura rasmidan (AI)',
+                received_by=request.user)
+            created += 1
+
+    from .notifications import notify_intake_session
+    notify_intake_session(session)
+    return JsonResponse({
+        'ok': True, 'session_id': session.pk, 'lines': created,
+        'redirect': reverse('intake_session_detail', args=[session.pk]),
+    })
+
+
 @admin_required
 def intake_session_detail(request, pk):
     session = get_object_or_404(
