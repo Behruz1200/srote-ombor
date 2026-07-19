@@ -2505,6 +2505,43 @@ const QS_DATA = (function () {
     };
 })();
 
+// ---- Skaner HAR DOIM qidiruv katagiga yozsin ----
+// Sotuvchi biror tugmani bosgach fokus o'sha yerda qoladi; skaner esa oddiy
+// klaviatura kabi belgi yuboradi va ular yo'qolib ketardi (kassir avval
+// katakni bosishga majbur edi). Endi tahrirlanmaydigan joyda terilgan har
+// qanday shtrix-kod belgisi avtomatik qidiruv katagiga tushadi.
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;      // yorliqlar buzilmasin
+    if (document.querySelector('.modal.show')) return;   // modal o'z inputiga
+    const t = e.target;
+    if (!t || t === scanInput) return;
+    const tag = t.tagName;
+    // Foydalanuvchi ataylab boshqa katakka yozayotgan bo'lsa — tegmaymiz
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+        t.isContentEditable) return;
+
+    // Shtrix-kodda uchraydigan belgilar (bo'sh joy YO'Q — u tugmani bosadi)
+    if (e.key && e.key.length === 1 && /[A-Za-z0-9\-_.\/]/.test(e.key)) {
+        e.preventDefault();
+        scanInput.focus();
+        scanInput.value += e.key;
+        scanInput.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+    }
+    // Skaner oxirida Enter yuboradi — katakda matn bo'lsa qidiramiz
+    if (e.key === 'Enter' && scanInput.value.trim()) {
+        e.preventDefault();
+        scanInput.focus();
+        doSearch();
+    }
+}, true);
+
+// Sahifa/oyna faollashganda fokus qidiruv katagida tursin
+window.addEventListener('focus', refocus);
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refocus();
+});
+
 // Refocus scanner input after clicks anywhere except other inputs.
 // Exclude SELECT/TEXTAREA/LABEL and any element inside a form/dropdown/modal
 // so click-to-open native dropdowns and form controls don't immediately
