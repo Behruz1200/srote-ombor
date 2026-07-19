@@ -272,6 +272,29 @@
     </tr>
 </template>
 
+<!-- Qoralama saqlandi -->
+<div class="modal fade" id="draftDoneModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center py-4">
+        <div class="text-success mb-2" style="font-size:3rem; line-height:1;">
+          <i class="bi bi-check-circle-fill"></i>
+        </div>
+        <h5 class="mb-1">Qoralama saqlandi</h5>
+        <p class="text-muted mb-3">
+          <strong id="doneDraftNo"></strong> ·
+          <strong id="doneDraftRows"></strong> qator.
+          Kompyuterda "Faktura rasmidan" bo'limini oching —
+          qoralama ro'yxatda turadi.
+        </p>
+        <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">
+          Yopish
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Kamera skaner modali (telefon uchun) -->
 <div class="modal fade" id="invScanModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable">
@@ -681,16 +704,26 @@
             const data = await resp.json();
             if (!data.ok) {
                 setStat(saveStat, data.error || 'Xatolik', 'text-danger');
-            } else {
-                draftId = data.id;
-                setStat(saveStat, '✓ Qoralama #' + data.id + ' saqlandi (' +
-                        data.rows + ' qator) — boshqa qurilmada davom ettirsangiz bo\'ladi.',
-                        'text-success');
+                draftBtn.disabled = false;
+                return;
             }
+            draftId = data.id;
+            setStat(saveStat, '✓ Qoralama #' + data.id + ' saqlandi', 'text-success');
+            document.getElementById('doneDraftNo').textContent = '#' + data.id;
+            document.getElementById('doneDraftRows').textContent = data.rows;
+            doneModal.show();
+            return;                     // tugma o'chiq qoladi — takror bosilmasin
         } catch (e) {
             setStat(saveStat, 'Tarmoq xatosi: ' + e.message, 'text-danger');
         }
         draftBtn.disabled = false;
+    });
+
+    // Qoralama saqlangach: xabar oynasi yopilishi bilan qabul sahifasiga qaytamiz
+    const doneEl = document.getElementById('draftDoneModal');
+    const doneModal = new bootstrap.Modal(doneEl);
+    doneEl.addEventListener('hidden.bs.modal', function () {
+        window.location.href = '{% url "intake_new" %}';
     });
 
     // ---------- saqlash ----------
