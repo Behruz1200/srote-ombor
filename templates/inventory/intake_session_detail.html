@@ -61,6 +61,21 @@
                         <div class="small text-muted">Faktura raqami</div>
                         <strong>{{ session.invoice_number|default:"—" }}</strong>
                     </div>
+                    {% if session.agent_name or session.agent_phone %}
+                        <div class="col-md-6">
+                            <div class="small text-muted">Agent</div>
+                            <strong>
+                                <i class="bi bi-person-badge"></i>
+                                {{ session.agent_name|default:"—" }}
+                            </strong>
+                            {% if session.agent_phone %}
+                                <a href="tel:{{ session.agent_phone }}"
+                                   class="ms-2 text-decoration-none">
+                                    <i class="bi bi-telephone"></i> {{ session.agent_phone }}
+                                </a>
+                            {% endif %}
+                        </div>
+                    {% endif %}
                     {% if session.note %}
                         <div class="col-12">
                             <div class="small text-muted">Izoh</div>

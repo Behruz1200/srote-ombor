@@ -33,11 +33,13 @@ markdown, no code fences.
 Schema:
 {
   "supplier": "seller / Поставщик / Yetkazib beruvchi company name, or \\"\\"",
+  "agent": "PERSON who delivered it, or \\"\\"",
+  "agent_phone": "that person's phone number as printed, or \\"\\"",
   "invoice_no": "Номер накладной / Расход № / Накладная №, or \\"\\"",
   "date": "YYYY-MM-DD if a shipment date is printed, else \\"\\"",
   "rows": [
     {
-      "name": "product name exactly as printed (keep original language)",
+      "name": "the WHOLE product cell exactly as printed (keep original language)",
       "qty": 0,
       "unit": "шт / крб / кг / dona, or \\"\\"",
       "per_case": 0,
@@ -48,6 +50,30 @@ Schema:
 }
 
 Field rules:
+- "supplier" = the SELLING COMPANY (Поставщик / Продавец / Yetkazib beruvchi /
+  the letterhead name at the top). Never the buyer.
+- "agent" = a PERSON's name printed on a line labelled Агент / Торговый агент /
+  Экспедитор / Менеджер / Представитель / Водитель / Отпустил / Сдал / Agent /
+  Savdo agenti. Usually a surname + initials ("Каримов А.А."). It may be
+  handwritten next to a signature — read it if legible.
+  HARD RULES: the agent is NEVER the buyer (Покупатель / Получатель / Кому),
+  NEVER the supplier, and NEVER a company name. If no line carries one of
+  those labels, return "" — do not fall back to any other name on the page.
+- "agent_phone" = a phone printed on or next to that person's line (Тел / Тел. /
+  Телефон / Моб / Tel). Uzbek numbers look like +998 90 123 45 67,
+  (90) 123-45-67 or 901234567. Copy the digits exactly as printed.
+  If several phones appear, take the one closest to the agent's name; if you
+  cannot tell whose it is, return "". A company switchboard number printed in
+  the letterhead is NOT the agent's phone.
+- "invoice_no" = the document number from the line reading НАКЛАДНАЯ / Расход /
+  Счёт-фактура / Hisob-faktura, e.g. "N RN-004521" -> "RN-004521".
+  HARD RULE: never return an ИНН / СТИР / tax id, ОКЭД, bank account, phone
+  number, contract number or date here. If no document number is printed,
+  return "".
+- Never guess a name, phone or number that is not written on the document.
+- "name" = copy the entire product cell: the leading generic word
+  (Шампунь / Мыло / Паста / Сок), the brand, and the size or weight
+  ("Шампунь Head&Shoulders 400мл"). Do not shorten it to just the brand.
 - "qty"      = Количество / Кол-во / Soni for that row.
 - "cost"     = UNIT price (Цена / Нархи / Цена с переоценкой). NEVER the row total.
 - "line_sum" = row total (Сумма). Use 0 if the column is absent.
@@ -128,6 +154,27 @@ def _num(v):
     except ValueError:
         return 0.0
     return -val if neg else val
+
+
+def _phone(v):
+    """Telefonni O'zbekiston formatiga keltiradi: +998 XX XXX XX XX.
+
+    Tanib bo'lmasa — asl matnni qaytaradi (qo'lda tuzatiladi).
+    """
+    s = str(v or '').strip()
+    if not s:
+        return ''
+    digits = re.sub(r'\D', '', s)
+    if len(digits) == 12 and digits.startswith('998'):
+        pass
+    elif len(digits) == 9:                    # 901234567
+        digits = '998' + digits
+    elif len(digits) == 10 and digits.startswith('8'):   # 8 90 123 45 67
+        digits = '998' + digits[1:]
+    else:
+        return s[:40]                          # notanish shakl — o'zgartirmaymiz
+    return '+{} {} {} {} {}'.format(
+        digits[:3], digits[3:5], digits[5:8], digits[8:10], digits[10:12])
 
 
 def _parse_payload(text):
@@ -231,6 +278,8 @@ def extract_invoice(django_file, timeout=120):
 
     return {
         'supplier': (data.get('supplier') or '').strip()[:200],
+        'agent': (data.get('agent') or '').strip()[:120],
+        'agent_phone': _phone(data.get('agent_phone')),
         'invoice_no': (data.get('invoice_no') or '').strip()[:80],
         'date': (data.get('date') or '').strip()[:20],
         'rows': rows,

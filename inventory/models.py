@@ -297,6 +297,11 @@ class IntakeSession(models.Model):
                                     related_name='intake_sessions')
     invoice_number = models.CharField(max_length=80, blank=True,
                                       help_text="Yetkazib beruvchining faktura raqami")
+    agent_name = models.CharField(
+        max_length=120, blank=True,
+        help_text="Fakturani olib kelgan agent / ekspeditor")
+    agent_phone = models.CharField(
+        max_length=40, blank=True, help_text="Agent telefoni")
     invoice_image = models.ImageField(upload_to='invoices/', blank=True, null=True,
                                       help_text="Faktura/dostavka fotografiyasi")
     note = models.TextField(blank=True)

@@ -3475,6 +3475,8 @@ def intake_photo_save(request):
     supplier_text = (payload.get('supplier') or '').strip()[:200]
     supplier_obj = (Supplier.objects.filter(name__iexact=supplier_text).first()
                     if supplier_text else None)
+    agent_name = (payload.get('agent') or '').strip()[:120]
+    agent_phone = (payload.get('agent_phone') or '').strip()[:40]
 
     with transaction.atomic():
         session = IntakeSession.objects.create(
@@ -3483,8 +3485,22 @@ def intake_photo_save(request):
             supplier_text='' if supplier_obj else supplier_text,
             received_by=request.user,
             invoice_number=(payload.get('invoice_no') or '').strip()[:80],
+            agent_name=agent_name,
+            agent_phone=agent_phone,
             note=(payload.get('note') or '').strip()[:500] or 'Faktura rasmidan (AI)',
         )
+        # Yetkazib beruvchi kartochkasi bo'sh bo'lsa — agent ma'lumoti bilan
+        # to'ldiramiz. Mavjud qiymatlar hech qachon ustidan yozilmaydi.
+        if supplier_obj:
+            fill = []
+            if agent_name and not supplier_obj.contact_person:
+                supplier_obj.contact_person = agent_name
+                fill.append('contact_person')
+            if agent_phone and not supplier_obj.phone:
+                supplier_obj.phone = agent_phone
+                fill.append('phone')
+            if fill:
+                supplier_obj.save(update_fields=fill)
         # Faktura sanasi berilgan bo'lsa — sessiya sanasini o'shanga qo'yamiz
         d = (payload.get('date') or '').strip()
         if d:

@@ -85,6 +85,16 @@
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-3">
+                        <label class="form-label small mb-1">Agent (olib kelgan odam)</label>
+                        <input type="text" id="fAgent" class="form-control"
+                               placeholder="Masalan: Karimov A.A.">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Agent telefoni</label>
+                        <input type="tel" id="fAgentPhone" class="form-control"
+                               placeholder="+998 90 123 45 67">
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label small mb-1">Yangi mahsulot kategoriyasi</label>
                         <select id="fCategory" class="form-select">
                             <option value="">— yo'q —</option>
@@ -486,6 +496,8 @@
             (data.rows || []).forEach(function (r) { addRow(r, false); });
             if (!data.rows || !data.rows.length) addRow({}, false);
             document.getElementById('fSupplier').value = data.supplier || '';
+            document.getElementById('fAgent').value = data.agent || '';
+            document.getElementById('fAgentPhone').value = data.agent_phone || '';
             document.getElementById('fInvoice').value = data.invoice_no || '';
             if (data.date) document.getElementById('fDate').value = data.date;
             recount();
@@ -524,6 +536,8 @@
                 branch: branch,
                 category: document.getElementById('fCategory').value,
                 supplier: document.getElementById('fSupplier').value.trim(),
+                agent: document.getElementById('fAgent').value.trim(),
+                agent_phone: document.getElementById('fAgentPhone').value.trim(),
                 invoice_no: document.getElementById('fInvoice').value.trim(),
                 date: document.getElementById('fDate').value,
                 rows: rows
