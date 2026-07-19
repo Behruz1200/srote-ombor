@@ -8508,6 +8508,32 @@ def price_apply(request):
                     if new != stock.wholesale_price:
                         ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
                         stock.wholesale_price = new
+            elif op == 'margin_add':
+                # Mavjud marjaga qo'shish: 20% edi, +5 -> 25%.
+                # sotuv = tannarx × (1 + (joriy_marja + pct)/100)
+                if stock.cost_price > 0 and stock.sale_price > 0:
+                    cur_m = (stock.sale_price / stock.cost_price
+                             - Decimal('1')) * Decimal('100')
+                    new_m = cur_m + pct
+                    if new_m > Decimal('-100'):
+                        new = (stock.cost_price
+                               * (Decimal('1') + new_m / Decimal('100'))
+                               ).quantize(q2)
+                        if new >= 0 and new != stock.sale_price:
+                            ch['sotuv'] = [str(stock.sale_price), str(new)]
+                            stock.sale_price = new
+            elif op == 'wholesale_margin_add':
+                if stock.cost_price > 0 and stock.wholesale_price > 0:
+                    cur_m = (stock.wholesale_price / stock.cost_price
+                             - Decimal('1')) * Decimal('100')
+                    new_m = cur_m + pct
+                    if new_m > Decimal('-100'):
+                        new = (stock.cost_price
+                               * (Decimal('1') + new_m / Decimal('100'))
+                               ).quantize(q2)
+                        if new >= 0 and new != stock.wholesale_price:
+                            ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
+                            stock.wholesale_price = new
             elif op == 'bump_sale':
                 if stock.sale_price > 0:
                     new = (stock.sale_price * factor).quantize(q2)

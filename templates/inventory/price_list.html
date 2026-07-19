@@ -109,6 +109,8 @@
                         <option value="cost_from_sale">Tannarxni sotuv narxidan hisoblash (marja %)</option>
                         <option value="margin_from_cost">Sotuv narxini tannarxdan hisoblash (marja %)</option>
                         <option value="wholesale_from_cost">Ulgurji narxni tannarxdan hisoblash (marja %)</option>
+                        <option value="margin_add">Mavjud marjaga qo'shish / ayirish (+5%, −3%)</option>
+                        <option value="wholesale_margin_add">Mavjud ulgurji marjaga qo'shish / ayirish</option>
                         <option value="bump_sale">Sotuv narxini foizga o'zgartirish</option>
                         <option value="bump_wholesale">Ulgurji narxni foizga o'zgartirish</option>
                     </select>
@@ -337,6 +339,8 @@
         cost_from_sale: "tannarx = sotuv narxi ÷ (1 + %). Sotuv narxi to'g'ri, tannarx qo'yilmagan bo'lsa shuni tanlang.",
         margin_from_cost: "sotuv narxi = tannarx × (1 + %). Tannarx to'g'ri bo'lsa.",
         wholesale_from_cost: "ulgurji narx = tannarx × (1 + %).",
+        margin_add: "Har qatorning HOZIRGI marjasiga shu foiz qo'shiladi: 20% edi, +5 yozsangiz 25% bo'ladi. Ayirish uchun manfiy yozing (−3). Marjasi yo'q (tannarx 0) qatorlar tegilmaydi.",
+        wholesale_margin_add: "Ulgurji marjaga qo'shadi/ayiradi. Ulgurji narxi 0 bo'lgan qatorlar tegilmaydi.",
         bump_sale: "sotuv narxi shu foizga oshadi/kamayadi (manfiy ham yozsa bo'ladi).",
         bump_wholesale: "ulgurji narx shu foizga oshadi/kamayadi."
     };
