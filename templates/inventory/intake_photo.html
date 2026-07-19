@@ -102,8 +102,15 @@
                 </button>
                 <span id="readStatus" class="small text-muted"></span>
             </div>
-            <img id="invPreview" alt="" style="display:none; max-width:280px; margin-top:12px;
-                 border:1px solid var(--yrt-border); border-radius:8px;">
+            <div id="invPreviewWrap" style="display:none; margin-top:12px;">
+                <img id="invPreview" alt="Faktura rasmi"
+                     title="Kattalashtirish uchun bosing"
+                     style="max-width:280px; cursor:zoom-in; display:block;
+                            border:1px solid var(--yrt-border); border-radius:8px;">
+                <div class="small text-muted mt-1">
+                    <i class="bi bi-zoom-in"></i> Kattalashtirish uchun rasmni bosing
+                </div>
+            </div>
         </div>
     </article>
 
@@ -292,6 +299,34 @@
     </tr>
 </template>
 
+<!-- Faktura rasmini kattalashtirib ko'rish (bootstrap'siz — mustaqil) -->
+<div id="imgZoom" class="yrt-zoom" aria-hidden="true">
+    <div class="yrt-zoom__bar">
+        <button type="button" class="btn btn-sm btn-light" data-z="out" title="Kichraytirish">
+            <i class="bi bi-zoom-out"></i>
+        </button>
+        <span class="yrt-zoom__pct">100%</span>
+        <button type="button" class="btn btn-sm btn-light" data-z="in" title="Kattalashtirish">
+            <i class="bi bi-zoom-in"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-light" data-z="fit" title="Ekranga moslash">
+            <i class="bi bi-arrows-angle-contract"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-light" data-z="rot" title="Burish">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+        <a class="btn btn-sm btn-light" id="zoomNewTab" target="_blank" rel="noopener"
+           title="Yangi oynada ochish"><i class="bi bi-box-arrow-up-right"></i></a>
+        <button type="button" class="btn btn-sm btn-danger" data-z="close" title="Yopish (Esc)">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <img id="imgZoomPic" alt="Faktura rasmi" draggable="false">
+    <div class="yrt-zoom__hint small">
+        Ikki marta bosing — kattalashadi · sudrab suring · g'ildirak bilan zum
+    </div>
+</div>
+
 <!-- Qoralama saqlandi -->
 <div class="modal fade" id="draftDoneModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -348,6 +383,41 @@
     box-shadow: inset 3px 0 0 var(--bs-primary, #0d6efd);
 }
 #rowsBody .row-src { line-height: 1.15; margin-top: 2px; }
+
+/* --- Faktura rasmini kattalashtirish --- */
+.yrt-zoom {
+    display: none;
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0, 0, 0, .92);
+    overflow: hidden;
+    touch-action: none;
+}
+.yrt-zoom.is-open { display: block; }
+.yrt-zoom img {
+    position: absolute; top: 50%; left: 50%;
+    transform-origin: center center;
+    max-width: none; max-height: none;
+    user-select: none; -webkit-user-drag: none;
+    cursor: grab;
+}
+.yrt-zoom img.is-dragging { cursor: grabbing; }
+.yrt-zoom__bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+    display: flex; gap: .35rem; align-items: center; justify-content: center;
+    flex-wrap: wrap;
+    padding: calc(.5rem + env(safe-area-inset-top, 0px)) .5rem .5rem;
+    background: linear-gradient(rgba(0,0,0,.65), rgba(0,0,0,0));
+}
+.yrt-zoom__pct {
+    color: #fff; font-size: .8rem; min-width: 3.2rem; text-align: center;
+}
+.yrt-zoom__hint {
+    position: absolute; left: 0; right: 0;
+    bottom: calc(.6rem + env(safe-area-inset-bottom, 0px));
+    text-align: center; color: rgba(255,255,255,.62); pointer-events: none;
+    padding: 0 1rem;
+}
+@media (max-width: 575.98px) { .yrt-zoom__hint { display: none; } }
 </style>
 
 <datalist id="catOptions">
@@ -364,6 +434,7 @@
     const CSRF = document.querySelector('#csrfForm input[name=csrfmiddlewaretoken]').value;
     const imgEl = document.getElementById('invImage');
     const preview = document.getElementById('invPreview');
+    const previewWrap = document.getElementById('invPreviewWrap');
     const readBtn = document.getElementById('readBtn');
     const readStat = document.getElementById('readStatus');
     const wrap = document.getElementById('reviewWrap');
@@ -396,9 +467,9 @@
 
     imgEl.addEventListener('change', function () {
         const f = imgEl.files && imgEl.files[0];
-        if (!f) { preview.style.display = 'none'; return; }
+        if (!f) { previewWrap.style.display = 'none'; return; }
         preview.src = URL.createObjectURL(f);
-        preview.style.display = 'block';
+        previewWrap.style.display = 'block';
         setStat(readStat, '', '');
     });
 
@@ -817,6 +888,136 @@
         }
     });
 
+    // ---------- Faktura rasmini kattalashtirib ko'rish ----------
+    // Bootstrap ishlatilmaydi (u bu skriptdan keyin yuklanadi) — mustaqil overlay.
+    const zoomEl = document.getElementById('imgZoom');
+    const zoomPic = document.getElementById('imgZoomPic');
+    const zoomPct = zoomEl.querySelector('.yrt-zoom__pct');
+    let zs = 1, zx = 0, zy = 0, zrot = 0, zfit = 1;
+
+    function zApply() {
+        zoomPic.style.transform =
+            'translate(calc(-50% + ' + zx + 'px), calc(-50% + ' + zy + 'px)) ' +
+            'scale(' + zs + ') rotate(' + zrot + 'deg)';
+        zoomPct.textContent = Math.round(zs / zfit * 100) + '%';
+    }
+    function zFit() {
+        const nw = zoomPic.naturalWidth || 1, nh = zoomPic.naturalHeight || 1;
+        const rot = (zrot % 180) !== 0;
+        const w = rot ? nh : nw, h = rot ? nw : nh;
+        zfit = Math.min((window.innerWidth - 24) / w, (window.innerHeight - 96) / h);
+        if (!isFinite(zfit) || zfit <= 0) zfit = 1;
+        zs = zfit; zx = 0; zy = 0;
+        zApply();
+    }
+    function zSet(next, cx, cy) {
+        next = Math.max(zfit * 0.5, Math.min(zfit * 12, next));
+        if (cx !== undefined) {
+            // kursor ostidagi nuqta joyida qolsin
+            const k = next / zs;
+            zx = cx - (cx - zx) * k;
+            zy = cy - (cy - zy) * k;
+        }
+        zs = next;
+        zApply();
+    }
+    function zOpen(src) {
+        if (!src) return;
+        zoomPic.src = src;
+        document.getElementById('zoomNewTab').href = src;
+        zoomEl.classList.add('is-open');
+        zoomEl.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        zrot = 0;
+        if (zoomPic.complete && zoomPic.naturalWidth) zFit();
+        else zoomPic.onload = zFit;
+    }
+    function zClose() {
+        zoomEl.classList.remove('is-open');
+        zoomEl.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    preview.addEventListener('click', function () { zOpen(preview.src); });
+
+    zoomEl.addEventListener('click', function (e) {
+        const btn = e.target.closest('[data-z]');
+        if (btn) {
+            const a = btn.dataset.z;
+            if (a === 'in') zSet(zs * 1.4);
+            else if (a === 'out') zSet(zs / 1.4);
+            else if (a === 'fit') { zrot = 0; zFit(); }
+            else if (a === 'rot') { zrot = (zrot + 90) % 360; zFit(); }
+            else if (a === 'close') zClose();
+            return;
+        }
+        if (e.target === zoomEl) zClose();      // fon bosilsa — yopamiz
+    });
+    zoomPic.addEventListener('dblclick', function (e) {
+        zSet(zs > zfit * 1.2 ? zfit : zfit * 3,
+             e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2);
+    });
+    zoomEl.addEventListener('wheel', function (e) {
+        if (!zoomEl.classList.contains('is-open')) return;
+        e.preventDefault();
+        zSet(zs * (e.deltaY < 0 ? 1.15 : 1 / 1.15),
+             e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2);
+    }, { passive: false });
+    document.addEventListener('keydown', function (e) {
+        if (!zoomEl.classList.contains('is-open')) return;
+        if (e.key === 'Escape') zClose();
+        else if (e.key === '+' || e.key === '=') zSet(zs * 1.4);
+        else if (e.key === '-') zSet(zs / 1.4);
+        else if (e.key === '0') { zrot = 0; zFit(); }
+    });
+
+    // sudrash (sichqoncha) + surish/pinch (barmoq)
+    let pan = null, pinch = null;
+    zoomPic.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'touch') return;   // touch alohida
+        pan = { x: e.clientX - zx, y: e.clientY - zy };
+        zoomPic.classList.add('is-dragging');
+        zoomPic.setPointerCapture(e.pointerId);
+    });
+    zoomPic.addEventListener('pointermove', function (e) {
+        if (!pan || e.pointerType === 'touch') return;
+        zx = e.clientX - pan.x; zy = e.clientY - pan.y;
+        zApply();
+    });
+    ['pointerup', 'pointercancel'].forEach(function (ev) {
+        zoomPic.addEventListener(ev, function () {
+            pan = null; zoomPic.classList.remove('is-dragging');
+        });
+    });
+    function dist(t) {
+        const dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+        return Math.hypot(dx, dy);
+    }
+    zoomEl.addEventListener('touchstart', function (e) {
+        if (e.touches.length === 2) {
+            pinch = { d: dist(e.touches), s: zs };
+        } else if (e.touches.length === 1) {
+            pan = { x: e.touches[0].clientX - zx, y: e.touches[0].clientY - zy };
+        }
+    }, { passive: true });
+    zoomEl.addEventListener('touchmove', function (e) {
+        if (pinch && e.touches.length === 2) {
+            e.preventDefault();
+            zSet(pinch.s * (dist(e.touches) / pinch.d));
+        } else if (pan && e.touches.length === 1) {
+            e.preventDefault();
+            zx = e.touches[0].clientX - pan.x;
+            zy = e.touches[0].clientY - pan.y;
+            zApply();
+        }
+    }, { passive: false });
+    zoomEl.addEventListener('touchend', function (e) {
+        if (e.touches.length === 0) { pan = null; pinch = null; }
+    }, { passive: true });
+    window.addEventListener('resize', function () {
+        if (zoomEl.classList.contains('is-open')) zFit();
+    });
+
     // ---------- qoralamani ochish ----------
     (function restoreDraft() {
         const el = document.getElementById('draftData');
@@ -840,7 +1041,7 @@
         wrap.style.display = 'block';
         if (d.image_url) {
             preview.src = d.image_url;
-            preview.style.display = 'block';
+            previewWrap.style.display = 'block';
         }
     })();
 
