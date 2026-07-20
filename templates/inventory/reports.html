@@ -2,6 +2,7 @@
 {% load yurit_extras %}
 
 {% block title %}Hisobotlar — yurit{% endblock %}
+{% block backbar %}{% endblock %}{# sahifaning o'z orqaga havolasi bor #}
 
 {% block content %}
 {% with current_type=form.report_type.value|default:'sales' selected_period=form.period.value|default:'week' selected_branch_id=form.branch.value|default:'' p_rows_list=form.pivot_rows.value|default_if_none:'' p_cols=form.pivot_cols.value|default:'' p_metric=form.pivot_metric.value|default:'revenue' %}

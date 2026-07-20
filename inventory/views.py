@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count, Max, Min
+from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count, Max, Min, Avg
 from django.db.models.functions import (
     Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
 )
@@ -1359,9 +1359,25 @@ def product_detail(request, code):
         s=Sum('stock_count'),
         v=Sum(ExpressionWrapper(F('stock_count') * F('cost_price'),
                                 output_field=DecimalField(max_digits=14, decimal_places=2))),
+        sv=Sum(ExpressionWrapper(F('stock_count') * F('sale_price'),
+                                 output_field=DecimalField(max_digits=14, decimal_places=2))),
     )
     total_stock = inv_agg['s'] or 0
     total_value = float(inv_agg['v'] or 0)
+
+    # Marja — HAQIQIY tannarx/sotuv bo'yicha hisoblanadi.
+    # Ilgari sarlavhada `product.markup_percent` ko'rsatilardi: u saqlanadigan
+    # maydon bo'lib, faqat ayrim qabul yo'llarida yozilardi — shuning uchun
+    # tannarx 10 200 / sotuv 13 000 bo'lsa ham 0.00% chiqib turardi.
+    _cost_val = float(inv_agg['v'] or 0)
+    _sale_val = float(inv_agg['sv'] or 0)
+    if _cost_val > 0:
+        real_markup = (_sale_val - _cost_val) / _cost_val * 100
+    else:
+        _avg = BranchStock.objects.filter(variant__product=product).aggregate(
+            c=Avg('cost_price'), sp=Avg('sale_price'))
+        _c = float(_avg['c'] or 0); _sp = float(_avg['sp'] or 0)
+        real_markup = ((_sp - _c) / _c * 100) if _c > 0 else None
     days_left = (total_stock / daily_avg) if daily_avg else None
 
     # Daily chart data
@@ -1485,6 +1501,7 @@ def product_detail(request, code):
 
     return render(request, 'inventory/product_detail.html', {
         'product': product, 'branches_data': branches_data,
+        'real_markup': real_markup,
         'recent_intakes': recent_intakes,
         'product_kpis': product_kpis,
         'variant_rows': variant_rows,

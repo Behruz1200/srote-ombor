@@ -2,6 +2,7 @@
 {% load yurit_extras %}
 
 {% block title %}{{ product.name }} — yurit{% endblock %}
+{% block backbar %}{% endblock %}{# sahifaning o'z orqaga havolasi bor #}
 
 {% block content %}
 <div class="container dash-page">
@@ -66,7 +67,10 @@
                 <div style="font-family: var(--yrt-font-mono); font-size: 1.75rem; font-weight: 700; color: var(--yrt-primary); line-height: 1.1;">
                     {% if price_min and price_max and price_min != price_max %}{{ price_min|som }} – {{ price_max|som }}{% elif price_min %}{{ price_min|som }}{% else %}{{ product.default_sale_price|som }}{% endif %}
                 </div>
-                <small style="color: var(--yrt-fg-muted);">so'm · Markup: {{ product.markup_percent }}%</small>
+                <small style="color: var(--yrt-fg-muted);">
+                    so'm{% if real_markup is not None %} · Marja:
+                    <span style="color: var(--yrt-{% if real_markup < 10 %}danger{% elif real_markup < 25 %}warning{% else %}success{% endif %});">{{ real_markup|floatformat:1 }}%</span>{% endif %}
+                </small>
                 <div style="margin-top: 0.7rem;">
                     <img src="{% url 'qr_image' product.code %}" alt="QR"
                          style="width: 120px; height: 120px; image-rendering: pixelated; background: #FFFFFF; padding: 4px; border-radius: 8px; border: 1px solid var(--yrt-border);">
