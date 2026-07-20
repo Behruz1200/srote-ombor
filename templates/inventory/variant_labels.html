@@ -4,7 +4,7 @@
 {% block backbar %}{% endblock %}
 
 {% block content %}
-<div class="container dash-page no-print" style="max-width:760px;">
+<div class="dash-page no-print">
     <header class="dash-hero">
         <div class="dash-hero__glow"></div>
         <div class="dash-hero__inner">
@@ -16,8 +16,6 @@
             <div class="dash-hero__actions">
                 <button onclick="window.print()" class="dash-btn dash-btn--primary"><i class="bi bi-printer"></i> <span>Chop etish (dialog)</span></button>
                 <a href="{% url 'price_labels' %}?ids={{ ids }}&size=58x40" class="dash-btn dash-btn--ghost"><i class="bi bi-tag"></i> <span>Narx etiketkasi</span></a>
-                {# Kelgan joyga qaytadi (mahsulot sahifasi, qabul, ro'yxat...).
-                   Tarix bo'lmasa — mahsulotlar ro'yxatiga. #}
                 <a href="{% url 'product_list' %}" id="backBtn" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Orqaga</span></a>
             </div>
         </div>
@@ -62,7 +60,7 @@
 </div>
 
 {% if uniq_labels|length > 1 %}
-<div class="container no-print" style="max-width:760px;">
+<div class="dash-page no-print">
     <div class="card p-3 mb-3">
         <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
             <strong class="small"><i class="bi bi-rulers"></i> Qaysi o'lcham/tur chop etilsin?</strong>

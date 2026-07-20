@@ -1512,7 +1512,14 @@
                                 radial-gradient(ellipse at top right, rgba(34,197,94,0.22), transparent 50%),
                                 radial-gradient(ellipse at bottom, rgba(245,158,11,0.16), transparent 60%);
         }
-        .dash-page { color: var(--yrt-fg); }
+        .dash-page {
+            color: var(--yrt-fg);
+            /* Barcha sahifalar bir xil kenglikda boshlansin — ilgari har
+               sahifa o'z ichki max-width'ini qo'yardi (760/860/900px) va
+               sarlavhalar turlicha kenglikda ko'rinardi. */
+            max-width: 1400px;
+            margin-inline: auto;
+        }
 
         /* ── Aurora hero ───────────────────────────────────────────────── */
         .dash-hero {
