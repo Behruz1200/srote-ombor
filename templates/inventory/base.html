@@ -1429,10 +1429,13 @@
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            /* Navbar, sticky bars, action buttons, filter forms — gone */
+            /* Navbar, sticky bars, action buttons, filter forms — gone.
+               Mobil yuqori panel va uchib turuvchi xabarlar ham qog'ozga
+               tushmasin (ilgari tushardi — chek "ekran surati"dek chiqardi). */
             nav.navbar, .yurit-nav, .yrt-page-header .yrt-actions,
             .yrt-section-head form, .btn-group, footer, #cmdkModal,
-            #iosInstallHint, .modal {
+            #iosInstallHint, .modal,
+            .yrt-mobile-topbar, .yrt-sidebar-scrim, .alert-dismissible {
                 display: none !important;
             }
             /* Generic .no-print escape hatch */

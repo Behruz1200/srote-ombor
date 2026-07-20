@@ -4,6 +4,46 @@
 {% block title %}Smena cheki #{{ shift.pk }} — yurit{% endblock %}
 
 {% block content %}
+<style>
+{% comment %}
+Chop etishda FAQAT chek chiqsin. Ilgari sahifaning hamma joyi (mobil
+yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi —
+"ekran surati" bo'lib chiqardi.
+{% endcomment %}
+@media print {
+    @page { size: 80mm auto; margin: 0; }
+
+    /* Hamma narsani ko'rinmas qilamiz, keyin faqat chekni qaytaramiz.
+       (display:none o'rniga visibility — ota elementlar joyida qoladi,
+       shuning uchun chek sahifa boshidan chiqadi.) */
+    body * { visibility: hidden !important; }
+    #receipt, #receipt * { visibility: visible !important; }
+
+    #receipt {
+        position: absolute !important;
+        left: 0 !important; top: 0 !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
+        margin: 0 !important;
+        padding: 3mm 4mm !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        background: #fff !important;
+        font-size: 10pt;
+    }
+    html, body {
+        background: #fff !important;
+        margin: 0 !important; padding: 0 !important;
+    }
+    /* Ehtiyot uchun — sahifa bezaklari */
+    .yrt-mobile-topbar, .yrt-sidebar-scrim, .alert, .messages,
+    nav.yurit-nav, .dash-hero, .btn, footer {
+        display: none !important;
+    }
+}
+</style>
+
 <div class="container dash-page">
     <header class="dash-hero d-print-none">
         <div class="dash-hero__glow"></div>
