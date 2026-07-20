@@ -103,11 +103,11 @@
         <div class="lbl__sc">{{ lb.variant.size }} · {{ lb.variant.color }}</div>
         <div class="lbl__mid">
             <div class="lbl__bc">{{ lb.barcode_svg|safe }}</div>
-            <img class="lbl__qr" src="{{ lb.qr_uri }}" alt="qr">
         </div>
         <div class="lbl__foot">
             <span class="lbl__price">{{ lb.price|som }} so'm</span>
         </div>
+        <div class="lbl__store">{{ store_name }}</div>
     </div>
     {% endfor %}
 </div>
@@ -230,8 +230,16 @@
 .lbl__name { font-weight: 700; font-size: 9pt; line-height: 1.1; }
 .lbl__sc { font-size: 8pt; margin: 0.5mm 0 1mm; }
 .lbl__mid { display: flex; align-items: center; justify-content: center; gap: 2mm; }
-.lbl__bc svg { height: 13mm; width: auto; max-width: 34mm; }
-.lbl__qr { width: 13mm; height: 13mm; }
+/* QR olib tashlandi — shtrix-kod butun kenglikni egallaydi */
+.lbl__bc { width: 100%; display: flex; justify-content: center; }
+.lbl__bc svg { height: 13mm; width: 94%; max-width: 100%; }
+.lbl__store {
+    font-size: 6.5pt;
+    letter-spacing: .04em;
+    text-align: center;
+    margin-top: .4mm;
+    line-height: 1;
+}
 .lbl__foot { margin-top: 1mm; }
 .lbl__price { font-weight: 800; font-size: 12pt; }
 
@@ -259,9 +267,8 @@
         page-break-inside: avoid; break-inside: avoid;
     }
     .lbl[style*="display: none"] { display: none !important; }
-    .lbl__name, .lbl__sc, .lbl__price { color: #000 !important; }
-    .lbl__bc svg { height: 11mm; }
-    .lbl__qr { width: 11mm; height: 11mm; }
+    .lbl__name, .lbl__sc, .lbl__price, .lbl__store { color: #000 !important; }
+    .lbl__bc svg { height: 11mm; width: 94%; }
 }
 </style>
 {% endblock %}

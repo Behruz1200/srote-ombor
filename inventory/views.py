@@ -2158,13 +2158,6 @@ def variant_labels(request):
         except Exception:
             barcode_svg = ''
         # QR (kod) -> PNG data URI
-        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,
-                           box_size=3, border=1)
-        qr.add_data(bc)
-        qr.make(fit=True)
-        qbuf = io.BytesIO()
-        qr.make_image(fill_color='black', back_color='white').save(qbuf, 'PNG')
-        qr_uri = 'data:image/png;base64,' + base64.b64encode(qbuf.getvalue()).decode()
         # narx
         _branch = getattr(request.user, 'branch', None)
         _rows = _stock_by_variant.get(v.pk, [])
@@ -2178,7 +2171,7 @@ def variant_labels(request):
         labels.append({
             'stock': stock_n,
             'variant': v, 'code': bc, 'barcode_svg': barcode_svg,
-            'qr_uri': qr_uri, 'price': price,
+            'price': price,
         })
     # Nusxa: qat'iy son yoki OMBOR soniga qarab (copies=stock).
     # Ombori 0 bo'lgan tur uchun yorliq chiqarilmaydi — bekorga sarf bo'lmasin.
@@ -2192,6 +2185,7 @@ def variant_labels(request):
         for _ in range(n):
             render_labels.append(lb)
     return render(request, 'inventory/variant_labels.html', {
+        'store_name': PRICE_LABEL_STORE_NAME,
         'labels': render_labels, 'copies': copies_raw if by_stock else copies,
         'by_stock': by_stock, 'skipped': skipped,
         'uniq_labels': labels,          # o'lcham tanlash paneli uchun
