@@ -40,7 +40,7 @@
             </div>
         </article>
 
-        <article class="dash-kpi" data-tone="success">
+        <a href="?{% querystring stock='in_stock' page=1 %}" class="dash-kpi text-decoration-none" data-tone="success" title="Faqat zaxirasi borlarni ko'rish">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-check2-circle"></i> Zaxirada bor</span>
             </div>
@@ -48,9 +48,9 @@
                 <span>{{ kpi.in_stock }}</span>
             </div>
             <div class="dash-kpi__footer"><span>qoldiq &gt; 0</span></div>
-        </article>
+        </a>
 
-        <article class="dash-kpi" data-tone="amber">
+        <a href="?{% querystring stock='low' page=1 %}" class="dash-kpi text-decoration-none" data-tone="amber" title="Faqat past zaxirani ko'rish">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-exclamation-triangle"></i> Past zaxira</span>
             </div>
@@ -58,7 +58,7 @@
                 <span>{{ kpi.low_stock }}</span>
             </div>
             <div class="dash-kpi__footer"><span>1–3 dona qolgan</span></div>
-        </article>
+        </a>
 
         <article class="dash-kpi" data-tone="indigo">
             <div class="dash-kpi__head">
@@ -78,7 +78,7 @@
             </div>
         </article>
 
-        <article class="dash-kpi" data-tone="danger">
+        <a href="?{% querystring stock='zero' page=1 %}" class="dash-kpi text-decoration-none" data-tone="danger" title="Faqat tugaganlarni ko'rish">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-x-octagon"></i> Tugagan</span>
             </div>
@@ -86,7 +86,7 @@
                 <span>{{ kpi.out_stock }}</span>
             </div>
             <div class="dash-kpi__footer"><span>qoldiq = 0</span></div>
-        </article>
+        </a>
     </section>
     {% endif %}
 
@@ -191,6 +191,11 @@
                 </form>
             </div>
             <div class="d-flex align-items-center gap-2 ms-auto">
+                <a href="{% url 'product_export' %}?{% querystring %}"
+                   class="btn btn-sm btn-outline-success"
+                   title="Ekrandagi ro'yxatni Excel'ga yuklab olish">
+                    <i class="bi bi-file-earmark-excel"></i> Excel
+                </a>
                 <button type="button" id="colToggle" class="btn btn-sm btn-outline-secondary"
                         title="Sotuv tahlili ustunlari (30 kun, Yetadi, Aylanma, Marja)">
                     <i class="bi bi-layout-three-columns"></i> Ko'proq ustun
@@ -216,7 +221,7 @@
                             <th class="text-end col-opt">Yetadi</th>
                             <th class="text-end col-opt" title="Yillik aylanma (sotilgan / o'rtacha zaxira)">Aylanma</th>
                             <th class="text-end">{% include "inventory/_sort_th.html" with field="price" label="Narx" %}</th>
-                            <th class="text-end col-opt">Marja</th>
+                            <th class="text-end col-opt">{% include "inventory/_sort_th.html" with field="margin" label="Marja" %}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -306,9 +311,10 @@
                                 <a href="{% url 'intake_for_product' p.code %}"
                                    class="btn btn-sm btn-outline-secondary border-0 px-1"
                                    title="Qabul qilish"><i class="bi bi-truck"></i></a>
-                                <a href="{% url 'product_label' p.code %}" target="_blank"
+                                <a href="{% url 'variant_labels' %}?products={{ p.pk }}&copies=stock"
+                                   target="_blank"
                                    class="btn btn-sm btn-outline-secondary border-0 px-1"
-                                   title="Etiketka"><i class="bi bi-printer"></i></a>
+                                   title="Etiketka"><i class="bi bi-tags"></i></a>
                                 <button type="button"
                                         class="btn btn-sm btn-outline-secondary border-0 px-1 text-danger del-btn"
                                         title="O'chirish"

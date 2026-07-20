@@ -3,7 +3,8 @@ from django.urls import reverse
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, F, Q, DecimalField, ExpressionWrapper, Count, Max, Min, Avg
+from django.db.models import (Sum, F, Q, DecimalField, ExpressionWrapper, Count,
+                              Max, Min, Avg, Case, When, Value, FloatField)
 from django.db.models.functions import (
     Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
 )
@@ -795,7 +796,28 @@ def product_list(request):
         'price': 'default_sale_price', '-price': '-default_sale_price',
         'created': 'created_at', '-created': '-created_at',
         '-created_at': '-created_at',
+        'margin': 'margin_calc', '-margin': '-margin_calc',
+        'value': 'stock_value', '-value': '-stock_value',
     }
+    # Marja va zaxira qiymati bo'yicha saralash uchun annotatsiya
+    if sort in ('margin', '-margin', 'value', '-value'):
+        products = products.annotate(
+            _cv=Sum(ExpressionWrapper(
+                F('variants__branch_stocks__stock_count') *
+                F('variants__branch_stocks__cost_price'),
+                output_field=DecimalField(max_digits=16, decimal_places=2))),
+            _sv=Sum(ExpressionWrapper(
+                F('variants__branch_stocks__stock_count') *
+                F('variants__branch_stocks__sale_price'),
+                output_field=DecimalField(max_digits=16, decimal_places=2))),
+        ).annotate(
+            stock_value=F('_cv'),
+            margin_calc=Case(
+                When(_cv__gt=0, then=(F('_sv') - F('_cv')) * 100.0 / F('_cv')),
+                default=Value(None),
+                output_field=FloatField(),
+            ),
+        )
     products = products.order_by(allowed_sorts.get(sort, '-created_at'))
 
     # Sahifalash — avval qattiq [:200] chegara bor edi va undan keyingi
@@ -1313,7 +1335,10 @@ def product_attach_barcode(request):
 @admin_required
 def product_detail(request, code):
     product = get_object_or_404(Product, code=normalize_code(code))
-    variants = list(product.variants.all())
+    # Zaxira yozuvlari bilan birga — har tur uchun alohida so'rov
+    # yubormaslik uchun (ilgari sahifada 45 ta so'rov bo'lardi)
+    variants = list(product.variants.all()
+                    .prefetch_related('branch_stocks__branch'))
     sizes = sorted({v.size for v in variants}, key=lambda s: (len(s), s))
     colors = sorted({v.color for v in variants})
 
@@ -1343,11 +1368,26 @@ def product_detail(request, code):
     for v in variants:
         sts = stocks_by_variant.get(v.pk, [])
         prices = [st.sale_price for st in sts if st.sale_price]
+        # Tannarx va marja — turlar jadvalida ko'rinsin (ilgari faqat
+        # "Turlarni tahrirlash" sahifasida ko'rinardi)
+        _costs = [st.cost_price for st in sts if st.cost_price]
+        _cv = sum(float(st.stock_count) * float(st.cost_price) for st in sts)
+        _sv = sum(float(st.stock_count) * float(st.sale_price) for st in sts)
+        if _cv > 0:
+            _marja = (_sv - _cv) / _cv * 100
+        elif _costs and prices:
+            _c = float(min(_costs)); _p = float(min(prices))
+            _marja = ((_p - _c) / _c * 100) if _c > 0 else None
+        else:
+            _marja = None
         variant_rows.append({
             'variant': v,
             'stock_total': sum(st.stock_count for st in sts),
             'price_min': min(prices) if prices else None,
             'price_max': max(prices) if prices else None,
+            'cost_min': min(_costs) if _costs else None,
+            'cost_max': max(_costs) if _costs else None,
+            'marja': _marja,
         })
     _all_prices = [st.sale_price for st in all_stocks if st.sale_price]
     price_min = min(_all_prices) if _all_prices else None
@@ -1506,12 +1546,18 @@ def product_detail(request, code):
                 .order_by('variant_id', 'received_at')):
         _batch_map.setdefault((ink.variant_id, ink.branch_id), []).append(ink)
 
+    # Zaxira yozuvlari yuqorida allaqachon o'qilgan (all_stocks) — har tur
+    # uchun qaytadan so'rov yubormaymiz (bu yerda 22 ta ortiqcha so'rov edi)
+    _stocks_by_variant = {}
+    for _st in all_stocks:
+        _stocks_by_variant.setdefault(_st.variant_id, []).append(_st)
+
     batch_groups = []
     for row in variant_rows:
         v = row.get('variant') if isinstance(row, dict) else getattr(row, 'variant', None)
         if v is None:
             continue
-        for st in BranchStock.objects.filter(variant=v).select_related('branch'):
+        for st in _stocks_by_variant.get(v.pk, []):
             inks = _batch_map.get((v.pk, st.branch_id)) or []
             # AJRATISH SOTUV narxiga qarab bo'ladi (tannarxga emas) — shuning
             # uchun faqat sotuv narxi HAR XIL bo'lgan qabullar ko'rsatiladi.
@@ -2089,6 +2135,12 @@ def variant_labels(request):
 
     # Narx: variantning filial narxi yoki so'rov paramidan yoki mahsulot default
     price_param = request.GET.get('price')
+    # Zaxira yozuvlarini oldindan olamiz — halqa ichida har tur uchun
+    # alohida so'rov ketardi (sahifada 51 ta so'rov)
+    _stock_by_variant = {}
+    for _st in BranchStock.objects.filter(
+            variant__in=variants).select_related('branch'):
+        _stock_by_variant.setdefault(_st.variant_id, []).append(_st)
     labels = []
     for v in variants:
         bc = v.barcode or gen_internal_ean13(v.pk)
@@ -2115,10 +2167,12 @@ def variant_labels(request):
         qr_uri = 'data:image/png;base64,' + base64.b64encode(qbuf.getvalue()).decode()
         # narx
         _branch = getattr(request.user, 'branch', None)
-        _qs = BranchStock.objects.filter(variant=v)
-        st = ((_qs.filter(branch=_branch, sale_price__gt=0).first() if _branch else None)
-              or _qs.filter(sale_price__gt=0).order_by('-sale_price').first())
-        _stock_row = (_qs.filter(branch=_branch).first() if _branch else None) or st
+        _rows = _stock_by_variant.get(v.pk, [])
+        _priced = [r for r in _rows if r.sale_price and r.sale_price > 0]
+        st = (next((r for r in _priced if _branch and r.branch_id == _branch.pk), None)
+              or (max(_priced, key=lambda r: r.sale_price) if _priced else None))
+        _stock_row = (next((r for r in _rows if _branch and r.branch_id == _branch.pk), None)
+                      or st)
         stock_n = _stock_row.stock_count if _stock_row else 0
         price = (price_param or (st.sale_price if st else v.product.default_sale_price))
         labels.append({
@@ -7426,84 +7480,6 @@ PRICE_LABEL_STORE_NAME = 'Koreys Bozor'
 PRICE_LABEL_SIZES = {'30x20': (30, 20), '58x40': (58, 40)}
 
 
-@admin_required
-def product_labels(request, code=None):
-    """Mahsulot etiketkasi — narx yorlig'i uslubida, SHTRIX-KOD bilan.
-
-    Har yorliq alohida bosiladi (termal rulon). Skanerlanganda POS
-    mahsulotni kodi yoki ishlab chiqaruvchi barcode'i orqali topadi.
-    """
-    from barcode import Code128, EAN13
-    from barcode.writer import SVGWriter
-
-    if code:
-        products = [get_object_or_404(Product, code=normalize_code(code))]
-    else:
-        ids = request.GET.getlist('id') or request.GET.get('id', '').split(',')
-        ids = [i for i in ids if i.strip().isdigit()]
-        products = list(Product.objects.filter(id__in=ids)) if ids else []
-
-    try:
-        copies = max(1, min(200, int(request.GET.get('copies', 6))))
-    except ValueError:
-        copies = 6
-
-    size = request.GET.get('size') or '58x40'
-    if size not in PRICE_LABEL_SIZES:
-        size = '58x40'
-    w, h = PRICE_LABEL_SIZES[size]
-
-    branch = getattr(request.user, 'branch', None)
-    labels = []
-    for p in products:
-        # Skanerlanadigan qiymat: ishlab chiqaruvchi barcode'i bo'lsa o'sha,
-        # bo'lmasa mahsulot kodi (POS ikkalasini ham topadi).
-        raw = (p.external_barcode or '').strip()
-        digits = raw.isdigit() and len(raw) in (12, 13)
-        bc_value = raw or p.code
-        try:
-            svg_io = io.BytesIO()
-            opts = {'module_height': 8.0, 'module_width': 0.26,
-                    'font_size': 7, 'text_distance': 3.0, 'quiet_zone': 1.5}
-            if digits:
-                EAN13(raw[:12], writer=SVGWriter()).write(svg_io, options=opts)
-            else:
-                Code128(bc_value, writer=SVGWriter()).write(svg_io, options=opts)
-            barcode_svg = svg_io.getvalue().decode('utf-8')
-            i = barcode_svg.find('<svg')
-            barcode_svg = barcode_svg[i:] if i >= 0 else barcode_svg
-        except Exception:
-            barcode_svg = ''
-
-        st = (BranchStock.objects.filter(variant__product=p, sale_price__gt=0)
-              .filter(branch=branch).first() if branch else None)
-        if st is None:
-            st = (BranchStock.objects.filter(variant__product=p, sale_price__gt=0)
-                  .order_by('-sale_price').first())
-        price = st.sale_price if st else p.default_sale_price
-        try:
-            price_str = f"{int(round(float(price))):,}"
-        except (ValueError, TypeError):
-            price_str = str(price)
-        labels.append({'product': p, 'code': bc_value,
-                       'barcode_svg': barcode_svg, 'price_str': price_str})
-
-    items = []
-    for lb in labels:
-        for _ in range(copies):
-            items.append(lb)
-
-    return render(request, 'inventory/labels.html', {
-        'items': items, 'products': products, 'copies': copies,
-        'size': size, 'w': w, 'h': h,
-        'codes': ','.join(p.code for p in products),
-        'ids': ','.join(str(p.id) for p in products),
-        'store_name': PRICE_LABEL_STORE_NAME,
-    })
-
-
-
-
 @login_required
 def price_labels(request):
     """Peshtaxta (narx) etiketkasi: mahsulot nomi + narx + do'kon nomi.
@@ -9599,3 +9575,82 @@ def product_image(request, code):
             pass
     messages.success(request, "Rasm saqlandi.")
     return redirect(back)
+
+
+@admin_required
+def product_export(request):
+    """Filtrlangan mahsulot ro'yxatini Excel'ga chiqarish.
+
+    Sahifadagi qidiruv/kategoriya/zaxira filtrlari va saralash aynan
+    saqlanadi — ekranda ko'rgan ro'yxatning o'zi tushadi.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    rows = (BranchStock.objects
+            .select_related('variant', 'variant__product',
+                            'variant__product__category', 'branch')
+            .exclude(variant__product__is_open_price=True))
+
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        rows = rows.filter(
+            Q(variant__product__name__icontains=q) |
+            Q(variant__product__code__icontains=q) |
+            Q(variant__product__brand__icontains=q) |
+            Q(variant__barcode__icontains=q) |
+            Q(variant__color__icontains=q) |
+            Q(variant__size__icontains=q))
+    cat = request.GET.get('category')
+    if cat and str(cat).isdigit():
+        rows = rows.filter(variant__product__category_id=int(cat))
+    sf = request.GET.get('stock')
+    if sf == 'zero':
+        rows = rows.filter(stock_count=0)
+    elif sf == 'low':
+        rows = rows.filter(stock_count__gt=0, stock_count__lte=3)
+    elif sf == 'in_stock':
+        rows = rows.filter(stock_count__gt=0)
+
+    rows = rows.order_by('variant__product__name', 'variant__size', 'variant__color')
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Mahsulotlar'
+    head = ['Kod', 'Nomi', 'Brend', 'Kategoriya', 'Rang', "O'lcham",
+            'Shtrix-kod', 'Filial', 'Ombor', 'Tannarx', 'Sotuv narxi',
+            'Marja %', 'Zaxira qiymati']
+    ws.append(head)
+    hf = Font(bold=True, color='FFFFFF')
+    fill = PatternFill('solid', fgColor='4F46E5')
+    for i in range(1, len(head) + 1):
+        cl = ws.cell(row=1, column=i)
+        cl.font = hf; cl.fill = fill
+        cl.alignment = Alignment(horizontal='center')
+
+    n = 0
+    for st in rows.iterator(chunk_size=500):
+        v = st.variant; p = v.product
+        cost = float(st.cost_price or 0)
+        sale = float(st.sale_price or 0)
+        marja = round((sale - cost) / cost * 100, 1) if cost > 0 else None
+        ws.append([p.code, p.name, p.brand or '',
+                   p.category.name if p.category else '',
+                   v.color or '', v.size or '', v.barcode or '',
+                   st.branch.name, st.stock_count, cost, sale, marja,
+                   round(st.stock_count * cost, 2)])
+        n += 1
+
+    widths = [11, 34, 14, 16, 12, 10, 16, 16, 8, 12, 12, 9, 14]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = f'A1:{get_column_letter(len(head))}{n + 1}'
+
+    resp = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    stamp = timezone.localtime().strftime('%Y-%m-%d_%H%M')
+    resp['Content-Disposition'] = f'attachment; filename="mahsulotlar_{stamp}.xlsx"'
+    wb.save(resp)
+    return resp

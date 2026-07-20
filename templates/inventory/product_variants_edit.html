@@ -105,6 +105,18 @@
                         <i class="bi bi-upc-scan"></i> Kamera bilan skanerlash
                     </button>
                 </div>
+                <div class="d-flex gap-1 align-items-center flex-wrap">
+                    <span class="small text-muted me-1">Hammasiga:</span>
+                    <input type="text" id="bulkCost" class="form-control form-control-sm text-end"
+                           style="width:96px" inputmode="decimal" placeholder="tannarx">
+                    <input type="text" id="bulkMarja" class="form-control form-control-sm text-end"
+                           style="width:84px" inputmode="decimal" placeholder="marja %">
+                    <input type="text" id="bulkSale" class="form-control form-control-sm text-end"
+                           style="width:96px" inputmode="decimal" placeholder="sotuv">
+                    <button type="button" id="bulkApply" class="btn btn-sm btn-primary">
+                        Qo'llash
+                    </button>
+                </div>
                 <div class="small text-muted">
                     <i class="bi bi-info-circle"></i>
                     Ombor soni o'zgartirilsa, farq "qo'lda tuzatish" sifatida qabul tarixiga yoziladi.
@@ -550,4 +562,51 @@ document.getElementById('editForm') && document.getElementById('editForm')
 })();
 </script>
 
+
+<script>
+(function () {
+    // Bir qiymatni BARCHA qatorlarga qo'yish — 33 ta o'lchamga bittalab
+    // yozib chiqmaslik uchun. Bo'sh qoldirilgan maydon tegilmaydi.
+    var btn = document.getElementById('bulkApply');
+    if (!btn) return;
+    function num(v) {
+        var n = parseFloat(String(v || '').replace(/[^0-9.]/g, ''));
+        return isNaN(n) ? null : n;
+    }
+    btn.addEventListener('click', function () {
+        var cost = num(document.getElementById('bulkCost').value);
+        var marja = num(document.getElementById('bulkMarja').value);
+        var sale = num(document.getElementById('bulkSale').value);
+        if (cost === null && marja === null && sale === null) return;
+        var rows = document.querySelectorAll('#editRows tr');
+        var n = 0;
+        rows.forEach(function (tr) {
+            var c = tr.querySelector('.v-cost'),
+                m = tr.querySelector('.v-marja'),
+                sp = tr.querySelector('.v-sale');
+            if (!c || !sp) return;
+            if (cost !== null) c.value = Math.round(cost);
+            if (marja !== null) m.value = marja;
+            if (sale !== null) sp.value = Math.round(sale);
+            // marja berilgan bo'lsa sotuvni hisoblaymiz (sotuv aniq
+            // ko'rsatilmagan bo'lsa)
+            if (marja !== null && sale === null) {
+                var cv = num(c.value);
+                if (cv) sp.value = Math.round(cv * (1 + marja / 100));
+            }
+            // sotuv berilgan bo'lsa marjani qayta hisoblaymiz
+            if (sale !== null) {
+                var cv2 = num(c.value);
+                if (cv2) m.value = Math.round((sale / cv2 - 1) * 1000) / 10;
+            }
+            [c, m, sp].forEach(function (el) {
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            n++;
+        });
+        btn.textContent = n + " qatorga qo'llandi";
+        setTimeout(function () { btn.textContent = "Qo'llash"; }, 1600);
+    });
+})();
+</script>
 {% endblock %}

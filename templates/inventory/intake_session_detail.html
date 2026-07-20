@@ -153,9 +153,9 @@
             <div class="card p-3 mb-3">
                 <h6 class="text-muted text-uppercase small mb-2">Keyingi amallar</h6>
                 <div class="d-grid gap-2">
-                    <a href="{% url 'labels' %}?codes={% for i in session.intakes.all %}{{ i.variant.product.code }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                    <a href="{% url 'variant_labels' %}?ids={% for i in session.intakes.all %}{{ i.variant.pk }}{% if not forloop.last %},{% endif %}{% endfor %}&copies=stock"
                        class="btn btn-outline-primary" target="_blank">
-                        <i class="bi bi-qr-code"></i> QR labellarni chop etish
+                        <i class="bi bi-tags"></i> Etiketkalarni chop etish
                     </a>
                     <a href="{% url 'price_labels' %}?codes={% for i in session.intakes.all %}{{ i.variant.product.code }}{% if not forloop.last %},{% endif %}{% endfor %}&size=58x40"
                        class="btn btn-outline-danger" target="_blank">

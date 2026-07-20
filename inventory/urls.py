@@ -62,6 +62,7 @@ urlpatterns = [
 
     path('products/', views.product_list, name='product_list'),
     path('products/bulk/', views.product_bulk_update, name='product_bulk_update'),
+    path('products/export/', views.product_export, name='product_export'),
     path('products/new/', views.product_create, name='product_create'),
     path('products/merge/', views.product_merge, name='product_merge'),
     path('products/search-suggest/', views.product_search_suggest,
@@ -155,6 +156,4 @@ urlpatterns = [
     path('audit/', views.audit_list, name='audit_list'),
 
     path('products/<str:code>/qr.png', views.qr_image, name='qr_image'),
-    path('products/<str:code>/label/', views.product_labels, name='product_label'),
-    path('labels/', views.product_labels, name='labels'),
 ]
