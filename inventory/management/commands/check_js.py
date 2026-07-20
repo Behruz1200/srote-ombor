@@ -34,7 +34,24 @@ def _extract(html):
 class Command(BaseCommand):
     help = "node --check every inline <script> on the key pages."
 
+    # Ko'p qatorli {# ... #} — Django buni IZOH deb hisoblamaydi va matn
+    # bo'lib sahifaga chiqib ketadi. Sintaksis tekshiruvi buni ushlamaydi.
+    MULTI_COMMENT = re.compile(r'\{#(?:(?!#\}).)*?\n(?:(?!#\}).)*?#\}', re.S)
+
+    def _check_multiline_comments(self):
+        import glob
+        bad = []
+        for f in glob.glob('templates/**/*.html', recursive=True):
+            with open(f, encoding='utf-8') as fh:
+                for m in self.MULTI_COMMENT.finditer(fh.read()):
+                    bad.append((f, m.group(0)[:60].replace('\n', ' | ')))
+        for f, t in bad:
+            self.stderr.write(self.style.ERROR(
+                f"{f}: ko'p qatorli {{# #}} izoh — matn bo'lib chiqadi: {t}..."))
+        return len(bad)
+
     def handle(self, *args, **opts):
+        _bad_comments = self._check_multiline_comments()
         node = shutil.which('node') or shutil.which('nodejs')
         if not node:
             self.stdout.write(self.style.WARNING(

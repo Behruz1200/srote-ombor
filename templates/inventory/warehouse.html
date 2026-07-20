@@ -76,7 +76,12 @@
             <h6 class="text-muted text-uppercase small mb-2">
                 <i class="bi bi-arrow-left-right"></i> Kirim / chiqim — 12 hafta (dona)
             </h6>
-            <canvas id="flowChart" height="120"></canvas>
+            {% comment %}
+            Balandligi belgilangan qutiga solamiz: maintainAspectRatio:false
+            bo'lganda konteynerda balandlik bo'lmasa, Chart.js har o'lchamda
+            canvas'ni kattalashtirib, cheksiz o'sib ketadi.
+            {% endcomment %}
+            <div class="dash-chart-box"><canvas id="flowChart"></canvas></div>
             <p class="text-muted small mb-0 mt-2">
                 Kirim chiqimdan doim baland bo'lsa — ombor o'sib boradi va pul
                 tovarda qotib qoladi.
