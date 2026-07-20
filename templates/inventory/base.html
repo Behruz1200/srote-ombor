@@ -2959,7 +2959,31 @@
             .btn-group-sm > .btn:has(> i.bi:only-child),
             .btn-sm:has(> i.bi:only-child) { min-width: 40px; min-height: 40px; }
         }
-    </style>
+    
+    /* --- Jadval ustunlarini sozlash (yurit-table-resize.js) --- */
+    .yrt-col-handle {
+        position: absolute; top: 0; right: -4px; width: 8px; height: 100%;
+        cursor: col-resize; user-select: none; touch-action: none;
+        z-index: 3; background: transparent;
+    }
+    .yrt-col-handle::after {
+        content: ''; position: absolute; top: 18%; left: 3px;
+        width: 2px; height: 64%; border-radius: 2px;
+        background: transparent; transition: background .12s;
+    }
+    th:hover > .yrt-col-handle::after { background: rgba(13,110,253,.35); }
+    .yrt-col-handle:hover::after,
+    body.yrt-col-resizing .yrt-col-handle:hover::after { background: #0d6efd; }
+    /* Tortayotganda matn belgilanib ketmasin */
+    body.yrt-col-resizing { cursor: col-resize; user-select: none; }
+    body.yrt-col-resizing * { cursor: col-resize !important; }
+    /* Kenglik cheklanganda matn chiroyli kesilsin */
+    table[style*="table-layout: fixed"] th,
+    table[style*="table-layout: fixed"] td {
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    @media print { .yrt-col-handle { display: none !important; } }
+</style>
 </head>
 <body>
 <!-- Cmd+K / Ctrl+K global search palette -->
@@ -3317,6 +3341,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'js/yurit-table-resize.js' %}"></script>
 
 <!-- PWA install hint (iOS Safari can't auto-prompt; show a one-time banner) -->
 <div id="iosInstallHint" class="position-fixed bottom-0 start-0 end-0 m-2 p-3 bg-dark text-light rounded shadow"
