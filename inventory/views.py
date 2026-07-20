@@ -1722,7 +1722,20 @@ def product_variants_edit(request, code):
                     if v is None:
                         v = ProductVariant.objects.create(
                             product=product, size=r['size'],
-                            color=r['color'], barcode=r['barcode'])
+                            color=r['color'], barcode=r['barcode'] or None)
+                        # Shtrix-kod kiritilmagan bo'lsa — o'zi beriladi
+                        # (boshqa qabul yo'llarida shunday, bu yerda tushib
+                        # qolgan edi: kodsiz tur kassada skanerlanmaydi va
+                        # etiketka ham chiqmaydi)
+                        if not v.barcode:
+                            code = gen_internal_ean13(v.pk)
+                            k = 0
+                            while ProductVariant.objects.filter(
+                                    barcode=code).exclude(pk=v.pk).exists():
+                                k += 1
+                                code = gen_internal_ean13(v.pk + k * 100000)
+                            v.barcode = code
+                            v.save(update_fields=['barcode'])
                         stock = BranchStock.objects.create(
                             variant=v, branch=branch,
                             cost_price=r['cost'], sale_price=r['sale'],
@@ -1733,6 +1746,7 @@ def product_variants_edit(request, code):
                                 variant=v, branch=branch,
                                 quantity=r['stock'],
                                 cost_per_unit=r['cost'],
+                                sale_price=r['sale'] or None,
                                 note="Yangi tur (tahrirlash sahifasidan)",
                                 received_by=request.user)
                         changed.append(
