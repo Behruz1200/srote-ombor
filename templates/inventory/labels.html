@@ -98,20 +98,14 @@
                        class="form-control form-control-sm" style="width: 74px;">
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Yangilash</button>
             </form>
-            <button type="button" id="usbPrintBtn" class="btn btn-dark btn-sm"
-                    title="Xprinter'ga to'g'ridan-to'g'ri, bittalab (USB, dialogsiz)">USB chop etish</button>
-            <button onclick="window.print()" class="btn btn-success btn-sm">Chop etish (dialog)</button>
+            <button onclick="window.print()" class="btn btn-success btn-sm">Chop etish</button>
             <a href="{% url 'price_labels' %}?codes={{ codes }}&size={{ size }}"
                class="btn btn-outline-danger btn-sm">Narx etiketkasi</a>
             <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">Orqaga</a>
         </div>
     </div>
-    <div class="no-print" style="padding:6px 18px; background:#fff; border-bottom:1px solid #eee; font-size:.85rem; display:flex; flex-wrap:wrap; gap:16px; align-items:center;">
-        <span id="usbStatus" class="text-muted">
-            Har yorliq ALOHIDA bosiladi. USB uchun printer WinUSB (Zadig) drayverida bo'lsin.
-        </span>
-        <label class="mb-0"><input type="checkbox" id="usbInvert"> Ranglar teskari</label>
-        <a href="#" id="usbRepick">Printerni qayta tanlash</a>
+    <div class="no-print" style="padding:6px 18px; background:#fff; border-bottom:1px solid #eee; font-size:.85rem;">
+        <span class="text-muted">Har yorliq alohida sahifaga tushadi.</span>
     </div>
 
     {% if not items %}
@@ -132,99 +126,6 @@
         {% endfor %}
     </div>
 
-    <script src="{% static 'js/yurit-tspl.js' %}"></script>
-    <script>
-    // Avtomatik chop etish (?autoprint=1)
-    (function () {
-        var qs = new URLSearchParams(location.search);
-        if (qs.get('autoprint') !== '1') return;
-        var fired = false;
-        function go() { if (fired) return; fired = true; window.print(); }
-        if (document.readyState === 'complete') { setTimeout(go, 350); }
-        else { window.addEventListener('load', function () { setTimeout(go, 350); }); }
-        window.addEventListener('afterprint', function () {
-            setTimeout(function () { try { window.close(); } catch (e) {} }, 200);
-        });
-    })();
-    </script>
 
-    <script>
-    // USB (TSPL): har yorliq canvasga chiziladi va ALOHIDA topshiriq bo'lib ketadi
-    (function () {
-        const btn = document.getElementById('usbPrintBtn');
-        if (!btn || !window.yuritTSPL) return;
-        const statusEl = document.getElementById('usbStatus');
-        const invertEl = document.getElementById('usbInvert');
-        const WMM = {{ w }}, HMM = {{ h }};
-
-        function setMsg(m, err) {
-            statusEl.textContent = m;
-            statusEl.className = err ? 'text-danger' : 'text-success';
-        }
-
-        async function renderLabel(el) {
-            const D = yuritTSPL.DPMM;
-            const W = Math.round(WMM * D), H = Math.round(HMM * D);
-            const cv = document.createElement('canvas');
-            cv.width = W; cv.height = H;
-            const ctx = cv.getContext('2d');
-            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-            ctx.fillStyle = '#000';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-
-            const pad = Math.round(1.2 * D);
-            let y = pad;
-
-            const name = (el.querySelector('.plbl__name') || {}).textContent || '';
-            ctx.font = 'bold ' + Math.round(H * 0.10) + 'px Arial, sans-serif';
-            ctx.fillText(name.trim(), W / 2, y, W - pad * 2);
-            y += Math.round(H * 0.13);
-
-            const price = (el.querySelector('.plbl__price') || {}).textContent || '';
-            ctx.font = 'bold ' + Math.round(H * 0.26) + 'px Arial, sans-serif';
-            ctx.fillText(price.trim() + " so'm", W / 2, y, W - pad * 2);
-            y += Math.round(H * 0.30);
-
-            const svg = el.querySelector('.plbl__bc svg');
-            const bcH = Math.round(H * 0.30);
-            if (svg) {
-                try {
-                    const bcW = Math.round(W * 0.88);
-                    const im = await yuritTSPL.svgToImage(svg, bcW, bcH);
-                    ctx.drawImage(im, Math.round((W - bcW) / 2), y, bcW, bcH);
-                } catch (e) { /* barcode chizilmadi — davom etamiz */ }
-            }
-            y += bcH;
-
-            const store = (el.querySelector('.plbl__store') || {}).textContent || '';
-            ctx.font = Math.round(H * 0.075) + 'px Arial, sans-serif';
-            ctx.fillText(store.trim(), W / 2, Math.min(y, H - Math.round(H * 0.09)));
-            return cv;
-        }
-
-        async function run(forcePrompt) {
-            const els = Array.prototype.slice.call(document.querySelectorAll('.plbl'));
-            if (!els.length) { setMsg("Yorliq yo'q", true); return; }
-            const invert = !!(invertEl && invertEl.checked);
-            btn.disabled = true;
-            setMsg('Yorliqlar tayyorlanmoqda...', false);
-            const bitmaps = [];
-            for (const el of els) {
-                const cv = await renderLabel(el);
-                bitmaps.push(yuritTSPL.canvasToBitmap(cv, WMM, HMM, invert));
-            }
-            await yuritTSPL.printAll(bitmaps, {
-                forcePrompt: forcePrompt,
-                onStatus: function (m, err) { setMsg(m, err); },
-            });
-            btn.disabled = false;
-        }
-        btn.addEventListener('click', function () { run(false); });
-        const repick = document.getElementById('usbRepick');
-        if (repick) repick.addEventListener('click', function (e) {
-            e.preventDefault(); run(true);
-        });
-    })();
-    </script>
 </body>
 </html>

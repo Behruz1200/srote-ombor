@@ -89,16 +89,12 @@
                        class="form-control form-control-sm" style="width: 74px;">
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Yangilash</button>
             </form>
-            <button type="button" id="usbPrintBtn" class="btn btn-dark btn-sm"
-                    title="Xprinter'ga to'g'ridan-to'g'ri (USB, dialogsiz)">USB chop etish</button>
             <button onclick="window.print()" class="btn btn-success btn-sm">Chop etish (dialog)</button>
             <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">Orqaga</a>
         </div>
     </div>
     <div class="no-print" style="padding:6px 18px; background:#fff; border-bottom:1px solid #eee; font-size:.85rem; display:flex; flex-wrap:wrap; gap:16px; align-items:center;">
-        <span id="usbStatus" class="text-muted">USB: Xprinter'ni bir marta tanlaysiz, keyin avtomatik ulanadi.</span>
-        <label class="mb-0"><input type="checkbox" id="usbInvert"> Ranglar teskari (qora fon chiqsa belgilang)</label>
-        <a href="#" id="usbRepick">Printerni qayta tanlash</a>
+        <span class="text-muted">Har yorliq alohida sahifaga tushadi.</span>
     </div>
 
     {% if uniq_labels|length > 1 %}
@@ -186,137 +182,6 @@
     })();
     </script>
 
-    <script>
-    // To'g'ridan-to'g'ri USB chop etish (TSPL, dialogsiz) — Xprinter XP-370B.
-    // Printer WinUSB (Zadig) drayveriga o'tkazilgan bo'lishi shart.
-    (function () {
-        const KEY = 'yurit_label_usb';
-        const btn = document.getElementById('usbPrintBtn');
-        const repick = document.getElementById('usbRepick');
-        const statusEl = document.getElementById('usbStatus');
-        const invertEl = document.getElementById('usbInvert');
-        if (!btn) return;
-
-        function setMsg(m, err) {
-            statusEl.textContent = m;
-            statusEl.className = err ? 'text-danger' : 'text-success';
-        }
-        function saved() {
-            try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
-        }
-        async function pickPrinter(forcePrompt) {
-            if (!navigator.usb) throw new Error("WebUSB yo'q — Chrome (HTTPS) kerak");
-            const s = saved();
-            if (!forcePrompt && s) {
-                const devs = await navigator.usb.getDevices();
-                const m = devs.find(d => d.vendorId === s.vendorId && d.productId === s.productId);
-                if (m) return m;
-            }
-            const device = await navigator.usb.requestDevice({ filters: [] });
-            localStorage.setItem(KEY, JSON.stringify({ vendorId: device.vendorId, productId: device.productId }));
-            return device;
-        }
-        async function sendBytes(device, bytes) {
-            if (!device.opened) await device.open();
-            if (device.configuration === null) await device.selectConfiguration(1);
-            let ifaceNum = null, epNum = null;
-            for (const iface of device.configuration.interfaces) {
-                const alt = iface.alternate || (iface.alternates && iface.alternates[0]);
-                if (!alt) continue;
-                const ep = alt.endpoints.find(e => e.direction === 'out' && e.type === 'bulk')
-                        || alt.endpoints.find(e => e.direction === 'out');
-                if (ep) { ifaceNum = iface.interfaceNumber; epNum = ep.endpointNumber; break; }
-            }
-            if (epNum === null) throw new Error("USB chiqish endpoint topilmadi");
-            const iface = device.configuration.interfaces.find(i => i.interfaceNumber === ifaceNum);
-            if (!iface.claimed) await device.claimInterface(ifaceNum);
-            const CHUNK = 4096;
-            for (let i = 0; i < bytes.length; i += CHUNK) {
-                await device.transferOut(epNum, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
-            }
-        }
-        function renderBitmap(name, vtext, price, store, size, invert) {
-            const dpmm = 8;
-            const wmm = size === '30x20' ? 30 : 58;
-            const hmm = size === '30x20' ? 20 : 40;
-            const W = wmm * dpmm, H = hmm * dpmm;
-            const cv = document.createElement('canvas');
-            cv.width = W; cv.height = H;
-            const ctx = cv.getContext('2d');
-            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-            ctx.fillStyle = '#000';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            const big = size !== '30x20';
-            ctx.font = 'bold ' + (big ? 30 : 18) + 'px Arial, sans-serif';
-            ctx.fillText(name, W / 2, big ? 40 : 24);
-            if (vtext) {
-                ctx.font = (big ? 22 : 12) + 'px Arial, sans-serif';
-                ctx.fillText(vtext, W / 2, big ? 70 : 40);
-            }
-            ctx.font = 'bold ' + (big ? 88 : 44) + 'px Arial, sans-serif';
-            ctx.fillText(price, W / 2, Math.round(H * (vtext ? 0.56 : 0.5)));
-            ctx.font = (big ? 24 : 12) + 'px Arial, sans-serif';
-            ctx.fillText(store, W / 2, H - (big ? 26 : 14));
-            const pxd = ctx.getImageData(0, 0, W, H).data;
-            const bpr = Math.ceil(W / 8);
-            const data = new Uint8Array(bpr * H);
-            data.fill(invert ? 0x00 : 0xFF);
-            for (let y = 0; y < H; y++) {
-                for (let x = 0; x < W; x++) {
-                    const i = (y * W + x) * 4;
-                    const lum = 0.299 * pxd[i] + 0.587 * pxd[i + 1] + 0.114 * pxd[i + 2];
-                    const black = pxd[i + 3] > 64 && lum < 128;
-                    if (black) {
-                        const bi = y * bpr + (x >> 3);
-                        const mask = 0x80 >> (x & 7);
-                        if (invert) data[bi] |= mask; else data[bi] &= ~mask;
-                    }
-                }
-            }
-            return { data: data, bpr: bpr, H: H, wmm: wmm, hmm: hmm };
-        }
-        function buildTSPL(b) {
-            const enc = new TextEncoder();
-            const head = enc.encode(
-                'SIZE ' + b.wmm + ' mm,' + b.hmm + ' mm\r\n' +
-                'GAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\n' +
-                'BITMAP 0,0,' + b.bpr + ',' + b.H + ',0,'
-            );
-            const tail = enc.encode('\r\nPRINT 1,1\r\n');
-            const out = new Uint8Array(head.length + b.data.length + tail.length);
-            out.set(head, 0); out.set(b.data, head.length); out.set(tail, head.length + b.data.length);
-            return out;
-        }
-        async function run(forcePrompt) {
-            const sheet = document.querySelector('.plbl-sheet');
-            const plbls = Array.prototype.slice.call(document.querySelectorAll('.plbl'))
-                .filter(function (el) { return el.offsetParent !== null; });
-            if (!plbls.length) { setMsg("Yorliq yo'q", true); return; }
-            const size = sheet.classList.contains('sz-30x20') ? '30x20' : '58x40';
-            const invert = !!(invertEl && invertEl.checked);
-            btn.disabled = true; setMsg('Printerga ulanmoqda...', false);
-            let device;
-            try { device = await pickPrinter(forcePrompt); }
-            catch (e) { setMsg('Printer: ' + e.message, true); btn.disabled = false; return; }
-            try {
-                for (const el of plbls) {
-                    const name = el.querySelector('.plbl__name').textContent.trim();
-                    const vEl = el.querySelector('.plbl__var');
-                    const vtext = vEl ? vEl.textContent.trim() : '';
-                    const price = el.querySelector('.plbl__price').textContent.trim();
-                    const store = el.querySelector('.plbl__store').textContent.trim();
-                    await sendBytes(device, buildTSPL(
-                        renderBitmap(name, vtext, price, store, size, invert)));
-                }
-                setMsg('✓ Chop etildi (' + plbls.length + " ta, USB)", false);
-            } catch (e) {
-                setMsg('USB xato: ' + e.message, true);
-            }
-            btn.disabled = false;
-        }
-        btn.addEventListener('click', function () { run(false); });
-        if (repick) repick.addEventListener('click', function (e) { e.preventDefault(); run(true); });
-    })();
-    </script>
+    
 </body>
 </html>
