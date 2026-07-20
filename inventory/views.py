@@ -6151,12 +6151,25 @@ def sales_list(request):
     if payment_method:
         qs = qs.filter(transaction__payment_method=payment_method)
     if q:
-        qs = qs.filter(
+        cond = (
             Q(variant__product__name__icontains=q)
             | Q(variant__product__code__icontains=q)
+            | Q(variant__barcode__icontains=q)
             | Q(transaction__customer_name__icontains=q)
             | Q(transaction__customer_phone__icontains=q)
         )
+        # Chek raqami: "174" ham, "#174" ham ishlaydi.
+        # Agar shunday raqamli chek BOR bo'lsa — faqat o'shani ko'rsatamiz.
+        # (Aks holda raqam shtrix-kod ichida ham uchrab, begona cheklar
+        #  qo'shilib kelardi.)
+        _num = q.lstrip('#').strip()
+        _txn = None
+        if _num.isdigit():
+            _txn = SaleTransaction.objects.filter(pk=int(_num)).first()
+        if _txn is not None:
+            qs = qs.filter(transaction_id=_txn.pk)
+        else:
+            qs = qs.filter(cond)
 
     qs = qs.order_by('-sold_at')
 
