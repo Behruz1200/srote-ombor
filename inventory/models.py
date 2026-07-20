@@ -353,6 +353,10 @@ class Intake(models.Model):
         help_text="Manfiy bo'lishi mumkin — yetkazib beruvchiga qaytarish"
     )
     cost_per_unit = models.DecimalField(max_digits=12, decimal_places=2)
+    sale_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Shu qabuldagi sotuv narxi. Eski yozuvlarda bo'sh."
+    )
     supplier = models.CharField(max_length=200, blank=True)
     is_return = models.BooleanField(
         default=False,

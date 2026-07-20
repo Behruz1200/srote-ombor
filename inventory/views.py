@@ -1436,13 +1436,17 @@ def product_detail(request, code):
             continue
         for st in BranchStock.objects.filter(variant=v).select_related('branch'):
             inks = _batch_map.get((v.pk, st.branch_id)) or []
-            costs = {i.cost_per_unit for i in inks}
-            if len(inks) < 2 or len(costs) < 2:
-                continue  # bitta narx — ajratishning hojati yo'q
+            # AJRATISH SOTUV narxiga qarab bo'ladi (tannarxga emas) — shuning
+            # uchun faqat sotuv narxi HAR XIL bo'lgan qabullar ko'rsatiladi.
+            # Tannarx tebranib, sotuv narxi bir xil bo'lsa — ajratadigan narsa
+            # yo'q, kartochka bezovta qilmaydi.
+            sales = {i.sale_price for i in inks if i.sale_price}
+            if len(inks) < 2 or len(sales) < 2:
+                continue
             batch_groups.append({
                 'variant': v, 'branch': st.branch, 'stock': st,
                 'intakes': inks,
-                'cost_min': min(costs), 'cost_max': max(costs),
+                'sale_min': min(sales), 'sale_max': max(sales),
             })
 
     return render(request, 'inventory/product_detail.html', {
@@ -1556,7 +1560,7 @@ def intake_for_product(request, code):
                     stock.save()
                     Intake.objects.create(
                         variant=variant, branch=branch,
-                        quantity=qty, cost_per_unit=cost,
+                        quantity=qty, cost_per_unit=cost, sale_price=sale_price,
                         supplier=supplier, note=note,
                         received_by=request.user,
                     )
@@ -1934,7 +1938,7 @@ def clothes_intake(request):
                     stock.save()
                     Intake.objects.create(
                         session=session, variant=variant, branch=branch,
-                        quantity=qty, cost_per_unit=cost,
+                        quantity=qty, cost_per_unit=cost, sale_price=price,
                         note="Kiyim qabul", received_by=request.user)
                     created_ids.append(variant.pk)
                     total_qty += qty
@@ -2265,6 +2269,7 @@ def intake_variants(request):
                             session=session, supplier_ref=supplier_obj,
                             variant=variant, branch=branch,
                             quantity=r['qty'], cost_per_unit=r['cost'],
+                            sale_price=r['price'] or None,
                             supplier=supplier_text, note=note,
                             received_by=request.user)
                         total_qty += r['qty']
@@ -2558,6 +2563,7 @@ def intake_import(request):
                         Intake.objects.create(
                             session=session, variant=variant, branch=branch,
                             quantity=r['qty'], cost_per_unit=cost,
+                            sale_price=r['price'] or None,
                             note="Excel import", received_by=request.user)
                         total_qty += r['qty']
                     if product.default_sale_price == 0 and r['price'] > 0:
@@ -2798,6 +2804,7 @@ def intake_quick_save(request):
                 supplier_ref=supplier,
                 variant=variant, branch=branch,
                 quantity=qty, cost_per_unit=cost,
+                sale_price=sale_price or None,
                 supplier=supplier.name if supplier else supplier_text,
                 is_return=is_return,
                 return_reason=(ln.get('return_reason') or '').strip()[:200],
@@ -3042,6 +3049,7 @@ def csv_import(request):
                             Intake.objects.create(
                                 variant=variant, branch=branch,
                                 quantity=qty, cost_per_unit=cost,
+                                sale_price=sale or None,
                                 supplier='CSV import',
                                 received_by=request.user,
                             )
@@ -3844,6 +3852,7 @@ def intake_photo_save(request):
             Intake.objects.create(
                 session=session, variant=variant, branch=branch,
                 quantity=r['qty'], cost_per_unit=r['cost'],
+                sale_price=r['sale'] or None,
                 supplier=supplier_text, note='Faktura rasmidan (AI)',
                 received_by=request.user)
             created += 1

@@ -327,8 +327,8 @@
             <i class="bi bi-layers"></i> Turli narxdagi partiyalar
         </h6>
         <p class="text-muted small mb-3">
-            Bu turlar bir necha marta <strong>har xil tannarxda</strong> kelgan, ammo
-            omborda bitta narx saqlanadi — oxirgi qabul avvalgisini bosib ketgan.
+            Bu turlar bir necha marta <strong>har xil sotuv narxida</strong> kelgan,
+            ammo omborda bitta narx saqlanadi — oxirgi qabul avvalgisini bosib ketgan.
             Partiyani alohida ajratsangiz, u <strong>o'z shtrix-kodi</strong> va
             <strong>o'z narxi</strong>ni oladi; qolgani eski kodda qoladi.
         </p>
@@ -349,20 +349,22 @@
             <table class="table table-sm align-middle mb-0">
                 <thead><tr>
                     <th>Qabul sanasi</th><th class="text-end">Miqdor</th>
-                    <th class="text-end">Tannarx</th><th style="width:1%"></th>
+                    <th class="text-end">Tannarx</th>
+                    <th class="text-end">Sotuv narxi</th><th style="width:1%"></th>
                 </tr></thead>
                 <tbody>
                 {% for ink in g.intakes %}
                 <tr>
                     <td>{{ ink.received_at|date:"d.m.Y H:i" }}</td>
                     <td class="text-end">{{ ink.quantity }}</td>
-                    <td class="text-end {% if ink.cost_per_unit != g.stock.cost_price %}text-warning-emphasis fw-semibold{% endif %}">
-                        {{ ink.cost_per_unit|som }}
+                    <td class="text-end text-muted">{{ ink.cost_per_unit|som }}</td>
+                    <td class="text-end {% if ink.sale_price != g.stock.sale_price %}text-warning-emphasis fw-semibold{% endif %}">
+                        {{ ink.sale_price|som|default:"—" }}
                     </td>
                     <td class="text-nowrap">
                         <button type="button" class="btn btn-sm btn-outline-warning split-btn"
                                 data-variant="{{ g.variant.pk }}" data-branch="{{ g.branch.pk }}"
-                                data-qty="{{ ink.quantity }}" data-cost="{{ ink.cost_per_unit|floatformat:0 }}"
+                                data-qty="{{ ink.quantity }}" data-cost="{{ ink.cost_per_unit|floatformat:0 }}" data-sale="{{ ink.sale_price|floatformat:0 }}"
                                 data-max="{{ g.stock.stock_count }}"
                                 data-name="{{ product.name }} {{ g.variant.size }}">
                             Alohida kod ber
@@ -505,7 +507,7 @@ new Chart(document.getElementById('trendChart'), {
             document.getElementById('spQty').max = d.max;
             document.getElementById('spMax').textContent = d.max;
             document.getElementById('spCost').value = d.cost;
-            document.getElementById('spSale').value = '';
+            document.getElementById('spSale').value = d.sale || '';
             document.getElementById('spTag').value = '';
             document.getElementById('spInfo').textContent =
                 d.name + " — bu partiya " + d.qty + " dona, tannarxi " + d.cost + " so'm.";
