@@ -3209,9 +3209,6 @@
                             <i class="bi bi-box me-1 text-primary"></i> Mahsulotlar</a></li>
                         <li><a class="dropdown-item" href="{% url 'intake_new' %}">
                             <i class="bi bi-box-arrow-in-down me-1 text-success"></i> Qabul</a></li>
-                        <li><a class="dropdown-item" href="{% url 'intake_quick' %}">
-                            <i class="bi bi-lightning-charge me-1 text-warning"></i>
-                            <small>↳ Tezkor qabul</small></a></li>
                         <li><a class="dropdown-item" href="{% url 'intake_photo' %}">
                             <i class="bi bi-camera me-1 text-info"></i>
                             <small>↳ Faktura rasmidan (AI)</small></a></li>
@@ -3821,7 +3818,6 @@ if ('serviceWorker' in navigator) {
         {label: 'Tahlil (Insights)', url: '{% url "insights" %}', icon: 'graph-up-arrow', kw: 'tahlil insights analytics'},
         {label: 'Hisobotlar', url: '{% url "reports" %}', icon: 'file-earmark-bar-graph', kw: 'hisobot report'},
         {label: 'Qabul (dashboard)', url: '{% url "intake_new" %}', icon: 'box-arrow-in-down', kw: 'qabul intake'},
-        {label: 'Tezkor qabul', url: '{% url "intake_quick" %}', icon: 'lightning-charge', kw: 'tezkor qabul scanner'},
         {label: 'Ombor nazorati', url: '{% url "warehouse" %}', icon: 'boxes', kw: 'ombor warehouse zaxira olik dead abc matritsa'},
         {label: 'Smart buyurtma', url: '{% url "reorder_page" %}', icon: 'arrow-clockwise', kw: 'reorder buyurtma past'},
         {label: 'Filiallar', url: '{% url "branch_list" %}', icon: 'building', kw: 'filial branch'},

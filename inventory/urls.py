@@ -113,8 +113,6 @@ urlpatterns = [
     path('intake/import/', views.intake_import, name='intake_import'),
     path('intake/import/template/', views.intake_import_template,
          name='intake_import_template'),
-    path('intake/quick/', views.intake_quick, name='intake_quick'),
-    path('intake/quick/save/', views.intake_quick_save, name='intake_quick_save'),
     path('intake/lookup/', views.intake_lookup, name='intake_lookup'),
     path('intake/supplier-search/', views.intake_supplier_search, name='intake_supplier_search'),
     path('intake/sessions/<int:pk>/', views.intake_session_detail, name='intake_session_detail'),

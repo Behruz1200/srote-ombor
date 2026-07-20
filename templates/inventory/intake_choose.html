@@ -27,24 +27,6 @@
     <!-- 3 ta kirish nuqtasi -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <a href="{% url 'intake_quick' %}" class="card text-decoration-none h-100 p-4 border-success
-                                                      hover-shadow">
-                <div class="d-flex align-items-center mb-2">
-                    <div class="bg-success bg-opacity-10 rounded p-2 me-3">
-                        <i class="bi bi-lightning-charge text-success" style="font-size: 1.8rem;"></i>
-                    </div>
-                    <div>
-                        <h5 class="mb-0 text-dark">Tezkor qabul</h5>
-                        <small class="text-muted">eng tezkor — tavsiya etiladi</small>
-                    </div>
-                </div>
-                <p class="small text-muted mb-0">
-                    Scanner orqali bir sessiyada ko'p mahsulot. Yetkazib
-                    beruvchi avtomatik biriktiriladi.
-                </p>
-            </a>
-        </div>
-        <div class="col-md-3">
             <a href="{% url 'intake_photo' %}" class="card text-decoration-none h-100 p-4 border-primary hover-shadow">
                 <div class="d-flex align-items-center mb-2">
                     <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
@@ -126,45 +108,6 @@
                 </p>
             </a>
         </div>
-        <div class="col-md-3">
-            <div class="card h-100 p-4">
-                <div class="d-flex align-items-center mb-2">
-                    <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
-                        <i class="bi bi-grid-3x3 text-primary" style="font-size: 1.8rem;"></i>
-                    </div>
-                    <div>
-                        <h5 class="mb-0">Matritsa qabul</h5>
-                        <small class="text-muted">o'lcham × rang</small>
-                    </div>
-                </div>
-                <p class="small text-muted mb-2">
-                    Bitta mahsulot, ko'p variant: kiyim/poyabzal uchun.
-                </p>
-                <form method="get" action="{% url 'lookup' %}" class="d-flex gap-2 mb-2">
-                    <input type="text" name="code" placeholder="Kod kiriting..."
-                           class="form-control form-control-sm" style="text-transform: uppercase;">
-                    <button type="submit" class="btn btn-sm btn-primary">
-                        <i class="bi bi-search"></i>
-                    </button>
-                </form>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <a href="{% url 'product_create' %}" class="card text-decoration-none h-100 p-4 hover-shadow">
-                <div class="d-flex align-items-center mb-2">
-                    <div class="bg-warning bg-opacity-10 rounded p-2 me-3">
-                        <i class="bi bi-plus-circle text-warning" style="font-size: 1.8rem;"></i>
-                    </div>
-                    <div>
-                        <h5 class="mb-0 text-dark">Yangi mahsulot</h5>
-                        <small class="text-muted">yangi turdagi tovar</small>
-                    </div>
-                </div>
-                <p class="small text-muted mb-0">
-                    Bazada bo'lmagan, yangi turdagi mahsulotni yaratish.
-                </p>
-            </a>
-        </div>
     </div>
 
     <div class="row g-3">
@@ -214,7 +157,7 @@
                 </div>
                 {% else %}
                 <div class="text-muted text-center py-3">
-                    Hali sessiya yo'q. "Tezkor qabul"dan boshlang.
+                    Hali sessiya yo'q. "Aralash qabul"dan boshlang.
                 </div>
                 {% endif %}
             </div>
@@ -251,7 +194,7 @@
                         </tbody>
                     </table>
                 </div>
-                <a href="{% url 'intake_quick' %}" class="btn btn-sm btn-outline-warning w-100 mt-2">
+                <a href="{% url 'intake_mixed' %}" class="btn btn-sm btn-outline-warning w-100 mt-2">
                     <i class="bi bi-lightning-charge"></i> Buyurtmani boshlash
                 </a>
                 {% else %}
