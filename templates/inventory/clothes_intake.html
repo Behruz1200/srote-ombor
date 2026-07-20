@@ -5,26 +5,45 @@
 
 
 <style>
-.sz-presets { display: flex; flex-direction: column; gap: .3rem; }
-.sz-row { display: flex; flex-wrap: wrap; gap: .25rem; }
-.sz-btn {
-    min-width: 2.35rem;
-    padding: .2rem .45rem;
-    font-size: .78rem;
+.sz-presets { display: flex; flex-direction: column; gap: .45rem; }
+.sz-line { display: flex; align-items: center; gap: .5rem; }
+.sz-line__label {
+    flex: 0 0 2.6rem;
+    font-size: .68rem;
     font-weight: 600;
-    line-height: 1.25;
-    border: 1px solid var(--yrt-border);
-    border-radius: 7px;
-    background: var(--yrt-surface, #fff);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--yrt-fg-muted);
+    opacity: .75;
+    user-select: none;
+}
+.sz-row { display: flex; flex-wrap: wrap; gap: .3rem; }
+.sz-btn {
+    min-width: 2.6rem;
+    height: 1.9rem;
+    padding: 0 .55rem;
+    font-size: .8rem;
+    font-weight: 600;
+    line-height: 1;
+    border: 0;
+    border-radius: 999px;
+    background: var(--yrt-surface-2, #f1f3f5);
     color: var(--yrt-fg-muted);
     cursor: pointer;
-    transition: background .12s, color .12s, border-color .12s;
+    transition: background .13s ease, color .13s ease, transform .08s ease;
 }
-.sz-btn:hover { border-color: #4F46E5; color: #4F46E5; }
+.sz-btn:hover { background: #e6e8ff; color: #4F46E5; }
+.sz-btn:active { transform: scale(.94); }
 .sz-btn.is-on {
-    background: rgba(91, 91, 214, .12);
-    border-color: #4F46E5;
-    color: #4F46E5;
+    background: #4F46E5;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(79, 70, 229, .35);
+}
+.sz-btn.is-on:hover { background: #4338CA; color: #fff; }
+@media (max-width: 575.98px) {
+    .sz-line { align-items: flex-start; }
+    .sz-line__label { flex-basis: 2.2rem; padding-top: .35rem; }
+    .sz-btn { min-width: 2.4rem; height: 1.8rem; font-size: .75rem; }
 }
 </style>
 {% block content %}
@@ -106,9 +125,18 @@
                     <div class="form-text">Vergul bilan bir nechta: S, M, L</div>
 
                     <div class="sz-presets mt-2">
-                        <div class="sz-row" data-row="harf"></div>
-                        <div class="sz-row" data-row="juft"></div>
-                        <div class="sz-row" data-row="toq"></div>
+                        <div class="sz-line">
+                            <span class="sz-line__label">Harf</span>
+                            <div class="sz-row" data-row="harf"></div>
+                        </div>
+                        <div class="sz-line">
+                            <span class="sz-line__label">Juft</span>
+                            <div class="sz-row" data-row="juft"></div>
+                        </div>
+                        <div class="sz-line">
+                            <span class="sz-line__label">Toq</span>
+                            <div class="sz-row" data-row="toq"></div>
+                        </div>
                     </div>
 
                     <div id="sizeChips" class="d-flex flex-wrap gap-1 mt-2"></div>
