@@ -1,0 +1,352 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+{% block title %}Ombor — yurit{% endblock %}
+{% block backbar %}{% endblock %}{# sahifaning o'z orqaga havolasi bor #}
+
+{% block content %}
+<div class="dash-page">
+<header class="dash-hero mb-3">
+    <div class="dash-hero__glow"></div>
+    <div class="dash-hero__inner">
+        <div class="dash-hero__heading">
+            <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Ombor</span>
+            <h1 class="dash-hero__title"><i class="bi bi-boxes"></i> Ombor nazorati</h1>
+            <p class="dash-hero__sub">
+                <span>Qiymat, harakat, o'lik zaxira va buyurtma — bir sahifada</span>
+            </p>
+        </div>
+        <div class="dash-hero__actions">
+            {% if branches|length > 1 %}
+            <select class="form-select form-select-sm" id="branchSel" style="width:auto">
+                <option value="">Barcha filiallar</option>
+                {% for b in branches %}
+                <option value="{{ b.pk }}" {% if sel_branch and sel_branch.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <a href="{% url 'product_list' %}" class="dash-btn dash-btn--ghost">
+                <i class="bi bi-arrow-left"></i> <span>Mahsulotlar</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<!-- ===== Moliyaviy ko'rsatkichlar ===== -->
+<section class="dash-kpis dash-kpis--five yrt-stagger mb-3">
+    <article class="dash-kpi" data-tone="indigo">
+        <div class="dash-kpi__head"><span class="dash-kpi__label"><i class="bi bi-cash-stack"></i> Ombor qiymati</span></div>
+        <div class="dash-kpi__value" style="font-size:1.4rem;">{{ kpi.cost_val|floatformat:0|som }}</div>
+        <div class="dash-kpi__footer"><span>tannarx bo'yicha · so'm</span></div>
+    </article>
+    <article class="dash-kpi" data-tone="success">
+        <div class="dash-kpi__head"><span class="dash-kpi__label"><i class="bi bi-tags"></i> Sotuvdagi qiymat</span></div>
+        <div class="dash-kpi__value" style="font-size:1.4rem; color:var(--yrt-success);">{{ kpi.retail_val|floatformat:0|som }}</div>
+        <div class="dash-kpi__footer">
+            <span>potensial foyda <strong>{{ kpi.profit|floatformat:0|som }}</strong></span>
+        </div>
+    </article>
+    <article class="dash-kpi" data-tone="amber">
+        <div class="dash-kpi__head"><span class="dash-kpi__label"><i class="bi bi-graph-up"></i> O'rtacha marja</span></div>
+        <div class="dash-kpi__value" style="font-size:1.4rem;">
+            {% if kpi.margin is not None %}{{ kpi.margin|floatformat:1 }}%{% else %}—{% endif %}
+        </div>
+        <div class="dash-kpi__footer"><span>butun ombor bo'yicha</span></div>
+    </article>
+    <article class="dash-kpi" data-tone="info">
+        <div class="dash-kpi__head"><span class="dash-kpi__label"><i class="bi bi-box-seam"></i> Zaxira</span></div>
+        <div class="dash-kpi__value" style="font-size:1.4rem;">{{ kpi.units|som }}</div>
+        <div class="dash-kpi__footer">
+            <span>{{ kpi.products }} mahsulot · {{ kpi.skus }} tur</span>
+        </div>
+    </article>
+    <article class="dash-kpi" data-tone="danger">
+        <div class="dash-kpi__head"><span class="dash-kpi__label"><i class="bi bi-snow"></i> O'lik zaxira</span></div>
+        <div class="dash-kpi__value" style="font-size:1.4rem; color:var(--yrt-danger);">{{ kpi.dead_val|floatformat:0|som }}</div>
+        <div class="dash-kpi__footer">
+            <span>{{ kpi.dead_n }} mahsulot · ombor qiymatining
+                  <strong>{{ kpi.dead_share|floatformat:0 }}%</strong></span>
+        </div>
+    </article>
+</section>
+
+<div class="row g-3 mb-3">
+    <!-- ===== Kirim / chiqim ===== -->
+    <div class="col-12 col-xl-7">
+        <div class="card p-3 h-100">
+            <h6 class="text-muted text-uppercase small mb-2">
+                <i class="bi bi-arrow-left-right"></i> Kirim / chiqim — 12 hafta (dona)
+            </h6>
+            <canvas id="flowChart" height="120"></canvas>
+            <p class="text-muted small mb-0 mt-2">
+                Kirim chiqimdan doim baland bo'lsa — ombor o'sib boradi va pul
+                tovarda qotib qoladi.
+            </p>
+        </div>
+    </div>
+
+    <!-- ===== ABC tahlili ===== -->
+    <div class="col-12 col-xl-5">
+        <div class="card p-3 h-100">
+            <h6 class="text-muted text-uppercase small mb-2">
+                <i class="bi bi-bar-chart-steps"></i> ABC tahlili (90 kunlik tushum)
+            </h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-2">
+                    <thead><tr>
+                        <th>Sinf</th><th class="text-end">Mahsulot</th>
+                        <th class="text-end">Ombor puli</th><th class="text-end">Ulush</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for row in abc_rows %}
+                    <tr>
+                        <td>
+                            <span class="badge bg-{% if row.cls == 'A' %}success{% elif row.cls == 'B' %}warning text-dark{% else %}secondary{% endif %}">{{ row.cls }}</span>
+                            <span class="small text-muted ms-1">
+                                {% if row.cls == 'A' %}tushumning 80%{% elif row.cls == 'B' %}keyingi 15%{% else %}deyarli sotilmaydi{% endif %}
+                            </span>
+                        </td>
+                        <td class="text-end">{{ row.n }}</td>
+                        <td class="text-end">{{ row.val|floatformat:0|som }}</td>
+                        <td class="text-end">{{ row.share|floatformat:0 }}%</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-muted small mb-0">
+                <strong>C</strong> sinfdagi pul — deyarli aylanmayotgan tovar.
+                Uni kamaytirish ombor pulini bo'shatadi.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Kategoriya matritsasi ===== -->
+<div class="card p-3 mb-3">
+    <h6 class="text-muted text-uppercase small mb-2">
+        <i class="bi bi-grid-3x3"></i> Kategoriya matritsasi
+    </h6>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0" data-colkey="wh-matrix">
+            <thead><tr>
+                <th>Kategoriya</th>
+                <th class="text-end">Mahsulot</th>
+                <th class="text-end">Dona</th>
+                <th class="text-end">Ombor puli</th>
+                <th class="text-end">Sotuvda</th>
+                <th class="text-end">Marja</th>
+                <th style="width:22%">Ulush</th>
+            </tr></thead>
+            <tbody>
+            {% for m in matrix %}
+            <tr>
+                <td>
+                    <a href="{% url 'product_list' %}?category={{ m.id }}" class="text-decoration-none">{{ m.name }}</a>
+                </td>
+                <td class="text-end">{{ m.products }}</td>
+                <td class="text-end">{{ m.units|som }}</td>
+                <td class="text-end fw-semibold">{{ m.cost_val|floatformat:0|som }}</td>
+                <td class="text-end text-muted">{{ m.retail_val|floatformat:0|som }}</td>
+                <td class="text-end">
+                    {% if m.margin is not None %}
+                        <span class="text-{% if m.margin < 1 %}danger{% elif m.margin < 15 %}warning{% else %}success{% endif %}">{{ m.margin|floatformat:0 }}%</span>
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="flex-fill" style="background:var(--yrt-bg-subtle); border-radius:4px; height:8px; overflow:hidden;">
+                            <div style="height:100%; border-radius:4px; background:var(--yrt-primary);
+                                        width:{{ m.share|floatformat:1 }}%;"></div>
+                        </div>
+                        <span class="small text-muted" style="min-width:3rem">{{ m.share|floatformat:1 }}%</span>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-3">Ma'lumot yo'q.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- ===== O'lik zaxira ===== -->
+    <div class="col-12 col-xl-7">
+        <div class="card p-3 h-100">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <h6 class="text-muted text-uppercase small mb-0">
+                    <i class="bi bi-snow"></i> O'lik zaxira — 90 kunda sotilmagan
+                </h6>
+                <span class="badge bg-danger-subtle text-danger border ms-auto">
+                    {{ dead_total }} mahsulot · {{ kpi.dead_val|floatformat:0|som }} so'm
+                </span>
+            </div>
+            <div class="table-responsive" style="max-height:420px; overflow:auto;">
+                <table class="table table-sm align-middle mb-0" data-colkey="wh-dead">
+                    <thead class="sticky-top bg-body"><tr>
+                        <th>Mahsulot</th><th class="text-end">Dona</th>
+                        <th class="text-end">Qotgan pul</th><th class="text-end">Oxirgi sotuv</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for d in dead %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'product_detail' d.product.code %}" class="text-decoration-none">{{ d.product.name|truncatechars:34 }}</a>
+                            <div class="small text-muted">{{ d.product.category.name|default:'—' }}</div>
+                        </td>
+                        <td class="text-end">{{ d.units }}</td>
+                        <td class="text-end fw-semibold">{{ d.cost_val|floatformat:0|som }}</td>
+                        <td class="text-end small text-muted">
+                            {% if d.days %}{{ d.days }} kun oldin{% else %}hech qachon{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted py-3">O'lik zaxira yo'q.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if dead_total > dead|length %}
+            <p class="text-muted small mb-0 mt-2">Eng qimmat {{ dead|length }} tasi ko'rsatildi.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ===== Buyurtma kerak ===== -->
+    <div class="col-12 col-xl-5">
+        <div class="card p-3 h-100">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <h6 class="text-muted text-uppercase small mb-0">
+                    <i class="bi bi-cart-plus"></i> Buyurtma qilish kerak
+                </h6>
+                <span class="badge bg-warning-subtle text-warning-emphasis border ms-auto">
+                    {{ reorder_total }} ta
+                </span>
+            </div>
+            <div class="table-responsive" style="max-height:420px; overflow:auto;">
+                <table class="table table-sm align-middle mb-0" data-colkey="wh-reorder">
+                    <thead class="sticky-top bg-body"><tr>
+                        <th>Mahsulot</th><th class="text-end">Qoldi</th>
+                        <th class="text-end">Yetadi</th><th class="text-end">Olish</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for r in reorder %}
+                    <tr>
+                        <td><a href="{% url 'product_detail' r.product.code %}" class="text-decoration-none">{{ r.product.name|truncatechars:26 }}</a></td>
+                        <td class="text-end">{{ r.units }}</td>
+                        <td class="text-end">
+                            <span class="text-{% if r.days_left < 7 %}danger{% elif r.days_left < 14 %}warning{% else %}muted{% endif %}">{{ r.days_left|floatformat:0 }} kun</span>
+                        </td>
+                        <td class="text-end fw-semibold">{{ r.suggest }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted py-3">Hammasi yetarli.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-muted small mb-0 mt-2">
+                90 kunlik sotuv tezligi bo'yicha; "Olish" — 30 kunga yetadigan miqdor.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Zaxirani tuzatish ===== -->
+<div class="card p-3 mt-3">
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <h6 class="text-muted text-uppercase small mb-0">
+            <i class="bi bi-pencil-square"></i> Zaxirani tuzatish
+        </h6>
+        <span class="text-muted small ms-auto">
+            Eng ko'p pul turgan 40 ta yozuv · o'zgarish qabul tarixiga yoziladi
+        </span>
+    </div>
+    <div class="table-responsive" style="max-height:460px; overflow:auto;">
+        <table class="table table-sm align-middle mb-0" data-colkey="wh-adjust">
+            <thead class="sticky-top bg-body"><tr>
+                <th>Mahsulot</th><th>Tur</th>
+                <th class="text-end">Ombor</th><th class="text-end">Ombor puli</th>
+                <th style="width:150px">Yangi son</th>
+                <th style="width:170px">Sabab</th>
+                <th style="width:1%"></th>
+            </tr></thead>
+            <tbody>
+            {% for st in adjust_rows %}
+            <tr>
+                <td>
+                    <a href="{% url 'product_detail' st.variant.product.code %}" class="text-decoration-none">{{ st.variant.product.name|truncatechars:28 }}</a>
+                </td>
+                <td class="small text-muted">
+                    {{ st.variant.size|default:'—' }}{% if st.variant.color %} / {{ st.variant.color }}{% endif %}
+                </td>
+                <td class="text-end">{{ st.stock_count }}</td>
+                <td class="text-end text-muted">{{ st.val|floatformat:0|som }}</td>
+                <td colspan="3">
+                    <form method="post" action="{% url 'warehouse_adjust' %}" class="d-flex gap-1">
+                        {% csrf_token %}
+                        <input type="hidden" name="stock" value="{{ st.pk }}">
+                        <input type="hidden" name="back" value="{{ request.get_full_path }}">
+                        <input type="number" name="count" value="{{ st.stock_count }}" min="0"
+                               class="form-control form-control-sm" style="width:96px">
+                        <select name="reason" class="form-select form-select-sm" style="width:150px">
+                            <option>Qayta sanaldi</option>
+                            <option>Shikastlangan</option>
+                            <option>Yo'qolgan</option>
+                            <option>Topildi</option>
+                            <option>Muddati o'tgan</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-primary" type="submit">
+                            <i class="bi bi-check2"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-3">Zaxira yo'q.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{{ weeks|json_script:"whWeeks" }}
+{{ flow_in|json_script:"whIn" }}
+{{ flow_out|json_script:"whOut" }}
+<script>
+(function () {
+    // Filial tanlanishi bilan qo'llanadi
+    var sel = document.getElementById('branchSel');
+    if (sel) sel.addEventListener('change', function () {
+        var u = new URL(window.location.href);
+        if (sel.value) u.searchParams.set('branch', sel.value);
+        else u.searchParams.delete('branch');
+        window.location.assign(u.toString());
+    });
+
+    var el = document.getElementById('flowChart');
+    if (!el || typeof Chart === 'undefined') return;
+    var weeks = JSON.parse(document.getElementById('whWeeks').textContent);
+    var fin = JSON.parse(document.getElementById('whIn').textContent);
+    var fout = JSON.parse(document.getElementById('whOut').textContent);
+    new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: weeks,
+            datasets: [
+                { label: 'Kirim (qabul)', data: fin, backgroundColor: 'rgba(79,70,229,.75)', borderRadius: 4 },
+                { label: 'Chiqim (sotuv)', data: fout, backgroundColor: 'rgba(22,163,74,.8)', borderRadius: 4 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } },
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
+    });
+})();
+</script>
+{% endblock %}

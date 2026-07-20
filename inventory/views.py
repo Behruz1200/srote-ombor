@@ -9654,3 +9654,266 @@ def product_export(request):
     resp['Content-Disposition'] = f'attachment; filename="mahsulotlar_{stamp}.xlsx"'
     wb.save(resp)
     return resp
+
+
+@admin_required
+def warehouse(request):
+    """Ombor — to'liq nazorat va tahlil.
+
+    Hammasi AGREGAT so'rovlar bilan hisoblanadi: 1475 zaxira yozuvi va
+    ~19 000 dona bo'lgani uchun har qator bo'yicha alohida so'rov yubormaymiz.
+    """
+    from decimal import Decimal
+    branches = list(Branch.objects.filter(is_active=True).order_by('name'))
+    branch_id = request.GET.get('branch') or ''
+    branch = next((b for b in branches if str(b.pk) == str(branch_id)), None)
+
+    stock = BranchStock.objects.select_related(
+        'variant__product__category', 'branch')
+    if branch:
+        stock = stock.filter(branch=branch)
+    stock = stock.exclude(variant__product__is_open_price=True)
+
+    money = lambda expr: ExpressionWrapper(
+        expr, output_field=DecimalField(max_digits=18, decimal_places=2))
+    COST = money(F('stock_count') * F('cost_price'))
+    RETAIL = money(F('stock_count') * F('sale_price'))
+
+    # ---------- Umumiy ko'rsatkichlar ----------
+    agg = stock.aggregate(
+        units=Sum('stock_count'),
+        cost_val=Sum(COST),
+        retail_val=Sum(RETAIL),
+        rows=Count('pk'),
+        skus=Count('variant', distinct=True),
+        products=Count('variant__product', distinct=True),
+        zero=Count('pk', filter=Q(stock_count=0)),
+        low=Count('pk', filter=Q(stock_count__gt=0, stock_count__lte=3)),
+    )
+    cost_val = float(agg['cost_val'] or 0)
+    retail_val = float(agg['retail_val'] or 0)
+
+    # ---------- Sotuv tezligi (90 kun) ----------
+    d90 = timezone.now() - timedelta(days=90)
+    sales_q = Sale.objects.filter(sold_at__gte=d90)
+    if branch:
+        sales_q = sales_q.filter(branch=branch)
+    sold_map = {r['variant__product_id']: r for r in (
+        sales_q.values('variant__product_id')
+        .annotate(qty=Sum('quantity'),
+                  revenue=Sum(money(F('quantity') * F('sale_price'))),
+                  last=Max('sold_at')))}
+
+    # ---------- Kategoriya matritsasi ----------
+    cat_rows = list(stock.values(
+        'variant__product__category__id', 'variant__product__category__name'
+    ).annotate(
+        units=Sum('stock_count'),
+        cost_val=Sum(COST),
+        retail_val=Sum(RETAIL),
+        products=Count('variant__product', distinct=True),
+    ).order_by('-cost_val'))
+    matrix = []
+    for r in cat_rows:
+        cv = float(r['cost_val'] or 0)
+        rv = float(r['retail_val'] or 0)
+        matrix.append({
+            'id': r['variant__product__category__id'],
+            'name': r['variant__product__category__name'] or 'Kategoriyasiz',
+            'units': r['units'] or 0,
+            'products': r['products'] or 0,
+            'cost_val': cv,
+            'retail_val': rv,
+            'margin': ((rv - cv) / cv * 100) if cv > 0 else None,
+            'share': (cv / cost_val * 100) if cost_val > 0 else 0,
+        })
+
+    # ---------- ABC tahlili (90 kunlik tushum bo'yicha) ----------
+    prod_stock = {r['variant__product_id']: r for r in stock.values(
+        'variant__product_id').annotate(
+            units=Sum('stock_count'), cost_val=Sum(COST))}
+    ranked = []
+    for pid, srow in prod_stock.items():
+        s = sold_map.get(pid) or {}
+        ranked.append({
+            'pid': pid,
+            'revenue': float(s.get('revenue') or 0),
+            'qty': s.get('qty') or 0,
+            'last': s.get('last'),
+            'units': srow['units'] or 0,
+            'cost_val': float(srow['cost_val'] or 0),
+        })
+    ranked.sort(key=lambda x: -x['revenue'])
+    total_rev = sum(x['revenue'] for x in ranked) or 1.0
+    run = 0.0
+    abc = {'A': {'n': 0, 'val': 0.0, 'rev': 0.0},
+           'B': {'n': 0, 'val': 0.0, 'rev': 0.0},
+           'C': {'n': 0, 'val': 0.0, 'rev': 0.0}}
+    for x in ranked:
+        run += x['revenue']
+        pct = run / total_rev * 100
+        cls = 'A' if pct <= 80 and x['revenue'] > 0 else ('B' if pct <= 95 and x['revenue'] > 0 else 'C')
+        x['abc'] = cls
+        abc[cls]['n'] += 1
+        abc[cls]['val'] += x['cost_val']
+        abc[cls]['rev'] += x['revenue']
+
+    # ---------- O'lik zaxira ----------
+    names = {p.pk: p for p in Product.objects.filter(
+        pk__in=[x['pid'] for x in ranked]).select_related('category')}
+    now = timezone.now()
+    dead = []
+    for x in ranked:
+        if x['units'] <= 0 or x['qty'] > 0:
+            continue
+        p = names.get(x['pid'])
+        if p is None:
+            continue
+        last = x['last']
+        dead.append({
+            'product': p,
+            'units': x['units'],
+            'cost_val': x['cost_val'],
+            'days': (now - last).days if last else None,
+        })
+    dead.sort(key=lambda d: -d['cost_val'])
+    dead_val = sum(d['cost_val'] for d in dead)
+
+    # ---------- Buyurtma kerak (sotuv tezligiga qarab) ----------
+    reorder = []
+    for x in ranked:
+        if x['qty'] <= 0:
+            continue
+        per_day = x['qty'] / 90.0
+        days_left = (x['units'] / per_day) if per_day > 0 else None
+        if days_left is not None and days_left <= 21:
+            p = names.get(x['pid'])
+            if p is None:
+                continue
+            reorder.append({
+                'product': p,
+                'units': x['units'],
+                'per_day': per_day,
+                'days_left': days_left,
+                'suggest': max(1, int(per_day * 30 - x['units'])),
+            })
+    reorder.sort(key=lambda r: r['days_left'])
+
+    # ---------- Kirim / chiqim harakati (12 hafta) ----------
+    d84 = timezone.now() - timedelta(days=84)
+    ink_q = Intake.objects.filter(received_at__gte=d84)
+    sal_q = Sale.objects.filter(sold_at__gte=d84)
+    if branch:
+        ink_q = ink_q.filter(branch=branch)
+        sal_q = sal_q.filter(branch=branch)
+    from django.db.models.functions import TruncWeek
+    in_map = {r['w'].date(): r['q'] for r in ink_q.annotate(w=TruncWeek('received_at'))
+              .values('w').annotate(q=Sum('quantity')) if r['w']}
+    out_map = {r['w'].date(): r['q'] for r in sal_q.annotate(w=TruncWeek('sold_at'))
+               .values('w').annotate(q=Sum('quantity')) if r['w']}
+    weeks, flow_in, flow_out = [], [], []
+    start = (timezone.localdate() - timedelta(days=83))
+    start -= timedelta(days=start.weekday())
+    for i in range(12):
+        w = start + timedelta(weeks=i)
+        weeks.append(w.strftime('%d.%m'))
+        flow_in.append(int(in_map.get(w, 0) or 0))
+        flow_out.append(int(out_map.get(w, 0) or 0))
+
+    # Tuzatish jadvali — eng ko'p pul turgan yozuvlar
+    adjust_rows = list(stock.annotate(val=COST).order_by('-val')[:40])
+
+    _abc_total = sum(v['val'] for v in abc.values()) or 0.0
+    abc_rows = [{'cls': c,
+                 'n': abc[c]['n'],
+                 'val': abc[c]['val'],
+                 'rev': abc[c]['rev'],
+                 'share': (abc[c]['val'] / _abc_total * 100) if _abc_total else 0}
+                for c in ('A', 'B', 'C')]
+
+    return render(request, 'inventory/warehouse.html', {
+        'branches': branches,
+        'sel_branch': branch,
+        'kpi': {
+            'units': agg['units'] or 0,
+            'cost_val': cost_val,
+            'retail_val': retail_val,
+            'profit': retail_val - cost_val,
+            'margin': ((retail_val - cost_val) / cost_val * 100) if cost_val > 0 else None,
+            'skus': agg['skus'] or 0,
+            'products': agg['products'] or 0,
+            'zero': agg['zero'] or 0,
+            'low': agg['low'] or 0,
+            'dead_n': len(dead),
+            'dead_val': dead_val,
+            'dead_share': (dead_val / cost_val * 100) if cost_val > 0 else 0,
+        },
+        'adjust_rows': adjust_rows,
+        'matrix': matrix,
+        'matrix_max': max([m['cost_val'] for m in matrix], default=0),
+        'abc_rows': abc_rows,
+        'dead': dead[:40],
+        'dead_total': len(dead),
+        'reorder': reorder[:40],
+        'reorder_total': len(reorder),
+        'weeks': weeks,
+        'flow_in': flow_in,
+        'flow_out': flow_out,
+    })
+
+
+@admin_required
+def warehouse_adjust(request):
+    """Zaxirani tuzatish — sabab bilan va tarixga yozilib.
+
+    Farq Intake sifatida yoziladi (musbat yoki manfiy), shuning uchun
+    qabul tarixida ham, hisobotlarda ham ko'rinadi.
+    """
+    from decimal import Decimal
+    if request.method != 'POST':
+        return redirect('warehouse')
+    back = request.POST.get('back') or reverse('warehouse')
+    st = BranchStock.objects.filter(pk=request.POST.get('stock') or 0).select_related(
+        'variant__product', 'branch').first()
+    if st is None:
+        messages.error(request, "Zaxira yozuvi topilmadi.")
+        return redirect(back)
+    try:
+        new_count = int(float(request.POST.get('count') or 0))
+    except (TypeError, ValueError):
+        messages.error(request, "Miqdor noto'g'ri.")
+        return redirect(back)
+    if new_count < 0:
+        messages.error(request, "Miqdor manfiy bo'lmaydi.")
+        return redirect(back)
+
+    reason = (request.POST.get('reason') or '').strip()[:60] or "Qo'lda tuzatish"
+    delta = new_count - st.stock_count
+    if delta == 0:
+        messages.info(request, "O'zgarish yo'q.")
+        return redirect(back)
+
+    with transaction.atomic():
+        old = st.stock_count
+        st.stock_count = new_count
+        st.save(update_fields=['stock_count'])
+        Intake.objects.create(
+            variant=st.variant, branch=st.branch,
+            quantity=delta, cost_per_unit=st.cost_price,
+            sale_price=st.sale_price,
+            is_return=delta < 0,
+            return_reason=reason if delta < 0 else '',
+            note=f"Ombor tuzatishi: {reason}",
+            received_by=request.user)
+        AuditLog.objects.create(
+            user=request.user, username_snapshot=request.user.username,
+            action=AuditLog.Action.UPDATE, model_name='BranchStock',
+            object_id=str(st.pk),
+            object_repr=f"{st.variant.product.name} {st.variant.size}"[:300],
+            changes={'stock_count': [str(old), str(new_count)],
+                     'sabab': ['', reason]},
+        )
+    messages.success(
+        request,
+        f"{st.variant.product.name} — {old} → {new_count} dona ({reason}).")
+    return redirect(back)

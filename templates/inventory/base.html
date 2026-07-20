@@ -3212,6 +3212,9 @@
                         <li><a class="dropdown-item" href="{% url 'intake_photo' %}">
                             <i class="bi bi-camera me-1 text-info"></i>
                             <small>↳ Faktura rasmidan (AI)</small></a></li>
+                        <li><a class="dropdown-item" href="{% url 'warehouse' %}">
+                            <i class="bi bi-boxes me-1 text-primary"></i>
+                            <small>↳ Ombor nazorati</small></a></li>
                         <li><a class="dropdown-item" href="{% url 'reorder_page' %}">
                             <i class="bi bi-arrow-clockwise me-1 text-primary"></i>
                             <small>↳ Smart buyurtma</small></a></li>
@@ -3819,6 +3822,7 @@ if ('serviceWorker' in navigator) {
         {label: 'Hisobotlar', url: '{% url "reports" %}', icon: 'file-earmark-bar-graph', kw: 'hisobot report'},
         {label: 'Qabul (dashboard)', url: '{% url "intake_new" %}', icon: 'box-arrow-in-down', kw: 'qabul intake'},
         {label: 'Tezkor qabul', url: '{% url "intake_quick" %}', icon: 'lightning-charge', kw: 'tezkor qabul scanner'},
+        {label: 'Ombor nazorati', url: '{% url "warehouse" %}', icon: 'boxes', kw: 'ombor warehouse zaxira olik dead abc matritsa'},
         {label: 'Smart buyurtma', url: '{% url "reorder_page" %}', icon: 'arrow-clockwise', kw: 'reorder buyurtma past'},
         {label: 'Filiallar', url: '{% url "branch_list" %}', icon: 'building', kw: 'filial branch'},
         {label: 'Foydalanuvchilar', url: '{% url "user_list" %}', icon: 'people', kw: 'user foydalanuvchi'},

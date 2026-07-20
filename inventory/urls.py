@@ -119,6 +119,9 @@ urlpatterns = [
     path('intake/supplier-search/', views.intake_supplier_search, name='intake_supplier_search'),
     path('intake/sessions/<int:pk>/', views.intake_session_detail, name='intake_session_detail'),
     path('intake/suppliers/', views.supplier_list, name='supplier_list'),
+    # --- Ombor (to'liq nazorat va tahlil) ---
+    path('warehouse/', views.warehouse, name='warehouse'),
+    path('warehouse/adjust/', views.warehouse_adjust, name='warehouse_adjust'),
     path('reorder/', views.reorder_page, name='reorder_page'),
     path('cashier/<int:user_id>/', views.cashier_stats, name='cashier_stats'),
     path('import/', views.csv_import, name='csv_import'),
