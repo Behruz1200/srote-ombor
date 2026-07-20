@@ -1130,14 +1130,17 @@
            u ishlatilsa matn fon bilan qo'shilib ko'rinmay qoladi. */
         nav.yurit-nav .nav-item.active > .nav-link,
         nav.yurit-nav .nav-link.is-current {
-            color: var(--yrt-primary) !important;
-            background: color-mix(in srgb, var(--yrt-primary) 12%, transparent) !important;
+            /* Aniq qiymatlar: color-mix + o'zgaruvchi bu yerda shaffofga
+               aylanib ketardi, --yrt-primary-soft esa to'q rang. */
+            color: #4F46E5 !important;
+            background: rgba(91, 91, 214, .12) !important;
             font-weight: 600;
             position: relative;
         }
-        @supports not (background: color-mix(in srgb, red 10%, transparent)) {
-            nav.yurit-nav .nav-item.active > .nav-link,
-            nav.yurit-nav .nav-link.is-current { background: rgba(91,91,214,.12) !important; }
+        [data-bs-theme="dark"] nav.yurit-nav .nav-item.active > .nav-link,
+        [data-bs-theme="dark"] nav.yurit-nav .nav-link.is-current {
+            color: #A5B4FC !important;
+            background: rgba(129, 140, 248, .18) !important;
         }
         nav.yurit-nav .nav-item.active > .nav-link::before,
         nav.yurit-nav .nav-link.is-current::before {
@@ -1148,7 +1151,7 @@
         nav.yurit-nav .nav-item.active > .nav-link i.bi { opacity: 1; }
         /* Ochiladigan ro'yxat ichidagi faol band */
         nav.yurit-nav .dropdown-menu .dropdown-item.is-current {
-            background: color-mix(in srgb, var(--yrt-primary) 12%, transparent);
+            background: rgba(91, 91, 214, .12);
             color: var(--yrt-primary);
             font-weight: 600;
             border-radius: 6px;
