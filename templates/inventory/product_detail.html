@@ -1,36 +1,7 @@
 {% extends 'inventory/base.html' %}
 {% load yurit_extras %}
 
-{% block title %}{{ product.name }} — yurit
-<script>
-(function () {
-    // Bootstrap sahifa mazmunidan KEYIN yuklanadi — shuning uchun
-    // Modal obyekti faqat bosilganda quriladi.
-    var _bs = null;
-    function modal() {
-        var el = document.getElementById('splitModal');
-        if (!el) return null;
-        return _bs || (_bs = new bootstrap.Modal(el));
-    }
-    document.querySelectorAll('.split-btn').forEach(function (b) {
-        b.addEventListener('click', function () {
-            var d = b.dataset;
-            document.getElementById('spVariant').value = d.variant;
-            document.getElementById('spBranch').value = d.branch;
-            document.getElementById('spQty').value = d.qty;
-            document.getElementById('spQty').max = d.max;
-            document.getElementById('spMax').textContent = d.max;
-            document.getElementById('spCost').value = d.cost;
-            document.getElementById('spSale').value = '';
-            document.getElementById('spTag').value = '';
-            document.getElementById('spInfo').textContent =
-                d.name + " — bu partiya " + d.qty + " dona, tannarxi " + d.cost + " so'm.";
-            var m = modal(); if (m) m.show();
-        });
-    });
-})();
-</script>
-{% endblock %}
+{% block title %}{{ product.name }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -514,5 +485,33 @@ new Chart(document.getElementById('trendChart'), {
         }
     }
 });
+</script>
+<script>
+(function () {
+    // Bootstrap sahifa mazmunidan KEYIN yuklanadi — shuning uchun
+    // Modal obyekti faqat bosilganda quriladi.
+    var _bs = null;
+    function modal() {
+        var el = document.getElementById('splitModal');
+        if (!el) return null;
+        return _bs || (_bs = new bootstrap.Modal(el));
+    }
+    document.querySelectorAll('.split-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var d = b.dataset;
+            document.getElementById('spVariant').value = d.variant;
+            document.getElementById('spBranch').value = d.branch;
+            document.getElementById('spQty').value = d.qty;
+            document.getElementById('spQty').max = d.max;
+            document.getElementById('spMax').textContent = d.max;
+            document.getElementById('spCost').value = d.cost;
+            document.getElementById('spSale').value = '';
+            document.getElementById('spTag').value = '';
+            document.getElementById('spInfo').textContent =
+                d.name + " — bu partiya " + d.qty + " dona, tannarxi " + d.cost + " so'm.";
+            var m = modal(); if (m) m.show();
+        });
+    });
+})();
 </script>
 {% endblock %}
