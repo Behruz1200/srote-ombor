@@ -142,12 +142,12 @@
             </div>
             <input type="hidden" name="sort" value="{{ sort }}">
             <div class="col-md-2 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-sm btn-primary flex-fill">
-                    <i class="bi bi-funnel"></i> Filter
-                </button>
-                <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-x"></i>
-                </a>
+                <span class="text-muted small flex-fill" id="filterHint">
+                    <span id="filterBusy" class="spinner-border spinner-border-sm d-none"></span>
+                    <span id="filterWord">Avtomatik</span>
+                </span>
+                <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary"
+                   title="Filtrni tozalash"><i class="bi bi-x"></i></a>
             </div>
         </div>
     </form>
@@ -653,6 +653,47 @@ document.addEventListener('hide.bs.dropdown', (e) => {
         try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {}
         apply(on);
     });
+})();
+</script>
+
+<script>
+(function () {
+    // Filtr o'zi qo'llanadi — "Filter" tugmasi kerak emas.
+    var form = document.querySelector('form[method="get"].card');
+    if (!form) return;
+    var busy = document.getElementById('filterBusy');
+    var word = document.getElementById('filterWord');
+    function go() {
+        if (busy) busy.classList.remove('d-none');
+        if (word) word.textContent = 'Qo\'llanmoqda...';
+        // sahifa raqami tushib qolsin — yangi filtr 1-sahifadan boshlanadi
+        var pg = form.querySelector('input[name="page"]');
+        if (pg) pg.remove();
+        form.submit();
+    }
+    // Ro'yxatlar: tanlangan zahoti
+    form.querySelectorAll('select').forEach(function (sel) {
+        sel.addEventListener('change', go);
+    });
+    // Qidiruv: yozishdan to'xtagach. Takliflar oynasi ochiq bo'lsa
+    // yubormaymiz — aks holda tanlamoqchi bo'lgan qatori yo'qolib ketadi.
+    var q = document.getElementById('qInput');
+    var sug = document.getElementById('qSuggest');
+    if (q) {
+        var t = null, last = q.value;
+        q.addEventListener('input', function () {
+            clearTimeout(t);
+            t = setTimeout(function () {
+                if (q.value === last) return;
+                if (sug && sug.style.display !== 'none' && sug.children.length) return;
+                last = q.value;
+                go();
+            }, 800);
+        });
+        q.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); go(); }
+        });
+    }
 })();
 </script>
 {% endblock %}
