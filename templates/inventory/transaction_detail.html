@@ -131,12 +131,12 @@
             </tbody>
             <tfoot>
                 {% if txn.discount_total > 0 %}
-                <tr><th colspan="3" class="text-end small">Oraliq summa:</th>
+                <tr><th colspan="3" class="text-start small">Oraliq summa:</th>
                     <td class="text-end">{{ txn.gross|som }}</td></tr>
-                <tr><th colspan="3" class="text-end small text-danger">Chegirma:</th>
+                <tr><th colspan="3" class="text-start small text-danger">Chegirma:</th>
                     <td class="text-end text-danger text-nowrap">−{{ txn.discount_total|som }}</td></tr>
                 {% endif %}
-                <tr><th colspan="3" class="text-end">JAMI:</th>
+                <tr><th colspan="3" class="text-start">JAMI:</th>
                     <th class="text-end fs-5 text-nowrap">{{ txn.total|som }}&nbsp;so'm</th></tr>
             </tfoot>
         </table>
@@ -258,6 +258,8 @@ POS terminal devices (Android):
     /* JAMI va summalar qatorga sig'sin — bo'linib ketmasin */
     #receipt .text-nowrap { white-space: nowrap !important; }
     #receipt tfoot th, #receipt tfoot td { white-space: nowrap !important; }
+    /* Yakuniy qatorlar: yorliq chap chekkadan, summa o'ng chekkada */
+    #receipt tfoot .text-start { text-align: left !important; }
 
     #receipt table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     #receipt th, #receipt td {
@@ -269,15 +271,18 @@ POS terminal devices (Android):
         border: none !important;
         word-break: break-word;
     }
-    /* Ustun kengliklari: nom keng, sonlar tor va teng oraliqda */
-    #receipt thead th:nth-child(1) { width: 44%; }
-    #receipt thead th:nth-child(2) { width: 12%; }
-    #receipt thead th:nth-child(3) { width: 21%; }
-    #receipt thead th:nth-child(4) { width: 23%; }
-    /* Sonlar bo'linmasin */
+    /* Ustun kengliklari: sonlarga kengroq joy */
+    #receipt thead th:nth-child(1) { width: 38%; }
+    #receipt thead th:nth-child(2) { width: 13%; }
+    #receipt thead th:nth-child(3) { width: 23%; }
+    #receipt thead th:nth-child(4) { width: 26%; }
+    /* Sonlar sig'masa yangi qatorga o'tsin (kesilib ketmasin) */
     #receipt tbody td:nth-child(2),
     #receipt tbody td:nth-child(3),
-    #receipt tbody td:nth-child(4) { white-space: nowrap; }
+    #receipt tbody td:nth-child(4) {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
     /* Ustun nomlari — termalda aniq chiqishi uchun kattaroq va qalinroq */
     #receipt thead th {
         border-bottom: 1.5px solid #000 !important;
