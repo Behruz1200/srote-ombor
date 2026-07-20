@@ -2101,6 +2101,46 @@ def clothes_intake(request):
     })
 
 
+
+def _svg_scalable(svg):
+    """python-barcode SVG'siga viewBox qo'shadi.
+
+    Kutubxona SVG'ni mm birliklarida, viewBox'siz chiqaradi. viewBox
+    bo'lmasa CSS'dagi height SVG'ni KICHRAYTIRMAYDI — kesib tashlaydi.
+    Shtrix-kod raqami pastda (y≈13.5mm) turgani uchun chop etishda
+    (height: 11mm) u qirqilib, ekранda ko'ringani bilan qog'ozga
+    tushmasdi.
+
+    Shuning uchun: mm qo'shimchalarini olib tashlab, o'lchamlarni
+    foydalanuvchi birligiga aylantiramiz va viewBox qo'yamiz.
+    """
+    import re as _re
+    m = _re.search(r'<svg[^>]*>', svg)
+    if not m:
+        return svg
+    root = m.group(0)
+    w = _re.search(r'width="([\d.]+)mm"', root)
+    h = _re.search(r'height="([\d.]+)mm"', root)
+    if not (w and h):
+        return svg
+    W, H = w.group(1), h.group(1)
+
+    body = svg[m.end():]
+    # pt -> mm (1pt = 25.4/72 mm), aks holda viewBox bilan mos kelmaydi
+    def _pt(mm):
+        return f'font-size:{float(mm.group(1)) * 25.4 / 72:.3f};'
+    body = _re.sub(r'font-size:\s*([\d.]+)pt;', _pt, body)
+    # "12.34mm" -> "12.34"
+    body = _re.sub(r'="([\d.]+)mm"', r'="\1"', body)
+
+    new_root = (
+        f'<svg version="1.1" xmlns="http://www.w3.org/2000/svg" '
+        f'width="100%" height="100%" viewBox="0 0 {W} {H}" '
+        f'preserveAspectRatio="xMidYMid meet">'
+    )
+    return new_root + body
+
+
 @admin_required
 def variant_labels(request):
     """Termal etiketka: EAN-13 barcode + QR + kod + narx (variantlar)."""
@@ -2155,6 +2195,7 @@ def variant_labels(request):
             # <?xml ...?> va DOCTYPE'ni olib tashlaymiz (inline uchun)
             i = barcode_svg.find('<svg')
             barcode_svg = barcode_svg[i:] if i >= 0 else barcode_svg
+            barcode_svg = _svg_scalable(barcode_svg)
         except Exception:
             barcode_svg = ''
         # QR (kod) -> PNG data URI
