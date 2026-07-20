@@ -25,10 +25,10 @@
         </div>
     </header>
     <div class="card p-3 mb-3">
-        <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
-            <input type="hidden" name="ids" value="{{ ids }}">
-            <label class="form-label mb-0">Har turdan nusxa:</label>
-            <select name="copies" class="form-select form-select-sm" style="width:auto">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <label class="form-label mb-0" for="copiesSel">Har turdan nusxa:</label>
+            <select name="copies" id="copiesSel"
+                    class="form-select form-select-sm" style="width:auto">
                 <option value="stock" {% if by_stock %}selected{% endif %}>Ombor soniga qarab</option>
                 <option value="1" {% if copies == 1 %}selected{% endif %}>1 dona</option>
                 <option value="2" {% if copies == 2 %}selected{% endif %}>2 dona</option>
@@ -36,7 +36,8 @@
                 <option value="5" {% if copies == 5 %}selected{% endif %}>5 dona</option>
                 <option value="10" {% if copies == 10 %}selected{% endif %}>10 dona</option>
             </select>
-            <button class="btn btn-sm btn-outline-primary" type="submit">Yangilash</button>
+            <span id="copiesBusy" class="spinner-border spinner-border-sm text-primary d-none"
+                  role="status" aria-hidden="true"></span>
             {% if by_stock %}
                 <span class="small text-success ms-2">
                     <i class="bi bi-box-seam"></i> Har turga omboridagi soni qadar
@@ -45,7 +46,7 @@
             {% else %}
                 <span class="small text-muted ms-2">Yoki "Ombor soniga qarab"ni tanlang.</span>
             {% endif %}
-        </form>
+        </div>
         <hr class="my-2">
         <div class="d-flex align-items-center gap-2 flex-wrap small">
             <strong><i class="bi bi-usb-symbol"></i> USB:</strong>
@@ -278,6 +279,24 @@
     const repick = document.getElementById('usbRepick');
     if (repick) repick.addEventListener('click', function (e) {
         e.preventDefault(); run(true);
+    });
+})();
+</script>
+
+<script>
+// Nusxa soni tanlansa — darrov qo'llanadi ("Yangilash" tugmasi olib tashlandi).
+// Manzildagi qolgan parametrlar (ids / products / size) saqlanib qoladi —
+// eski formada faqat "ids" bor edi va "?products=" bilan ochilganda yo'qolardi.
+(function () {
+    var sel = document.getElementById('copiesSel');
+    if (!sel) return;
+    sel.addEventListener('change', function () {
+        var busy = document.getElementById('copiesBusy');
+        if (busy) busy.classList.remove('d-none');
+        sel.disabled = true;
+        var u = new URL(window.location.href);
+        u.searchParams.set('copies', sel.value);
+        window.location.assign(u.toString());
     });
 })();
 </script>
