@@ -259,13 +259,25 @@ POS terminal devices (Android):
     #receipt .text-nowrap { white-space: nowrap !important; }
     #receipt tfoot th, #receipt tfoot td { white-space: nowrap !important; }
 
-    #receipt table { width: 100%; border-collapse: collapse; }
+    #receipt table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     #receipt th, #receipt td {
-        padding: 1mm 0.5mm !important;
+        /* Chap/o'ng bo'shliq bir xil — ilgari NARX ustuni SONI ga
+           yopishib qolardi */
+        padding: 1mm 1.6mm !important;
         font-size: 9.5pt;
         vertical-align: top;
         border: none !important;
+        word-break: break-word;
     }
+    /* Ustun kengliklari: nom keng, sonlar tor va teng oraliqda */
+    #receipt thead th:nth-child(1) { width: 44%; }
+    #receipt thead th:nth-child(2) { width: 12%; }
+    #receipt thead th:nth-child(3) { width: 21%; }
+    #receipt thead th:nth-child(4) { width: 23%; }
+    /* Sonlar bo'linmasin */
+    #receipt tbody td:nth-child(2),
+    #receipt tbody td:nth-child(3),
+    #receipt tbody td:nth-child(4) { white-space: nowrap; }
     /* Ustun nomlari — termalda aniq chiqishi uchun kattaroq va qalinroq */
     #receipt thead th {
         border-bottom: 1.5px solid #000 !important;
