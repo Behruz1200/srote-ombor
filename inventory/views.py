@@ -811,9 +811,15 @@ def product_list(request):
     if show_all:
         per_page = max(1, products.count())
 
-    # Umumiy yig'indi — BUTUN ro'yxat bo'yicha (faqat shu sahifa emas)
+    # Umumiy yig'indi va KPI — BUTUN ro'yxat bo'yicha (faqat shu sahifa emas).
+    # Ilgari bular shablonda `products` ro'yxati ustidan hisoblanardi;
+    # sahifalash qo'shilgach faqat joriy sahifani sanab qolardi.
     _all_totals = products.aggregate(
-        v=Sum('variants_count'), u=Sum('total_stock'))
+        v=Sum('variants_count'), u=Sum('total_stock'),
+        n_in=Count('pk', filter=Q(total_stock__gt=0)),
+        n_low=Count('pk', filter=Q(total_stock__gt=0, total_stock__lte=3)),
+        n_out=Count('pk', filter=Q(total_stock=0)),
+    )
     paginator = Paginator(products, per_page)
     page_obj = paginator.get_page(request.GET.get('page') or 1)
     products = list(page_obj.object_list)
@@ -821,6 +827,12 @@ def product_list(request):
     list_totals = {
         'variants': _all_totals.get('v') or 0,
         'units': _all_totals.get('u') or 0,
+    }
+    kpi = {
+        'total': paginator.count,
+        'in_stock': _all_totals.get('n_in') or 0,
+        'low_stock': _all_totals.get('n_low') or 0,
+        'out_stock': _all_totals.get('n_out') or 0,
     }
 
     # 30/365 kunlik sotuvlar — faqat ko'rsatiladigan mahsulotlar bo'yicha
@@ -904,6 +916,7 @@ def product_list(request):
 
     return render(request, 'inventory/product_list.html', {
         'products': products,
+        'kpi': kpi,
         'page_obj': page_obj,
         'paginator': paginator,
         'per_page': 'all' if show_all else per_page,
