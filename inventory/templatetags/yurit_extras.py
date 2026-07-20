@@ -6,7 +6,12 @@ register = template.Library()
 
 @register.filter
 def som(value):
-    """Sonni bo'shliq bilan formatlash, masalan 1234567 → '1 234 567'"""
+    """Sonni bo'shliq bilan formatlash, masalan 1234567 → '1 234 567'
+
+    Ajratuvchi — UZILMAYDIGAN bo'shliq (\u00a0). Oddiy bo'shliq bo'lsa,
+    tor joyda (chek, etiketka) son "39" va "000" bo'lib ikki qatorga
+    bo'linib ketardi.
+    """
     if value is None or value == '':
         return ''
     try:
@@ -14,7 +19,7 @@ def som(value):
     except (ValueError, TypeError):
         return value
     sign = '-' if n < 0 else ''
-    return sign + f'{abs(n):,}'.replace(',', ' ')
+    return sign + f'{abs(n):,}'.replace(',', '\u00a0')
 
 
 @register.filter
@@ -76,7 +81,7 @@ def som_with_decimals(value, places=2):
         return value
     formatted = f'{n:,.{places}f}'
     int_part, _, dec_part = formatted.partition('.')
-    return int_part.replace(',', ' ') + ('.' + dec_part if dec_part else '')
+    return int_part.replace(',', '\u00a0') + ('.' + dec_part if dec_part else '')
 
 
 # ── Stock-aggregation helpers used by product_list KPI strip ────────────

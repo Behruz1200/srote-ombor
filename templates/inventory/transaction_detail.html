@@ -134,10 +134,10 @@
                 <tr><th colspan="3" class="text-end small">Oraliq summa:</th>
                     <td class="text-end">{{ txn.gross|som }}</td></tr>
                 <tr><th colspan="3" class="text-end small text-danger">Chegirma:</th>
-                    <td class="text-end text-danger">−{{ txn.discount_total|som }}</td></tr>
+                    <td class="text-end text-danger text-nowrap">−{{ txn.discount_total|som }}</td></tr>
                 {% endif %}
                 <tr><th colspan="3" class="text-end">JAMI:</th>
-                    <th class="text-end fs-4">{{ txn.total|som }} so'm</th></tr>
+                    <th class="text-end fs-5 text-nowrap">{{ txn.total|som }}&nbsp;so'm</th></tr>
             </tfoot>
         </table>
         <hr>
@@ -254,7 +254,10 @@ POS terminal devices (Android):
     #receipt h5 { font-size: 11pt; margin: 1mm 0; }
     #receipt hr { border: 0; border-top: 1px dashed #000; margin: 1.5mm 0; }
     #receipt .small { font-size: 9.5pt; }
-    #receipt .fs-4 { font-size: 13pt !important; font-weight: 700; }
+    #receipt .fs-4, #receipt .fs-5 { font-size: 12pt !important; font-weight: 700; }
+    /* JAMI va summalar qatorga sig'sin — bo'linib ketmasin */
+    #receipt .text-nowrap { white-space: nowrap !important; }
+    #receipt tfoot th, #receipt tfoot td { white-space: nowrap !important; }
 
     #receipt table { width: 100%; border-collapse: collapse; }
     #receipt th, #receipt td {
