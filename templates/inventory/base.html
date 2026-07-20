@@ -1125,13 +1125,19 @@
             color: var(--yrt-fg) !important;
             background: var(--yrt-surface-2) !important;
         }
-        /* Hozir turgan sahifa — ajralib tursin (chap chekkada rangli chiziq) */
+        /* Hozir turgan sahifa — ajralib tursin (chap chekkada rangli chiziq).
+           DIQQAT: --yrt-primary-soft TO'Q rang (#818CF8), fon uchun emas —
+           u ishlatilsa matn fon bilan qo'shilib ko'rinmay qoladi. */
         nav.yurit-nav .nav-item.active > .nav-link,
         nav.yurit-nav .nav-link.is-current {
             color: var(--yrt-primary) !important;
-            background: var(--yrt-primary-soft, rgba(79,70,229,.10)) !important;
+            background: color-mix(in srgb, var(--yrt-primary) 12%, transparent) !important;
             font-weight: 600;
             position: relative;
+        }
+        @supports not (background: color-mix(in srgb, red 10%, transparent)) {
+            nav.yurit-nav .nav-item.active > .nav-link,
+            nav.yurit-nav .nav-link.is-current { background: rgba(91,91,214,.12) !important; }
         }
         nav.yurit-nav .nav-item.active > .nav-link::before,
         nav.yurit-nav .nav-link.is-current::before {
@@ -1142,7 +1148,7 @@
         nav.yurit-nav .nav-item.active > .nav-link i.bi { opacity: 1; }
         /* Ochiladigan ro'yxat ichidagi faol band */
         nav.yurit-nav .dropdown-menu .dropdown-item.is-current {
-            background: var(--yrt-primary-soft, rgba(79,70,229,.10));
+            background: color-mix(in srgb, var(--yrt-primary) 12%, transparent);
             color: var(--yrt-primary);
             font-weight: 600;
             border-radius: 6px;
