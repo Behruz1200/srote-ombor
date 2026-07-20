@@ -2187,8 +2187,12 @@ def variant_labels(request):
         # EAN-13 barcode SVG (12 body -> lib check qo'shadi)
         try:
             svg_io = io.BytesIO()
+            # module_width kattaroq -> shtrix-kod KENGROQ (va skaner uchun
+            # ham qulayroq). Balandlik CSS bilan cheklangani uchun, enini
+            # oshirishning yagona yo'li — nisbatni kengaytirish.
+            # quiet_zone 2.0 saqlanadi: EAN-13 uchun chekka bo'shliq shart.
             EAN13(bc[:12], writer=SVGWriter()).write(
-                svg_io, options={'module_height': 9.0, 'module_width': 0.28,
+                svg_io, options={'module_height': 9.0, 'module_width': 0.50,
                                  'font_size': 8, 'text_distance': 3.5,
                                  'quiet_zone': 2.0})
             barcode_svg = svg_io.getvalue().decode('utf-8')
