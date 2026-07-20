@@ -1,0 +1,24 @@
+{% load yurit_extras %}
+{% if products %}
+<div class="grid">
+  {% for it in products %}
+  <a class="card2" href="{% url 'shop_product' it.p.code %}">
+    <div class="card2__img">
+      {% if it.p.image %}<img src="{{ it.p.image.url }}" alt="{{ it.p.name }}" loading="lazy">
+      {% else %}<i class="bi bi-box-seam"></i>{% endif %}
+    </div>
+    <div class="card2__b">
+      {% if it.p.category %}<div class="card2__cat">{{ it.p.category.name }}</div>{% endif %}
+      <div class="card2__name">{{ it.p.name }}</div>
+      <div class="card2__price">
+        {% if it.price_min != it.price_max %}{{ it.price_min|floatformat:0|som }}<span style="font-size:.8rem;font-weight:600">+</span>
+        {% else %}{{ it.price_min|floatformat:0|som }}{% endif %}
+        <span style="font-size:.78rem;color:var(--muted);font-weight:600">so'm</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p style="color:var(--muted)">Hozircha mahsulot yo'q.</p>
+{% endif %}

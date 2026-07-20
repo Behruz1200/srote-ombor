@@ -8,6 +8,20 @@ urlpatterns = [
 
     path('healthz', views.healthz, name='healthz'),
     path('', views.home, name='home'),
+
+    # --- Onlayn do'kon (ochiq sayt) ---
+    path('shop/', views.shop_home, name='shop_home'),
+    path('shop/catalog/', views.shop_catalog, name='shop_catalog'),
+    path('shop/p/<str:code>/', views.shop_product, name='shop_product'),
+    path('shop/cart/', views.shop_cart, name='shop_cart'),
+    path('shop/cart/add/', views.shop_cart_add, name='shop_cart_add'),
+    path('shop/cart/update/', views.shop_cart_update, name='shop_cart_update'),
+    path('shop/checkout/', views.shop_checkout, name='shop_checkout'),
+    path('shop/order/<int:pk>/', views.shop_order_done, name='shop_order_done'),
+    # Xodimlar uchun
+    path('web-orders/', views.web_orders, name='web_orders'),
+    path('web-orders/<int:pk>/status/', views.web_order_status,
+         name='web_order_status'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('login/2fa/', views.login_2fa, name='login_2fa'),

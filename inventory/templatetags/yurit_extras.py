@@ -110,3 +110,11 @@ def low_stock_count(products):
 @register.filter
 def in_stock_count(products):
     return sum(1 for p in (products or []) if _stock_value(p) > 0)
+
+@register.filter
+def dict_get(d, key):
+    """Shablonda lug'atdan kalit bo'yicha qiymat: {{ counts|dict_get:s }}"""
+    try:
+        return d.get(key, '')
+    except AttributeError:
+        return ''

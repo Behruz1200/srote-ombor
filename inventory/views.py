@@ -9,8 +9,9 @@ from django.db.models.functions import (
     Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
 )
 from django.db import transaction
-from django.http import HttpResponseForbidden, HttpResponse, JsonResponse
+from django.http import HttpResponseForbidden, HttpResponse, JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.core.cache import cache
 import json as _json
@@ -38,7 +39,7 @@ from .models import (
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
-    InvoiceImage, QuickSellItem,
+    InvoiceImage, QuickSellItem, WebOrder, WebOrderLine,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -255,6 +256,7 @@ def security_2fa(request):
 
 @login_required
 def home(request):
+    # POS tizimiga TEGILMAYDI — sayt butunlay alohida (/shop/).
     if request.user.is_admin():
         return redirect('dashboard')
     return redirect('lookup')
@@ -9804,3 +9806,288 @@ def warehouse_adjust(request):
         request,
         f"{st.variant.product.name} — {old} → {new_count} dona ({reason}).")
     return redirect(back)
+
+
+# ===========================================================================
+#  ONLAYN DO'KON (ochiq sayt)
+#  Mijozlar uchun: katalog, savat, buyurtma. Kirish talab qilinmaydi.
+#  Narx ko'rsatiladi, ombor qoldig'i KO'RSATILMAYDI.
+# ===========================================================================
+
+SHOP_NAME = 'Koreys Bozor'
+SHOP_CITY = 'Urganch shahar'
+SHOP_PHONE = '+998 90 000 00 00'
+SHOP_TELEGRAM = 'https://t.me/koreysbozor'
+CART_KEY = 'shop_cart'
+
+
+def _shop_branch():
+    return Branch.objects.filter(is_active=True).order_by('pk').first()
+
+
+def _shop_stock_qs():
+    """Saytda ko'rsatiladigan tovarlar.
+
+    Narxsizlar (sotuv = 0) va ochiq narxli xizmat yozuvlari chiqmaydi —
+    aks holda saytda "0 so'm" bo'lib ko'rinardi.
+    """
+    return (BranchStock.objects
+            .filter(branch=_shop_branch(), stock_count__gt=0, sale_price__gt=0)
+            .exclude(variant__product__is_open_price=True)
+            .select_related('variant', 'variant__product',
+                            'variant__product__category'))
+
+
+def _shop_ctx(request, **extra):
+    cart = request.session.get(CART_KEY) or {}
+    ctx = {
+        'shop_name': SHOP_NAME, 'shop_city': SHOP_CITY,
+        'shop_phone': SHOP_PHONE, 'shop_telegram': SHOP_TELEGRAM,
+        'cart_count': sum(int(v) for v in cart.values()),
+    }
+    ctx.update(extra)
+    return ctx
+
+
+def shop_home(request):
+    """Bosh sahifa — do'kon haqida + mashhur bo'limlar."""
+    stock = _shop_stock_qs()
+    cats = (stock.values('variant__product__category__id',
+                         'variant__product__category__name')
+            .annotate(n=Count('variant__product', distinct=True))
+            .order_by('-n')[:8])
+    categories = [{'id': c['variant__product__category__id'],
+                   'name': c['variant__product__category__name'] or 'Boshqa',
+                   'n': c['n']} for c in cats]
+
+    # So'nggi qo'shilganlar
+    latest_ids = list(stock.order_by('-variant__product__created_at')
+                      .values_list('variant__product_id', flat=True)[:60])
+    seen, pids = set(), []
+    for pid in latest_ids:
+        if pid not in seen:
+            seen.add(pid); pids.append(pid)
+        if len(pids) >= 8:
+            break
+    products = _shop_cards(pids)
+    return render(request, 'shop/home.html',
+                  _shop_ctx(request, categories=categories, products=products))
+
+
+def _shop_cards(pids):
+    """Mahsulot kartochkalari: nom, eng arzon narx, rasm."""
+    if not pids:
+        return []
+    rows = (_shop_stock_qs().filter(variant__product_id__in=pids)
+            .values('variant__product_id')
+            .annotate(price_min=Min('sale_price'), price_max=Max('sale_price')))
+    price_map = {r['variant__product_id']: r for r in rows}
+    prods = Product.objects.filter(pk__in=pids).select_related('category')
+    out = []
+    for p in prods:
+        r = price_map.get(p.pk)
+        if not r:
+            continue
+        out.append({'p': p, 'price_min': r['price_min'], 'price_max': r['price_max']})
+    # pids tartibini saqlaymiz
+    order = {pid: i for i, pid in enumerate(pids)}
+    out.sort(key=lambda x: order.get(x['p'].pk, 999))
+    return out
+
+
+def shop_catalog(request):
+    """Katalog — qidiruv, kategoriya, sahifalash."""
+    from django.core.paginator import Paginator
+    stock = _shop_stock_qs()
+    q = (request.GET.get('q') or '').strip()
+    cat = request.GET.get('category') or ''
+    if q:
+        stock = stock.filter(
+            Q(variant__product__name__icontains=q) |
+            Q(variant__product__brand__icontains=q) |
+            Q(variant__product__category__name__icontains=q))
+    if cat.isdigit():
+        stock = stock.filter(variant__product__category_id=int(cat))
+
+    pids = list(dict.fromkeys(
+        stock.order_by('variant__product__name')
+        .values_list('variant__product_id', flat=True)))
+    paginator = Paginator(pids, 24)
+    page = paginator.get_page(request.GET.get('page') or 1)
+    products = _shop_cards(list(page.object_list))
+
+    categories = (Category.objects.filter(
+        products__variants__branch_stocks__in=_shop_stock_qs())
+        .annotate(n=Count('products', distinct=True))
+        .order_by('name').distinct())
+    return render(request, 'shop/catalog.html', _shop_ctx(
+        request, products=products, page_obj=page, paginator=paginator,
+        q=q, category_id=cat, categories=categories))
+
+
+def shop_product(request, code):
+    product = get_object_or_404(Product, code=normalize_code(code))
+    rows = _shop_stock_qs().filter(variant__product=product)
+    if not rows.exists():
+        raise Http404
+    variants = [{'v': r.variant, 'price': r.sale_price, 'stock_id': r.pk}
+                for r in rows.order_by('variant__size', 'variant__color')]
+    return render(request, 'shop/product.html', _shop_ctx(
+        request, product=product, variants=variants,
+        price_min=min(v['price'] for v in variants),
+        price_max=max(v['price'] for v in variants)))
+
+
+# ---------- Savat (sessiyada saqlanadi) ----------
+
+def _cart_items(request):
+    """Savatdagi qatorlar. Yo'q bo'lib qolgan tovarlar jimgina tushib qoladi."""
+    cart = request.session.get(CART_KEY) or {}
+    if not cart:
+        return [], 0
+    rows = {str(r.pk): r for r in _shop_stock_qs().filter(pk__in=list(cart.keys()))}
+    items, total = [], 0
+    changed = False
+    for sid, qty in list(cart.items()):
+        st = rows.get(str(sid))
+        if st is None:
+            cart.pop(sid, None); changed = True
+            continue
+        qty = max(1, min(int(qty), st.stock_count))
+        if str(cart[sid]) != str(qty):
+            cart[sid] = qty; changed = True
+        line = st.sale_price * qty
+        total += line
+        items.append({'stock': st, 'variant': st.variant,
+                      'product': st.variant.product,
+                      'qty': qty, 'price': st.sale_price, 'total': line})
+    if changed:
+        request.session[CART_KEY] = cart
+        request.session.modified = True
+    return items, total
+
+
+@require_POST
+def shop_cart_add(request):
+    sid = (request.POST.get('stock') or '').strip()
+    try:
+        qty = max(1, int(request.POST.get('qty') or 1))
+    except (TypeError, ValueError):
+        qty = 1
+    st = _shop_stock_qs().filter(pk=sid or 0).first()
+    if st is None:
+        messages.error(request, 'Bu tovar hozir mavjud emas.')
+        return redirect('shop_catalog')
+    cart = request.session.get(CART_KEY) or {}
+    cart[str(st.pk)] = min(int(cart.get(str(st.pk), 0)) + qty, st.stock_count)
+    request.session[CART_KEY] = cart
+    request.session.modified = True
+    messages.success(request, f'"{st.variant.product.name}" savatga qo\'shildi.')
+    return redirect(request.POST.get('next') or 'shop_cart')
+
+
+@require_POST
+def shop_cart_update(request):
+    cart = request.session.get(CART_KEY) or {}
+    sid = (request.POST.get('stock') or '').strip()
+    action = request.POST.get('action')
+    if sid in cart:
+        if action == 'remove':
+            cart.pop(sid)
+        else:
+            try:
+                q = int(request.POST.get('qty') or 1)
+            except (TypeError, ValueError):
+                q = 1
+            if q <= 0:
+                cart.pop(sid)
+            else:
+                cart[sid] = q
+    request.session[CART_KEY] = cart
+    request.session.modified = True
+    return redirect('shop_cart')
+
+
+def shop_cart(request):
+    items, total = _cart_items(request)
+    return render(request, 'shop/cart.html',
+                  _shop_ctx(request, items=items, total=total))
+
+
+def shop_checkout(request):
+    items, total = _cart_items(request)
+    if not items:
+        return redirect('shop_cart')
+
+    # Onlayn to'lov faqat merchant kalitlari sozlangan bo'lsa ko'rinadi
+    online_ready = bool(getattr(settings, 'CLICK_MERCHANT_ID', '') or
+                        getattr(settings, 'PAYME_MERCHANT_ID', ''))
+
+    if request.method == 'POST':
+        name = (request.POST.get('name') or '').strip()[:120]
+        phone = (request.POST.get('phone') or '').strip()[:32]
+        address = (request.POST.get('address') or '').strip()
+        note = (request.POST.get('note') or '').strip()
+        pay = request.POST.get('payment') or WebOrder.Payment.ON_DELIVERY
+        if pay == WebOrder.Payment.ONLINE and not online_ready:
+            pay = WebOrder.Payment.ON_DELIVERY
+        if not name or not phone:
+            messages.error(request, 'Ism va telefon raqamini kiriting.')
+        else:
+            with transaction.atomic():
+                order = WebOrder.objects.create(
+                    branch=_shop_branch(), customer_name=name,
+                    customer_phone=phone, address=address, note=note,
+                    payment_method=pay, total=total)
+                for it in items:
+                    WebOrderLine.objects.create(
+                        order=order, variant=it['variant'],
+                        quantity=it['qty'], price=it['price'])
+            request.session[CART_KEY] = {}
+            request.session.modified = True
+            try:
+                from .notifications import notify_web_order
+                notify_web_order(order)
+            except Exception:
+                pass  # xabar ketmasa ham buyurtma saqlanadi
+            return redirect('shop_order_done', pk=order.pk)
+
+    return render(request, 'shop/checkout.html', _shop_ctx(
+        request, items=items, total=total, online_ready=online_ready))
+
+
+def shop_order_done(request, pk):
+    order = get_object_or_404(WebOrder.objects.prefetch_related(
+        'lines__variant__product'), pk=pk)
+    return render(request, 'shop/done.html', _shop_ctx(request, order=order))
+
+
+# ---------- Xodimlar uchun: kelgan buyurtmalar ----------
+
+@admin_required
+def web_orders(request):
+    status = request.GET.get('status') or ''
+    qs = (WebOrder.objects.select_related('branch', 'handled_by')
+          .prefetch_related('lines__variant__product'))
+    if status in dict(WebOrder.Status.choices):
+        qs = qs.filter(status=status)
+    counts = {s: WebOrder.objects.filter(status=s).count()
+              for s, _ in WebOrder.Status.choices}
+    return render(request, 'inventory/web_orders.html', {
+        'orders': qs[:100], 'status': status, 'counts': counts,
+        'statuses': WebOrder.Status.choices,
+    })
+
+
+@admin_required
+@require_POST
+def web_order_status(request, pk):
+    order = get_object_or_404(WebOrder, pk=pk)
+    new = request.POST.get('status')
+    if new in dict(WebOrder.Status.choices):
+        order.status = new
+        order.handled_by = request.user
+        order.handled_at = timezone.now()
+        order.save(update_fields=['status', 'handled_by', 'handled_at'])
+        messages.success(request, f'#{order.pk} — {order.get_status_display()}.')
+    return redirect(request.POST.get('back') or 'web_orders')

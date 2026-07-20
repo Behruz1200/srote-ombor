@@ -1,0 +1,88 @@
+{% extends 'inventory/base.html' %}{% load yurit_extras %}
+{% block title %}Sayt buyurtmalari — yurit{% endblock %}
+{% block backbar %}{% endblock %}
+{% block content %}
+<div class="dash-page">
+<header class="dash-hero mb-3">
+    <div class="dash-hero__glow"></div>
+    <div class="dash-hero__inner">
+        <div class="dash-hero__heading">
+            <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Onlayn</span>
+            <h1 class="dash-hero__title"><i class="bi bi-bag-check"></i> Sayt buyurtmalari</h1>
+            <p class="dash-hero__sub"><span>Mijozlar saytdan yuborgan buyurtmalar</span></p>
+        </div>
+        <div class="dash-hero__actions">
+            <a href="{% url 'shop_home' %}" target="_blank" class="dash-btn dash-btn--ghost">
+                <i class="bi bi-box-arrow-up-right"></i> <span>Saytni ochish</span>
+            </a>
+            <a href="{% url 'dashboard' %}" class="dash-btn dash-btn--ghost">
+                <i class="bi bi-arrow-left"></i> <span>Orqaga</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <a href="?" class="btn btn-sm {% if not status %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        Hammasi
+    </a>
+    {% for s, label in statuses %}
+    <a href="?status={{ s }}"
+       class="btn btn-sm {% if status == s %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        {{ label }} <span class="badge bg-light text-dark ms-1">{{ counts|dict_get:s }}</span>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="card p-0">
+<div class="table-responsive">
+<table class="table align-middle mb-0" data-colkey="web-orders">
+    <thead><tr>
+        <th>#</th><th>Sana</th><th>Mijoz</th><th>Tarkib</th>
+        <th class="text-end">Summa</th><th>Holat</th><th style="width:1%"></th>
+    </tr></thead>
+    <tbody>
+    {% for o in orders %}
+    <tr>
+        <td class="fw-bold">#{{ o.pk }}</td>
+        <td class="small text-muted text-nowrap">{{ o.created_at|date:"d.m.Y H:i" }}</td>
+        <td>
+            <div class="fw-semibold">{{ o.customer_name }}</div>
+            <div class="small"><a href="tel:{{ o.customer_phone }}">{{ o.customer_phone }}</a></div>
+            {% if o.address %}<div class="small text-muted">{{ o.address|truncatechars:44 }}</div>{% endif %}
+        </td>
+        <td class="small">
+            {% for l in o.lines.all %}
+            <div>{{ l.variant.product.name|truncatechars:28 }}
+                 <span class="text-muted">{{ l.variant.size }} ×{{ l.quantity }}</span></div>
+            {% endfor %}
+        </td>
+        <td class="text-end fw-bold text-nowrap">{{ o.total|floatformat:0|som }}</td>
+        <td>
+            <span class="badge bg-{% if o.status == 'new' %}warning text-dark{% elif o.status == 'confirmed' %}info{% elif o.status == 'delivered' %}success{% else %}secondary{% endif %}">
+                {{ o.get_status_display }}
+            </span>
+            <div class="small text-muted">{{ o.get_payment_method_display }}</div>
+        </td>
+        <td class="text-nowrap">
+            <form method="post" action="{% url 'web_order_status' o.pk %}" class="d-flex gap-1">
+                {% csrf_token %}
+                <input type="hidden" name="back" value="{{ request.get_full_path }}">
+                <select name="status" class="form-select form-select-sm" style="width:auto">
+                    {% for s, label in statuses %}
+                    <option value="{{ s }}" {% if o.status == s %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-sm btn-outline-primary"><i class="bi bi-check2"></i></button>
+            </form>
+        </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" class="text-center text-muted py-4">Buyurtma yo'q.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+</div>
+{% endblock %}

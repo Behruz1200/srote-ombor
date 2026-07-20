@@ -1,0 +1,131 @@
+{% load yurit_extras static %}<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ shop_name }}{% endblock %}</title>
+<meta name="description" content="{{ shop_name }} — {{ shop_city }}. Kiyim, maishiy kimyo, gigiyena va boshqa tovarlar.">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+:root{
+  --ink:#0f1115; --muted:#6b7280; --line:#e9eaee;
+  --bg:#ffffff; --soft:#f6f7f9; --brand:#16a34a; --brand-dark:#15803d;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+     -webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1180px;margin:0 auto;padding:0 18px}
+
+/* ---- Header ---- */
+.hdr{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);
+     backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hdr__in{display:flex;align-items:center;gap:18px;height:64px}
+.brand{font-weight:800;font-size:1.15rem;letter-spacing:-.02em;white-space:nowrap}
+.brand small{display:block;font-weight:500;font-size:.68rem;color:var(--muted);
+             letter-spacing:.04em;text-transform:uppercase}
+.hdr__search{flex:1;max-width:520px;position:relative}
+.hdr__search input{width:100%;height:42px;border:1px solid var(--line);
+  border-radius:999px;padding:0 44px 0 18px;font-size:.92rem;background:var(--soft)}
+.hdr__search input:focus{outline:none;border-color:var(--brand);background:#fff}
+.hdr__search button{position:absolute;right:5px;top:5px;width:32px;height:32px;
+  border:0;border-radius:50%;background:var(--brand);color:#fff;cursor:pointer}
+.hdr__cart{position:relative;display:inline-flex;align-items:center;gap:.4rem;
+  padding:.5rem .9rem;border:1px solid var(--line);border-radius:999px;font-weight:600;font-size:.9rem}
+.hdr__cart b{position:absolute;top:-6px;right:-6px;background:var(--brand);color:#fff;
+  font-size:.68rem;min-width:19px;height:19px;border-radius:999px;display:grid;place-items:center}
+.navlinks{display:flex;gap:16px;font-size:.92rem;color:var(--muted);font-weight:500}
+.navlinks a:hover{color:var(--ink)}
+
+/* ---- Cards ---- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+.card2{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;
+  transition:box-shadow .15s,transform .15s;height:100%;display:flex;flex-direction:column}
+.card2:hover{box-shadow:0 8px 26px rgba(15,17,21,.08);transform:translateY(-2px)}
+.card2__img{aspect-ratio:1/1;background:var(--soft);display:grid;place-items:center;overflow:hidden}
+.card2__img img{width:100%;height:100%;object-fit:cover}
+.card2__img i{font-size:2.4rem;color:#c9ccd4}
+.card2__b{padding:11px 13px 13px;display:flex;flex-direction:column;gap:5px;flex:1}
+.card2__cat{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.card2__name{font-weight:600;font-size:.9rem;line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card2__price{margin-top:auto;font-weight:800;font-size:1.02rem}
+
+/* ---- Buttons ---- */
+.btn2{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
+  height:46px;padding:0 22px;border-radius:12px;border:0;font-weight:700;font-size:.95rem;
+  background:var(--brand);color:#fff;cursor:pointer;transition:background .15s}
+.btn2:hover{background:var(--brand-dark);color:#fff}
+.btn2--ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn2--ghost:hover{background:var(--soft);color:var(--ink)}
+.btn2--sm{height:38px;padding:0 16px;font-size:.88rem;border-radius:10px}
+
+/* ---- Misc ---- */
+.chip{display:inline-flex;align-items:center;gap:.35rem;padding:.42rem .85rem;border:1px solid var(--line);
+  border-radius:999px;font-size:.85rem;font-weight:500;background:#fff;white-space:nowrap}
+.chip.is-on{background:var(--brand);border-color:var(--brand);color:#fff}
+.sec-title{font-size:1.25rem;font-weight:800;letter-spacing:-.02em;margin:0}
+.ftr{border-top:1px solid var(--line);margin-top:56px;padding:28px 0 40px;color:var(--muted);font-size:.9rem}
+@media(max-width:768px){
+  .hdr__in{height:auto;padding:10px 0;flex-wrap:wrap}
+  .hdr__search{order:3;flex:1 0 100%;max-width:none}
+  .navlinks{display:none}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="wrap hdr__in">
+    <a href="{% url 'shop_home' %}" class="brand">
+      {{ shop_name }}<small>{{ shop_city }}</small>
+    </a>
+    <form class="hdr__search" method="get" action="{% url 'shop_catalog' %}">
+      <input type="search" name="q" value="{{ q|default:'' }}" placeholder="Mahsulot qidirish...">
+      <button type="submit" aria-label="Qidirish"><i class="bi bi-search"></i></button>
+    </form>
+    <nav class="navlinks">
+      <a href="{% url 'shop_catalog' %}">Katalog</a>
+      <a href="#aloqa">Aloqa</a>
+    </nav>
+    <a href="{% url 'shop_cart' %}" class="hdr__cart">
+      <i class="bi bi-bag"></i> Savat
+      {% if cart_count %}<b>{{ cart_count }}</b>{% endif %}
+    </a>
+  </div>
+</header>
+
+{% if messages %}
+<div class="wrap" style="padding-top:14px">
+  {% for m in messages %}
+  <div class="alert alert-{{ m.tags|default:'info' }} py-2 mb-2">{{ m }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<main>{% block content %}{% endblock %}</main>
+
+<footer class="ftr" id="aloqa">
+  <div class="wrap">
+    <div class="d-flex flex-wrap gap-4 justify-content-between">
+      <div>
+        <div style="font-weight:800;color:var(--ink);font-size:1.05rem">{{ shop_name }}</div>
+        <div>{{ shop_city }}</div>
+      </div>
+      <div>
+        <div><i class="bi bi-telephone"></i> {{ shop_phone }}</div>
+        <div><a href="{{ shop_telegram }}"><i class="bi bi-telegram"></i> Telegram</a></div>
+      </div>
+      <div style="font-size:.82rem">
+        © {{ shop_name }}<br>
+        <a href="{% url 'login' %}" style="color:var(--muted)">Xodimlar kirishi</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

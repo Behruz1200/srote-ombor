@@ -1,0 +1,39 @@
+{% extends 'shop/base.html' %}{% load yurit_extras %}
+{% block title %}Katalog — {{ shop_name }}{% endblock %}
+{% block content %}
+<section class="wrap" style="padding:28px 18px 40px">
+
+  <h1 class="sec-title mb-3">
+    {% if q %}"{{ q }}" bo'yicha{% else %}Katalog{% endif %}
+    <span style="color:var(--muted);font-weight:600;font-size:1rem">{{ paginator.count }} ta</span>
+  </h1>
+
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    <a href="{% url 'shop_catalog' %}{% if q %}?q={{ q }}{% endif %}"
+       class="chip {% if not category_id %}is-on{% endif %}">Hammasi</a>
+    {% for c in categories %}
+    <a href="?category={{ c.id }}{% if q %}&q={{ q }}{% endif %}"
+       class="chip {% if category_id == c.id|stringformat:'s' %}is-on{% endif %}">{{ c.name }}</a>
+    {% endfor %}
+  </div>
+
+  {% include 'shop/_cards.html' %}
+
+  {% if paginator.num_pages > 1 %}
+  <div class="d-flex justify-content-center align-items-center gap-2 mt-4">
+    {% if page_obj.has_previous %}
+    <a class="btn2 btn2--ghost btn2--sm" href="?{% querystring page=page_obj.previous_page_number %}">
+      <i class="bi bi-chevron-left"></i></a>
+    {% endif %}
+    <span style="color:var(--muted);font-size:.9rem">
+      {{ page_obj.number }} / {{ paginator.num_pages }}
+    </span>
+    {% if page_obj.has_next %}
+    <a class="btn2 btn2--ghost btn2--sm" href="?{% querystring page=page_obj.next_page_number %}">
+      <i class="bi bi-chevron-right"></i></a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</section>
+{% endblock %}

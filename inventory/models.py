@@ -1283,3 +1283,77 @@ class QuickSellItem(models.Model):
     @property
     def prices_text(self):
         return ', '.join(str(p) for p in self.price_list)
+
+
+# ---------------------------------------------------------------------------
+#  Onlayn do'kon (sayt orqali buyurtmalar)
+# ---------------------------------------------------------------------------
+class WebOrder(models.Model):
+    """Saytdan kelgan buyurtma.
+
+    POS savdosidan (SaleTransaction) ALOHIDA: bu hali sotuv emas, so'rov.
+    Tasdiqlangandan keyin xodim uni POS orqali rasmiylashtiradi yoki
+    "bajarildi" deb belgilaydi.
+    """
+    class Status(models.TextChoices):
+        NEW = 'new', 'Yangi'
+        CONFIRMED = 'confirmed', 'Tasdiqlangan'
+        DELIVERED = 'delivered', 'Yetkazildi'
+        CANCELLED = 'cancelled', 'Bekor qilindi'
+
+    class Payment(models.TextChoices):
+        ON_DELIVERY = 'on_delivery', 'Yetkazib berishda'
+        ONLINE = 'online', 'Onlayn to\'lov'
+
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT,
+                               related_name='web_orders')
+    customer_name = models.CharField(max_length=120)
+    customer_phone = models.CharField(max_length=32)
+    address = models.TextField(blank=True)
+    note = models.TextField(blank=True)
+
+    status = models.CharField(max_length=12, choices=Status.choices,
+                              default=Status.NEW, db_index=True)
+    payment_method = models.CharField(max_length=16, choices=Payment.choices,
+                                      default=Payment.ON_DELIVERY)
+    is_paid = models.BooleanField(default=False)
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    handled_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                   on_delete=models.SET_NULL,
+                                   related_name='web_orders')
+    handled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Sayt buyurtmasi'
+        verbose_name_plural = 'Sayt buyurtmalari'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'#{self.pk} {self.customer_name} ({self.get_status_display()})'
+
+    @property
+    def total_qty(self):
+        return sum(l.quantity for l in self.lines.all())
+
+
+class WebOrderLine(models.Model):
+    order = models.ForeignKey(WebOrder, on_delete=models.CASCADE,
+                              related_name='lines')
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT,
+                                related_name='web_order_lines')
+    quantity = models.PositiveIntegerField()
+    # Narx buyurtma paytida qotiriladi — keyin o'zgarsa ham chek to'g'ri qoladi
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = 'Buyurtma qatori'
+        verbose_name_plural = 'Buyurtma qatorlari'
+
+    def __str__(self):
+        return f'{self.variant} x{self.quantity}'
+
+    @property
+    def total(self):
+        return self.price * self.quantity

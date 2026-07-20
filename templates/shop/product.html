@@ -1,0 +1,69 @@
+{% extends 'shop/base.html' %}{% load yurit_extras %}
+{% block title %}{{ product.name }} — {{ shop_name }}{% endblock %}
+{% block content %}
+<section class="wrap" style="padding:24px 18px 48px">
+
+  <a href="{% url 'shop_catalog' %}" style="color:var(--muted);font-size:.9rem">
+    <i class="bi bi-arrow-left"></i> Katalog
+  </a>
+
+  <div class="row g-4 mt-1">
+    <div class="col-12 col-md-5">
+      <div style="border:1px solid var(--line);border-radius:16px;overflow:hidden;
+                  aspect-ratio:1/1;background:var(--soft);display:grid;place-items:center">
+        {% if product.image %}
+          <img src="{{ product.image.url }}" alt="{{ product.name }}"
+               style="width:100%;height:100%;object-fit:cover">
+        {% else %}<i class="bi bi-box-seam" style="font-size:4rem;color:#c9ccd4"></i>{% endif %}
+      </div>
+    </div>
+
+    <div class="col-12 col-md-7">
+      {% if product.category %}
+      <div style="font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">
+        {{ product.category.name }}
+      </div>
+      {% endif %}
+      <h1 style="font-size:1.8rem;font-weight:800;letter-spacing:-.02em;margin:.35rem 0 .5rem">
+        {{ product.name }}
+      </h1>
+      <div style="font-size:1.6rem;font-weight:850;margin-bottom:1.2rem">
+        {% if price_min != price_max %}{{ price_min|floatformat:0|som }} – {{ price_max|floatformat:0|som }}
+        {% else %}{{ price_min|floatformat:0|som }}{% endif %}
+        <span style="font-size:.9rem;color:var(--muted);font-weight:600">so'm</span>
+      </div>
+
+      <form method="post" action="{% url 'shop_cart_add' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <div style="font-weight:700;font-size:.9rem;margin-bottom:.5rem">Turini tanlang</div>
+        <div class="d-flex flex-column gap-2 mb-3" style="max-width:460px">
+          {% for v in variants %}
+          <label style="display:flex;align-items:center;gap:.7rem;border:1px solid var(--line);
+                        border-radius:12px;padding:.7rem .9rem;cursor:pointer">
+            <input type="radio" name="stock" value="{{ v.stock_id }}"
+                   {% if forloop.first %}checked{% endif %} style="accent-color:var(--brand)">
+            <span style="font-weight:600">
+              {{ v.v.size|default:'—' }}{% if v.v.color %} · {{ v.v.color }}{% endif %}
+            </span>
+            <span style="margin-left:auto;font-weight:700">{{ v.price|floatformat:0|som }} so'm</span>
+          </label>
+          {% endfor %}
+        </div>
+        <div class="d-flex gap-2 align-items-center" style="max-width:460px">
+          <input type="number" name="qty" value="1" min="1" class="form-control"
+                 style="width:88px;height:46px;border-radius:12px">
+          <button class="btn2 flex-fill" type="submit">
+            <i class="bi bi-bag-plus"></i> Savatga qo'shish
+          </button>
+        </div>
+      </form>
+
+      <div style="margin-top:1.6rem;color:var(--muted);font-size:.9rem;line-height:1.7">
+        <div><i class="bi bi-truck"></i> Yetkazib berish — {{ shop_city }} bo'ylab</div>
+        <div><i class="bi bi-telephone"></i> Savol bo'lsa: {{ shop_phone }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
