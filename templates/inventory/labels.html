@@ -1,256 +1,223 @@
-{% load yurit_extras static %}
-<!DOCTYPE html>
+{% load yurit_extras static %}<!DOCTYPE html>
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <title>Etiketkalar — yurit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mahsulot etiketkasi — yurit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background: #e9ecef; font-family: -apple-system, system-ui, sans-serif; }
+        body { background: #e9ecef; font-family: -apple-system, system-ui, "Segoe UI", sans-serif; margin: 0; }
+
         .toolbar {
-            background: #fff; padding: 12px 20px; border-bottom: 1px solid #dee2e6;
+            background: #fff; padding: 12px 18px; border-bottom: 1px solid #dee2e6;
             position: sticky; top: 0; z-index: 100;
+            display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
         }
-        .sheet {
-            background: #fff; width: 210mm; min-height: 297mm;
-            margin: 16px auto; padding: 8mm;
-            box-shadow: 0 0 8px rgba(0,0,0,.15);
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-auto-rows: 50mm;
-            gap: 2mm;
+        .toolbar .grp { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+        /* --- Ko'rish varag'i --- */
+        .plbl-sheet {
+            display: flex; flex-wrap: wrap; gap: 6mm;
+            justify-content: center; padding: 18px;
         }
-        .label {
+        .plbl {
+            box-sizing: border-box; background: #fff; color: #000;
             border: 1px dashed #adb5bd;
-            padding: 4mm;
-            display: flex; align-items: center; gap: 4mm;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: space-between; text-align: center;
+            overflow: hidden;
         }
-        .label img { width: 30mm; height: 30mm; flex-shrink: 0; }
-        .label .info { flex: 1; min-width: 0; overflow: hidden; }
-        .label .code {
-            font-family: 'SF Mono', Menlo, monospace; font-weight: 700;
-            font-size: 11pt; letter-spacing: 1px;
-        }
-        .label .name {
-            font-size: 9pt; margin-top: 2mm;
-            overflow: hidden; text-overflow: ellipsis;
-            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-        }
-        .label .price {
-            font-size: 11pt; font-weight: 700; margin-top: 2mm; color: #0d6efd;
-        }
-        /* --- Termal rejim: har yorliq alohida, rulon uchun --- */
-        body.thermal .sheet {
-            width: auto; min-height: 0; padding: 8px;
-            display: flex; flex-wrap: wrap; gap: 6px;
-            box-shadow: none; background: transparent;
-        }
-        body.thermal .label {
-            width: 50mm; height: 30mm; padding: 2mm;
-            background: #fff; border: 1px dashed #adb5bd;
-        }
-        body.thermal .label img { width: 22mm; height: 22mm; }
+        .plbl__name { font-weight: 700; text-transform: uppercase; line-height: 1.05; width: 100%; }
+        .plbl__price { font-weight: 800; line-height: 1; }
+        .plbl__cur { font-weight: 400; }
+        .plbl__bc { width: 100%; display: flex; justify-content: center; }
+        .plbl__bc svg { width: auto; max-width: 96%; }
+        .plbl__store { width: 100%; line-height: 1.05; }
+
+        /* 58 × 40 mm */
+        .sz-58x40 .plbl { width: 58mm; height: 40mm; padding: 2mm 2mm 1.5mm; }
+        .sz-58x40 .plbl__name { font-size: 10pt; }
+        .sz-58x40 .plbl__price { font-size: 21pt; }
+        .sz-58x40 .plbl__cur { font-size: 8pt; }
+        .sz-58x40 .plbl__bc svg { height: 11mm; }
+        .sz-58x40 .plbl__store { font-size: 7pt; }
+
+        /* 30 × 20 mm */
+        .sz-30x20 .plbl { width: 30mm; height: 20mm; padding: 1mm; }
+        .sz-30x20 .plbl__name { font-size: 5.5pt; }
+        .sz-30x20 .plbl__price { font-size: 10pt; }
+        .sz-30x20 .plbl__cur { font-size: 4.5pt; }
+        .sz-30x20 .plbl__bc svg { height: 6mm; }
+        .sz-30x20 .plbl__store { font-size: 4.5pt; }
 
         @media print {
-            body { background: #fff; }
-            .toolbar { display: none; }
-            .label { border: 1px dashed #888; }
-
-            /* A4 varaq rejimi (eski holat) */
-            body:not(.thermal) .sheet { margin: 0; box-shadow: none; page-break-after: always; }
-            body:not(.thermal) { }
-
-            /* Termal rejim: HAR yorliq — alohida sahifa. Varaqni oqimda
-               qoldiramiz (absolut element sahifalarga bo'linmaydi). */
-            body.thermal .sheet {
-                display: block; padding: 0; margin: 0; gap: 0;
-                background: #fff; box-shadow: none; page-break-after: auto;
-            }
-            body.thermal .label {
-                border: none; margin: 0; padding: 1.5mm;
-                display: flex; align-items: center;
-                overflow: hidden;
+            html, body { margin: 0; padding: 0; background: #fff; }
+            .toolbar, .no-print { display: none !important; }
+            @page { size: {{ w }}mm {{ h }}mm; margin: 0; }
+            /* Varaq OQIMDA qoladi — absolut element sahifalarga bo'linmaydi,
+               shuning uchun har yorliq o'z sahifasiga tushadi. */
+            .plbl-sheet { display: block; gap: 0; padding: 0; margin: 0; }
+            .plbl {
+                border: none; margin: 0;
+                width: {{ w }}mm; height: {{ h }}mm;
                 page-break-after: always; break-after: page;
                 page-break-inside: avoid; break-inside: avoid;
+                -webkit-print-color-adjust: exact; print-color-adjust: exact;
             }
-            body.thermal .label:last-child { page-break-after: auto; break-after: auto; }
+            .plbl:last-child { page-break-after: auto; break-after: auto; }
         }
-        /* @page o'lchamini JS qo'yadi (rejim va rulon o'lchamiga qarab) */
     </style>
 </head>
 <body>
-<div class="toolbar d-flex justify-content-between align-items-center">
-    <div>
-        <strong>Etiketkalar</strong> —
-        {{ products|length }} ta mahsulot × {{ copies }} nusxa = {{ items|length }} etiketka
-    </div>
-    <div class="d-flex gap-2 align-items-center">
-        <form method="get" class="d-flex gap-2 align-items-center mb-0">
-            {% for p in products %}
-                <input type="hidden" name="id" value="{{ p.id }}">
-            {% endfor %}
-            <label class="form-label mb-0 small">Har bittasidan:</label>
-            <input type="number" name="copies" value="{{ copies }}" min="1" max="50"
-                   class="form-control form-control-sm" style="width: 80px;">
-            <button type="submit" class="btn btn-sm btn-outline-primary">Yangilash</button>
-        </form>
-        <button onclick="window.print()" class="btn btn-success btn-sm">
-            <i class="bi bi-printer"></i> Chop etish
-        </button>
-        <a href="{% url 'price_labels' %}?codes={% for p in products %}{{ p.code }}{% if not forloop.last %},{% endif %}{% endfor %}&size=58x40"
-           class="btn btn-outline-danger btn-sm" target="_blank">
-            <i class="bi bi-tag"></i> Narx etiketkasi
-        </a>
-        <div class="btn-group btn-group-sm" role="group">
-            <input type="radio" class="btn-check" name="lblMode" id="modeThermal" value="thermal" checked>
-            <label class="btn btn-outline-dark" for="modeThermal">Termal (bittalab)</label>
-            <input type="radio" class="btn-check" name="lblMode" id="modeA4" value="a4">
-            <label class="btn btn-outline-dark" for="modeA4">A4 varaq</label>
+    <div class="toolbar no-print">
+        <div>
+            <strong>Mahsulot etiketkasi</strong>
+            <span class="text-muted small">
+                — {{ products|length }} mahsulot · {{ items|length }} yorliq · shtrix-kod bilan
+            </span>
         </div>
-        <span id="szBox" class="d-flex gap-1 align-items-center small">
-            <input type="number" id="usbW" value="50" min="20" max="100"
-                   class="form-control form-control-sm" style="width:64px" title="Eni, mm">
-            <span>×</span>
-            <input type="number" id="usbH" value="30" min="15" max="100"
-                   class="form-control form-control-sm" style="width:64px" title="Bo'yi, mm">
-            <span>mm</span>
-        </span>
-        <button type="button" id="usbPrintBtn" class="btn btn-sm btn-dark"
-                title="Termal printerga to'g'ridan-to'g'ri, bittalab">USB chop etish</button>
-        <a href="javascript:history.back()" class="btn btn-secondary btn-sm">Orqaga</a>
-    </div>
-</div>
-
-<div class="sheet">
-    {% for p in items %}
-        <div class="label">
-            <img src="{% url 'qr_image' p.code %}" alt="{{ p.code }}">
-            <div class="info">
-                <div class="code">{{ p.code }}</div>
-                <div class="name">{{ p.name }}</div>
-                <div class="price">{{ p.default_sale_price|som }} so'm</div>
+        <div class="grp">
+            <div class="btn-group btn-group-sm" role="group">
+                <a href="?id={{ ids }}&size=58x40&copies={{ copies }}"
+                   class="btn {% if size == '58x40' %}btn-primary{% else %}btn-outline-primary{% endif %}">58 × 40 mm</a>
+                <a href="?id={{ ids }}&size=30x20&copies={{ copies }}"
+                   class="btn {% if size == '30x20' %}btn-primary{% else %}btn-outline-primary{% endif %}">30 × 20 mm</a>
             </div>
+            <form method="get" class="d-flex gap-2 align-items-center mb-0">
+                <input type="hidden" name="id" value="{{ ids }}">
+                <input type="hidden" name="size" value="{{ size }}">
+                <label class="form-label mb-0 small">Nusxa:</label>
+                <input type="number" name="copies" value="{{ copies }}" min="1" max="200"
+                       class="form-control form-control-sm" style="width: 74px;">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Yangilash</button>
+            </form>
+            <button type="button" id="usbPrintBtn" class="btn btn-dark btn-sm"
+                    title="Xprinter'ga to'g'ridan-to'g'ri, bittalab (USB, dialogsiz)">USB chop etish</button>
+            <button onclick="window.print()" class="btn btn-success btn-sm">Chop etish (dialog)</button>
+            <a href="{% url 'price_labels' %}?codes={{ codes }}&size={{ size }}"
+               class="btn btn-outline-danger btn-sm">Narx etiketkasi</a>
+            <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">Orqaga</a>
         </div>
-    {% empty %}
-        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: #6c757d;">
-            Hech qanday mahsulot tanlanmagan.
-            <br>Mahsulotlar ro'yxatidan tanlab kelishingiz mumkin.
+    </div>
+    <div class="no-print" style="padding:6px 18px; background:#fff; border-bottom:1px solid #eee; font-size:.85rem; display:flex; flex-wrap:wrap; gap:16px; align-items:center;">
+        <span id="usbStatus" class="text-muted">
+            Har yorliq ALOHIDA bosiladi. USB uchun printer WinUSB (Zadig) drayverida bo'lsin.
+        </span>
+        <label class="mb-0"><input type="checkbox" id="usbInvert"> Ranglar teskari</label>
+        <a href="#" id="usbRepick">Printerni qayta tanlash</a>
+    </div>
+
+    {% if not items %}
+    <div class="alert alert-warning m-4">Mahsulot topilmadi.</div>
+    {% endif %}
+
+    <div class="plbl-sheet sz-{{ size }}">
+        {% for lb in items %}
+        <div class="plbl">
+            <div class="plbl__name">{{ lb.product.name|truncatechars:34 }}</div>
+            <div>
+                <span class="plbl__price">{{ lb.price_str }}</span>
+                <span class="plbl__cur">so'm</span>
+            </div>
+            <div class="plbl__bc">{{ lb.barcode_svg|safe }}</div>
+            <div class="plbl__store">{{ store_name }}</div>
         </div>
-    {% endfor %}
-</div>
-<div class="toolbar small text-muted" style="position:static; border-top:1px solid #dee2e6; border-bottom:none;">
-    <span id="usbStatus">Termal rejim: har yorliq alohida bosiladi. USB uchun printer WinUSB drayverida bo'lsin.</span>
-    <label class="ms-3"><input type="checkbox" id="usbInvert"> Ranglar teskari</label>
-    <a href="#" id="usbRepick" class="ms-3">Printerni qayta tanlash</a>
-</div>
+        {% endfor %}
+    </div>
 
-<script src="{% static 'js/yurit-tspl.js' %}"></script>
-<script>
-(function () {
-    const body = document.body;
-    const wEl = document.getElementById('usbW');
-    const hEl = document.getElementById('usbH');
-    const szBox = document.getElementById('szBox');
-    const statusEl = document.getElementById('usbStatus');
-    const invertEl = document.getElementById('usbInvert');
-    const btn = document.getElementById('usbPrintBtn');
-    const thermal = document.getElementById('modeThermal');
-    const a4 = document.getElementById('modeA4');
-
-    function setMsg(m, err) {
-        statusEl.textContent = m;
-        statusEl.className = err ? 'text-danger' : 'text-success';
-    }
-    function isThermal() { return thermal.checked; }
-
-    // @page: termalda har yorliq bitta sahifa, A4da eski holat
-    function applyMode() {
-        const on = isThermal();
-        body.classList.toggle('thermal', on);
-        szBox.style.display = on ? '' : 'none';
-        btn.disabled = !on;
-        let st = document.getElementById('pageSizeStyle');
-        if (!st) {
-            st = document.createElement('style');
-            st.id = 'pageSizeStyle';
-            document.head.appendChild(st);
-        }
-        if (on) {
-            const w = Math.max(20, parseInt(wEl.value, 10) || 50);
-            const h = Math.max(15, parseInt(hEl.value, 10) || 30);
-            st.textContent = '@media print { @page { size: ' + w + 'mm ' + h +
-                'mm; margin: 0; } body.thermal .label { width: ' + w +
-                'mm; height: ' + h + 'mm; } }';
-        } else {
-            st.textContent = '@media print { @page { size: A4; margin: 0; } }';
-        }
-    }
-    [thermal, a4].forEach(function (r) { r.addEventListener('change', applyMode); });
-    [wEl, hEl].forEach(function (e) { e.addEventListener('input', applyMode); });
-    window.addEventListener('beforeprint', applyMode);
-    applyMode();
-
-    // --- USB: har yorliqni canvasga chizib, bittalab yuboramiz ---
-    async function renderLabel(el, wmm, hmm) {
-        const D = yuritTSPL.DPMM;
-        const W = Math.round(wmm * D), H = Math.round(hmm * D);
-        const cv = document.createElement('canvas');
-        cv.width = W; cv.height = H;
-        const ctx = cv.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#000';
-        const pad = Math.round(1.5 * D);
-        const qrSide = Math.min(H - pad * 2, Math.round(W * 0.42));
-        const img = el.querySelector('img');
-        if (img && img.src) {
-            try {
-                const im = await yuritTSPL.loadImage(img.src);
-                ctx.drawImage(im, pad, Math.round((H - qrSide) / 2), qrSide, qrSide);
-            } catch (e) { /* jim */ }
-        }
-        const tx = pad + qrSide + Math.round(1.5 * D);
-        const tw = W - tx - pad;
-        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        let y = Math.round(H * 0.16);
-        const code = (el.querySelector('.code') || {}).textContent || '';
-        ctx.font = 'bold ' + Math.round(H * 0.15) + 'px monospace';
-        ctx.fillText(code.trim(), tx, y, tw);
-        y += Math.round(H * 0.20);
-        const name = (el.querySelector('.name') || {}).textContent || '';
-        ctx.font = Math.round(H * 0.10) + 'px Arial, sans-serif';
-        ctx.fillText(name.trim().slice(0, 22), tx, y, tw);
-        y += Math.round(H * 0.16);
-        const price = (el.querySelector('.price') || {}).textContent || '';
-        ctx.font = 'bold ' + Math.round(H * 0.15) + 'px Arial, sans-serif';
-        ctx.fillText(price.trim(), tx, y, tw);
-        return cv;
-    }
-
-    async function run(forcePrompt) {
-        const els = Array.prototype.slice.call(document.querySelectorAll('.label'));
-        if (!els.length) { setMsg("Yorliq yo'q", true); return; }
-        const wmm = Math.max(20, parseInt(wEl.value, 10) || 50);
-        const hmm = Math.max(15, parseInt(hEl.value, 10) || 30);
-        const invert = !!(invertEl && invertEl.checked);
-        btn.disabled = true;
-        setMsg('Yorliqlar tayyorlanmoqda...', false);
-        const bitmaps = [];
-        for (const el of els) {
-            const cv = await renderLabel(el, wmm, hmm);
-            bitmaps.push(yuritTSPL.canvasToBitmap(cv, wmm, hmm, invert));
-        }
-        await yuritTSPL.printAll(bitmaps, {
-            forcePrompt: forcePrompt,
-            onStatus: function (m, err) { setMsg(m, err); },
+    <script src="{% static 'js/yurit-tspl.js' %}"></script>
+    <script>
+    // Avtomatik chop etish (?autoprint=1)
+    (function () {
+        var qs = new URLSearchParams(location.search);
+        if (qs.get('autoprint') !== '1') return;
+        var fired = false;
+        function go() { if (fired) return; fired = true; window.print(); }
+        if (document.readyState === 'complete') { setTimeout(go, 350); }
+        else { window.addEventListener('load', function () { setTimeout(go, 350); }); }
+        window.addEventListener('afterprint', function () {
+            setTimeout(function () { try { window.close(); } catch (e) {} }, 200);
         });
-        btn.disabled = false;
-    }
-    btn.addEventListener('click', function () { run(false); });
-    const repick = document.getElementById('usbRepick');
-    if (repick) repick.addEventListener('click', function (e) {
-        e.preventDefault(); run(true);
-    });
-})();
-</script>
+    })();
+    </script>
+
+    <script>
+    // USB (TSPL): har yorliq canvasga chiziladi va ALOHIDA topshiriq bo'lib ketadi
+    (function () {
+        const btn = document.getElementById('usbPrintBtn');
+        if (!btn || !window.yuritTSPL) return;
+        const statusEl = document.getElementById('usbStatus');
+        const invertEl = document.getElementById('usbInvert');
+        const WMM = {{ w }}, HMM = {{ h }};
+
+        function setMsg(m, err) {
+            statusEl.textContent = m;
+            statusEl.className = err ? 'text-danger' : 'text-success';
+        }
+
+        async function renderLabel(el) {
+            const D = yuritTSPL.DPMM;
+            const W = Math.round(WMM * D), H = Math.round(HMM * D);
+            const cv = document.createElement('canvas');
+            cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#000';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+
+            const pad = Math.round(1.2 * D);
+            let y = pad;
+
+            const name = (el.querySelector('.plbl__name') || {}).textContent || '';
+            ctx.font = 'bold ' + Math.round(H * 0.10) + 'px Arial, sans-serif';
+            ctx.fillText(name.trim(), W / 2, y, W - pad * 2);
+            y += Math.round(H * 0.13);
+
+            const price = (el.querySelector('.plbl__price') || {}).textContent || '';
+            ctx.font = 'bold ' + Math.round(H * 0.26) + 'px Arial, sans-serif';
+            ctx.fillText(price.trim() + " so'm", W / 2, y, W - pad * 2);
+            y += Math.round(H * 0.30);
+
+            const svg = el.querySelector('.plbl__bc svg');
+            const bcH = Math.round(H * 0.30);
+            if (svg) {
+                try {
+                    const bcW = Math.round(W * 0.88);
+                    const im = await yuritTSPL.svgToImage(svg, bcW, bcH);
+                    ctx.drawImage(im, Math.round((W - bcW) / 2), y, bcW, bcH);
+                } catch (e) { /* barcode chizilmadi — davom etamiz */ }
+            }
+            y += bcH;
+
+            const store = (el.querySelector('.plbl__store') || {}).textContent || '';
+            ctx.font = Math.round(H * 0.075) + 'px Arial, sans-serif';
+            ctx.fillText(store.trim(), W / 2, Math.min(y, H - Math.round(H * 0.09)));
+            return cv;
+        }
+
+        async function run(forcePrompt) {
+            const els = Array.prototype.slice.call(document.querySelectorAll('.plbl'));
+            if (!els.length) { setMsg("Yorliq yo'q", true); return; }
+            const invert = !!(invertEl && invertEl.checked);
+            btn.disabled = true;
+            setMsg('Yorliqlar tayyorlanmoqda...', false);
+            const bitmaps = [];
+            for (const el of els) {
+                const cv = await renderLabel(el);
+                bitmaps.push(yuritTSPL.canvasToBitmap(cv, WMM, HMM, invert));
+            }
+            await yuritTSPL.printAll(bitmaps, {
+                forcePrompt: forcePrompt,
+                onStatus: function (m, err) { setMsg(m, err); },
+            });
+            btn.disabled = false;
+        }
+        btn.addEventListener('click', function () { run(false); });
+        const repick = document.getElementById('usbRepick');
+        if (repick) repick.addEventListener('click', function (e) {
+            e.preventDefault(); run(true);
+        });
+    })();
+    </script>
 </body>
 </html>

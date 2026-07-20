@@ -7236,34 +7236,87 @@ def qr_image(request, code):
     return response
 
 
+# Do'kon nomi — peshtaxta narx etiketkasida chiqadi
+PRICE_LABEL_STORE_NAME = 'Koreys Bozor'
+PRICE_LABEL_SIZES = {'30x20': (30, 20), '58x40': (58, 40)}
+
+
 @admin_required
 def product_labels(request, code=None):
-    """A4 print etiketka sahifasi"""
+    """Mahsulot etiketkasi — narx yorlig'i uslubida, SHTRIX-KOD bilan.
+
+    Har yorliq alohida bosiladi (termal rulon). Skanerlanganda POS
+    mahsulotni kodi yoki ishlab chiqaruvchi barcode'i orqali topadi.
+    """
+    from barcode import Code128, EAN13
+    from barcode.writer import SVGWriter
+
     if code:
         products = [get_object_or_404(Product, code=normalize_code(code))]
     else:
         ids = request.GET.getlist('id') or request.GET.get('id', '').split(',')
         ids = [i for i in ids if i.strip().isdigit()]
-        if ids:
-            products = list(Product.objects.filter(id__in=ids))
-        else:
-            products = []
+        products = list(Product.objects.filter(id__in=ids)) if ids else []
+
     try:
-        copies = max(1, min(50, int(request.GET.get('copies', 6))))
+        copies = max(1, min(200, int(request.GET.get('copies', 6))))
     except ValueError:
         copies = 6
-    items = []
+
+    size = request.GET.get('size') or '58x40'
+    if size not in PRICE_LABEL_SIZES:
+        size = '58x40'
+    w, h = PRICE_LABEL_SIZES[size]
+
+    branch = getattr(request.user, 'branch', None)
+    labels = []
     for p in products:
+        # Skanerlanadigan qiymat: ishlab chiqaruvchi barcode'i bo'lsa o'sha,
+        # bo'lmasa mahsulot kodi (POS ikkalasini ham topadi).
+        raw = (p.external_barcode or '').strip()
+        digits = raw.isdigit() and len(raw) in (12, 13)
+        bc_value = raw or p.code
+        try:
+            svg_io = io.BytesIO()
+            opts = {'module_height': 8.0, 'module_width': 0.26,
+                    'font_size': 7, 'text_distance': 3.0, 'quiet_zone': 1.5}
+            if digits:
+                EAN13(raw[:12], writer=SVGWriter()).write(svg_io, options=opts)
+            else:
+                Code128(bc_value, writer=SVGWriter()).write(svg_io, options=opts)
+            barcode_svg = svg_io.getvalue().decode('utf-8')
+            i = barcode_svg.find('<svg')
+            barcode_svg = barcode_svg[i:] if i >= 0 else barcode_svg
+        except Exception:
+            barcode_svg = ''
+
+        st = (BranchStock.objects.filter(variant__product=p, sale_price__gt=0)
+              .filter(branch=branch).first() if branch else None)
+        if st is None:
+            st = (BranchStock.objects.filter(variant__product=p, sale_price__gt=0)
+                  .order_by('-sale_price').first())
+        price = st.sale_price if st else p.default_sale_price
+        try:
+            price_str = f"{int(round(float(price))):,}"
+        except (ValueError, TypeError):
+            price_str = str(price)
+        labels.append({'product': p, 'code': bc_value,
+                       'barcode_svg': barcode_svg, 'price_str': price_str})
+
+    items = []
+    for lb in labels:
         for _ in range(copies):
-            items.append(p)
+            items.append(lb)
+
     return render(request, 'inventory/labels.html', {
         'items': items, 'products': products, 'copies': copies,
+        'size': size, 'w': w, 'h': h,
+        'codes': ','.join(p.code for p in products),
+        'ids': ','.join(str(p.id) for p in products),
+        'store_name': PRICE_LABEL_STORE_NAME,
     })
 
 
-# Do'kon nomi — peshtaxta narx etiketkasida chiqadi
-PRICE_LABEL_STORE_NAME = 'Koreys Bozor'
-PRICE_LABEL_SIZES = {'30x20': (30, 20), '58x40': (58, 40)}
 
 
 @login_required
