@@ -134,15 +134,23 @@
         </div>
     </form>
 
-    <form id="labelsForm" action="{% url 'labels' %}" method="get" target="_blank">
+    <form id="labelsForm" onsubmit="return false;">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
             <div class="d-flex align-items-center gap-2 flex-wrap">
-                <button type="submit" class="btn btn-sm btn-outline-success" id="printBtn" disabled>
-                    <i class="bi bi-printer"></i> Etiketka
+                <button type="button" class="btn btn-sm btn-success" id="printBtn" disabled
+                        title="Termal etiketkalar: har turga barcode + QR + narx, bittalab bosiladi">
+                    <i class="bi bi-tag"></i> Termal etiketka
                     (<span id="cnt">0</span>)
                 </button>
-                <input type="number" name="copies" value="6" min="1" max="50"
-                       class="form-control form-control-sm" style="width: 70px;">
+                <select name="copies" class="form-select form-select-sm" style="width:auto"
+                        title="Har turdan nechta yorliq bosilsin">
+                    <option value="stock" selected>Ombor soniga qarab</option>
+                    <option value="1">1 dona</option>
+                    <option value="2">2 dona</option>
+                    <option value="3">3 dona</option>
+                    <option value="5">5 dona</option>
+                    <option value="10">10 dona</option>
+                </select>
                 <button type="button" class="btn btn-sm btn-outline-primary" id="bulkBtn" disabled
                         data-bs-toggle="modal" data-bs-target="#bulkModal">
                     <i class="bi bi-pencil-square"></i> Bulk amal
@@ -402,6 +410,18 @@
     const btn = document.getElementById('printBtn');
     const bulkBtn = document.getElementById('bulkBtn');
     if (!selAll || !cnt || !btn) return;
+
+    // Termal etiketkalar — tanlangan mahsulotlarning HAMMA turi uchun
+    // (har turga barcode + QR + narx). Har yorliq bittalab bosiladi.
+    btn.addEventListener('click', function () {
+        const picked = Array.from(document.querySelectorAll('.pick:checked'))
+                            .map(p => p.value);
+        if (!picked.length) return;
+        const copiesEl = document.querySelector('#labelsForm [name="copies"]');
+        const c = copiesEl ? copiesEl.value : 'stock';   // 'stock' = ombor soni
+        window.open('{% url "variant_labels" %}?products=' + picked.join(',') +
+                    '&copies=' + c, '_blank');
+    });
     const catMoveBtn = document.getElementById('catMoveBtn');
     const catMoveSelect = document.getElementById('catMoveSelect');
     function refresh() {

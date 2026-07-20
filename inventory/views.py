@@ -1933,11 +1933,26 @@ def variant_labels(request):
 
     ids = [int(i) for i in (request.GET.get('ids') or '').split(',')
            if i.strip().isdigit()]
-    variants = list(ProductVariant.objects.filter(pk__in=ids)
-                    .select_related('product'))
+    # Mahsulotlar sahifasidan kelganda MAHSULOT id'lari uzatiladi —
+    # ularning hamma turlarini ochamiz.
+    # ?products=1,2  ham  ?products=1&products=2  ham ishlasin
+    _parts = []
+    for chunk in request.GET.getlist('products'):
+        _parts.extend(str(chunk).split(','))
+    pids = [int(x) for x in _parts if x.strip().isdigit()]
+    if pids:
+        variants = list(ProductVariant.objects.filter(product_id__in=pids)
+                        .select_related('product')
+                        .order_by('product__name', 'color', 'size'))
+    else:
+        variants = list(ProductVariant.objects.filter(pk__in=ids)
+                        .select_related('product'))
     # Etiketka nusxalari — har variant uchun nechta (default 1)
+    # "copies=stock" -> har tur uchun OMBORDAGI soni qadar yorliq
+    copies_raw = (request.GET.get('copies') or '1').strip().lower()
+    by_stock = copies_raw in ('stock', 'ombor')
     try:
-        copies = max(1, min(200, int(request.GET.get('copies') or 1)))
+        copies = 1 if by_stock else max(1, min(200, int(copies_raw)))
     except ValueError:
         copies = 1
 
@@ -1968,21 +1983,38 @@ def variant_labels(request):
         qr.make_image(fill_color='black', back_color='white').save(qbuf, 'PNG')
         qr_uri = 'data:image/png;base64,' + base64.b64encode(qbuf.getvalue()).decode()
         # narx
-        st = (BranchStock.objects.filter(variant=v, sale_price__gt=0)
-              .order_by('-sale_price').first())
+        _branch = getattr(request.user, 'branch', None)
+        _qs = BranchStock.objects.filter(variant=v)
+        st = ((_qs.filter(branch=_branch, sale_price__gt=0).first() if _branch else None)
+              or _qs.filter(sale_price__gt=0).order_by('-sale_price').first())
+        _stock_row = (_qs.filter(branch=_branch).first() if _branch else None) or st
+        stock_n = _stock_row.stock_count if _stock_row else 0
         price = (price_param or (st.sale_price if st else v.product.default_sale_price))
         labels.append({
+            'stock': stock_n,
             'variant': v, 'code': bc, 'barcode_svg': barcode_svg,
             'qr_uri': qr_uri, 'price': price,
         })
-    # copies bo'yicha ko'paytiramiz
+    # Nusxa: qat'iy son yoki OMBOR soniga qarab (copies=stock).
+    # Ombori 0 bo'lgan tur uchun yorliq chiqarilmaydi — bekorga sarf bo'lmasin.
     render_labels = []
+    skipped = 0
     for lb in labels:
-        for _ in range(copies):
+        n = min(200, lb['stock']) if by_stock else copies
+        if by_stock and n <= 0:
+            skipped += 1
+            continue
+        for _ in range(n):
             render_labels.append(lb)
     return render(request, 'inventory/variant_labels.html', {
-        'labels': render_labels, 'copies': copies,
-        'ids': request.GET.get('ids', ''),
+        'labels': render_labels, 'copies': copies_raw if by_stock else copies,
+        'by_stock': by_stock, 'skipped': skipped,
+        'uniq_labels': labels,          # o'lcham tanlash paneli uchun
+        'variant_count': len(labels),
+        # products= bilan kelgan bo'lsa ham "Nusxa" formasi ishlashi uchun
+        # aniq tur id'larini qaytaramiz
+        'ids': (','.join(str(v.pk) for v in variants) if pids
+                else request.GET.get('ids', '')),
     })
 
 

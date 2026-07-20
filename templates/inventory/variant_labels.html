@@ -28,9 +28,23 @@
         <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
             <input type="hidden" name="ids" value="{{ ids }}">
             <label class="form-label mb-0">Har turdan nusxa:</label>
-            <input type="number" name="copies" value="{{ copies }}" min="1" max="200" class="form-control form-control-sm" style="width:100px">
+            <select name="copies" class="form-select form-select-sm" style="width:auto">
+                <option value="stock" {% if by_stock %}selected{% endif %}>Ombor soniga qarab</option>
+                <option value="1" {% if copies == 1 %}selected{% endif %}>1 dona</option>
+                <option value="2" {% if copies == 2 %}selected{% endif %}>2 dona</option>
+                <option value="3" {% if copies == 3 %}selected{% endif %}>3 dona</option>
+                <option value="5" {% if copies == 5 %}selected{% endif %}>5 dona</option>
+                <option value="10" {% if copies == 10 %}selected{% endif %}>10 dona</option>
+            </select>
             <button class="btn btn-sm btn-outline-primary" type="submit">Yangilash</button>
-            <span class="small text-muted ms-2">Odatda mahsulot soniga teng qiling.</span>
+            {% if by_stock %}
+                <span class="small text-success ms-2">
+                    <i class="bi bi-box-seam"></i> Har turga omboridagi soni qadar
+                    {% if skipped %}· <span class="text-muted">{{ skipped }} ta tur omborda yo'q — o'tkazib yuborildi</span>{% endif %}
+                </span>
+            {% else %}
+                <span class="small text-muted ms-2">Yoki "Ombor soniga qarab"ni tanlang.</span>
+            {% endif %}
         </form>
         <hr class="my-2">
         <div class="d-flex align-items-center gap-2 flex-wrap small">
@@ -52,9 +66,38 @@
     </div>
 </div>
 
+{% if uniq_labels|length > 1 %}
+<div class="container no-print" style="max-width:760px;">
+    <div class="card p-3 mb-3">
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+            <strong class="small"><i class="bi bi-rulers"></i> Qaysi o'lcham/tur chop etilsin?</strong>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="vAll">Hammasi</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="vNone">Hech biri</button>
+            <span class="text-muted small ms-auto">
+                <strong id="vCount">0</strong> tur · <strong id="vLabels">0</strong> yorliq
+            </span>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% for lb in uniq_labels %}
+            <label class="border rounded px-2 py-1 d-flex align-items-center gap-2"
+                   style="font-size:.85rem; cursor:pointer;">
+                <input type="checkbox" class="v-pick form-check-input mt-0"
+                       value="{{ lb.variant.pk }}" checked>
+                <span>
+                    <strong>{{ lb.variant.size|default:"—" }}</strong>
+                    {% if lb.variant.color %}<span class="text-muted">/ {{ lb.variant.color }}</span>{% endif %}
+                    <span class="text-muted">· {{ lb.stock }} dona</span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div id="labelSheet">
     {% for lb in labels %}
-    <div class="lbl">
+    <div class="lbl" data-vid="{{ lb.variant.pk }}">
         <div class="lbl__name">{{ lb.variant.product.name|truncatechars:26 }}</div>
         <div class="lbl__sc">{{ lb.variant.size }} · {{ lb.variant.color }}</div>
         <div class="lbl__mid">
@@ -67,6 +110,36 @@
     </div>
     {% endfor %}
 </div>
+
+<script>
+// O'lcham tanlash: belgilanmagan turning yorliqlari yashiriladi —
+// chop etishda ham, USB'da ham chiqmaydi.
+(function () {
+    const picks = Array.prototype.slice.call(document.querySelectorAll('.v-pick'));
+    if (!picks.length) return;
+    const cEl = document.getElementById('vCount');
+    const lEl = document.getElementById('vLabels');
+    function apply() {
+        let nv = 0, nl = 0;
+        picks.forEach(function (cb) {
+            const rows = document.querySelectorAll('.lbl[data-vid="' + cb.value + '"]');
+            if (cb.checked) { nv++; nl += rows.length; }
+            rows.forEach(function (el) {
+                el.style.display = cb.checked ? '' : 'none';
+            });
+        });
+        cEl.textContent = nv; lEl.textContent = nl;
+    }
+    picks.forEach(function (cb) { cb.addEventListener('change', apply); });
+    document.getElementById('vAll').addEventListener('click', function () {
+        picks.forEach(function (cb) { cb.checked = true; }); apply();
+    });
+    document.getElementById('vNone').addEventListener('click', function () {
+        picks.forEach(function (cb) { cb.checked = false; }); apply();
+    });
+    apply();
+})();
+</script>
 
 <script src="{% static 'js/yurit-tspl.js' %}"></script>
 <script>
@@ -137,8 +210,9 @@
     }
 
     async function run(forcePrompt) {
-        const els = Array.prototype.slice.call(document.querySelectorAll('.lbl'));
-        if (!els.length) { setMsg("Yorliq yo'q", true); return; }
+        const els = Array.prototype.slice.call(document.querySelectorAll('.lbl'))
+            .filter(function (el) { return el.style.display !== 'none'; });
+        if (!els.length) { setMsg("Yorliq tanlanmagan", true); return; }
         const wmm = Math.max(20, parseInt(wEl.value, 10) || 50);
         const hmm = Math.max(15, parseInt(hEl.value, 10) || 30);
         const invert = !!(invertEl && invertEl.checked);
@@ -224,6 +298,7 @@
            chiqadi. break-inside yorliqni ikkiga bo'linishdan saqlaydi. */
         page-break-inside: avoid; break-inside: avoid;
     }
+    .lbl[style*="display: none"] { display: none !important; }
     .lbl__name, .lbl__sc, .lbl__price { color: #000 !important; }
     .lbl__bc svg { height: 11mm; }
     .lbl__qr { width: 11mm; height: 11mm; }
