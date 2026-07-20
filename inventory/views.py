@@ -1396,6 +1396,15 @@ def product_detail(request, code):
             c=Avg('cost_price'), sp=Avg('sale_price'))
         _c = float(_avg['c'] or 0); _sp = float(_avg['sp'] or 0)
         real_markup = ((_sp - _c) / _c * 100) if _c > 0 else None
+
+    # O'rtacha sotuv narxi — zaxira bilan tortilgan (ko'p turgan tur ko'proq
+    # ta'sir qiladi). Zaxira bo'lmasa — oddiy o'rtacha.
+    if total_stock > 0 and _sale_val > 0:
+        avg_price = _sale_val / total_stock
+    else:
+        avg_price = float(BranchStock.objects
+                          .filter(variant__product=product, sale_price__gt=0)
+                          .aggregate(a=Avg('sale_price'))['a'] or 0)
     days_left = (total_stock / daily_avg) if daily_avg else None
 
     # Daily chart data
@@ -1520,6 +1529,7 @@ def product_detail(request, code):
     return render(request, 'inventory/product_detail.html', {
         'product': product, 'branches_data': branches_data,
         'real_markup': real_markup,
+        'avg_price': avg_price,
         'recent_intakes': recent_intakes,
         'product_kpis': product_kpis,
         'variant_rows': variant_rows,

@@ -67,10 +67,15 @@
                 <div style="font-family: var(--yrt-font-mono); font-size: 1.75rem; font-weight: 700; color: var(--yrt-primary); line-height: 1.1;">
                     {% if price_min and price_max and price_min != price_max %}{{ price_min|som }} – {{ price_max|som }}{% elif price_min %}{{ price_min|som }}{% else %}{{ product.default_sale_price|som }}{% endif %}
                 </div>
-                <small style="color: var(--yrt-fg-muted);">
+                <small style="color: var(--yrt-fg-muted); display:block;">
                     so'm{% if real_markup is not None %} · Marja:
                     <span style="color: var(--yrt-{% if real_markup < 10 %}danger{% elif real_markup < 25 %}warning{% else %}success{% endif %});">{{ real_markup|floatformat:1 }}%</span>{% endif %}
                 </small>
+                {% if avg_price and price_min != price_max %}
+                <small style="color: var(--yrt-fg-muted); display:block;">
+                    o'rtacha <strong>{{ avg_price|floatformat:0|som }}</strong> so'm
+                </small>
+                {% endif %}
                 <div style="margin-top: 0.7rem;">
                     <img src="{% url 'qr_image' product.code %}" alt="QR"
                          style="width: 120px; height: 120px; image-rendering: pixelated; background: #FFFFFF; padding: 4px; border-radius: 8px; border: 1px solid var(--yrt-border);">
