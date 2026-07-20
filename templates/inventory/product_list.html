@@ -281,9 +281,10 @@
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
                             <td class="text-end text-nowrap">
-                                {# Ilgari har qatorda dropdown + CSRF forma bor edi (qatoriga ~1.8 KB).
-                                   Endi ko'p ishlatiladigan 2 amal to'g'ridan-to'g'ri, o'chirish esa
-                                   bitta umumiy oyna orqali — bosish ham, hajm ham kamaydi. #}
+                                {% comment %}
+                                Ilgari har qatorda dropdown + CSRF forma bor edi (~1.8 KB).
+                                Endi 2 amal to'g'ridan-to'g'ri, o'chirish bitta umumiy oyna orqali.
+                                {% endcomment %}
                                 <a href="{% url 'intake_for_product' p.code %}"
                                    class="btn btn-sm btn-outline-secondary border-0 px-1"
                                    title="Qabul qilish"><i class="bi bi-truck"></i></a>
