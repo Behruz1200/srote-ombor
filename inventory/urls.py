@@ -78,6 +78,7 @@ urlpatterns = [
          name='product_variants_edit'),
     path('products/<str:code>/variants/move/', views.product_variants_move,
          name='product_variants_move'),
+    path('variants/split/', views.variant_split_batch, name='variant_split_batch'),
     path('variants/<int:pk>/delete/', views.variant_delete,
          name='variant_delete'),
     path('products/<str:code>/intake/', views.intake_for_product, name='intake_for_product'),

@@ -1416,11 +1416,41 @@ def product_detail(request, code):
         cross_sell.sort(key=lambda c: -c['lift'])
         cross_sell = cross_sell[:5]
 
+    # --- Partiyalar: har tur bo'yicha turli tannarxda kelgan qabullar ---
+    # Bir tur bir necha marta, HAR XIL tannarxda kelgan bo'lishi mumkin.
+    # BranchStock esa bitta tannarx/narx saqlaydi — ya'ni oxirgi qabul
+    # avvalgilarini bosib ketadi. Shu yerda haqiqiy qabul tarixini
+    # ko'rsatamiz va kerak bo'lsa alohida shtrix-kodga ajratishni taklif
+    # qilamiz.
+    _batch_map = {}
+    for ink in (Intake.objects
+                .filter(variant__product=product, is_return=False)
+                .select_related('branch')
+                .order_by('variant_id', 'received_at')):
+        _batch_map.setdefault((ink.variant_id, ink.branch_id), []).append(ink)
+
+    batch_groups = []
+    for row in variant_rows:
+        v = row.get('variant') if isinstance(row, dict) else getattr(row, 'variant', None)
+        if v is None:
+            continue
+        for st in BranchStock.objects.filter(variant=v).select_related('branch'):
+            inks = _batch_map.get((v.pk, st.branch_id)) or []
+            costs = {i.cost_per_unit for i in inks}
+            if len(inks) < 2 or len(costs) < 2:
+                continue  # bitta narx — ajratishning hojati yo'q
+            batch_groups.append({
+                'variant': v, 'branch': st.branch, 'stock': st,
+                'intakes': inks,
+                'cost_min': min(costs), 'cost_max': max(costs),
+            })
+
     return render(request, 'inventory/product_detail.html', {
         'product': product, 'branches_data': branches_data,
         'recent_intakes': recent_intakes,
         'product_kpis': product_kpis,
         'variant_rows': variant_rows,
+        'batch_groups': batch_groups,
         'variant_ids': ','.join(str(v.pk) for v in variants),
         'price_min': price_min,
         'price_max': price_max,
@@ -9023,3 +9053,99 @@ def _parse_prices(text):
         if v > 0 and v not in out:
             out.append(v)
     return sorted(out)
+
+
+@admin_required
+def variant_split_batch(request):
+    """Bir turdagi zaxiraning bir qismini ALOHIDA turga (o'z shtrix-kodi va
+    o'z narxi bilan) ajratib olish.
+
+    Nega shunday: shtrix-kod TURGA tegishli va kassada kod -> tur -> narx
+    bo'lib ishlaydi. Demak "boshqa kod + boshqa narx" degani — alohida tur.
+    Masalan 155 dona ichidan 28 tasi boshqa narxda kelgan bo'lsa, o'shani
+    ajratamiz: qolgan 127 eski kodda qoladi, 28 tasi yangi kod oladi.
+    """
+    from decimal import Decimal, InvalidOperation
+    if request.method != 'POST':
+        return redirect('product_list')
+
+    src = get_object_or_404(ProductVariant.objects.select_related('product'),
+                            pk=request.POST.get('variant') or 0)
+    branch = Branch.objects.filter(pk=request.POST.get('branch') or 0).first() \
+        or getattr(request.user, 'branch', None)
+    back = request.POST.get('back') or reverse('product_detail',
+                                               args=[src.product.code])
+    if branch is None:
+        messages.error(request, "Filial topilmadi.")
+        return redirect(back)
+
+    def dec(v, default='0'):
+        try:
+            return Decimal(str(v).replace(' ', '').replace(',', '.') or default)
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal(default)
+
+    try:
+        qty = int(float(request.POST.get('qty') or 0))
+    except (TypeError, ValueError):
+        qty = 0
+    cost = dec(request.POST.get('cost'))
+    sale = dec(request.POST.get('sale'))
+    if qty <= 0:
+        messages.error(request, "Ajratiladigan miqdorni kiriting.")
+        return redirect(back)
+    if cost < 0 or sale < 0:
+        messages.error(request, "Narx manfiy bo'lmaydi.")
+        return redirect(back)
+
+    src_stock = BranchStock.objects.filter(variant=src, branch=branch).first()
+    if src_stock is None or src_stock.stock_count < qty:
+        have = src_stock.stock_count if src_stock else 0
+        messages.error(request, f"Omborda faqat {have} dona bor.")
+        return redirect(back)
+
+    # Yangi tur nomi: narx bilan farqlanadi (unique_together: product+size+color)
+    tag = (request.POST.get('tag') or '').strip()[:40] or f"{int(sale or cost):,}".replace(',', ' ')
+    base_color = (src.color or '').strip()
+    color = f"{base_color} · {tag}".strip(' ·') if base_color else tag
+    color = color[:50]
+    n = 1
+    while ProductVariant.objects.filter(product=src.product, size=src.size,
+                                        color=color).exists():
+        n += 1
+        color = f"{color[:44]} ({n})"
+
+    with transaction.atomic():
+        new_v = ProductVariant.objects.create(
+            product=src.product, size=src.size, color=color)
+        # Yangi, betakror shtrix-kod
+        code = gen_internal_ean13(new_v.pk)
+        while ProductVariant.objects.filter(barcode=code).exclude(pk=new_v.pk).exists():
+            code = gen_internal_ean13(new_v.pk + 100000)
+        new_v.barcode = code
+        new_v.save(update_fields=['barcode'])
+
+        BranchStock.objects.create(
+            variant=new_v, branch=branch, stock_count=qty,
+            cost_price=cost or src_stock.cost_price,
+            sale_price=sale or src_stock.sale_price,
+            wholesale_price=src_stock.wholesale_price,
+        )
+        src_stock.stock_count = F('stock_count') - qty
+        src_stock.save(update_fields=['stock_count'])
+
+        AuditLog.objects.create(
+            user=request.user, username_snapshot=request.user.username,
+            action=AuditLog.Action.CREATE, model_name='ProductVariant',
+            object_id=str(new_v.pk),
+            object_repr=f"Partiya ajratildi: {src.product.name} — {qty} dona"[:300],
+            changes={'ajratildi': [str(src.pk), str(new_v.pk)],
+                     'miqdor': ['0', str(qty)],
+                     'shtrix_kod': ['', code]},
+        )
+
+    messages.success(
+        request,
+        f"{qty} dona alohida turga ajratildi — yangi shtrix-kod {code}, "
+        f"sotuv narxi {sale or src_stock.sale_price} so'm.")
+    return redirect(back)

@@ -1,7 +1,36 @@
 {% extends 'inventory/base.html' %}
 {% load yurit_extras %}
 
-{% block title %}{{ product.name }} — yurit{% endblock %}
+{% block title %}{{ product.name }} — yurit
+<script>
+(function () {
+    // Bootstrap sahifa mazmunidan KEYIN yuklanadi — shuning uchun
+    // Modal obyekti faqat bosilganda quriladi.
+    var _bs = null;
+    function modal() {
+        var el = document.getElementById('splitModal');
+        if (!el) return null;
+        return _bs || (_bs = new bootstrap.Modal(el));
+    }
+    document.querySelectorAll('.split-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var d = b.dataset;
+            document.getElementById('spVariant').value = d.variant;
+            document.getElementById('spBranch').value = d.branch;
+            document.getElementById('spQty').value = d.qty;
+            document.getElementById('spQty').max = d.max;
+            document.getElementById('spMax').textContent = d.max;
+            document.getElementById('spCost').value = d.cost;
+            document.getElementById('spSale').value = '';
+            document.getElementById('spTag').value = '';
+            document.getElementById('spInfo').textContent =
+                d.name + " — bu partiya " + d.qty + " dona, tannarxi " + d.cost + " so'm.";
+            var m = modal(); if (m) m.show();
+        });
+    });
+})();
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
@@ -319,6 +348,111 @@
         {% endif %}
     </div>
     {% endfor %}
+
+    <!-- Turli tannarxdagi partiyalar -->
+    {% if batch_groups %}
+    <div class="card p-3 mb-3 border-warning">
+        <h6 class="text-uppercase small mb-1 text-warning-emphasis">
+            <i class="bi bi-layers"></i> Turli narxdagi partiyalar
+        </h6>
+        <p class="text-muted small mb-3">
+            Bu turlar bir necha marta <strong>har xil tannarxda</strong> kelgan, ammo
+            omborda bitta narx saqlanadi — oxirgi qabul avvalgisini bosib ketgan.
+            Partiyani alohida ajratsangiz, u <strong>o'z shtrix-kodi</strong> va
+            <strong>o'z narxi</strong>ni oladi; qolgani eski kodda qoladi.
+        </p>
+
+        {% for g in batch_groups %}
+        <div class="border rounded p-2 mb-2">
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <strong>{{ g.variant.size|default:"—" }}</strong>
+                {% if g.variant.color %}<span class="text-muted">/ {{ g.variant.color }}</span>{% endif %}
+                <span class="badge bg-light text-dark border">{{ g.branch.name }}</span>
+                <span class="text-muted small">
+                    kod {{ g.variant.barcode|default:"—" }} ·
+                    omborda {{ g.stock.stock_count }} dona ·
+                    sotuv {{ g.stock.sale_price|som }} so'm
+                </span>
+            </div>
+            <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr>
+                    <th>Qabul sanasi</th><th class="text-end">Miqdor</th>
+                    <th class="text-end">Tannarx</th><th style="width:1%"></th>
+                </tr></thead>
+                <tbody>
+                {% for ink in g.intakes %}
+                <tr>
+                    <td>{{ ink.received_at|date:"d.m.Y H:i" }}</td>
+                    <td class="text-end">{{ ink.quantity }}</td>
+                    <td class="text-end {% if ink.cost_per_unit != g.stock.cost_price %}text-warning-emphasis fw-semibold{% endif %}">
+                        {{ ink.cost_per_unit|som }}
+                    </td>
+                    <td class="text-nowrap">
+                        <button type="button" class="btn btn-sm btn-outline-warning split-btn"
+                                data-variant="{{ g.variant.pk }}" data-branch="{{ g.branch.pk }}"
+                                data-qty="{{ ink.quantity }}" data-cost="{{ ink.cost_per_unit|floatformat:0 }}"
+                                data-max="{{ g.stock.stock_count }}"
+                                data-name="{{ product.name }} {{ g.variant.size }}">
+                            Alohida kod ber
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="modal fade" id="splitModal" tabindex="-1">
+      <div class="modal-dialog">
+        <form method="post" action="{% url 'variant_split_batch' %}" class="modal-content">
+          {% csrf_token %}
+          <input type="hidden" name="variant" id="spVariant">
+          <input type="hidden" name="branch" id="spBranch">
+          <input type="hidden" name="back" value="{{ request.get_full_path }}">
+          <div class="modal-header">
+            <h5 class="modal-title">Partiyani alohida ajratish</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small" id="spInfo"></p>
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label small">Miqdor (dona)</label>
+                <input type="number" name="qty" id="spQty" class="form-control" min="1" required>
+                <div class="form-text">Omborda: <span id="spMax">0</span></div>
+              </div>
+              <div class="col-6">
+                <label class="form-label small">Belgisi (ixtiyoriy)</label>
+                <input type="text" name="tag" id="spTag" class="form-control"
+                       maxlength="40" placeholder="masalan: eski narx">
+              </div>
+              <div class="col-6">
+                <label class="form-label small">Tannarx</label>
+                <input type="text" name="cost" id="spCost" class="form-control" inputmode="numeric">
+              </div>
+              <div class="col-6">
+                <label class="form-label small">Sotuv narxi</label>
+                <input type="text" name="sale" id="spSale" class="form-control" inputmode="numeric" required>
+              </div>
+            </div>
+            <div class="alert alert-light border mt-3 mb-0 small">
+              Ajratilgan qism <strong>yangi shtrix-kod</strong> oladi. Qolgan zaxira
+              eski kodda, eski narxda qoladi. Yangi kodga etiketka chiqarishni
+              unutmang.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Bekor</button>
+            <button type="submit" class="btn btn-warning">Ajratish</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Recent intakes -->
     <div class="card p-3">
