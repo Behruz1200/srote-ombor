@@ -172,7 +172,16 @@
                     </button>
                 </form>
             </div>
-            <small class="text-muted">Topildi: <strong>{{ products|length }}</strong></small>
+            <div class="d-flex align-items-center gap-2 ms-auto">
+                <button type="button" id="colToggle" class="btn btn-sm btn-outline-secondary"
+                        title="Sotuv tahlili ustunlari (30 kun, Yetadi, Aylanma, Marja)">
+                    <i class="bi bi-layout-three-columns"></i> Ko'proq ustun
+                </button>
+                <small class="text-muted">
+                    Topildi: <strong>{{ paginator.count }}</strong>{% if paginator.num_pages > 1 %}
+                    <span class="ms-1">· {{ page_obj.number }}/{{ paginator.num_pages }}-sahifa</span>{% endif %}
+                </small>
+            </div>
         </div>
 
         <div class="card">
@@ -185,11 +194,11 @@
                             <th>{% include "inventory/_sort_th.html" with field="name" label="Nomi" %}</th>
                             <th>Kategoriya</th>
                             <th class="text-end">{% include "inventory/_sort_th.html" with field="stock" label="Zaxira" %}</th>
-                            <th class="text-end d-none d-xl-table-cell">30 kun</th>
-                            <th class="text-end d-none d-xl-table-cell">Yetadi</th>
-                            <th class="text-end d-none d-xl-table-cell" title="Yillik aylanma (sotilgan / o'rtacha zaxira)">Aylanma</th>
+                            <th class="text-end col-opt">30 kun</th>
+                            <th class="text-end col-opt">Yetadi</th>
+                            <th class="text-end col-opt" title="Yillik aylanma (sotilgan / o'rtacha zaxira)">Aylanma</th>
                             <th class="text-end">{% include "inventory/_sort_th.html" with field="price" label="Narx" %}</th>
-                            <th class="text-end d-none d-lg-table-cell">Marja</th>
+                            <th class="text-end col-opt">Marja</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -210,7 +219,8 @@
                                 <a href="{% url 'product_detail' p.code %}">
                                     <strong>{{ p.name|truncatechars:35 }}</strong>
                                 </a>
-                                {% if p.brand %}<span class="badge rounded-pill bg-primary-subtle text-primary border ms-1"><i class="bi bi-tag"></i> {{ p.brand }}</span>{% endif %}
+                                {# Brend nomning ichida bo'lsa — takrorlamaymiz #}
+                                {% if p.brand and p.brand not in p.name %}<span class="badge rounded-pill bg-primary-subtle text-primary border ms-1"><i class="bi bi-tag"></i> {{ p.brand }}</span>{% endif %}
                                 <small class="text-muted text-nowrap">{{ p.variants_count }} tur</small>
                                 {% if p.variant_colors %}
                                     <span class="ms-1">
@@ -238,17 +248,17 @@
                                     {{ p.total_stock }}
                                 {% endif %}
                             </td>
-                            <td class="text-end small text-muted d-none d-xl-table-cell">
+                            <td class="text-end small text-muted col-opt">
                                 {% if p.sold_30d %}{{ p.sold_30d }}{% else %}—{% endif %}
                             </td>
-                            <td class="text-end small d-none d-xl-table-cell">
+                            <td class="text-end small col-opt">
                                 {% if p.days_left is not None %}
                                     <span class="text-{% if p.days_left < 7 %}danger{% elif p.days_left < 14 %}warning{% else %}muted{% endif %}">
                                         {{ p.days_left|floatformat:0 }} kun
                                     </span>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
-                            <td class="text-end small d-none d-xl-table-cell">
+                            <td class="text-end small col-opt">
                                 {% if p.turnover %}
                                     <span class="text-{% if p.turnover < 1 %}danger{% elif p.turnover < 4 %}warning{% else %}success{% endif %}"
                                           title="Yiliga {{ p.turnover|floatformat:1 }} marta aylanadi">
@@ -263,32 +273,28 @@
                                     {% else %}{{ p.price_min|som }}{% endif %}
                                 {% else %}{{ p.default_sale_price|som }}{% endif %}
                             </td>
-                            <td class="text-end small d-none d-lg-table-cell">
+                            <td class="text-end small col-opt">
                                 {% if p.margin_percent %}
                                     <span class="text-{% if p.margin_percent < 10 %}danger{% elif p.margin_percent < 25 %}warning{% else %}success{% endif %}">
                                         {{ p.margin_percent|floatformat:0 }}%
                                     </span>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </td>
-                            <td class="text-end">
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Amallar">
-                                        <i class="bi bi-three-dots"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="{% url 'product_detail' p.code %}"><i class="bi bi-eye me-2"></i> Batafsil</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'intake_for_product' p.code %}"><i class="bi bi-truck me-2"></i> Qabul</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'product_label' p.code %}" target="_blank"><i class="bi bi-printer me-2"></i> Etiketka</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li>
-                                            <form method="post" action="{% url 'product_delete' p.code %}"
-                                                  onsubmit="return confirm('{{ p.name|escapejs }} ({{ p.code }}) o\'chirilsinmi? Turlari va ombor qoldiqlari ham o\'chadi. Bu amalni ortga qaytarib bo\'lmaydi.');">
-                                                {% csrf_token %}
-                                                <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i> Oʻchirish</button>
-                                            </form>
-                                        </li>
-                                    </ul>
-                                </div>
+                            <td class="text-end text-nowrap">
+                                {# Ilgari har qatorda dropdown + CSRF forma bor edi (qatoriga ~1.8 KB).
+                                   Endi ko'p ishlatiladigan 2 amal to'g'ridan-to'g'ri, o'chirish esa
+                                   bitta umumiy oyna orqali — bosish ham, hajm ham kamaydi. #}
+                                <a href="{% url 'intake_for_product' p.code %}"
+                                   class="btn btn-sm btn-outline-secondary border-0 px-1"
+                                   title="Qabul qilish"><i class="bi bi-truck"></i></a>
+                                <a href="{% url 'product_label' p.code %}" target="_blank"
+                                   class="btn btn-sm btn-outline-secondary border-0 px-1"
+                                   title="Etiketka"><i class="bi bi-printer"></i></a>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary border-0 px-1 text-danger del-btn"
+                                        title="O'chirish"
+                                        data-code="{{ p.code }}" data-name="{{ p.name }}"
+                                        data-url="{% url 'product_delete' p.code %}"><i class="bi bi-trash"></i></button>
                             </td>
                         </tr>
                     {% empty %}
@@ -299,6 +305,41 @@
                     </tbody>
                 </table>
             </div>
+
+            {% if paginator.num_pages > 1 or paginator.count > 50 %}
+            <div class="d-flex flex-wrap align-items-center gap-2 p-2 border-top">
+                <div class="btn-group btn-group-sm" role="group">
+                    {% if page_obj.has_previous %}
+                    <a class="btn btn-outline-secondary" href="?{% querystring page=page_obj.previous_page_number %}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                    {% endif %}
+                    <span class="btn btn-outline-secondary disabled">
+                        {{ page_obj.number }} / {{ paginator.num_pages }}
+                    </span>
+                    {% if page_obj.has_next %}
+                    <a class="btn btn-outline-secondary" href="?{% querystring page=page_obj.next_page_number %}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                    {% endif %}
+                </div>
+                <span class="text-muted small">Sahifada:</span>
+                <div class="btn-group btn-group-sm" role="group">
+                    <a class="btn {% if per_page == 50 %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                       href="?{% querystring per=50 page=1 %}">50</a>
+                    <a class="btn {% if per_page == 100 %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                       href="?{% querystring per=100 page=1 %}">100</a>
+                    <a class="btn {% if per_page == 200 %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                       href="?{% querystring per=200 page=1 %}">200</a>
+                    <a class="btn {% if per_page == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                       href="?{% querystring per='all' page=1 %}">hammasi</a>
+                </div>
+                <span class="text-muted small ms-auto">
+                    Jami {{ paginator.count }} mahsulot · {{ list_totals.variants }} tur ·
+                    {{ list_totals.units }} dona
+                </span>
+            </div>
+            {% endif %}
         </div>
     </form>
 </div>
@@ -530,5 +571,69 @@ document.addEventListener('hide.bs.dropdown', (e) => {
     const w = e.target.closest('.table-responsive');
     if (w) { w.style.overflow = w.dataset._ov || ''; }
 });
+</script>
+
+<!-- Umumiy o'chirish oynasi: ilgari har qatorda alohida forma bor edi -->
+<div class="modal fade" id="delModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="post" id="delForm" class="modal-content">
+      {% csrf_token %}
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-trash"></i> Mahsulotni o'chirish</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1"><strong id="delName"></strong> <code id="delCode"></code></p>
+        <p class="text-muted small mb-0">
+          Turlari va ombor qoldiqlari ham o'chadi.
+          <strong>Bu amalni ortga qaytarib bo'lmaydi.</strong>
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Bekor</button>
+        <button type="submit" class="btn btn-danger">O'chirish</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+    // --- O'chirish: bitta umumiy oyna (bootstrap kech yuklanadi -> lazy) ---
+    var _bs = null;
+    function delModal() {
+        var el = document.getElementById('delModal');
+        return _bs || (_bs = new bootstrap.Modal(el));
+    }
+    document.querySelectorAll('.del-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.getElementById('delForm').action = b.dataset.url;
+            document.getElementById('delName').textContent = b.dataset.name || '';
+            document.getElementById('delCode').textContent = b.dataset.code || '';
+            delModal().show();
+        });
+    });
+
+    // --- Sotuv tahlili ustunlari: kerak bo'lganda ko'rsatiladi ---
+    var KEY = 'yurit_products_cols';
+    var btn = document.getElementById('colToggle');
+    function apply(on) {
+        document.querySelectorAll('.col-opt').forEach(function (el) {
+            el.classList.toggle('d-none', !on);
+        });
+        if (btn) {
+            btn.classList.toggle('btn-primary', on);
+            btn.classList.toggle('btn-outline-secondary', !on);
+        }
+    }
+    var on = false;
+    try { on = localStorage.getItem(KEY) === '1'; } catch (e) {}
+    apply(on);
+    if (btn) btn.addEventListener('click', function () {
+        on = !on;
+        try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {}
+        apply(on);
+    });
+})();
 </script>
 {% endblock %}

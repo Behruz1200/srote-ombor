@@ -2983,6 +2983,12 @@
         overflow: hidden; text-overflow: ellipsis;
     }
     @media print { .yrt-col-handle { display: none !important; } }
+
+    /* Saralanadigan jadval sarlavhalari (_sort_th.html) — ilgari bu CSS
+       HAR <th> ichida takrorlanardi. */
+    .sort-th-link:hover { color: #0d6efd !important; }
+    .sort-th-link i { opacity: .4; transition: opacity .15s; }
+    .sort-th-link:hover i { opacity: 1; }
 </style>
 </head>
 <body>

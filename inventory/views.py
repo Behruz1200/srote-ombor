@@ -798,11 +798,29 @@ def product_list(request):
     }
     products = products.order_by(allowed_sorts.get(sort, '-created_at'))
 
-    products = list(products[:200])
+    # Sahifalash — avval qattiq [:200] chegara bor edi va undan keyingi
+    # mahsulotlar UMUMAN ko'rinmasdi (344 tadan 200 tasi).
+    from django.core.paginator import Paginator
+    try:
+        per_page = int(request.GET.get('per') or 100)
+    except (TypeError, ValueError):
+        per_page = 100
+    if per_page not in (50, 100, 200, 500):
+        per_page = 100
+    show_all = (request.GET.get('per') == 'all')
+    if show_all:
+        per_page = max(1, products.count())
+
+    # Umumiy yig'indi — BUTUN ro'yxat bo'yicha (faqat shu sahifa emas)
+    _all_totals = products.aggregate(
+        v=Sum('variants_count'), u=Sum('total_stock'))
+    paginator = Paginator(products, per_page)
+    page_obj = paginator.get_page(request.GET.get('page') or 1)
+    products = list(page_obj.object_list)
     _pids = [p.id for p in products]
     list_totals = {
-        'variants': sum(p.variants_count for p in products),
-        'units': sum(p.total_stock for p in products),
+        'variants': _all_totals.get('v') or 0,
+        'units': _all_totals.get('u') or 0,
     }
 
     # 30/365 kunlik sotuvlar — faqat ko'rsatiladigan mahsulotlar bo'yicha
@@ -886,6 +904,9 @@ def product_list(request):
 
     return render(request, 'inventory/product_list.html', {
         'products': products,
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'per_page': 'all' if show_all else per_page,
         'dup_groups': dup_groups,
         'list_totals': list_totals,
         'q': q,
