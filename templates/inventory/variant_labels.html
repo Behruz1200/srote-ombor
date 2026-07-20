@@ -232,10 +232,11 @@
 .lbl__mid { display: flex; align-items: center; justify-content: center; gap: 2mm; }
 /* QR olib tashlandi — shtrix-kod butun kenglikni egallaydi */
 .lbl__bc { width: 100%; display: flex; justify-content: center; }
-.lbl__bc svg { height: 13mm; width: 94%; max-width: 100%; }
+.lbl__bc svg { height: 14mm; width: 100%; max-width: 100%; }
 .lbl__store {
-    font-size: 6.5pt;
-    letter-spacing: .04em;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: .03em;
     text-align: center;
     margin-top: .4mm;
     line-height: 1;
@@ -268,7 +269,9 @@
     }
     .lbl[style*="display: none"] { display: none !important; }
     .lbl__name, .lbl__sc, .lbl__price, .lbl__store { color: #000 !important; }
-    .lbl__bc svg { height: 11mm; width: 94%; }
+    .lbl__bc { width: 100%; }
+    .lbl__bc svg { height: 12mm; width: 100%; }
+    .lbl__store { font-size: 7pt; font-weight: 700; }
 }
 </style>
 {% endblock %}
