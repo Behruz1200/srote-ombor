@@ -58,15 +58,20 @@
             @page { size: {{ w }}mm {{ h }}mm; margin: 0; }
             /* Varaq OQIMDA qoladi — absolut element sahifalarga bo'linmaydi,
                shuning uchun har yorliq o'z sahifasiga tushadi. */
-            .plbl-sheet { display: block; gap: 0; padding: 0; margin: 0; }
+            /* font-size:0 — yorliqlar orasidagi bo'sh matn tugunlari
+               qo'shimcha sahifa ochib yubormasin */
+            .plbl-sheet { display: block; gap: 0; padding: 0; margin: 0; font-size: 0; }
             .plbl {
                 border: none; margin: 0;
-                width: {{ w }}mm; height: {{ h }}mm;
-                page-break-after: always; break-after: page;
+                width: {{ w }}mm;
+                /* Sahifadan BIR OZ past: aynan teng bo'lsa yaxlitlash tufayli
+                   1px keyingi sahifaga oshib, orasiga bo'sh sahifa tushardi.
+                   Balandlik sahifani to'ldirgani uchun majburiy break kerak
+                   emas — har yorliq o'zi alohida sahifaga tushadi. */
+                height: calc({{ h }}mm - 0.6mm);
                 page-break-inside: avoid; break-inside: avoid;
                 -webkit-print-color-adjust: exact; print-color-adjust: exact;
             }
-            .plbl:last-child { page-break-after: auto; break-after: auto; }
         }
     </style>
 </head>

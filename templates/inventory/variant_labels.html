@@ -165,9 +165,11 @@
             st.id = 'pageSizeStyle';
             document.head.appendChild(st);
         }
+        // Yorliq sahifadan bir oz past — aks holda 1px oshib, orasiga
+        // bo'sh sahifa tushadi.
         st.textContent =
             '@media print { @page { size: ' + w + 'mm ' + h + 'mm; margin: 0; }' +
-            ' .lbl { width: ' + w + 'mm; height: ' + h + 'mm; } }';
+            ' .lbl { width: ' + w + 'mm; height: calc(' + h + 'mm - 0.6mm); } }';
     }
     wEl.addEventListener('input', applyPageSize);
     hEl.addEventListener('input', applyPageSize);
@@ -209,7 +211,7 @@
     .container-fluid { padding: 0 !important; margin: 0 !important; }
     #labelSheet {
         position: static; display: block;
-        padding: 0; margin: 0; gap: 0;
+        padding: 0; margin: 0; gap: 0; font-size: 0;
     }
     /* Har yorliq — ALOHIDA sahifa. O'lchamni JS @page bilan moslaydi. */
     .lbl {
@@ -217,10 +219,11 @@
         margin: 0; padding: 1mm;
         display: flex; flex-direction: column; justify-content: center;
         overflow: hidden;
-        page-break-after: always; break-after: page;
+        /* Balandlik sahifani to'ldiradi (JS @page bilan moslaydi) — majburiy
+           break QO'SHMAYMIZ, aks holda har yorliqdan keyin bo'sh sahifa
+           chiqadi. break-inside yorliqni ikkiga bo'linishdan saqlaydi. */
         page-break-inside: avoid; break-inside: avoid;
     }
-    .lbl:last-child { page-break-after: auto; break-after: auto; }
     .lbl__name, .lbl__sc, .lbl__price { color: #000 !important; }
     .lbl__bc svg { height: 11mm; }
     .lbl__qr { width: 11mm; height: 11mm; }
