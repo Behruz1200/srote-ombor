@@ -16,7 +16,9 @@
             <div class="dash-hero__actions">
                 <button onclick="window.print()" class="dash-btn dash-btn--primary"><i class="bi bi-printer"></i> <span>Chop etish (dialog)</span></button>
                 <a href="{% url 'price_labels' %}?ids={{ ids }}&size=58x40" class="dash-btn dash-btn--ghost"><i class="bi bi-tag"></i> <span>Narx etiketkasi</span></a>
-                <a href="{% url 'clothes_intake' %}" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Yangi qabul</span></a>
+                {# Kelgan joyga qaytadi (mahsulot sahifasi, qabul, ro'yxat...).
+                   Tarix bo'lmasa — mahsulotlar ro'yxatiga. #}
+                <a href="{% url 'product_list' %}" id="backBtn" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Orqaga</span></a>
             </div>
         </div>
     </header>
@@ -203,6 +205,17 @@
         var u = new URL(window.location.href);
         u.searchParams.set('copies', sel.value);
         window.location.assign(u.toString());
+    });
+})();
+</script>
+
+<script>
+// "Orqaga" — brauzer tarixi bo'lsa o'sha yerga, aks holda havoladagi manzil
+(function () {
+    var b = document.getElementById('backBtn');
+    if (!b) return;
+    b.addEventListener('click', function (e) {
+        if (window.history.length > 1) { e.preventDefault(); window.history.back(); }
     });
 })();
 </script>
