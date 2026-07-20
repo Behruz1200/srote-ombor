@@ -1541,6 +1541,8 @@ def intake_for_product(request, code):
                     variant, _ = ProductVariant.objects.get_or_create(
                         product=product, size=size, color=color,
                     )
+                    # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
+                    variant = resolve_price_variant(variant, branch, sale_price)
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': cost, 'sale_price': sale_price,
@@ -1921,6 +1923,8 @@ def clothes_intake(request):
                             code = gen_internal_ean13(variant.pk + n * 100000)
                         variant.barcode = code
                         variant.save(update_fields=['barcode'])
+                    # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
+                    variant = resolve_price_variant(variant, branch, price)
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': cost, 'sale_price': price})
@@ -2244,6 +2248,8 @@ def intake_variants(request):
                     if r['barcode'] and variant.barcode != r['barcode']:
                         variant.barcode = r['barcode']
                         variant.save(update_fields=['barcode'])
+                    # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
+                    variant = resolve_price_variant(variant, branch, r['price'])
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': r['cost'],
@@ -2536,6 +2542,8 @@ def intake_import(request):
                     cost = (r['price'] / (Decimal('1') + marja /
                             Decimal('100'))).quantize(Decimal('0.01')) \
                         if r['price'] > 0 else Decimal('0')
+                    # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
+                    variant = resolve_price_variant(variant, branch, r['price'])
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': cost,
@@ -2760,6 +2768,9 @@ def intake_quick_save(request):
             wholesale_price = Decimal(str(ln.get('wholesale_price') or '0'))
             update_price = bool(ln.get('update_product_price'))
 
+            # Qaytarish bo'lmasa va narx boshqacha bo'lsa — alohida tur
+            if not is_return:
+                variant = resolve_price_variant(variant, branch, sale_price)
             stock, _ = BranchStock.objects.get_or_create(
                 variant=variant, branch=branch,
                 defaults={'cost_price': cost, 'sale_price': sale_price,
@@ -3820,6 +3831,8 @@ def intake_photo_save(request):
                 if r['barcode'] and not variant.barcode:
                     variant.barcode = r['barcode']
                     variant.save(update_fields=['barcode'])
+            # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
+            variant = resolve_price_variant(variant, branch, r['sale'])
             stock, _ = BranchStock.objects.get_or_create(
                 variant=variant, branch=branch,
                 defaults={'cost_price': r['cost'], 'sale_price': r['sale']})
@@ -9053,6 +9066,105 @@ def _parse_prices(text):
         if v > 0 and v not in out:
             out.append(v)
     return sorted(out)
+
+
+
+PRICE_TAG_SEP = ' · '
+
+
+# Sof narx belgisi: "115 000" yoki "115 000 (2)"
+_PRICE_TAG_RE = re.compile(r'^\d[\d\s]*(\s*\(\d+\))?$')
+
+
+def _base_color(color):
+    """Narx belgisi olib tashlangan asosiy rang.
+
+    "Qora · 115 000" -> "Qora"
+    "115 000"        -> ""      (asosiy rang bo'sh bo'lgan holat — ajratuvchi
+                                 yo'q, shuning uchun alohida tekshiramiz;
+                                 aks holda har qabulda yangi tur ochilib
+                                 ketardi)
+    """
+    c = (color or '').strip()
+    if c in ('—', '-', '–'):
+        c = ''            # "rang yo'q" belgisi — bo'sh deb qaraymiz
+    if PRICE_TAG_SEP in c:
+        b = c.split(PRICE_TAG_SEP)[0].strip()
+        return '' if b in ('—', '-', '–') else b
+    if _PRICE_TAG_RE.match(c):
+        return ''
+    return c
+
+
+def _price_tag(sale_price):
+    return f"{int(sale_price):,}".replace(',', ' ')
+
+
+def resolve_price_variant(variant, branch, sale_price):
+    """Sotuv narxi omborodagidan FARQ qilsa — alohida tur (o'z shtrix-kodi bilan).
+
+    Nega: shtrix-kod turga tegishli, kassa esa kod -> tur -> narx bo'yicha
+    ishlaydi. Ya'ni bir turga ikki xil narx sig'maydi — oxirgi qabul
+    avvalgisini bosib ketadi va etiketkalar noto'g'ri narx bilan chiqadi.
+
+    Qoida:
+      1. Shu narxdagi "birodar" tur allaqachon bo'lsa — o'shani ishlatamiz
+         (har qabulda yangi tur yaratilib ketmasin).
+      2. Bazaviy tur bo'sh bo'lsa (ombor 0) — narxni bemalol yangilaymiz.
+      3. Aks holda yangi tur ochamiz: rang "... · 115 000" ko'rinishida
+         belgilanadi va yangi EAN-13 beriladi.
+
+    Qaytaradi: aslida ishlatilishi kerak bo'lgan ProductVariant.
+    """
+    from decimal import Decimal
+    if variant is None or branch is None:
+        return variant
+    try:
+        sale = Decimal(str(sale_price or 0))
+    except Exception:
+        return variant
+    if sale <= 0:
+        return variant  # narx ko'rsatilmagan — eski xatti-harakat
+
+    base_color = _base_color(variant.color)
+    sibs = [v for v in ProductVariant.objects.filter(
+                product=variant.product, size=variant.size)
+            if _base_color(v.color) == base_color]
+
+    stocks = {st.variant_id: st for st in BranchStock.objects.filter(
+        variant__in=sibs, branch=branch)}
+
+    # 1) Ayni shu narxdagi tur bormi?
+    for v in sibs:
+        st = stocks.get(v.pk)
+        if st is not None and st.sale_price == sale:
+            return v
+
+    # 2) Kelgan turning o'zi bo'sh bo'lsa — o'shani ishlatamiz
+    own = stocks.get(variant.pk)
+    if own is None or own.stock_count <= 0:
+        return variant
+
+    # 3) Yangi tur — o'z kodi va o'z narxi bilan
+    tag = _price_tag(sale)
+    color = f"{base_color}{PRICE_TAG_SEP}{tag}" if base_color else tag
+    color = color[:50]
+    n = 1
+    while ProductVariant.objects.filter(product=variant.product,
+                                        size=variant.size, color=color).exists():
+        n += 1
+        color = f"{color[:44]} ({n})"
+
+    new_v = ProductVariant.objects.create(
+        product=variant.product, size=variant.size, color=color)
+    code = gen_internal_ean13(new_v.pk)
+    k = 0
+    while ProductVariant.objects.filter(barcode=code).exclude(pk=new_v.pk).exists():
+        k += 1
+        code = gen_internal_ean13(new_v.pk + k * 100000)
+    new_v.barcode = code
+    new_v.save(update_fields=['barcode'])
+    return new_v
 
 
 @admin_required
