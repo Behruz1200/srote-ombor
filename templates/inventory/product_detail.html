@@ -202,9 +202,18 @@
             <strong><i class="bi bi-list-ol"></i> Turlar ro'yxati
                 <span class="badge bg-light text-dark border">{{ variant_rows|length }}</span>
             </strong>
-            <a href="{% url 'product_variants_edit' product.code %}" class="btn btn-sm btn-outline-primary">
-                <i class="bi bi-pencil"></i> Tahrirlash
-            </a>
+            <div class="d-flex gap-2">
+                {% if variant_ids %}
+                <a href="{% url 'variant_labels' %}?ids={{ variant_ids }}&copies=1"
+                   class="btn btn-sm btn-outline-success" target="_blank"
+                   title="Har turga shtrix-kodli termal etiketka">
+                    <i class="bi bi-tag"></i> Etiketka
+                </a>
+                {% endif %}
+                <a href="{% url 'product_variants_edit' product.code %}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-pencil"></i> Tahrirlash
+                </a>
+            </div>
         </div>
         <div class="table-responsive" style="max-height: 420px; overflow:auto;">
             <table class="table table-sm table-hover align-middle mb-0">
@@ -215,6 +224,7 @@
                         <th>Shtrix-kod</th>
                         <th class="text-end">Narx</th>
                         <th class="text-end">Ombor</th>
+                        <th style="width:44px"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -236,6 +246,13 @@
                             {% if r.stock_total == 0 %}<span class="badge bg-danger">0</span>
                             {% elif r.stock_total <= 3 %}<span class="badge bg-warning text-dark">{{ r.stock_total }}</span>
                             {% else %}{{ r.stock_total }}{% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'variant_labels' %}?ids={{ r.variant.pk }}&copies={{ r.stock_total|default:1 }}"
+                               class="btn btn-sm btn-outline-secondary py-0 px-1" target="_blank"
+                               title="Shu turga etiketka (shtrix-kod bilan)">
+                                <i class="bi bi-tag"></i>
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}

@@ -1421,6 +1421,7 @@ def product_detail(request, code):
         'recent_intakes': recent_intakes,
         'product_kpis': product_kpis,
         'variant_rows': variant_rows,
+        'variant_ids': ','.join(str(v.pk) for v in variants),
         'price_min': price_min,
         'price_max': price_max,
         'chart_labels': chart_labels,
@@ -1776,6 +1777,7 @@ def product_variants_edit(request, code):
     return render(request, 'inventory/product_variants_edit.html', {
         'product': product, 'branch': branch, 'branches': branches,
         'rows': rows,
+        'variant_ids': ','.join(str(r['variant'].pk) for r in rows),
     })
 
 

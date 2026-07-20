@@ -30,24 +30,26 @@
         .plbl__name { font-weight: 700; text-transform: uppercase; line-height: 1.05; width: 100%; }
         .plbl__price { font-weight: 800; line-height: 1; }
         .plbl__cur { font-weight: 400; }
-        .plbl__bc { width: 100%; display: flex; justify-content: center; }
-        .plbl__bc svg { width: auto; max-width: 96%; }
+        .plbl__bc { width: 100%; display: flex; justify-content: center;
+                    align-items: center; overflow: hidden; }
+        /* Proportsional kichrayadi — kod matni kesilmasin */
+        .plbl__bc svg { width: 94%; height: auto; }
         .plbl__store { width: 100%; line-height: 1.05; }
 
         /* 58 × 40 mm */
         .sz-58x40 .plbl { width: 58mm; height: 40mm; padding: 2mm 2mm 1.5mm; }
-        .sz-58x40 .plbl__name { font-size: 10pt; }
-        .sz-58x40 .plbl__price { font-size: 21pt; }
+        .sz-58x40 .plbl__name { font-size: 9.5pt; }
+        .sz-58x40 .plbl__price { font-size: 19pt; }
         .sz-58x40 .plbl__cur { font-size: 8pt; }
-        .sz-58x40 .plbl__bc svg { height: 11mm; }
+        .sz-58x40 .plbl__bc { max-height: 14mm; }
         .sz-58x40 .plbl__store { font-size: 7pt; }
 
         /* 30 × 20 mm */
         .sz-30x20 .plbl { width: 30mm; height: 20mm; padding: 1mm; }
-        .sz-30x20 .plbl__name { font-size: 5.5pt; }
-        .sz-30x20 .plbl__price { font-size: 10pt; }
+        .sz-30x20 .plbl__name { font-size: 5pt; }
+        .sz-30x20 .plbl__price { font-size: 9pt; }
         .sz-30x20 .plbl__cur { font-size: 4.5pt; }
-        .sz-30x20 .plbl__bc svg { height: 6mm; }
+        .sz-30x20 .plbl__bc { max-height: 7mm; }
         .sz-30x20 .plbl__store { font-size: 4.5pt; }
 
         @media print {
