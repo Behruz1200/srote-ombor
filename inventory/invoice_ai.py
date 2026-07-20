@@ -27,6 +27,15 @@ PROMPT = """You are reading a supplier delivery note (накладная / faktu
 from a shop in Uzbekistan. The document may be in Russian or Uzbek, may be
 photographed at an angle, and may have handwritten ticks or notes on it.
 
+The photo may also be ROTATED (the sheet is landscape but shot in portrait, so
+the text runs sideways). Read it in whatever orientation it is — do not skip
+rows and do not invent a row out of the column headers.
+
+IGNORE ALL HANDWRITING. The shop staff tick rows off and pencil their own
+intended retail prices next to the printed ones ("30", "36", "25"). Those
+handwritten digits are NOT invoice data — never use them as qty, cost or sum.
+Only printed values count.
+
 Extract the printed line items. Reply with ONLY a JSON object — no prose, no
 markdown, no code fences.
 
@@ -80,6 +89,10 @@ Field rules:
   name is the CUSTOMER code, not the invoice number — never use it. If no
   document number is printed, return "".
 - Never guess a name, phone or number that is not written on the document.
+- Some suppliers prefix the name with their own article code:
+  "1130 - GOLD шампунь 1,4 л ( 6 шт )". Keep the whole text in "name", but
+  leave that leading number OUT of "product" — it is not part of the product
+  name. A trailing "( 6 шт )" is the pack size, so it belongs in "size".
 - "name" = copy the entire product cell: the leading generic word
   (Шампунь / Мыло / Паста / Сок), the brand, and the size or weight
   ("Шампунь Head&Shoulders 400мл"). Do not shorten it to just the brand.
@@ -265,8 +278,72 @@ def _parse_payload(text):
             raise InvoiceAIError("AI javobini o'qib bo'lmadi. Rasmni aniqroq oling.")
 
 
+def _confidence(data):
+    """Natija qanchalik ishonchli — fakturaning O'Z arifmetikasiga qarab.
+
+    Burilgan rasmda model qatorlarni chalkashtiradi va qty x narx = summa
+    tenglik buziladi. Shu bilan qaysi burilish to'g'ri ekanini bilamiz.
+    """
+    rows = data.get('rows') or []
+    if not rows:
+        return -1.0
+    ok = sum(1 for r in rows if r.get('sum_ok'))
+    score = ok / len(rows)
+    total = data.get('total') or 0
+    if total > 0:
+        calc = sum((r.get('total_qty') or 0) * (r.get('cost') or 0) for r in rows)
+        if abs(calc - total) <= max(1.0, total * 0.01):
+            score += 0.5
+    return score
+
+
 def extract_invoice(django_file, timeout=120):
-    """Rasm -> {supplier, invoice_no, date, rows[]}. Xatoda InvoiceAIError."""
+    """Rasm -> {supplier, invoice_no, date, rows[]}. Xatoda InvoiceAIError.
+
+    Rasm yonboshiga burilgan bo'lsa (nakladnoy albom, telefon tik ushlagan),
+    model qatorlarni chalkashtiradi. Shuning uchun natija ishonchsiz chiqsa
+    rasmni burib qayta o'qiymiz va eng yaxshisini olamiz.
+    """
+    raw, media_type = prepare_image(django_file)
+    best = _extract_bytes(raw, media_type, timeout)
+    best_score = _confidence(best)
+    best['rotated'] = 0
+    if best_score >= 1.4:                 # hammasi joyida — burishga hojat yo'q
+        return best
+
+    for angle in (270, 90, 180):
+        try:
+            rotated = _rotate_jpeg(raw, angle)
+        except Exception:                 # pragma: no cover
+            continue
+        if rotated is None:
+            continue
+        try:
+            cand = _extract_bytes(rotated, media_type, timeout)
+        except InvoiceAIError:
+            continue
+        score = _confidence(cand)
+        if score > best_score:
+            best, best_score = cand, score
+            best['rotated'] = angle
+            if best_score >= 1.4:
+                break
+    return best
+
+
+def _rotate_jpeg(raw, angle):
+    try:
+        from PIL import Image
+    except ImportError:                                   # pragma: no cover
+        return None
+    img = Image.open(io.BytesIO(raw)).rotate(angle, expand=True)
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=JPEG_QUALITY, optimize=True)
+    return buf.getvalue()
+
+
+def _extract_bytes(raw, media_type, timeout=120):
+    """Bitta rasm baytlarini AI'ga yuborib, tozalangan natijani qaytaradi."""
     key = getattr(settings, 'ANTHROPIC_API_KEY', '')
     if not key:
         raise InvoiceAIError(
@@ -275,7 +352,6 @@ def extract_invoice(django_file, timeout=120):
         )
     model = getattr(settings, 'ANTHROPIC_MODEL', 'claude-sonnet-4-5')
 
-    raw, media_type = prepare_image(django_file)
     body = json.dumps({
         'model': model,
         'max_tokens': 8000,
