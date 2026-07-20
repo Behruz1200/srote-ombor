@@ -9290,3 +9290,188 @@ def variant_split_batch(request):
         f"{qty} dona alohida turga ajratildi — yangi shtrix-kod {code}, "
         f"sotuv narxi {sale or src_stock.sale_price} so'm.")
     return redirect(back)
+
+
+@admin_required
+def intake_mixed(request):
+    """Aralash qabul — bitta sahifada butun yuk.
+
+    "Kiyim/poyabzal" (o'lchamlar setkasi) va "Turlar jadvali" (qatorlab)
+    birlashtirilgan: har mahsulot uchun qulay usulni tanlaysiz, hammasi
+    bitta qabulga yoziladi.
+    """
+    branches = Branch.objects.filter(is_active=True).order_by('name')
+    return render(request, 'inventory/intake_mixed.html', {
+        'branches': branches,
+        'categories': Category.objects.all().order_by('name'),
+        'user_branch': getattr(request.user, 'branch', None),
+        'suppliers': Supplier.objects.filter(is_active=True).order_by('name')[:200],
+    })
+
+
+@admin_required
+def intake_mixed_save(request):
+    """POST JSON — bir nechta mahsulotni bitta qabulda saqlaydi.
+
+    Kutilgan shakl:
+      {branch, supplier, invoice_number, note,
+       products: [{code|name, category, brand, cost, marja, price,
+                   lines: [{size, color, qty, cost, price, barcode}]}]}
+
+    Ikkala usul (setka / qatorlab) ham AYNI "lines" shaklini yuboradi —
+    farq faqat ko'rinishda, shuning uchun bu yerda bitta yo'l yetadi.
+    """
+    from decimal import Decimal, InvalidOperation
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Faqat POST'}, status=405)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'ok': False, 'error': "So'rov noto'g'ri"}, status=400)
+
+    def dec(v, default='0'):
+        try:
+            return Decimal(str(v).replace(' ', '').replace(',', '.') or default)
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal(default)
+
+    branch = Branch.objects.filter(pk=data.get('branch') or 0,
+                                   is_active=True).first()
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'Filial tanlanmagan'}, status=400)
+
+    products_in = data.get('products') or []
+    if not products_in:
+        return JsonResponse({'ok': False, 'error': "Mahsulot qo'shilmagan"}, status=400)
+
+    supplier_text = (data.get('supplier') or '').strip()[:200]
+    supplier_obj = (Supplier.objects.filter(name__iexact=supplier_text).first()
+                    if supplier_text else None)
+
+    created_variant_ids = []
+    total_qty = 0
+    new_products = 0
+
+    try:
+        with transaction.atomic():
+            session = IntakeSession.objects.create(
+                branch=branch,
+                supplier=supplier_obj,
+                supplier_text='' if supplier_obj else supplier_text,
+                received_by=request.user,
+                invoice_number=(data.get('invoice_number') or '').strip()[:80],
+                note=(data.get('note') or '').strip() or 'Aralash qabul',
+            )
+
+            for pi, p in enumerate(products_in, start=1):
+                lines = [ln for ln in (p.get('lines') or [])
+                         if int(float(ln.get('qty') or 0)) > 0]
+                if not lines:
+                    continue
+
+                code = (p.get('code') or '').strip()
+                product = Product.objects.filter(code__iexact=code).first() if code else None
+                if product is None:
+                    name = smart_title((p.get('name') or '').strip())
+                    if not name:
+                        raise ValueError(f"{pi}-mahsulot: nom kiritilmagan")
+                    category = Category.objects.filter(pk=p.get('category') or 0).first()
+                    if category is None:
+                        raise ValueError(f"{pi}-mahsulot ({name}): kategoriya tanlanmagan")
+                    brand = smart_title((p.get('brand') or '').strip())
+                    product = Product.objects.filter(name__iexact=name,
+                                                     category=category).first()
+                    if product is None:
+                        product = Product.objects.create(
+                            name=name, brand=brand, category=category)
+                        new_products += 1
+
+                # Mahsulot darajasidagi narx — qatorda ko'rsatilmasa shu ishlatiladi
+                p_cost = dec(p.get('cost'))
+                p_price = dec(p.get('price'))
+                p_marja = dec(p.get('marja'))
+                if p_price <= 0 and p_cost > 0 and p_marja > 0:
+                    p_price = (p_cost * (Decimal('1') + p_marja / Decimal('100'))
+                               ).quantize(Decimal('0.01'))
+                if p_cost <= 0 and p_price > 0 and p_marja > 0:
+                    p_cost = (p_price / (Decimal('1') + p_marja / Decimal('100'))
+                              ).quantize(Decimal('0.01'))
+
+                for ln in lines:
+                    qty = int(float(ln.get('qty') or 0))
+                    size = (ln.get('size') or '').strip()[:30] or '—'
+                    color = (ln.get('color') or '').strip()[:50]
+                    cost = dec(ln.get('cost')) if str(ln.get('cost') or '').strip() else p_cost
+                    price = dec(ln.get('price')) if str(ln.get('price') or '').strip() else p_price
+                    if price <= 0:
+                        raise ValueError(f"{product.name} ({size}): sotuv narxi yo'q")
+
+                    variant, _ = ProductVariant.objects.get_or_create(
+                        product=product, size=size, color=color)
+                    bc = (ln.get('barcode') or '').strip()
+                    if bc and not variant.barcode:
+                        if not ProductVariant.objects.filter(barcode=bc).exclude(
+                                pk=variant.pk).exists():
+                            variant.barcode = bc
+                            variant.save(update_fields=['barcode'])
+                    if not variant.barcode:
+                        c = gen_internal_ean13(variant.pk)
+                        k = 0
+                        while ProductVariant.objects.filter(barcode=c).exclude(
+                                pk=variant.pk).exists():
+                            k += 1
+                            c = gen_internal_ean13(variant.pk + k * 100000)
+                        variant.barcode = c
+                        variant.save(update_fields=['barcode'])
+
+                    # Sotuv narxi omborodagidan farq qilsa — alohida tur
+                    variant = resolve_price_variant(variant, branch, price)
+                    if not variant.barcode:
+                        c = gen_internal_ean13(variant.pk)
+                        variant.barcode = c
+                        variant.save(update_fields=['barcode'])
+
+                    stock, _ = BranchStock.objects.get_or_create(
+                        variant=variant, branch=branch,
+                        defaults={'cost_price': cost, 'sale_price': price})
+                    stock.stock_count = F('stock_count') + qty
+                    if cost > 0:
+                        stock.cost_price = cost
+                    stock.sale_price = price
+                    stock.save(update_fields=['stock_count', 'cost_price', 'sale_price'])
+
+                    Intake.objects.create(
+                        session=session, supplier_ref=supplier_obj,
+                        variant=variant, branch=branch,
+                        quantity=qty, cost_per_unit=cost, sale_price=price,
+                        supplier=supplier_text, note='Aralash qabul',
+                        received_by=request.user)
+
+                    created_variant_ids.append(variant.pk)
+                    total_qty += qty
+
+                if product.default_sale_price == 0 and p_price > 0:
+                    product.default_sale_price = p_price
+                    product.save(update_fields=['default_sale_price'])
+
+            if not created_variant_ids:
+                raise ValueError("Hech qanday miqdor kiritilmagan")
+    except ValueError as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+    try:
+        from .notifications import notify_intake_session
+        notify_intake_session(session)
+    except Exception:
+        pass  # xabar yuborilmasa ham qabul saqlanadi
+
+    ids = ','.join(str(i) for i in dict.fromkeys(created_variant_ids))
+    return JsonResponse({
+        'ok': True,
+        'session_id': session.pk,
+        'total_qty': total_qty,
+        'variants': len(set(created_variant_ids)),
+        'new_products': new_products,
+        'labels_url': f"{reverse('variant_labels')}?ids={ids}&copies=stock",
+        'session_url': reverse('intake_session_detail', args=[session.pk]),
+    })

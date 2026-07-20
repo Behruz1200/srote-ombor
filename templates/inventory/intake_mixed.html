@@ -1,0 +1,510 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+{% block title %}Aralash qabul — yurit{% endblock %}
+
+{% block content %}
+<header class="dash-hero mb-3">
+    <div class="dash-hero__row">
+        <div>
+            <p class="dash-hero__eyebrow"><span class="dot"></span> QABUL</p>
+            <h1 class="dash-hero__title"><i class="bi bi-boxes"></i> Aralash qabul</h1>
+            <p class="dash-hero__sub">
+                <span>Kiyim ham, oddiy tovar ham — butun yuk bitta sahifada</span>
+            </p>
+        </div>
+        <div class="dash-hero__actions">
+            <button type="button" id="saveBtn" class="dash-btn dash-btn--primary">
+                <i class="bi bi-check2-circle"></i> <span>Qabulni saqlash</span>
+            </button>
+            <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost">
+                <i class="bi bi-arrow-left"></i> <span>Orqaga</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<!-- Yuk sarlavhasi -->
+<div class="card p-3 mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-1">Filial</label>
+            <select id="fBranch" class="form-select form-select-sm">
+                {% for b in branches %}
+                <option value="{{ b.pk }}" {% if user_branch and b.pk == user_branch.pk %}selected{% endif %}>{{ b.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-1">Yetkazib beruvchi</label>
+            <input type="text" id="fSupplier" class="form-control form-control-sm"
+                   list="supplierList" placeholder="ixtiyoriy">
+            <datalist id="supplierList">
+                {% for s in suppliers %}<option value="{{ s.name }}">{% endfor %}
+            </datalist>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-1">Faktura raqami</label>
+            <input type="text" id="fInvoice" class="form-control form-control-sm" placeholder="ixtiyoriy">
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-1">Izoh</label>
+            <input type="text" id="fNote" class="form-control form-control-sm" placeholder="ixtiyoriy">
+        </div>
+    </div>
+</div>
+
+<!-- Mahsulot bloklari shu yerga -->
+<div id="blocks"></div>
+
+<div class="d-flex flex-wrap gap-2 align-items-center mb-4">
+    <button type="button" class="btn btn-outline-primary" data-add="grid">
+        <i class="bi bi-plus-lg"></i> Kiyim / poyabzal (o'lchamlar)
+    </button>
+    <button type="button" class="btn btn-outline-primary" data-add="rows">
+        <i class="bi bi-plus-lg"></i> Oddiy tovar (qatorlab)
+    </button>
+    <span class="ms-auto text-muted small">
+        Jami: <strong id="grandQty">0</strong> dona ·
+        <strong id="grandLines">0</strong> tur ·
+        <strong id="grandProducts">0</strong> mahsulot
+    </span>
+</div>
+
+<div id="saveMsg"></div>
+
+<!-- ===== Blok andozasi ===== -->
+<template id="tplBlock">
+<div class="card p-3 mb-3 blk">
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="badge bg-light text-dark border blk-kind"></span>
+        <strong class="blk-title text-muted small">Yangi mahsulot</strong>
+        <div class="btn-group btn-group-sm ms-auto" role="group">
+            <button type="button" class="btn btn-outline-secondary mode-btn" data-mode="grid">O'lchamlar</button>
+            <button type="button" class="btn btn-outline-secondary mode-btn" data-mode="rows">Qatorlab</button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-danger blk-del" title="Blokni o'chirish">
+            <i class="bi bi-trash"></i>
+        </button>
+    </div>
+
+    <div class="row g-2 mb-2">
+        <div class="col-12 col-md-4 position-relative">
+            <label class="form-label small mb-1">Mahsulot nomi</label>
+            <input type="text" class="form-control form-control-sm f-name"
+                   placeholder="Yozing — mavjudi taklif qilinadi" autocomplete="off">
+            <input type="hidden" class="f-code">
+            <div class="list-group position-absolute w-100 shadow-sm sugg d-none"
+                 style="z-index:20; max-height:220px; overflow:auto"></div>
+            <div class="form-text f-found d-none text-success"></div>
+        </div>
+        <div class="col-6 col-md-3 f-catwrap">
+            <label class="form-label small mb-1">Kategoriya</label>
+            <select class="form-select form-select-sm f-cat">
+                <option value="">— tanlang —</option>
+                {% for c in categories %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-2 f-brandwrap">
+            <label class="form-label small mb-1">Brend</label>
+            <input type="text" class="form-control form-control-sm f-brand" placeholder="ixtiyoriy">
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-4 col-md-2">
+            <label class="form-label small mb-1">Tannarx</label>
+            <input type="text" inputmode="numeric" class="form-control form-control-sm f-cost">
+        </div>
+        <div class="col-4 col-md-2">
+            <label class="form-label small mb-1">Marja %</label>
+            <input type="text" inputmode="numeric" class="form-control form-control-sm f-marja">
+        </div>
+        <div class="col-4 col-md-2">
+            <label class="form-label small mb-1">Sotuv narxi</label>
+            <input type="text" inputmode="numeric" class="form-control form-control-sm f-price">
+        </div>
+        <div class="col-12 col-md-6">
+            <span class="text-muted small">
+                Shu narx barcha o'lcham/qatorlarga qo'llanadi — kerak bo'lsa
+                pastda alohida o'zgartirasiz.
+            </span>
+        </div>
+    </div>
+
+    <!-- ---- O'LCHAMLAR usuli ---- -->
+    <div class="m-grid">
+        <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
+            <input type="text" class="form-control form-control-sm sz-input" style="max-width:260px"
+                   placeholder="O'lcham: S, M, L, XL (vergul bilan)">
+            <button type="button" class="btn btn-sm btn-outline-primary sz-add">Qo'shish</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary sz-preset"
+                    data-sizes="S,M,L,XL,XXL">S–XXL</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary sz-preset"
+                    data-sizes="36,37,38,39,40,41,42,43,44,45">36–45</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" data-no-resize>
+                <thead><tr>
+                    <th style="width:22%">O'lcham</th>
+                    <th style="width:22%">Miqdor</th>
+                    <th style="width:28%">Narx (bo'sh = umumiy)</th>
+                    <th style="width:1%"></th>
+                </tr></thead>
+                <tbody class="grid-body"></tbody>
+            </table>
+        </div>
+        <p class="text-muted small mb-0 mt-1">
+            Har o'lchamga avtomatik EAN-13 shtrix-kod beriladi.
+        </p>
+    </div>
+
+    <!-- ---- QATORLAB usuli ---- -->
+    <div class="m-rows d-none">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" data-no-resize>
+                <thead><tr>
+                    <th style="width:18%">Rang / tur</th>
+                    <th style="width:14%">O'lcham</th>
+                    <th style="width:20%">Shtrix-kod</th>
+                    <th style="width:14%">Miqdor</th>
+                    <th style="width:18%">Narx</th>
+                    <th style="width:1%"></th>
+                </tr></thead>
+                <tbody class="rows-body"></tbody>
+            </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary mt-2 row-add">
+            <i class="bi bi-plus"></i> Qator qo'shish
+        </button>
+        <p class="text-muted small mb-0 mt-1">
+            Shtrix-kod bo'sh bo'lsa — avtomatik beriladi.
+        </p>
+    </div>
+
+    <div class="text-end small text-muted mt-2">
+        Blok jami: <strong class="blk-qty">0</strong> dona
+    </div>
+</div>
+</template>
+
+<script>
+(function () {
+    'use strict';
+    const blocks = document.getElementById('blocks');
+    const tpl = document.getElementById('tplBlock');
+    const msg = document.getElementById('saveMsg');
+
+    const num = (v) => {
+        const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.]/g, ''));
+        return isNaN(n) ? 0 : n;
+    };
+
+    /* ---------- Blok yaratish ---------- */
+    function addBlock(mode) {
+        const node = tpl.content.firstElementChild.cloneNode(true);
+        blocks.appendChild(node);
+        initBlock(node, mode || 'grid');
+        node.scrollIntoView({behavior: 'smooth', block: 'center'});
+        node.querySelector('.f-name').focus();
+        return node;
+    }
+
+    function initBlock(blk, mode) {
+        setMode(blk, mode);
+
+        blk.querySelector('.blk-del').addEventListener('click', function () {
+            blk.remove(); recount();
+        });
+        blk.querySelectorAll('.mode-btn').forEach(function (b) {
+            b.addEventListener('click', function () { setMode(blk, b.dataset.mode); });
+        });
+
+        // Narx <-> marja (ikki tomonlama)
+        const cost = blk.querySelector('.f-cost');
+        const marja = blk.querySelector('.f-marja');
+        const price = blk.querySelector('.f-price');
+        function fromMarja() {
+            const c = num(cost.value), m = num(marja.value);
+            if (c > 0 && marja.value !== '') price.value = Math.round(c * (1 + m / 100));
+        }
+        function fromPrice() {
+            const c = num(cost.value), p = num(price.value);
+            if (c > 0 && p > 0) marja.value = Math.round((p / c - 1) * 1000) / 10;
+        }
+        cost.addEventListener('input', function () { marja.value !== '' ? fromMarja() : fromPrice(); });
+        marja.addEventListener('input', fromMarja);
+        price.addEventListener('input', fromPrice);
+
+        // Mahsulot qidirish
+        setupSearch(blk);
+
+        // O'lchamlar
+        blk.querySelector('.sz-add').addEventListener('click', function () { addSizes(blk); });
+        blk.querySelector('.sz-input').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); addSizes(blk); }
+        });
+        blk.querySelectorAll('.sz-preset').forEach(function (b) {
+            b.addEventListener('click', function () {
+                b.dataset.sizes.split(',').forEach(function (s) { addSizeRow(blk, s.trim()); });
+                recount();
+            });
+        });
+
+        blk.querySelector('.row-add').addEventListener('click', function () { addRow(blk); });
+        blk.addEventListener('input', recount);
+        addRow(blk);
+    }
+
+    function setMode(blk, mode) {
+        blk.dataset.mode = mode;
+        blk.querySelector('.m-grid').classList.toggle('d-none', mode !== 'grid');
+        blk.querySelector('.m-rows').classList.toggle('d-none', mode !== 'rows');
+        blk.querySelector('.blk-kind').textContent =
+            mode === 'grid' ? "Kiyim / o'lchamlar" : 'Oddiy tovar';
+        blk.querySelectorAll('.mode-btn').forEach(function (b) {
+            b.classList.toggle('active', b.dataset.mode === mode);
+            b.classList.toggle('btn-primary', b.dataset.mode === mode);
+            b.classList.toggle('btn-outline-secondary', b.dataset.mode !== mode);
+        });
+        recount();
+    }
+
+    /* ---------- O'lcham qatorlari ---------- */
+    function addSizes(blk) {
+        const inp = blk.querySelector('.sz-input');
+        inp.value.split(',').map(s => s.trim()).filter(Boolean)
+            .forEach(function (s) { addSizeRow(blk, s); });
+        inp.value = ''; inp.focus(); recount();
+    }
+
+    function addSizeRow(blk, size) {
+        const body = blk.querySelector('.grid-body');
+        const bor = Array.prototype.some.call(body.querySelectorAll('.g-size'),
+            function (el) { return el.value.toLowerCase() === size.toLowerCase(); });
+        if (bor) return;
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><input type="text" class="form-control form-control-sm g-size"></td>' +
+            '<td><input type="text" inputmode="numeric" class="form-control form-control-sm g-qty" placeholder="0"></td>' +
+            '<td><input type="text" inputmode="numeric" class="form-control form-control-sm g-price" placeholder="umumiy"></td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger g-del"><i class="bi bi-x"></i></button></td>';
+        tr.querySelector('.g-size').value = size;
+        tr.querySelector('.g-del').addEventListener('click', function () { tr.remove(); recount(); });
+        body.appendChild(tr);
+    }
+
+    /* ---------- Erkin qatorlar ---------- */
+    function addRow(blk) {
+        const body = blk.querySelector('.rows-body');
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><input type="text" class="form-control form-control-sm r-color"></td>' +
+            '<td><input type="text" class="form-control form-control-sm r-size"></td>' +
+            '<td><input type="text" class="form-control form-control-sm r-barcode" placeholder="avto"></td>' +
+            '<td><input type="text" inputmode="numeric" class="form-control form-control-sm r-qty" placeholder="0"></td>' +
+            '<td><input type="text" inputmode="numeric" class="form-control form-control-sm r-price" placeholder="umumiy"></td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger r-del"><i class="bi bi-x"></i></button></td>';
+        tr.querySelector('.r-del').addEventListener('click', function () { tr.remove(); recount(); });
+        body.appendChild(tr);
+    }
+
+    /* ---------- Mahsulot qidirish ---------- */
+    function setupSearch(blk) {
+        const nameEl = blk.querySelector('.f-name');
+        const codeEl = blk.querySelector('.f-code');
+        const box = blk.querySelector('.sugg');
+        const found = blk.querySelector('.f-found');
+        let timer = null;
+
+        function clearPick() {
+            codeEl.value = '';
+            found.classList.add('d-none');
+            blk.querySelector('.f-catwrap').classList.remove('d-none');
+            blk.querySelector('.f-brandwrap').classList.remove('d-none');
+        }
+
+        nameEl.addEventListener('input', function () {
+            clearPick();
+            blk.querySelector('.blk-title').textContent = nameEl.value.trim() || 'Yangi mahsulot';
+            clearTimeout(timer);
+            const q = nameEl.value.trim();
+            if (q.length < 2) { box.classList.add('d-none'); return; }
+            timer = setTimeout(function () {
+                fetch('{% url "product_search_suggest" %}?q=' + encodeURIComponent(q),
+                      {credentials: 'same-origin'})
+                    .then(r => r.json())
+                    .then(function (d) {
+                        // Endpoint {t, label, sub} qaytaradi — faqat mahsulotlar
+                        const items = (d.results || [])
+                            .filter(function (x) { return x.t === 'mahsulot'; })
+                            .map(function (x) { return {name: x.label, code: x.sub}; })
+                            .slice(0, 8);
+                        if (!items.length) { box.classList.add('d-none'); return; }
+                        box.innerHTML = '';
+                        items.forEach(function (it) {
+                            const a = document.createElement('button');
+                            a.type = 'button';
+                            a.className = 'list-group-item list-group-item-action py-1 small';
+                            a.textContent = it.name + ' · ' + it.code;
+                            a.addEventListener('click', function () {
+                                nameEl.value = it.name;
+                                codeEl.value = it.code;
+                                found.textContent = 'Mavjud mahsulot: ' + it.code + ' — turlari shunga qo’shiladi';
+                                found.classList.remove('d-none');
+                                blk.querySelector('.f-catwrap').classList.add('d-none');
+                                blk.querySelector('.f-brandwrap').classList.add('d-none');
+                                blk.querySelector('.blk-title').textContent = it.name;
+                                box.classList.add('d-none');
+                            });
+                            box.appendChild(a);
+                        });
+                        box.classList.remove('d-none');
+                    })
+                    .catch(function () { box.classList.add('d-none'); });
+            }, 220);
+        });
+        document.addEventListener('click', function (e) {
+            if (!blk.contains(e.target)) box.classList.add('d-none');
+        });
+    }
+
+    /* ---------- Hisob ---------- */
+    function recount() {
+        let gq = 0, gl = 0, gp = 0;
+        document.querySelectorAll('.blk').forEach(function (blk) {
+            let q = 0, l = 0;
+            collect(blk).forEach(function (ln) { q += ln.qty; l += 1; });
+            blk.querySelector('.blk-qty').textContent = q;
+            gq += q; gl += l;
+            if (l > 0) gp += 1;
+        });
+        document.getElementById('grandQty').textContent = gq;
+        document.getElementById('grandLines').textContent = gl;
+        document.getElementById('grandProducts').textContent = gp;
+    }
+
+    /* Ikkala usul ham AYNI shakldagi qatorlarni beradi */
+    function collect(blk) {
+        const out = [];
+        if (blk.dataset.mode === 'grid') {
+            blk.querySelectorAll('.grid-body tr').forEach(function (tr) {
+                const qty = Math.round(num(tr.querySelector('.g-qty').value));
+                if (qty <= 0) return;
+                out.push({
+                    size: tr.querySelector('.g-size').value.trim(),
+                    color: '',
+                    barcode: '',
+                    qty: qty,
+                    price: tr.querySelector('.g-price').value.trim(),
+                    cost: ''
+                });
+            });
+        } else {
+            blk.querySelectorAll('.rows-body tr').forEach(function (tr) {
+                const qty = Math.round(num(tr.querySelector('.r-qty').value));
+                if (qty <= 0) return;
+                out.push({
+                    size: tr.querySelector('.r-size').value.trim(),
+                    color: tr.querySelector('.r-color').value.trim(),
+                    barcode: tr.querySelector('.r-barcode').value.trim(),
+                    qty: qty,
+                    price: tr.querySelector('.r-price').value.trim(),
+                    cost: ''
+                });
+            });
+        }
+        return out;
+    }
+
+    /* ---------- Saqlash ---------- */
+    function payload() {
+        const products = [];
+        document.querySelectorAll('.blk').forEach(function (blk) {
+            const lines = collect(blk);
+            if (!lines.length) return;
+            products.push({
+                code: blk.querySelector('.f-code').value.trim(),
+                name: blk.querySelector('.f-name').value.trim(),
+                category: blk.querySelector('.f-cat').value,
+                brand: blk.querySelector('.f-brand').value.trim(),
+                cost: blk.querySelector('.f-cost').value.trim(),
+                marja: blk.querySelector('.f-marja').value.trim(),
+                price: blk.querySelector('.f-price').value.trim(),
+                lines: lines
+            });
+        });
+        return {
+            branch: document.getElementById('fBranch').value,
+            supplier: document.getElementById('fSupplier').value.trim(),
+            invoice_number: document.getElementById('fInvoice').value.trim(),
+            note: document.getElementById('fNote').value.trim(),
+            products: products
+        };
+    }
+
+    function show(html, kind) {
+        msg.innerHTML = '<div class="alert alert-' + kind + '">' + html + '</div>';
+        msg.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.addEventListener('click', function () {
+        const data = payload();
+        if (!data.products.length) {
+            show("Miqdor kiritilmagan — hech bo'lmasa bitta o'lcham yoki qatorga son yozing.", 'warning');
+            return;
+        }
+        // Yangi mahsulotga kategoriya shart
+        for (const p of data.products) {
+            if (!p.code && !p.category) {
+                show('"' + (p.name || 'nomsiz') + '" — yangi mahsulot uchun kategoriya tanlang.', 'warning');
+                return;
+            }
+            if (!p.code && !p.name) {
+                show('Mahsulot nomi kiritilmagan.', 'warning');
+                return;
+            }
+        }
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saqlanmoqda...';
+        fetch('{% url "intake_mixed_save" %}', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value ||
+                               (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || ''
+            },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(function (d) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="bi bi-check2-circle"></i> <span>Qabulni saqlash</span>';
+            if (!d.ok) { show(d.error || 'Xato', 'danger'); return; }
+            show('<strong>Saqlandi.</strong> ' + d.total_qty + ' dona · ' + d.variants +
+                 ' tur' + (d.new_products ? ' · ' + d.new_products + ' yangi mahsulot' : '') +
+                 '<div class="mt-2 d-flex gap-2 flex-wrap">' +
+                 '<a class="btn btn-sm btn-success" href="' + d.labels_url + '">Etiketkalarni chop etish</a>' +
+                 '<a class="btn btn-sm btn-outline-secondary" href="' + d.session_url + '">Qabulni ko’rish</a>' +
+                 '<a class="btn btn-sm btn-outline-primary" href="">Yangi qabul</a>' +
+                 '</div>', 'success');
+            document.getElementById('blocks').innerHTML = '';
+            recount();
+        })
+        .catch(function (e) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="bi bi-check2-circle"></i> <span>Qabulni saqlash</span>';
+            show('Tarmoq xatosi: ' + e.message, 'danger');
+        });
+    });
+
+    document.querySelectorAll('[data-add]').forEach(function (b) {
+        b.addEventListener('click', function () { addBlock(b.dataset.add); });
+    });
+
+    addBlock('grid');
+})();
+</script>
+{% csrf_token %}
+{% endblock %}

@@ -86,6 +86,9 @@ urlpatterns = [
     path('intake/', views.intake_new, name='intake_new'),
     path('intake/variants/', views.intake_variants, name='intake_variants'),
     path('intake/clothes/', views.clothes_intake, name='clothes_intake'),
+    # Aralash qabul — kiyim (o'lchamlar) + oddiy tovar bir sahifada
+    path('intake/mixed/', views.intake_mixed, name='intake_mixed'),
+    path('intake/mixed/save/', views.intake_mixed_save, name='intake_mixed_save'),
     # Faktura rasmidan qabul (AI o'qiydi, foydalanuvchi tasdiqlaydi)
     path('intake/photo/', views.intake_photo, name='intake_photo'),
     path('intake/photo/extract/', views.intake_photo_extract, name='intake_photo_extract'),
