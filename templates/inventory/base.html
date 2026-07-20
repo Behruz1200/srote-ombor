@@ -2996,6 +2996,70 @@
     .sort-th-link:hover { color: #0d6efd !important; }
     .sort-th-link i { opacity: .4; transition: opacity .15s; }
     .sort-th-link:hover i { opacity: 1; }
+
+    /* --- Rasmni kattalashtirib ko'rish (yurit-zoom.js) --- */
+    /* --- Faktura rasmini kattalashtirish --- */
+    .yrt-zoom {
+        display: none;
+        position: fixed; inset: 0; z-index: 2000;
+        background: rgba(0, 0, 0, .92);
+        overflow: hidden;
+        touch-action: none;
+    }
+    .yrt-zoom.is-open { display: block; }
+    .yrt-zoom img {
+        position: absolute; top: 50%; left: 50%;
+        transform-origin: center center;
+        max-width: none; max-height: none;
+        user-select: none; -webkit-user-drag: none;
+        cursor: grab;
+    }
+    .yrt-zoom img.is-dragging { cursor: grabbing; }
+    .yrt-zoom__bar {
+        position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+        display: flex; gap: .35rem; align-items: center; justify-content: center;
+        flex-wrap: wrap;
+        padding: calc(.5rem + env(safe-area-inset-top, 0px)) .5rem .5rem;
+        background: linear-gradient(rgba(0,0,0,.65), rgba(0,0,0,0));
+    }
+    .yrt-zoom__pct {
+        color: #fff; font-size: .8rem; min-width: 3.2rem; text-align: center;
+    }
+    .yrt-zoom__hint {
+        position: absolute; left: 0; right: 0;
+        bottom: calc(.6rem + env(safe-area-inset-bottom, 0px));
+        text-align: center; color: rgba(255,255,255,.62); pointer-events: none;
+        padding: 0 1rem;
+    }
+    @media (max-width: 575.98px) { .yrt-zoom__hint { display: none; } }
+
+    /* --- Mahsulot rasmi (product_detail sarlavhasi) --- */
+    .yrt-prodimg {
+        position: relative; width: 120px; height: 120px;
+        border-radius: 8px; border: 1px solid var(--yrt-border);
+        background: #fff; overflow: hidden; display: block;
+    }
+    .yrt-prodimg img {
+        width: 100%; height: 100%; object-fit: cover; cursor: zoom-in;
+        display: block;
+    }
+    .yrt-prodimg__acts {
+        position: absolute; inset: auto 0 0 0;
+        display: flex; gap: .25rem; justify-content: center;
+        padding: .25rem; opacity: 0; transition: opacity .15s;
+        background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.55));
+    }
+    .yrt-prodimg:hover .yrt-prodimg__acts { opacity: 1; }
+    .yrt-prodimg--empty {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: .3rem; cursor: pointer;
+        border-style: dashed; color: var(--yrt-fg-muted);
+        font-size: .72rem; padding: 0;
+    }
+    .yrt-prodimg--empty i { font-size: 1.5rem; }
+    .yrt-prodimg--empty:hover {
+        border-color: var(--yrt-primary); color: var(--yrt-primary);
+    }
 </style>
 </head>
 <body>
@@ -3355,6 +3419,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{% static 'js/yurit-table-resize.js' %}"></script>
+<script src="{% static 'js/yurit-zoom.js' %}"></script>
 
 <!-- PWA install hint (iOS Safari can't auto-prompt; show a one-time banner) -->
 <div id="iosInstallHint" class="position-fixed bottom-0 start-0 end-0 m-2 p-3 bg-dark text-light rounded shadow"

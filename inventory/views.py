@@ -9554,3 +9554,48 @@ def intake_mixed_save(request):
         'labels_url': f"{reverse('variant_labels')}?ids={ids}&copies=stock",
         'session_url': reverse('intake_session_detail', args=[session.pk]),
     })
+
+
+@admin_required
+def product_image(request, code):
+    """Mahsulot rasmini yuklash / o'chirish.
+
+    Nakladnoy rasmlaridagi kabi: telefondan suratga olish ham, fayl tanlash
+    ham ishlaydi (shablonda `capture` atributi bor).
+    """
+    product = get_object_or_404(Product, code__iexact=code)
+    back = reverse('product_detail', args=[product.code])
+    if request.method != 'POST':
+        return redirect(back)
+
+    if request.POST.get('action') == 'delete':
+        if product.image:
+            product.image.delete(save=False)
+            product.image = None
+            product.save(update_fields=['image'])
+            messages.success(request, "Rasm o'chirildi.")
+        return redirect(back)
+
+    f = request.FILES.get('image')
+    if not f:
+        messages.error(request, "Rasm tanlanmadi.")
+        return redirect(back)
+    if f.size > 12 * 1024 * 1024:
+        messages.error(request, "Rasm juda katta (12 MB dan oshmasin).")
+        return redirect(back)
+    ctype = (getattr(f, 'content_type', '') or '').lower()
+    if not ctype.startswith('image/'):
+        messages.error(request, "Faqat rasm fayli yuklanadi.")
+        return redirect(back)
+
+    old = product.image.name if product.image else None
+    product.image = f
+    product.save(update_fields=['image'])
+    if old and old != product.image.name:
+        # eskisini tashlab yubormaymiz — joy egallab qolmasin
+        try:
+            product.image.storage.delete(old)
+        except Exception:
+            pass
+    messages.success(request, "Rasm saqlandi.")
+    return redirect(back)

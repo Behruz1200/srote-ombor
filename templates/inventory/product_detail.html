@@ -13,12 +13,6 @@
         <div class="dash-hero__glow"></div>
         <div class="dash-hero__inner" style="align-items: flex-start;">
             <div class="dash-hero__heading" style="display: flex; gap: 1.15rem; align-items: flex-start; flex: 1 1 360px;">
-                {% if product.image %}
-                <a href="{{ product.image.url }}" target="_blank" style="flex-shrink: 0;">
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}"
-                         class="rounded" style="width: 130px; height: 130px; object-fit: cover; border: 1px solid var(--yrt-border);">
-                </a>
-                {% endif %}
                 <div style="min-width: 0;">
                     <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Mahsulot</span>
                     <h1 class="dash-hero__title">{{ product.name }}</h1>
@@ -76,9 +70,33 @@
                     o'rtacha <strong>{{ avg_price|floatformat:0|som }}</strong> so'm
                 </small>
                 {% endif %}
+                {# Mahsulot rasmi — QR o'rniga. QR hali ham "QR rasm" tugmasida. #}
                 <div style="margin-top: 0.7rem;">
-                    <img src="{% url 'qr_image' product.code %}" alt="QR"
-                         style="width: 120px; height: 120px; image-rendering: pixelated; background: #FFFFFF; padding: 4px; border-radius: 8px; border: 1px solid var(--yrt-border);">
+                    <form method="post" action="{% url 'product_image' product.code %}"
+                          enctype="multipart/form-data" id="imgForm">
+                        {% csrf_token %}
+                        <input type="file" name="image" id="imgInput" accept="image/*"
+                               capture="environment" class="d-none">
+                    </form>
+                    {% if product.image %}
+                        <div class="yrt-prodimg">
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                                 data-zoom-src="{{ product.image.url }}"
+                                 title="Kattalashtirish uchun bosing">
+                            <div class="yrt-prodimg__acts">
+                                <button type="button" class="btn btn-sm btn-light" id="imgPick"
+                                        title="Rasmni almashtirish"><i class="bi bi-arrow-repeat"></i></button>
+                                <button type="button" class="btn btn-sm btn-light text-danger" id="imgDel"
+                                        title="Rasmni o'chirish"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                    {% else %}
+                        <button type="button" id="imgPick" class="yrt-prodimg yrt-prodimg--empty"
+                                title="Rasm qo'shish">
+                            <i class="bi bi-camera"></i>
+                            <span>Rasm qo'shish</span>
+                        </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -522,6 +540,28 @@ new Chart(document.getElementById('trendChart'), {
                 d.name + " — bu partiya " + d.qty + " dona, tannarxi " + d.cost + " so'm.";
             var m = modal(); if (m) m.show();
         });
+    });
+})();
+</script>
+
+<form method="post" action="{% url 'product_image' product.code %}" id="imgDelForm" class="d-none">
+    {% csrf_token %}<input type="hidden" name="action" value="delete">
+</form>
+<script>
+(function () {
+    // Rasm tanlansa — darrov yuklanadi (alohida "saqlash" tugmasi kerak emas)
+    var pick = document.getElementById('imgPick');
+    var input = document.getElementById('imgInput');
+    var form = document.getElementById('imgForm');
+    if (pick && input && form) {
+        pick.addEventListener('click', function () { input.click(); });
+        input.addEventListener('change', function () {
+            if (input.files && input.files.length) form.submit();
+        });
+    }
+    var del = document.getElementById('imgDel');
+    if (del) del.addEventListener('click', function () {
+        if (confirm("Rasm o'chirilsinmi?")) document.getElementById('imgDelForm').submit();
     });
 })();
 </script>
