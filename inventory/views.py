@@ -4680,18 +4680,24 @@ def _quick_sell_items(branch):
     for item in (QuickSellItem.objects.filter(is_active=True)
                  .select_related('product')):
         product = _quick_sell_sync(item, branch)
-        rows = []
-        stocks = {
-            s.variant.size: s
-            for s in BranchStock.objects.filter(
-                variant__product=product, branch=branch).select_related('variant')
-        }
-        for price in item.price_list:
-            st = stocks.get(str(price))
-            if st is None:
+        # Tugmalar HAQIQIY turlardan quriladi — sozlamadagi ro'yxatdan emas.
+        # Shunda mahsulot sahifasida yangi narx (tur) qo'shilsa, u shu yerda
+        # ham darrov ko'rinadi. _quick_sell_sync sozlamadagi narxlar uchun
+        # turlarni yaratib qo'yadi, qolganini ombor hal qiladi.
+        by_price = {}
+        for st in (BranchStock.objects
+                   .filter(variant__product=product, branch=branch)
+                   .select_related('variant')):
+            price = st.sale_price or 0
+            if price <= 0:
                 continue
-            rows.append({'price': price, 'sid': st.id,
-                         'stock': st.stock_count})
+            key = int(price)
+            prev = by_price.get(key)
+            # Bir narxda bir nechta tur bo'lsa — zaxirasi ko'pini olamiz
+            if prev is None or st.stock_count > prev['stock']:
+                by_price[key] = {'price': key, 'sid': st.id,
+                                 'stock': st.stock_count}
+        rows = sorted(by_price.values(), key=lambda r: r['price'])
         out.append({
             'key': f'qs{item.pk}',
             'name': item.name,
