@@ -1,4 +1,4 @@
-{% load yurit_extras %}
+{% load yurit_extras static %}
 <!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -39,13 +39,43 @@
         .label .price {
             font-size: 11pt; font-weight: 700; margin-top: 2mm; color: #0d6efd;
         }
+        /* --- Termal rejim: har yorliq alohida, rulon uchun --- */
+        body.thermal .sheet {
+            width: auto; min-height: 0; padding: 8px;
+            display: flex; flex-wrap: wrap; gap: 6px;
+            box-shadow: none; background: transparent;
+        }
+        body.thermal .label {
+            width: 50mm; height: 30mm; padding: 2mm;
+            background: #fff; border: 1px dashed #adb5bd;
+        }
+        body.thermal .label img { width: 22mm; height: 22mm; }
+
         @media print {
             body { background: #fff; }
             .toolbar { display: none; }
-            .sheet { margin: 0; box-shadow: none; page-break-after: always; }
             .label { border: 1px dashed #888; }
-            @page { size: A4; margin: 0; }
+
+            /* A4 varaq rejimi (eski holat) */
+            body:not(.thermal) .sheet { margin: 0; box-shadow: none; page-break-after: always; }
+            body:not(.thermal) { }
+
+            /* Termal rejim: HAR yorliq — alohida sahifa. Varaqni oqimda
+               qoldiramiz (absolut element sahifalarga bo'linmaydi). */
+            body.thermal .sheet {
+                display: block; padding: 0; margin: 0; gap: 0;
+                background: #fff; box-shadow: none; page-break-after: auto;
+            }
+            body.thermal .label {
+                border: none; margin: 0; padding: 1.5mm;
+                display: flex; align-items: center;
+                overflow: hidden;
+                page-break-after: always; break-after: page;
+                page-break-inside: avoid; break-inside: avoid;
+            }
+            body.thermal .label:last-child { page-break-after: auto; break-after: auto; }
         }
+        /* @page o'lchamini JS qo'yadi (rejim va rulon o'lchamiga qarab) */
     </style>
 </head>
 <body>
@@ -71,6 +101,22 @@
            class="btn btn-outline-danger btn-sm" target="_blank">
             <i class="bi bi-tag"></i> Narx etiketkasi
         </a>
+        <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="lblMode" id="modeThermal" value="thermal" checked>
+            <label class="btn btn-outline-dark" for="modeThermal">Termal (bittalab)</label>
+            <input type="radio" class="btn-check" name="lblMode" id="modeA4" value="a4">
+            <label class="btn btn-outline-dark" for="modeA4">A4 varaq</label>
+        </div>
+        <span id="szBox" class="d-flex gap-1 align-items-center small">
+            <input type="number" id="usbW" value="50" min="20" max="100"
+                   class="form-control form-control-sm" style="width:64px" title="Eni, mm">
+            <span>×</span>
+            <input type="number" id="usbH" value="30" min="15" max="100"
+                   class="form-control form-control-sm" style="width:64px" title="Bo'yi, mm">
+            <span>mm</span>
+        </span>
+        <button type="button" id="usbPrintBtn" class="btn btn-sm btn-dark"
+                title="Termal printerga to'g'ridan-to'g'ri, bittalab">USB chop etish</button>
         <a href="javascript:history.back()" class="btn btn-secondary btn-sm">Orqaga</a>
     </div>
 </div>
@@ -92,5 +138,119 @@
         </div>
     {% endfor %}
 </div>
+<div class="toolbar small text-muted" style="position:static; border-top:1px solid #dee2e6; border-bottom:none;">
+    <span id="usbStatus">Termal rejim: har yorliq alohida bosiladi. USB uchun printer WinUSB drayverida bo'lsin.</span>
+    <label class="ms-3"><input type="checkbox" id="usbInvert"> Ranglar teskari</label>
+    <a href="#" id="usbRepick" class="ms-3">Printerni qayta tanlash</a>
+</div>
+
+<script src="{% static 'js/yurit-tspl.js' %}"></script>
+<script>
+(function () {
+    const body = document.body;
+    const wEl = document.getElementById('usbW');
+    const hEl = document.getElementById('usbH');
+    const szBox = document.getElementById('szBox');
+    const statusEl = document.getElementById('usbStatus');
+    const invertEl = document.getElementById('usbInvert');
+    const btn = document.getElementById('usbPrintBtn');
+    const thermal = document.getElementById('modeThermal');
+    const a4 = document.getElementById('modeA4');
+
+    function setMsg(m, err) {
+        statusEl.textContent = m;
+        statusEl.className = err ? 'text-danger' : 'text-success';
+    }
+    function isThermal() { return thermal.checked; }
+
+    // @page: termalda har yorliq bitta sahifa, A4da eski holat
+    function applyMode() {
+        const on = isThermal();
+        body.classList.toggle('thermal', on);
+        szBox.style.display = on ? '' : 'none';
+        btn.disabled = !on;
+        let st = document.getElementById('pageSizeStyle');
+        if (!st) {
+            st = document.createElement('style');
+            st.id = 'pageSizeStyle';
+            document.head.appendChild(st);
+        }
+        if (on) {
+            const w = Math.max(20, parseInt(wEl.value, 10) || 50);
+            const h = Math.max(15, parseInt(hEl.value, 10) || 30);
+            st.textContent = '@media print { @page { size: ' + w + 'mm ' + h +
+                'mm; margin: 0; } body.thermal .label { width: ' + w +
+                'mm; height: ' + h + 'mm; } }';
+        } else {
+            st.textContent = '@media print { @page { size: A4; margin: 0; } }';
+        }
+    }
+    [thermal, a4].forEach(function (r) { r.addEventListener('change', applyMode); });
+    [wEl, hEl].forEach(function (e) { e.addEventListener('input', applyMode); });
+    window.addEventListener('beforeprint', applyMode);
+    applyMode();
+
+    // --- USB: har yorliqni canvasga chizib, bittalab yuboramiz ---
+    async function renderLabel(el, wmm, hmm) {
+        const D = yuritTSPL.DPMM;
+        const W = Math.round(wmm * D), H = Math.round(hmm * D);
+        const cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#000';
+        const pad = Math.round(1.5 * D);
+        const qrSide = Math.min(H - pad * 2, Math.round(W * 0.42));
+        const img = el.querySelector('img');
+        if (img && img.src) {
+            try {
+                const im = await yuritTSPL.loadImage(img.src);
+                ctx.drawImage(im, pad, Math.round((H - qrSide) / 2), qrSide, qrSide);
+            } catch (e) { /* jim */ }
+        }
+        const tx = pad + qrSide + Math.round(1.5 * D);
+        const tw = W - tx - pad;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        let y = Math.round(H * 0.16);
+        const code = (el.querySelector('.code') || {}).textContent || '';
+        ctx.font = 'bold ' + Math.round(H * 0.15) + 'px monospace';
+        ctx.fillText(code.trim(), tx, y, tw);
+        y += Math.round(H * 0.20);
+        const name = (el.querySelector('.name') || {}).textContent || '';
+        ctx.font = Math.round(H * 0.10) + 'px Arial, sans-serif';
+        ctx.fillText(name.trim().slice(0, 22), tx, y, tw);
+        y += Math.round(H * 0.16);
+        const price = (el.querySelector('.price') || {}).textContent || '';
+        ctx.font = 'bold ' + Math.round(H * 0.15) + 'px Arial, sans-serif';
+        ctx.fillText(price.trim(), tx, y, tw);
+        return cv;
+    }
+
+    async function run(forcePrompt) {
+        const els = Array.prototype.slice.call(document.querySelectorAll('.label'));
+        if (!els.length) { setMsg("Yorliq yo'q", true); return; }
+        const wmm = Math.max(20, parseInt(wEl.value, 10) || 50);
+        const hmm = Math.max(15, parseInt(hEl.value, 10) || 30);
+        const invert = !!(invertEl && invertEl.checked);
+        btn.disabled = true;
+        setMsg('Yorliqlar tayyorlanmoqda...', false);
+        const bitmaps = [];
+        for (const el of els) {
+            const cv = await renderLabel(el, wmm, hmm);
+            bitmaps.push(yuritTSPL.canvasToBitmap(cv, wmm, hmm, invert));
+        }
+        await yuritTSPL.printAll(bitmaps, {
+            forcePrompt: forcePrompt,
+            onStatus: function (m, err) { setMsg(m, err); },
+        });
+        btn.disabled = false;
+    }
+    btn.addEventListener('click', function () { run(false); });
+    const repick = document.getElementById('usbRepick');
+    if (repick) repick.addEventListener('click', function (e) {
+        e.preventDefault(); run(true);
+    });
+})();
+</script>
 </body>
 </html>

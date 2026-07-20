@@ -155,6 +155,25 @@
         });
         btn.disabled = false;
     }
+    // Brauzer chop etishi uchun ham AYNI o'lcham: har yorliq bitta sahifa
+    function applyPageSize() {
+        const w = Math.max(20, parseInt(wEl.value, 10) || 50);
+        const h = Math.max(15, parseInt(hEl.value, 10) || 30);
+        let st = document.getElementById('pageSizeStyle');
+        if (!st) {
+            st = document.createElement('style');
+            st.id = 'pageSizeStyle';
+            document.head.appendChild(st);
+        }
+        st.textContent =
+            '@media print { @page { size: ' + w + 'mm ' + h + 'mm; margin: 0; }' +
+            ' .lbl { width: ' + w + 'mm; height: ' + h + 'mm; } }';
+    }
+    wEl.addEventListener('input', applyPageSize);
+    hEl.addEventListener('input', applyPageSize);
+    window.addEventListener('beforeprint', applyPageSize);
+    applyPageSize();
+
     btn.addEventListener('click', function () { run(false); });
     const repick = document.getElementById('usbRepick');
     if (repick) repick.addEventListener('click', function (e) {
@@ -181,21 +200,30 @@
 .lbl__price { font-weight: 800; font-size: 12pt; }
 
 @media print {
-    body * { visibility: hidden; }
-    #labelSheet, #labelSheet * { visibility: visible; }
-    #labelSheet { position: absolute; left: 0; top: 0; padding: 0; gap: 0; display: block; }
-    @page { size: 50mm auto; margin: 1mm; }
-    /* Har etiketka ALOHIDA sahifada bosiladi — bitta varaqqa bir nechtasi
-       tushmasin (die-cut/rulon etiketka uchun shart). */
+    /* MUHIM: varaqni oqimda qoldiramiz. Ilgari #labelSheet position:absolute
+       edi — absolut element sahifalarga BO'LINMAYDI, shuning uchun
+       page-break-after e'tiborsiz qolib, bitta varaqqa 3 ta yorliq tushardi
+       va die-cut chiziqlariga to'g'ri kelmasdi. */
+    body > *:not(.container-fluid) { display: none !important; }
+    .container-fluid > *:not(#labelSheet) { display: none !important; }
+    .container-fluid { padding: 0 !important; margin: 0 !important; }
+    #labelSheet {
+        position: static; display: block;
+        padding: 0; margin: 0; gap: 0;
+    }
+    /* Har yorliq — ALOHIDA sahifa. O'lchamni JS @page bilan moslaydi. */
     .lbl {
-        width: 48mm; border: none; border-radius: 0;
-        padding: 1mm 1mm 2mm; margin: 0;
+        border: none; border-radius: 0;
+        margin: 0; padding: 1mm;
+        display: flex; flex-direction: column; justify-content: center;
+        overflow: hidden;
         page-break-after: always; break-after: page;
         page-break-inside: avoid; break-inside: avoid;
     }
     .lbl:last-child { page-break-after: auto; break-after: auto; }
     .lbl__name, .lbl__sc, .lbl__price { color: #000 !important; }
-    .lbl__bc svg { height: 12mm; }
+    .lbl__bc svg { height: 11mm; }
+    .lbl__qr { width: 11mm; height: 11mm; }
 }
 </style>
 {% endblock %}
