@@ -3,6 +3,30 @@
 {% block title %}Kiyim/poyabzal qabul — yurit{% endblock %}
 {% block backbar %}{% endblock %}{# sahifaning o'z orqaga havolasi bor #}
 
+
+<style>
+.sz-presets { display: flex; flex-direction: column; gap: .3rem; }
+.sz-row { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sz-btn {
+    min-width: 2.35rem;
+    padding: .2rem .45rem;
+    font-size: .78rem;
+    font-weight: 600;
+    line-height: 1.25;
+    border: 1px solid var(--yrt-border);
+    border-radius: 7px;
+    background: var(--yrt-surface, #fff);
+    color: var(--yrt-fg-muted);
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.sz-btn:hover { border-color: #4F46E5; color: #4F46E5; }
+.sz-btn.is-on {
+    background: rgba(91, 91, 214, .12);
+    border-color: #4F46E5;
+    color: #4F46E5;
+}
+</style>
 {% block content %}
 <div class="dash-page">
     <header class="dash-hero">
@@ -80,6 +104,13 @@
                         <button type="button" class="btn btn-outline-primary" id="addSize">Qo'shish</button>
                     </div>
                     <div class="form-text">Vergul bilan bir nechta: S, M, L</div>
+
+                    <div class="sz-presets mt-2">
+                        <div class="sz-row" data-row="harf"></div>
+                        <div class="sz-row" data-row="juft"></div>
+                        <div class="sz-row" data-row="toq"></div>
+                    </div>
+
                     <div id="sizeChips" class="d-flex flex-wrap gap-1 mt-2"></div>
                 </div>
             </div>
@@ -154,7 +185,9 @@
         s.addEventListener('click', function () {
             const i = sizes.indexOf(text);
             if (i >= 0) sizes.splice(i, 1);
-            s.remove(); rebuild();
+            s.remove();
+            if (typeof syncButtons === 'function') syncButtons();
+            rebuild();
         });
         sizeChips.appendChild(s);
     }
@@ -165,8 +198,57 @@
                 sizes.push(t); chip(t);
             }
         });
-        inp.value = ''; inp.focus(); rebuild();
+        inp.value = ''; inp.focus();
+        if (typeof syncButtons === 'function') syncButtons();
+        rebuild();
     }
+    // ---- Tayyor o'lchamlar: 3 qator tugma (yozib ham kiritsa bo'ladi) ----
+    function addOne(t) {
+        if (sizes.some(function (x) { return x.toLowerCase() === t.toLowerCase(); })) return false;
+        sizes.push(t); chip(t); return true;
+    }
+    function removeOne(t) {
+        var i = sizes.findIndex(function (x) { return x.toLowerCase() === t.toLowerCase(); });
+        if (i < 0) return false;
+        sizes.splice(i, 1);
+        // mos chipni ham olib tashlaymiz
+        Array.prototype.slice.call(sizeChips.children).forEach(function (c) {
+            if (c.textContent.trim().toLowerCase() === t.toLowerCase()) c.remove();
+        });
+        return true;
+    }
+    function syncButtons() {
+        document.querySelectorAll('.sz-btn').forEach(function (b) {
+            var on = sizes.some(function (x) { return x.toLowerCase() === b.dataset.sz.toLowerCase(); });
+            b.classList.toggle('is-on', on);
+        });
+    }
+    (function buildPresets() {
+        var harf = ['S', 'M', 'L', 'XL'];
+        for (var n = 2; n <= 10; n++) harf.push(n + 'XL');
+        var juft = [], toq = [];
+        for (var i = 30; i <= 60; i += 2) juft.push(String(i));
+        for (var j = 31; j <= 59; j += 2) toq.push(String(j));
+        var rows = {harf: harf, juft: juft, toq: toq};
+        Object.keys(rows).forEach(function (key) {
+            var wrap = document.querySelector('.sz-row[data-row="' + key + '"]');
+            if (!wrap) return;
+            rows[key].forEach(function (t) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'sz-btn';
+                b.dataset.sz = t;
+                b.textContent = t;
+                b.addEventListener('click', function () {
+                    if (b.classList.contains('is-on')) removeOne(t);
+                    else addOne(t);
+                    syncButtons(); rebuild();
+                });
+                wrap.appendChild(b);
+            });
+        });
+    })();
+
     document.getElementById('addSize').addEventListener('click', addSizes);
     document.getElementById('sizeInput').addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); addSizes(); }
