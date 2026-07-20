@@ -60,6 +60,24 @@
             <div class="dash-kpi__footer"><span>1–3 dona qolgan</span></div>
         </article>
 
+        <article class="dash-kpi" data-tone="indigo">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-graph-up"></i> O'rtacha</span>
+            </div>
+            <div class="dash-kpi__value" style="font-size:1.35rem;">
+                {{ kpi.avg_price|floatformat:0|som }} <span style="font-size:.8rem;font-weight:500;">so'm</span>
+            </div>
+            <div class="dash-kpi__footer">
+                <span>
+                    marja
+                    {% if kpi.avg_margin is not None %}
+                        <strong style="color: var(--yrt-{% if kpi.avg_margin < 10 %}danger{% elif kpi.avg_margin < 25 %}warning{% else %}success{% endif %});">{{ kpi.avg_margin|floatformat:1 }}%</strong>
+                    {% else %}<strong>—</strong>{% endif %}
+                    · o'rtacha narx
+                </span>
+            </div>
+        </article>
+
         <article class="dash-kpi" data-tone="danger">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-x-octagon"></i> Tugagan</span>

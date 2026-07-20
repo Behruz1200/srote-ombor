@@ -820,6 +820,7 @@ def product_list(request):
         n_low=Count('pk', filter=Q(total_stock__gt=0, total_stock__lte=3)),
         n_out=Count('pk', filter=Q(total_stock=0)),
     )
+    _pids_all = list(products.values_list('pk', flat=True))
     paginator = Paginator(products, per_page)
     page_obj = paginator.get_page(request.GET.get('page') or 1)
     products = list(page_obj.object_list)
@@ -828,11 +829,28 @@ def product_list(request):
         'variants': _all_totals.get('v') or 0,
         'units': _all_totals.get('u') or 0,
     }
+    # O'rtacha narx va o'rtacha marja — filtrlangan BUTUN ro'yxat bo'yicha.
+    # Marja zaxira bilan tortilgan: qimmat tovar ko'p bo'lsa, o'rtacha ham
+    # shuni aks ettiradi (oddiy o'rtacha aldab qo'yardi).
+    _stock_qs = BranchStock.objects.filter(variant__product__in=_pids_all)
+    _m = _stock_qs.aggregate(
+        avg_price=Avg('sale_price', filter=Q(sale_price__gt=0)),
+        cost_val=Sum(ExpressionWrapper(
+            F('stock_count') * F('cost_price'),
+            output_field=DecimalField(max_digits=16, decimal_places=2))),
+        sale_val=Sum(ExpressionWrapper(
+            F('stock_count') * F('sale_price'),
+            output_field=DecimalField(max_digits=16, decimal_places=2))),
+    )
+    _cv = float(_m.get('cost_val') or 0)
+    _sv = float(_m.get('sale_val') or 0)
     kpi = {
         'total': paginator.count,
         'in_stock': _all_totals.get('n_in') or 0,
         'low_stock': _all_totals.get('n_low') or 0,
         'out_stock': _all_totals.get('n_out') or 0,
+        'avg_price': float(_m.get('avg_price') or 0),
+        'avg_margin': ((_sv - _cv) / _cv * 100) if _cv > 0 else None,
     }
 
     # 30/365 kunlik sotuvlar — faqat ko'rsatiladigan mahsulotlar bo'yicha
