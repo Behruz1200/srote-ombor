@@ -121,14 +121,14 @@ def dict_get(d, key):
 
 # --- Do'kon sayti: rasmsiz kartochkalar chiroyli ko'rinishi uchun ---
 _TILE_COLORS = [
-    ('#eef2ff', '#4f46e5'),  # indigo
-    ('#ecfdf5', '#059669'),  # emerald
-    ('#fff7ed', '#ea580c'),  # orange
-    ('#fdf2f8', '#db2777'),  # pink
-    ('#eff6ff', '#2563eb'),  # blue
-    ('#f5f3ff', '#7c3aed'),  # violet
-    ('#fefce8', '#ca8a04'),  # amber
-    ('#f0fdfa', '#0d9488'),  # teal
+    ('#EFEAE3', '#A97C4B'),   # iliq qum / bronza
+    ('#E8E4DC', '#7A6A56'),
+    ('#F1ECE5', '#96784F'),
+    ('#E9E5E0', '#6E6459'),
+    ('#F2EDE6', '#B08A5E'),
+    ('#EAE6DF', '#857A66'),
+    ('#EDE8E1', '#9C7A50'),
+    ('#E6E2DA', '#77705F'),
 ]
 
 

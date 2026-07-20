@@ -1,50 +1,145 @@
 {% extends 'shop/base.html' %}{% load yurit_extras static %}
+
+{% block head_extra %}
+<style>
+/* ---- Hero ---- */
+.hero{position:relative;background:#0B0B0C;color:#fff;overflow:hidden}
+.hero__bg{position:absolute;inset:0;
+  background:url('{% static "img/hero-dark.jpg" %}') center right/cover no-repeat}
+.hero__bg::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,rgba(11,11,12,.96) 0%,rgba(11,11,12,.86) 34%,rgba(11,11,12,.28) 64%,rgba(11,11,12,.12) 100%)}
+.hero__in{position:relative;z-index:2;display:flex;align-items:center;
+  min-height:min(78vh,620px);padding:80px 24px}
+.hero__text{max-width:600px}
+.hero__rule{width:56px;height:1px;background:var(--bronze-lt);margin:22px 0 24px}
+.hero__h1{font-family:var(--serif);font-weight:600;
+  font-size:clamp(2.6rem,6.4vw,4.6rem);line-height:1.03;letter-spacing:-.025em;
+  margin:0;color:#fff}
+.hero__h1 em{font-style:italic;color:var(--bronze-lt)}
+.hero__sub{font-size:1.02rem;color:#B9B2A8;margin:0 0 2.2rem;max-width:400px;line-height:1.75}
+.hero__cta{display:flex;gap:14px;flex-wrap:wrap}
+
+/* ---- Afzalliklar tasmasi ---- */
+.strip{border-bottom:1px solid var(--line)}
+.strip__in{display:grid;grid-template-columns:repeat(4,1fr)}
+.perk{padding:30px 26px;border-left:1px solid var(--line)}
+.perk:first-child{border-left:0;padding-left:0}
+.perk__n{font-family:var(--serif);font-size:.9rem;color:var(--bronze);margin-bottom:.5rem}
+.perk b{display:block;font-size:.82rem;font-weight:600;letter-spacing:.04em;margin-bottom:.2rem}
+.perk span{font-size:.82rem;color:var(--muted);line-height:1.5}
+
+/* ---- Bo'limlar indeksi ---- */
+.idx{border-top:1px solid var(--line)}
+.idx__row{display:flex;align-items:baseline;gap:20px;padding:20px 4px;
+  border-bottom:1px solid var(--line);transition:padding-left .25s,background .25s}
+.idx__row:hover{padding-left:16px;background:var(--cream)}
+.idx__n{font-family:var(--serif);font-size:.8rem;color:var(--bronze);width:32px;flex-shrink:0}
+.idx__name{font-family:var(--serif);font-size:clamp(1.15rem,2.2vw,1.7rem);font-weight:500;
+  letter-spacing:-.01em;transition:color .2s}
+.idx__row:hover .idx__name{color:var(--bronze)}
+.idx__n2{margin-left:auto;font-size:.72rem;color:var(--muted);letter-spacing:.1em;white-space:nowrap}
+.idx__ar{color:var(--bronze);opacity:0;transform:translateX(-6px);
+  transition:opacity .25s,transform .25s;font-size:.9rem}
+.idx__row:hover .idx__ar{opacity:1;transform:translateX(0)}
+
+/* ---- Bo'lim sarlavhasi ---- */
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;
+  padding-bottom:22px;margin-bottom:34px;border-bottom:1px solid var(--ink)}
+
+/* ---- Raqamlar bloki ---- */
+.band{background:var(--cream);padding:64px 0;margin-bottom:72px}
+.band__in{display:grid;grid-template-columns:repeat(3,1fr);gap:44px;text-align:center}
+.band__n{font-family:var(--serif);font-size:2.4rem;font-weight:600;letter-spacing:-.02em}
+.band__l{font-size:.68rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin-top:.5rem}
+
+@media(max-width:768px){
+  .hero__in{min-height:auto;padding:56px 18px 52px}
+  .hero__bg{background-position:72% center}
+  .hero__bg::after{background:linear-gradient(180deg,rgba(11,11,12,.92) 0%,rgba(11,11,12,.78) 60%,rgba(11,11,12,.9) 100%)}
+  .strip__in{grid-template-columns:1fr 1fr}
+  .perk{padding:20px 16px;border-top:1px solid var(--line)}
+  .perk:nth-child(odd){border-left:0;padding-left:0}
+  .perk:nth-child(-n+2){border-top:0}
+  .band{padding:44px 0;margin-bottom:52px}
+  .band__in{grid-template-columns:1fr;gap:28px}
+  .head{margin-bottom:26px}
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
 <section class="hero">
+  <div class="hero__bg"></div>
   <div class="wrap hero__in">
     <div class="hero__text">
-      <span class="hero__pill"><i class="bi bi-geo-alt"></i> {{ shop_city }}</span>
-      <h1 class="hero__h1">Kerakli tovar,<br>arzon narx</h1>
+      <span class="eyebrow eyebrow--lt">{{ shop_city }}</span>
+      <div class="hero__rule"></div>
+      <h1 class="hero__h1">Kerakli tovar,<br><em>arzon narx</em></h1>
+      <div class="hero__rule"></div>
       <p class="hero__sub">
-        Kiyim, maishiy kimyo, gigiyena va kundalik ehtiyoj mollari.
-        Saytdan buyurtma bering — biz yetkazamiz.
+        Kiyim, maishiy kimyo, gigiyena va kundalik ehtiyoj mollari —
+        do'kondagi narxda, uyingizgacha.
       </p>
       <div class="hero__cta">
-        <a href="{% url 'shop_catalog' %}" class="btn2"><i class="bi bi-grid"></i> Katalogni ochish</a>
-        <a href="{{ shop_telegram }}" class="btn2 btn2--ghost"><i class="bi bi-telegram"></i> Telegram</a>
+        <a href="{% url 'shop_catalog' %}" class="btn2 btn2--lt">Katalogni ko'rish</a>
+        <a href="{{ shop_telegram }}" class="btn2 btn2--lt"><i class="bi bi-telegram"></i> Telegram</a>
       </div>
     </div>
   </div>
 </section>
 
-<section class="wrap perks">
-  <div class="perk"><i class="bi bi-truck"></i><div><b>Yetkazib berish</b><span>{{ shop_city }} bo'ylab</span></div></div>
-  <div class="perk"><i class="bi bi-cash-coin"></i><div><b>Qulay narx</b><span>Do'kondagidek</span></div></div>
-  <div class="perk"><i class="bi bi-telephone"></i><div><b>Operator</b><span>Buyurtmani tasdiqlaydi</span></div></div>
-  <div class="perk"><i class="bi bi-shield-check"></i><div><b>Kafolat</b><span>Original mahsulot</span></div></div>
+<section class="strip">
+  <div class="wrap strip__in">
+    <div class="perk"><div class="perk__n">01</div>
+      <b>Yetkazib berish</b><span>{{ shop_city }} bo'ylab</span></div>
+    <div class="perk"><div class="perk__n">02</div>
+      <b>Do'kon narxi</b><span>Ustama qo'shilmaydi</span></div>
+    <div class="perk"><div class="perk__n">03</div>
+      <b>Operator tasdig'i</b><span>Har bir buyurtmaga</span></div>
+    <div class="perk"><div class="perk__n">04</div>
+      <b>Original mahsulot</b><span>Kafolat bilan</span></div>
+  </div>
 </section>
 
 {% if categories %}
-<section class="wrap sec">
-  <h2 class="sec-title mb-3">Bo'limlar</h2>
-  <div class="cats">
+<section class="wrap" style="padding:72px 24px">
+  <div class="head">
+    <div>
+      <span class="eyebrow">Assortiment</span>
+      <h2 class="sec-title" style="margin-top:.5rem">Bo'limlar</h2>
+    </div>
+    <a href="{% url 'shop_catalog' %}" class="sec-more">Barchasi</a>
+  </div>
+  <div class="idx">
     {% for c in categories %}
-    <a href="{% url 'shop_catalog' %}?category={{ c.id }}" class="cat"
-       style="background:{{ c.name|tile_bg }};color:{{ c.name|tile_fg }}">
-      <span class="cat__ini">{{ c.name|initials:1 }}</span>
-      <span class="cat__name">{{ c.name }}</span>
-      <span class="cat__n">{{ c.n }} ta</span>
+    <a href="{% url 'shop_catalog' %}?category={{ c.id }}" class="idx__row">
+      <span class="idx__n">{{ forloop.counter|stringformat:"02d" }}</span>
+      <span class="idx__name">{{ c.name }}</span>
+      <span class="idx__n2">{{ c.n }} ta</span>
+      <i class="bi bi-arrow-right idx__ar"></i>
     </a>
     {% endfor %}
   </div>
 </section>
 {% endif %}
 
-<section class="wrap sec">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h2 class="sec-title">Yangi kelganlar</h2>
-    <a href="{% url 'shop_catalog' %}" class="sec-more">Hammasi <i class="bi bi-arrow-right"></i></a>
+<section class="band">
+  <div class="wrap band__in">
+    <div><div class="band__n">{{ stat_products }}</div><div class="band__l">Mahsulot turi</div></div>
+    <div><div class="band__n">{{ stat_categories }}</div><div class="band__l">Bo'lim</div></div>
+    <div><div class="band__n">1 kun</div><div class="band__l">Yetkazib berish</div></div>
+  </div>
+</section>
+
+<section class="sec wrap">
+  <div class="head">
+    <div>
+      <span class="eyebrow">Yangi</span>
+      <h2 class="sec-title" style="margin-top:.5rem">So'nggi kelganlar</h2>
+    </div>
+    <a href="{% url 'shop_catalog' %}" class="sec-more">Hammasi</a>
   </div>
   {% include 'shop/_cards.html' %}
 </section>

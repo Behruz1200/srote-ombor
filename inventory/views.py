@@ -9855,7 +9855,7 @@ def shop_home(request):
     cats = (stock.values('variant__product__category__id',
                          'variant__product__category__name')
             .annotate(n=Count('variant__product', distinct=True))
-            .order_by('-n')[:8])
+            .order_by('-n')[:10])
     categories = [{'id': c['variant__product__category__id'],
                    'name': c['variant__product__category__name'] or 'Boshqa',
                    'n': c['n']} for c in cats]
@@ -9870,8 +9870,14 @@ def shop_home(request):
         if len(pids) >= 8:
             break
     products = _shop_cards(pids)
+    # Sayt pastidagi raqamlar — haqiqiy assortimentdan
+    stat_products = stock.values('variant__product').distinct().count()
+    stat_categories = (stock.values('variant__product__category')
+                       .distinct().count())
     return render(request, 'shop/home.html',
-                  _shop_ctx(request, categories=categories, products=products))
+                  _shop_ctx(request, categories=categories, products=products,
+                            stat_products=stat_products,
+                            stat_categories=stat_categories))
 
 
 def _shop_cards(pids):

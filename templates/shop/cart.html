@@ -1,58 +1,95 @@
 {% extends 'shop/base.html' %}{% load yurit_extras %}
 {% block title %}Savat — {{ shop_name }}{% endblock %}
+
+{% block head_extra %}
+<style>
+.crt{border-top:1px solid var(--ink)}
+.crt__row{display:flex;gap:20px;align-items:center;padding:22px 0;
+  border-bottom:1px solid var(--line)}
+.crt__img{width:84px;height:104px;background:var(--soft);display:grid;place-items:center;
+  overflow:hidden;flex-shrink:0}
+.crt__img img{width:100%;height:100%;object-fit:cover}
+.crt__ini{font-family:var(--serif);font-weight:600;font-size:1.4rem}
+.crt__name{font-size:.98rem;font-weight:500;line-height:1.4}
+.crt__name:hover{color:var(--bronze)}
+.crt__meta{font-size:.76rem;color:var(--muted);letter-spacing:.04em;margin-top:.3rem}
+.crt__q{width:64px;height:42px;border:1px solid var(--line);border-radius:2px;text-align:center;
+  font-family:var(--sans);font-weight:600;font-size:.92rem}
+.crt__q:focus{outline:none;border-color:var(--ink)}
+.crt__x{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:6px;
+  font-size:.85rem;transition:color .2s}
+.crt__x:hover{color:var(--ink)}
+.crt__t{font-family:var(--serif);font-weight:600;font-size:1.1rem;min-width:130px;
+  text-align:right;white-space:nowrap}
+.sum{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+  padding-top:28px;flex-wrap:wrap}
+.sum__l{font-size:.7rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted)}
+.sum__v{font-family:var(--serif);font-size:2.1rem;font-weight:600;letter-spacing:-.02em;
+  line-height:1.1}
+.sum__cur{font-family:var(--sans);font-size:.7rem;color:var(--muted);font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase}
+@media(max-width:640px){
+  .crt__row{flex-wrap:wrap;gap:14px}
+  .crt__t{min-width:0;margin-left:auto}
+  .crt__img{width:64px;height:78px}
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="wrap" style="padding:28px 18px 48px;max-width:860px">
-  <h1 class="sec-title mb-3">Savat</h1>
+<section class="wrap" style="padding:52px 24px 80px;max-width:940px">
+
+  <span class="eyebrow">Buyurtma</span>
+  <h1 class="sec-title" style="margin:.5rem 0 30px">Savat</h1>
 
   {% if items %}
-  <div style="border:1px solid var(--line);border-radius:16px;overflow:hidden">
+  <div class="crt">
     {% for it in items %}
-    <div style="display:flex;gap:14px;align-items:center;padding:14px 16px;
-                {% if not forloop.last %}border-bottom:1px solid var(--line){% endif %}">
-      <div style="width:62px;height:62px;border-radius:10px;background:var(--soft);
-                  display:grid;place-items:center;overflow:hidden;flex-shrink:0">
-        {% if it.product.image %}<img src="{{ it.product.image.url }}" style="width:100%;height:100%;object-fit:cover">
-        {% else %}<i class="bi bi-box-seam" style="color:#c9ccd4"></i>{% endif %}
-      </div>
+    <div class="crt__row">
+      <a class="crt__img" href="{% url 'shop_product' it.product.code %}"
+         {% if not it.product.image %}style="background:{{ it.product.category.name|default:it.product.name|tile_bg }}"{% endif %}>
+        {% if it.product.image %}<img src="{{ it.product.image.url }}" alt="{{ it.product.name }}">
+        {% else %}<span class="crt__ini" style="color:{{ it.product.category.name|default:it.product.name|tile_fg }}">{{ it.product.name|initials }}</span>{% endif %}
+      </a>
       <div style="flex:1;min-width:0">
-        <a href="{% url 'shop_product' it.product.code %}" style="font-weight:600">{{ it.product.name }}</a>
-        <div style="color:var(--muted);font-size:.85rem">
+        <a href="{% url 'shop_product' it.product.code %}" class="crt__name">{{ it.product.name }}</a>
+        <div class="crt__meta">
           {{ it.variant.size|default:'—' }}{% if it.variant.color %} · {{ it.variant.color }}{% endif %}
           · {{ it.price|floatformat:0|som }} so'm
         </div>
       </div>
-      <form method="post" action="{% url 'shop_cart_update' %}" class="d-flex gap-1 align-items-center">
+      <form method="post" action="{% url 'shop_cart_update' %}" class="d-flex gap-2 align-items-center">
         {% csrf_token %}
         <input type="hidden" name="stock" value="{{ it.stock.pk }}">
-        <input type="number" name="qty" value="{{ it.qty }}" min="1" class="form-control form-control-sm"
-               style="width:70px" onchange="this.form.submit()">
-        <button name="action" value="remove" class="btn2 btn2--ghost btn2--sm" title="O'chirish">
+        <input type="number" name="qty" value="{{ it.qty }}" min="1" class="crt__q"
+               onchange="this.form.submit()">
+        <button name="action" value="remove" class="crt__x" title="O'chirish">
           <i class="bi bi-x-lg"></i>
         </button>
       </form>
-      <div style="font-weight:800;min-width:110px;text-align:right">
-        {{ it.total|floatformat:0|som }} <span style="font-size:.78rem;color:var(--muted)">so'm</span>
-      </div>
+      <div class="crt__t">{{ it.total|floatformat:0|som }}</div>
     </div>
     {% endfor %}
   </div>
 
-  <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-3">
+  <div class="sum">
     <a href="{% url 'shop_catalog' %}" class="btn2 btn2--ghost">
       <i class="bi bi-arrow-left"></i> Xaridni davom ettirish
     </a>
-    <div class="d-flex align-items-center gap-3">
-      <div style="font-size:1.35rem;font-weight:850">
-        {{ total|floatformat:0|som }} <span style="font-size:.85rem;color:var(--muted)">so'm</span>
+    <div class="d-flex align-items-end gap-4 flex-wrap">
+      <div style="text-align:right">
+        <div class="sum__l">Jami</div>
+        <div class="sum__v">{{ total|floatformat:0|som }} <span class="sum__cur">so'm</span></div>
       </div>
       <a href="{% url 'shop_checkout' %}" class="btn2">Buyurtma berish <i class="bi bi-arrow-right"></i></a>
     </div>
   </div>
 
   {% else %}
-  <div style="text-align:center;padding:60px 0;color:var(--muted)">
-    <i class="bi bi-bag" style="font-size:2.6rem;opacity:.4"></i>
-    <p class="mt-3 mb-3">Savat bo'sh</p>
+  <div class="empty">
+    <i class="bi bi-bag"></i>
+    <p>Savat bo'sh</p>
     <a href="{% url 'shop_catalog' %}" class="btn2">Katalogni ochish</a>
   </div>
   {% endif %}
