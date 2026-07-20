@@ -42,3 +42,4 @@ secrets.json
 
 # Telegram polling state
 .telegram_offset
+static/img/shop-hero.png

@@ -1,46 +1,50 @@
-{% extends 'shop/base.html' %}{% load yurit_extras %}
+{% extends 'shop/base.html' %}{% load yurit_extras static %}
 {% block content %}
 
-<section class="wrap" style="padding:56px 18px 44px">
-  <div style="max-width:640px">
-    <div style="display:inline-flex;align-items:center;gap:.4rem;background:var(--soft);
-                border-radius:999px;padding:.35rem .85rem;font-size:.8rem;color:var(--muted);font-weight:600">
-      <i class="bi bi-shop"></i> {{ shop_city }}
-    </div>
-    <h1 style="font-size:clamp(2rem,5vw,3.1rem);font-weight:850;letter-spacing:-.03em;
-               line-height:1.08;margin:.7rem 0 .8rem">
-      {{ shop_name }} — kerakli tovar, arzon narx
-    </h1>
-    <p style="font-size:1.05rem;color:var(--muted);margin:0 0 1.6rem">
-      Kiyim, maishiy kimyo, gigiyena va kundalik ehtiyoj mollari.
-      Saytdan buyurtma bering — biz yetkazamiz.
-    </p>
-    <div class="d-flex gap-2 flex-wrap">
-      <a href="{% url 'shop_catalog' %}" class="btn2"><i class="bi bi-grid"></i> Katalogni ochish</a>
-      <a href="{{ shop_telegram }}" class="btn2 btn2--ghost"><i class="bi bi-telegram"></i> Telegram</a>
+<section class="hero">
+  <div class="wrap hero__in">
+    <div class="hero__text">
+      <span class="hero__pill"><i class="bi bi-geo-alt"></i> {{ shop_city }}</span>
+      <h1 class="hero__h1">Kerakli tovar,<br>arzon narx</h1>
+      <p class="hero__sub">
+        Kiyim, maishiy kimyo, gigiyena va kundalik ehtiyoj mollari.
+        Saytdan buyurtma bering — biz yetkazamiz.
+      </p>
+      <div class="hero__cta">
+        <a href="{% url 'shop_catalog' %}" class="btn2"><i class="bi bi-grid"></i> Katalogni ochish</a>
+        <a href="{{ shop_telegram }}" class="btn2 btn2--ghost"><i class="bi bi-telegram"></i> Telegram</a>
+      </div>
     </div>
   </div>
 </section>
 
+<section class="wrap perks">
+  <div class="perk"><i class="bi bi-truck"></i><div><b>Yetkazib berish</b><span>{{ shop_city }} bo'ylab</span></div></div>
+  <div class="perk"><i class="bi bi-cash-coin"></i><div><b>Qulay narx</b><span>Do'kondagidek</span></div></div>
+  <div class="perk"><i class="bi bi-telephone"></i><div><b>Operator</b><span>Buyurtmani tasdiqlaydi</span></div></div>
+  <div class="perk"><i class="bi bi-shield-check"></i><div><b>Kafolat</b><span>Original mahsulot</span></div></div>
+</section>
+
 {% if categories %}
-<section class="wrap" style="padding-bottom:36px">
+<section class="wrap sec">
   <h2 class="sec-title mb-3">Bo'limlar</h2>
-  <div class="d-flex flex-wrap gap-2">
+  <div class="cats">
     {% for c in categories %}
-    <a href="{% url 'shop_catalog' %}?category={{ c.id }}" class="chip">
-      {{ c.name }} <span style="color:var(--muted)">{{ c.n }}</span>
+    <a href="{% url 'shop_catalog' %}?category={{ c.id }}" class="cat"
+       style="background:{{ c.name|tile_bg }};color:{{ c.name|tile_fg }}">
+      <span class="cat__ini">{{ c.name|initials:1 }}</span>
+      <span class="cat__name">{{ c.name }}</span>
+      <span class="cat__n">{{ c.n }} ta</span>
     </a>
     {% endfor %}
   </div>
 </section>
 {% endif %}
 
-<section class="wrap" style="padding-bottom:20px">
+<section class="wrap sec">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h2 class="sec-title">Yangi kelganlar</h2>
-    <a href="{% url 'shop_catalog' %}" style="color:var(--brand);font-weight:600;font-size:.92rem">
-      Hammasi <i class="bi bi-arrow-right"></i>
-    </a>
+    <a href="{% url 'shop_catalog' %}" class="sec-more">Hammasi <i class="bi bi-arrow-right"></i></a>
   </div>
   {% include 'shop/_cards.html' %}
 </section>

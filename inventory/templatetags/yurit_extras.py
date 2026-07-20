@@ -118,3 +118,41 @@ def dict_get(d, key):
         return d.get(key, '')
     except AttributeError:
         return ''
+
+# --- Do'kon sayti: rasmsiz kartochkalar chiroyli ko'rinishi uchun ---
+_TILE_COLORS = [
+    ('#eef2ff', '#4f46e5'),  # indigo
+    ('#ecfdf5', '#059669'),  # emerald
+    ('#fff7ed', '#ea580c'),  # orange
+    ('#fdf2f8', '#db2777'),  # pink
+    ('#eff6ff', '#2563eb'),  # blue
+    ('#f5f3ff', '#7c3aed'),  # violet
+    ('#fefce8', '#ca8a04'),  # amber
+    ('#f0fdfa', '#0d9488'),  # teal
+]
+
+
+def _tile_idx(text):
+    h = 0
+    for ch in str(text or ''):
+        h = (h * 31 + ord(ch)) & 0xFFFFFFFF
+    return h % len(_TILE_COLORS)
+
+
+@register.filter
+def tile_bg(text):
+    """Nom/kategoriyaga qarab barqaror ochiq fon rangi."""
+    return _TILE_COLORS[_tile_idx(text)][0]
+
+
+@register.filter
+def tile_fg(text):
+    """Shu fonga mos to'q rang."""
+    return _TILE_COLORS[_tile_idx(text)][1]
+
+
+@register.filter
+def initials(text, count=2):
+    """Nomdan bosh harflar: "Doctor S Shampun" -> "DS"."""
+    words = [w for w in str(text or '').split() if w[:1].isalnum()]
+    return ''.join(w[0].upper() for w in words[:int(count)]) or '?'
