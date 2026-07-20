@@ -1121,10 +1121,31 @@
             color: var(--yrt-fg) !important;
             background: var(--yrt-surface-2) !important;
         }
-        nav.yurit-nav .nav-link.show,
-        nav.yurit-nav .nav-item.active .nav-link {
+        nav.yurit-nav .nav-link.show {
             color: var(--yrt-fg) !important;
             background: var(--yrt-surface-2) !important;
+        }
+        /* Hozir turgan sahifa — ajralib tursin (chap chekkada rangli chiziq) */
+        nav.yurit-nav .nav-item.active > .nav-link,
+        nav.yurit-nav .nav-link.is-current {
+            color: var(--yrt-primary) !important;
+            background: var(--yrt-primary-soft, rgba(79,70,229,.10)) !important;
+            font-weight: 600;
+            position: relative;
+        }
+        nav.yurit-nav .nav-item.active > .nav-link::before,
+        nav.yurit-nav .nav-link.is-current::before {
+            content: ''; position: absolute; left: 0; top: 18%; bottom: 18%;
+            width: 3px; border-radius: 0 3px 3px 0;
+            background: var(--yrt-primary);
+        }
+        nav.yurit-nav .nav-item.active > .nav-link i.bi { opacity: 1; }
+        /* Ochiladigan ro'yxat ichidagi faol band */
+        nav.yurit-nav .dropdown-menu .dropdown-item.is-current {
+            background: var(--yrt-primary-soft, rgba(79,70,229,.10));
+            color: var(--yrt-primary);
+            font-weight: 600;
+            border-radius: 6px;
         }
         nav.yurit-nav .nav-link.dropdown-toggle::after {
             margin-left: auto;
@@ -4172,6 +4193,35 @@ window.yuritScan = (function () {
         } catch (e) {}
     }
     return { camera: camera, config: config, addTorch: addTorch, formats: formats };
+})();
+</script>
+
+<script>
+// Yon paneldagi hozirgi sahifani belgilaydi.
+// Har havolaga Django shartini yozish o'rniga manzil bo'yicha topamiz:
+// eng UZUN mos keluvchi havola tanlanadi, shunda "/products/" va
+// "/products/new/" chalkashmaydi.
+(function () {
+    var nav = document.querySelector('nav.yurit-nav');
+    if (!nav) return;
+    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var best = null, bestLen = -1;
+    nav.querySelectorAll('a[href]').forEach(function (a) {
+        var href = (a.getAttribute('href') || '').split('?')[0];
+        if (!href || href === '#' || /^https?:/i.test(href)) return;
+        href = href.replace(/\/+$/, '') || '/';
+        var match = (path === href) || (href !== '/' && path.indexOf(href + '/') === 0);
+        if (match && href.length > bestLen) { best = a; bestLen = href.length; }
+    });
+    if (!best) return;
+    best.classList.add('is-current');
+    var item = best.closest('.nav-item');
+    if (item) item.classList.add('active');
+    // Ochiladigan guruh ichida bo'lsa — guruh sarlavhasi ham belgilanadi
+    var menu = best.closest('.dropdown-menu');
+    if (menu && menu.parentElement) {
+        menu.parentElement.classList.add('active');
+    }
 })();
 </script>
 </body>
