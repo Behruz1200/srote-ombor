@@ -76,8 +76,10 @@
                     <form method="post" action="{% url 'product_image' product.code %}"
                           enctype="multipart/form-data" id="imgForm">
                         {% csrf_token %}
-                        {# capture="environment" yo'q: u telefonda faqat kamerani
-                           ochib, galereyadan tanlash imkonini bermasdi. #}
+                        {% comment %}
+                        capture="environment" ataylab yo'q: u telefonda faqat
+                        kamerani ochib, galereyadan tanlash imkonini bermasdi.
+                        {% endcomment %}
                         <input type="file" name="image" id="imgInput" accept="image/*"
                                class="d-none">
                     </form>

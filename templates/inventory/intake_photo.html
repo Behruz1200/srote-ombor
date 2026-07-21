@@ -101,10 +101,12 @@
         </header>
         <div class="dash-card__body">
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                {# capture="environment" yo'q: u telefonda faqat kamerani ochib,
-                   galereyadan tanlashni va bir nechta varaqni birdan
-                   belgilashni to'sib qo'yardi. Endi tizim o'zi tanlov beradi:
-                   kamera / galereya / fayl. #}
+                {% comment %}
+                capture="environment" ataylab yo'q: u telefonda faqat kamerani
+                ochib, galereyadan tanlashni va bir nechta varaqni birdan
+                belgilashni to'sib qo'yardi. Endi tizim o'zi tanlov beradi:
+                kamera / galereya / fayl.
+                {% endcomment %}
                 <input type="file" id="invImage" accept="image/*"
                        multiple class="form-control" style="max-width:340px;">
                 <button type="button" id="readBtn" class="dash-btn dash-btn--primary" {% if not ai_enabled %}disabled{% endif %}>

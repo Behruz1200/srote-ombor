@@ -34,24 +34,35 @@ def _extract(html):
 class Command(BaseCommand):
     help = "node --check every inline <script> on the key pages."
 
-    # Ko'p qatorli {# ... #} — Django buni IZOH deb hisoblamaydi va matn
-    # bo'lib sahifaga chiqib ketadi. Sintaksis tekshiruvi buni ushlamaydi.
-    MULTI_COMMENT = re.compile(r'\{#(?:(?!#\}).)*?\n(?:(?!#\}).)*?#\}', re.S)
-
     def _check_multiline_comments(self):
+        """{# ... #} FAQAT bir qatorlik. Ochilib, o'sha qatorda yopilmasa —
+        Django uni izoh deb hisoblamaydi va matn bo'lib sahifaga chiqib ketadi.
+
+        Ko'p qatorli izoh kerak bo'lsa {% comment %}...{% endcomment %}.
+
+        Qatorma-qator tekshiramiz: regex bilan emas, chunki regex bu yerda
+        bir necha marta xato natija bergan.
+        """
         import glob
         bad = []
-        for f in glob.glob('templates/**/*.html', recursive=True):
+        for f in sorted(glob.glob('templates/**/*.html', recursive=True)):
             with open(f, encoding='utf-8') as fh:
-                for m in self.MULTI_COMMENT.finditer(fh.read()):
-                    bad.append((f, m.group(0)[:60].replace('\n', ' | ')))
-        for f, t in bad:
+                for n, line in enumerate(fh, 1):
+                    i = line.find('{#')
+                    if i >= 0 and '#}' not in line[i:]:
+                        bad.append((f, n, line.strip()[:70]))
+        for f, n, t in bad:
             self.stderr.write(self.style.ERROR(
-                f"{f}: ko'p qatorli {{# #}} izoh — matn bo'lib chiqadi: {t}..."))
+                f"{f}:{n}: ko'p qatorli {{# #}} izoh — sahifaga MATN bo'lib "
+                f"chiqadi. {{% comment %}} ishlating.\n     {t}"))
         return len(bad)
 
     def handle(self, *args, **opts):
-        _bad_comments = self._check_multiline_comments()
+        # Deployni to'xtatadi: aks holda buzuq izoh jonli sahifaga chiqib ketadi
+        n_bad = self._check_multiline_comments()
+        if n_bad:
+            raise CommandError(
+                f"{n_bad} ta ko'p qatorli {{# #}} izoh topildi — deploy to'xtatildi.")
         node = shutil.which('node') or shutil.which('nodejs')
         if not node:
             self.stdout.write(self.style.WARNING(
