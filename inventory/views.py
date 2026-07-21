@@ -2042,6 +2042,7 @@ def clothes_intake(request):
         else:
             created_ids = []
             total_qty = 0
+            split_notes = []      # narxi farq qilgani uchun yangi kod olganlar
             with transaction.atomic():
                 # Bir xil brend + kategoriya bo'lsa — o'shanga qo'shamiz
                 # (aks holda yangi mahsulot). Nomi = "Brend Kategoriya".
@@ -2069,7 +2070,12 @@ def clothes_intake(request):
                         variant.barcode = code
                         variant.save(update_fields=['barcode'])
                     # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
+                    before_pk = variant.pk
                     variant = resolve_price_variant(variant, branch, price)
+                    if variant.pk != before_pk:
+                        # Xodim bilsin: eski kod tegilmadi, bu narxga yangi kod berildi
+                        split_notes.append(
+                            f"{size or '—'} — {variant.barcode}")
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': cost, 'sale_price': price})
@@ -2089,6 +2095,12 @@ def clothes_intake(request):
                 request,
                 f"{product.name}: {len(cells)} tur, {total_qty} dona qabul "
                 f"qilindi. Endi etiketkalarni chop eting.")
+            if split_notes:
+                messages.warning(
+                    request,
+                    "Narxi avvalgisidan farq qilgani uchun yangi shtrix-kod "
+                    "berildi (eski koddagi mol o'z narxida qoldi): "
+                    + ", ".join(split_notes))
             ids = ','.join(str(i) for i in created_ids)
             return redirect(f"{reverse('variant_labels')}?ids={ids}&price={price}")
 
