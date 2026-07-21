@@ -226,6 +226,51 @@ POS terminal devices (Android):
   ESC/POS thermal printer over USB/Bluetooth. We don't have that yet.
 -->
 <style>
+/* ---------- EKRANDA ----------
+   Ilgari #receipt uchun ekran uslublari umuman yo'q edi: chek butun sahifa
+   kengligiga cho'zilib, ustunlar bir-biridan uzoqlashib ketardi, uzun
+   mahsulot nomlari esa jadvalni ekrandan tashqariga surib, o'ng/chapga
+   siljish paydo qilardi. Endi chek haqiqiy qog'oz tasmasidek tor va markazda. */
+#receipt {
+    width: 100%;
+    max-width: 440px;      /* 80mm tasmaga yaqin */
+    margin-left: auto;
+    margin-right: auto;
+}
+#receipt table {
+    width: 100%;
+    margin: 0;
+    table-layout: auto;
+}
+#receipt th,
+#receipt td {
+    padding: 0.4rem 0.45rem;
+    vertical-align: top;
+}
+/* Mahsulot ustuni: uzun nom/kod jadvalni cho'zmasin — o'ralsin */
+#receipt tbody td:first-child,
+#receipt tbody td:first-child small,
+#receipt tbody td:first-child strong {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+/* Raqam ustunlari tor va bir qatorda */
+#receipt tbody td:not(:first-child),
+#receipt thead th:not(:first-child) {
+    white-space: nowrap;
+    width: 1%;
+}
+/* Sarlavha/oyoq qatorlari ham sig'sin */
+#receipt tfoot th,
+#receipt tfoot td { padding: 0.5rem 0.45rem; }
+#receipt .d-flex { gap: 0.75rem; flex-wrap: wrap; }
+
+@media (max-width: 575.98px) {
+    #receipt { padding: 1rem !important; }
+    #receipt th,
+    #receipt td { padding: 0.35rem 0.3rem; font-size: 0.86rem; }
+}
+
 @media print {
     /* hide screen UI */
     body * { visibility: hidden; }
