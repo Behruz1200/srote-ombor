@@ -85,6 +85,25 @@ def gen_internal_ean13(seed_int):
     return body + str(ean13_check_digit(body))
 
 
+def ensure_variant_barcode(variant):
+    """Turda shtrix-kod bo'lmasa — beradi (kolliziya bo'lsa boshqasini).
+
+    Kodsiz tur kassada skanerlanmaydi va etiketkasi ham chiqmaydi, shuning
+    uchun har bir qabul yo'lida tur yaratilgach shu chaqirilishi kerak.
+    """
+    from .models import ProductVariant as _PV
+    if variant is None or variant.barcode:
+        return variant
+    code = gen_internal_ean13(variant.pk)
+    k = 0
+    while _PV.objects.filter(barcode=code).exclude(pk=variant.pk).exists():
+        k += 1
+        code = gen_internal_ean13(variant.pk + k * 100000)
+    variant.barcode = code
+    variant.save(update_fields=['barcode'])
+    return variant
+
+
 def parse_dec(raw):
     """Foydalanuvchi kiritgan pul/son matnini Decimal'ga aylantiradi.
 
@@ -1770,7 +1789,7 @@ def product_variants_edit(request, code):
 
         variants = {v.pk: v for v in product.variants.all()}
         rows = []
-        seen_pairs, seen_barcodes = set(), set()
+        seen_pairs, seen_barcodes = {}, set()   # {(o'lcham, rang): narx}
         for i in range(len(ids)):
             get = lambda lst: (lst[i] if i < len(lst) else '') or ''
             raw_id = (ids[i] or '').strip()
@@ -1798,12 +1817,16 @@ def product_variants_edit(request, code):
             if min(cost, sale, wholesale) < 0 or stock_new < 0:
                 errors.append(f"{i + 1}-qator: manfiy qiymat kiritilmaydi.")
                 continue
-            pair = (size, color)
-            if pair in seen_pairs:
+            # Bir xil o'lcham, boshqa narx bo'lsa — narx belgisi bilan ajratamiz.
+            # Mavjud turni jimgina qayta nomlamaymiz: unga faqat xato beramiz.
+            new_color, is_dup = resolve_row_price_color(
+                size, color, sale, seen_pairs)
+            if is_dup or (variant is not None and new_color != color):
                 errors.append(
-                    f"{i + 1}-qator: {size or '—'} / {color or '—'} takrorlangan.")
+                    f"{i + 1}-qator: {size or '—'} / {color or '—'} "
+                    f"takrorlangan (o'lchami ham, narxi ham bir xil).")
                 continue
-            seen_pairs.add(pair)
+            color = new_color
             if barcode:
                 if barcode in seen_barcodes:
                     errors.append(f"{i + 1}-qator: shtrix-kod jadvalda takror.")
@@ -2327,7 +2350,7 @@ def intake_variants(request):
             marja = Decimal('0')
 
         rows, raw_rows = [], []
-        seen_pairs, seen_barcodes = set(), set()
+        seen_pairs, seen_barcodes = {}, set()   # {(o'lcham, rang): narx}
         for i in range(len(colors)):
             get = lambda lst: (lst[i] if i < len(lst) else '') or ''
             color = smart_title(get(colors))
@@ -2377,12 +2400,13 @@ def intake_variants(request):
                         ).quantize(Decimal('0.01'))
             else:
                 cost = Decimal('0')
-            pair = (size, color)
-            if pair in seen_pairs:
+            # Bir xil o'lcham, boshqa narx — narx belgisi bilan alohida tur
+            color, is_dup = resolve_row_price_color(size, color, price, seen_pairs)
+            if is_dup:
                 errors.append(
-                    f"{i + 1}-qator: {size or '—'} / {color or '—'} takrorlangan.")
+                    f"{i + 1}-qator: {size or '—'} / {color or '—'} "
+                    f"takrorlangan (o'lchami ham, narxi ham bir xil).")
                 continue
-            seen_pairs.add(pair)
             if barcode:
                 if barcode in seen_barcodes:
                     errors.append(f"{i + 1}-qator: shtrix-kod jadvalda takror.")
@@ -2452,8 +2476,12 @@ def intake_variants(request):
                     if r['barcode'] and variant.barcode != r['barcode']:
                         variant.barcode = r['barcode']
                         variant.save(update_fields=['barcode'])
+                    # Kod kiritilmagan bo'lsa — o'zi beriladi (aks holda tur
+                    # kodsiz qolib, kassada skanerlanmaydi)
+                    ensure_variant_barcode(variant)
                     # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
                     variant = resolve_price_variant(variant, branch, r['price'])
+                    ensure_variant_barcode(variant)
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': r['cost'],
@@ -9083,6 +9111,49 @@ def _base_color(color):
 
 def _price_tag(sale_price):
     return f"{int(sale_price):,}".replace(',', ' ')
+
+
+def resolve_row_price_color(size, color, sale_price, seen):
+    """Bitta qabulda bir xil o'lcham ikki xil narxda kelsa — ikkinchi qatorga
+    narx belgisi qo'shamiz, shunda u alohida tur bo'lib o'z kodini oladi.
+
+    Masalan "Maria" mahsuloti, 50-o'lcham:
+        6 dona  — 10 000 so'm  ->  "50 / —"        (o'z kodi)
+        3 dona  — 12 000 so'm  ->  "50 / 12 000"   (boshqa kod)
+    Ikkalasi ham 50-o'lcham, lekin kassada kod -> tur -> narx bo'lgani uchun
+    bitta turga ikki narx sig'maydi.
+
+    Narxi ham, o'lchami ham bir xil bo'lsa — bu haqiqiy takror, xato qaytaramiz.
+
+    seen: {(o'lcham, rang): narx} — chaqiruvchi tomonda saqlanadi.
+    Qaytaradi: (rang, takror_mi)
+    """
+    from decimal import Decimal
+    try:
+        price = Decimal(str(sale_price or 0))
+    except Exception:
+        price = Decimal('0')
+
+    key = (size, color)
+    if key not in seen:
+        seen[key] = price
+        return color, False
+    if seen[key] == price:
+        return color, True          # bir xil o'lcham + bir xil narx = takror
+
+    base = _base_color(color)
+    tag = _price_tag(price)
+    n = 1
+    while True:
+        suffix = tag if n == 1 else f"{tag} ({n})"
+        new_color = (f"{base}{PRICE_TAG_SEP}{suffix}" if base else suffix)[:50]
+        k = (size, new_color)
+        if k not in seen:
+            seen[k] = price
+            return new_color, False
+        if seen[k] == price:
+            return new_color, True
+        n += 1
 
 
 def resolve_price_variant(variant, branch, sale_price):
