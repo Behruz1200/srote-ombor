@@ -76,8 +76,10 @@
                     <form method="post" action="{% url 'product_image' product.code %}"
                           enctype="multipart/form-data" id="imgForm">
                         {% csrf_token %}
+                        {# capture="environment" yo'q: u telefonda faqat kamerani
+                           ochib, galereyadan tanlash imkonini bermasdi. #}
                         <input type="file" name="image" id="imgInput" accept="image/*"
-                               capture="environment" class="d-none">
+                               class="d-none">
                     </form>
                     {% if product.image %}
                         <div class="yrt-prodimg">
@@ -93,8 +95,8 @@
                         </div>
                     {% else %}
                         <button type="button" id="imgPick" class="yrt-prodimg yrt-prodimg--empty"
-                                title="Rasm qo'shish">
-                            <i class="bi bi-camera"></i>
+                                title="Kameradan suratga oling yoki galereyadan tanlang">
+                            <i class="bi bi-images"></i>
                             <span>Rasm qo'shish</span>
                         </button>
                     {% endif %}

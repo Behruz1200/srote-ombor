@@ -101,7 +101,11 @@
         </header>
         <div class="dash-card__body">
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                <input type="file" id="invImage" accept="image/*" capture="environment"
+                {# capture="environment" yo'q: u telefonda faqat kamerani ochib,
+                   galereyadan tanlashni va bir nechta varaqni birdan
+                   belgilashni to'sib qo'yardi. Endi tizim o'zi tanlov beradi:
+                   kamera / galereya / fayl. #}
+                <input type="file" id="invImage" accept="image/*"
                        multiple class="form-control" style="max-width:340px;">
                 <button type="button" id="readBtn" class="dash-btn dash-btn--primary" {% if not ai_enabled %}disabled{% endif %}>
                     <i class="bi bi-magic"></i> <span>Rasmni o'qish</span>
