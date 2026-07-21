@@ -47,10 +47,10 @@
         <div class="d-flex align-items-center gap-2 flex-wrap small">
             <strong><i class="bi bi-rulers"></i> Yorliq o'lchami:</strong>
             <label class="mb-0">Eni</label>
-            <input type="number" id="lblW" value="50" min="20" max="100"
+            <input type="number" id="lblW" value="58" min="20" max="100"
                    class="form-control form-control-sm" style="width:76px"> mm
             <label class="mb-0">Bo'yi</label>
-            <input type="number" id="lblH" value="30" min="15" max="100"
+            <input type="number" id="lblH" value="40" min="15" max="100"
                    class="form-control form-control-sm" style="width:76px"> mm
             <span class="text-muted ms-auto">
                 Rulon o'lchamini yozing — har yorliq alohida sahifaga tushadi.
@@ -168,8 +168,8 @@
     if (!wEl || !hEl) return;
 
     function applyPageSize() {
-        const w = Math.max(20, parseInt(wEl.value, 10) || 50);
-        const h = Math.max(15, parseInt(hEl.value, 10) || 30);
+        const w = Math.max(20, parseInt(wEl.value, 10) || 58);
+        const h = Math.max(15, parseInt(hEl.value, 10) || 40);
         let st = document.getElementById('pageSizeStyle');
         if (!st) {
             st = document.createElement('style');
@@ -221,7 +221,7 @@
 <style>
 #labelSheet { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 40px; }
 .lbl {
-    width: 50mm; box-sizing: border-box;
+    width: 58mm; box-sizing: border-box;
     border: 1px dashed #bbb; border-radius: 4px;
     padding: 2mm 2.5mm; text-align: center;
     font-family: 'SF Mono','Menlo','Consolas',monospace; color: #000;
