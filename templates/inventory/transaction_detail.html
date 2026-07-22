@@ -131,8 +131,10 @@
             {% endfor %}
             </tbody>
             <tfoot>
-                {# Yorliq 2 ustun, summa 2 ustun: aks holda katta JAMI ("352 000
-                   so'm") tor oxirgi ustunga sig'may, o'ng chekkadan kesilardi #}
+                {% comment %}
+                Yorliq 2 ustun, summa 2 ustun: aks holda katta JAMI
+                ("352 000 so'm") tor oxirgi ustunga sig'may o'ngdan kesilardi.
+                {% endcomment %}
                 {% if txn.discount_total > 0 %}
                 <tr><th colspan="2" class="text-start small">Oraliq summa:</th>
                     <td colspan="2" class="text-end">{{ txn.gross|som }}</td></tr>
