@@ -283,6 +283,10 @@ POS terminal devices (Android):
 
     #receipt {
         position: absolute; left: 0; top: 0;
+        /* box-sizing SHART: aks holda width:80mm + padding 3mm×2 = 86mm bo'lib,
+           80mm qog'ozdan o'ng chekka (summalar oxiri) kesilib qolardi —
+           "352 000" o'rniga "352 00" chiqardi */
+        box-sizing: border-box;
         width: 80mm;
         max-width: 80mm;
         padding: 3mm 3mm 6mm 3mm;
@@ -307,6 +311,7 @@ POS terminal devices (Android):
     /* Yakuniy qatorlar: yorliq chap chekkadan, summa o'ng chekkada */
     #receipt tfoot .text-start { text-align: left !important; }
 
+    #receipt, #receipt * { box-sizing: border-box; }
     #receipt table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     #receipt th, #receipt td {
         /* Chap/o'ng bo'shliq bir xil — ilgari NARX ustuni SONI ga
