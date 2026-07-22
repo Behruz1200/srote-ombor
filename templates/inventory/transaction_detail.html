@@ -247,23 +247,14 @@ POS terminal devices (Android):
     margin: 0;
     table-layout: auto;
 }
+/* HAMMA katak o'ralishi mumkin — hech narsa kesilmasin (raqam ham, so'z ham) */
 #receipt th,
 #receipt td {
     padding: 0.4rem 0.45rem;
     vertical-align: top;
-}
-/* Mahsulot ustuni: uzun nom/kod jadvalni cho'zmasin — o'ralsin */
-#receipt tbody td:first-child,
-#receipt tbody td:first-child small,
-#receipt tbody td:first-child strong {
+    white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
-}
-/* Raqam ustunlari tor va bir qatorda */
-#receipt tbody td:not(:first-child),
-#receipt thead th:not(:first-child) {
-    white-space: nowrap;
-    width: 1%;
 }
 /* Sarlavha/oyoq qatorlari ham sig'sin */
 #receipt tfoot th,
@@ -309,9 +300,10 @@ POS terminal devices (Android):
     #receipt hr { border: 0; border-top: 1px dashed #000; margin: 1.5mm 0; }
     #receipt .small { font-size: 9.5pt; }
     #receipt .fs-4, #receipt .fs-5 { font-size: 12pt !important; font-weight: 700; }
-    /* JAMI va summalar qatorga sig'sin — bo'linib ketmasin */
-    #receipt .text-nowrap { white-space: nowrap !important; }
-    #receipt tfoot th, #receipt tfoot td { white-space: nowrap !important; }
+    /* Chekda HECH NARSA nowrap emas — sig'masa o'raladi, kesilmaydi.
+       (Bootstrap .text-nowrap ni ham bekor qilamiz) */
+    #receipt .text-nowrap { white-space: normal !important; }
+    #receipt tfoot th, #receipt tfoot td { white-space: normal !important; }
     /* Yakuniy qatorlar: yorliq chap chekkadan, summa o'ng chekkada */
     #receipt tfoot .text-start { text-align: left !important; }
 
@@ -324,6 +316,9 @@ POS terminal devices (Android):
         font-size: 9.5pt;
         vertical-align: top;
         border: none !important;
+        /* Sig'masa o'raladi — raqam ham, so'z ham hech qachon kesilmaydi */
+        white-space: normal !important;
+        overflow-wrap: anywhere;
         word-break: break-word;
     }
     /* Ustun kengliklari: sonlarga kengroq joy */
