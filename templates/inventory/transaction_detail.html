@@ -131,14 +131,16 @@
             {% endfor %}
             </tbody>
             <tfoot>
+                {# Yorliq 2 ustun, summa 2 ustun: aks holda katta JAMI ("352 000
+                   so'm") tor oxirgi ustunga sig'may, o'ng chekkadan kesilardi #}
                 {% if txn.discount_total > 0 %}
-                <tr><th colspan="3" class="text-start small">Oraliq summa:</th>
-                    <td class="text-end">{{ txn.gross|som }}</td></tr>
-                <tr><th colspan="3" class="text-start small text-danger">Chegirma:</th>
-                    <td class="text-end text-danger text-nowrap">−{{ txn.discount_total|som }}</td></tr>
+                <tr><th colspan="2" class="text-start small">Oraliq summa:</th>
+                    <td colspan="2" class="text-end">{{ txn.gross|som }}</td></tr>
+                <tr><th colspan="2" class="text-start small text-danger">Chegirma:</th>
+                    <td colspan="2" class="text-end text-danger text-nowrap">−{{ txn.discount_total|som }}</td></tr>
                 {% endif %}
-                <tr><th colspan="3" class="text-start">JAMI:</th>
-                    <th class="text-end fs-5 text-nowrap">{{ txn.total|som }}&nbsp;so'm</th></tr>
+                <tr><th colspan="2" class="text-start">JAMI:</th>
+                    <th colspan="2" class="text-end fs-5 text-nowrap">{{ txn.total|som }}&nbsp;so'm</th></tr>
             </tfoot>
         </table>
         <hr>
