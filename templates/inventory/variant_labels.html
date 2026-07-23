@@ -26,12 +26,20 @@
             <select name="copies" id="copiesSel"
                     class="form-select form-select-sm" style="width:auto">
                 <option value="stock" {% if by_stock %}selected{% endif %}>Ombor soniga qarab</option>
-                <option value="1" {% if copies == 1 %}selected{% endif %}>1 dona</option>
-                <option value="2" {% if copies == 2 %}selected{% endif %}>2 dona</option>
-                <option value="3" {% if copies == 3 %}selected{% endif %}>3 dona</option>
-                <option value="5" {% if copies == 5 %}selected{% endif %}>5 dona</option>
-                <option value="10" {% if copies == 10 %}selected{% endif %}>10 dona</option>
+                <option value="1" {% if not by_stock and copies == 1 %}selected{% endif %}>1 dona</option>
+                <option value="2" {% if not by_stock and copies == 2 %}selected{% endif %}>2 dona</option>
+                <option value="3" {% if not by_stock and copies == 3 %}selected{% endif %}>3 dona</option>
+                <option value="5" {% if not by_stock and copies == 5 %}selected{% endif %}>5 dona</option>
+                <option value="10" {% if not by_stock and copies == 10 %}selected{% endif %}>10 dona</option>
             </select>
+            <span class="text-muted small">yoki</span>
+            {# Ixtiyoriy son: tayyor variantlardan tashqari o'zi yozishi mumkin (1–200) #}
+            <input type="number" id="copiesInput" min="1" max="200"
+                   value="{% if not by_stock %}{{ copies }}{% endif %}"
+                   placeholder="son yozing"
+                   class="form-control form-control-sm" style="width:104px"
+                   title="Ixtiyoriy nusxa soni — yozing va Enter bosing (1–200)">
+            <button type="button" id="copiesGo" class="btn btn-sm btn-outline-primary">Qo'llash</button>
             <span id="copiesBusy" class="spinner-border spinner-border-sm text-primary d-none"
                   role="status" aria-hidden="true"></span>
             {% if by_stock %}
@@ -195,14 +203,32 @@
 // eski formada faqat "ids" bor edi va "?products=" bilan ochilganda yo'qolardi.
 (function () {
     var sel = document.getElementById('copiesSel');
-    if (!sel) return;
-    sel.addEventListener('change', function () {
-        var busy = document.getElementById('copiesBusy');
+    var inp = document.getElementById('copiesInput');
+    var go = document.getElementById('copiesGo');
+    var busy = document.getElementById('copiesBusy');
+
+    function reloadWith(copiesVal) {
         if (busy) busy.classList.remove('d-none');
-        sel.disabled = true;
+        if (sel) sel.disabled = true;
+        if (inp) inp.disabled = true;
         var u = new URL(window.location.href);
-        u.searchParams.set('copies', sel.value);
+        u.searchParams.set('copies', copiesVal);
         window.location.assign(u.toString());
+    }
+
+    if (sel) sel.addEventListener('change', function () { reloadWith(sel.value); });
+
+    // Ixtiyoriy son — yozib Enter yoki "Qo'llash"
+    function applyInput() {
+        if (!inp) return;
+        var n = parseInt(inp.value, 10);
+        if (!(n >= 1)) return;
+        if (n > 200) n = 200;
+        reloadWith(String(n));
+    }
+    if (go) go.addEventListener('click', applyInput);
+    if (inp) inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); applyInput(); }
     });
 })();
 </script>
