@@ -15,7 +15,7 @@
             </div>
             <div class="dash-hero__actions">
                 <button onclick="window.print()" class="dash-btn dash-btn--primary"><i class="bi bi-printer"></i> <span>Chop etish (dialog)</span></button>
-                <a href="{% url 'price_labels' %}?ids={{ ids }}&size=58x40" class="dash-btn dash-btn--ghost"><i class="bi bi-tag"></i> <span>Narx etiketkasi</span></a>
+                <a href="{% url 'price_labels' %}?ids={{ ids }}&size=58x40&back={{ back_url|urlencode }}" class="dash-btn dash-btn--ghost"><i class="bi bi-tag"></i> <span>Narx etiketkasi</span></a>
                 <a href="{{ back_url|default:'/products/' }}" id="backBtn" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Orqaga</span></a>
             </div>
         </div>

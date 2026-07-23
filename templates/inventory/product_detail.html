@@ -47,7 +47,7 @@
                            class="dash-btn dash-btn--ghost dash-btn--sm">
                             <i class="bi bi-tags"></i> <span>Etiketka</span>
                         </a>
-                        <a href="{% url 'price_labels' %}?code={{ product.code }}&size=58x40" target="_blank" class="dash-btn dash-btn--ghost dash-btn--sm">
+                        <a href="{% url 'price_labels' %}?code={{ product.code }}&size=58x40&back={{ request.path|urlencode }}" class="dash-btn dash-btn--ghost dash-btn--sm">
                             <i class="bi bi-tag"></i> <span>Narx etiketkasi</span>
                         </a>
                         <a href="{% url 'qr_image' product.code %}" download="{{ product.code }}.png"

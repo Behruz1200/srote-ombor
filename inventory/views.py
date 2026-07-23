@@ -7514,12 +7514,19 @@ def price_labels(request):
     else:
         src_qs = 'codes=' + ','.join(p.code for p in products)
 
+    # "Orqaga" — kelib chiqgan sahifaga (faqat ichki yo'l; ochiq-redirect emas)
+    back_raw = (request.GET.get('back') or '').strip()
+    if back_raw.startswith('/') and not back_raw.startswith('//'):
+        back_url = back_raw
+    else:
+        back_url = reverse('product_list')
+
     return render(request, 'inventory/price_labels.html', {
         'labels': render_labels, 'uniq_labels': labels,
         'copies': copies, 'size': size,
         'w': w, 'h': h, 'n_products': len(labels),
         'codes': ','.join(p.code for p in products),
-        'src_qs': src_qs,
+        'src_qs': src_qs, 'back_url': back_url,
         'store_name': PRICE_LABEL_STORE_NAME,
     })
 
