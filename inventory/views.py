@@ -5054,10 +5054,21 @@ def pos_checkout(request):
     customer_name = (data.get('customer_name') or '').strip()[:120]
     customer_phone = (data.get('customer_phone') or '').strip()[:40]
     note = (data.get('note') or '').strip()[:200]
-    try:
-        order_discount = max(0, float(data.get('order_discount') or 0))
-    except (ValueError, TypeError):
-        order_discount = 0
+    # Pul qiymatlari Decimal bo'lishi SHART: modeldagi maydonlar DecimalField,
+    # float bilan aralashsa `Decimal + float` -> TypeError (chek yig'indisi
+    # hisoblanganda 500 xato). Shuning uchun hammasini Decimal'ga o'giramiz.
+    from decimal import Decimal, InvalidOperation
+
+    def _money(v, allow_zero=True):
+        try:
+            d = Decimal(str(v if v not in (None, '') else 0))
+        except (InvalidOperation, ValueError, TypeError):
+            d = Decimal('0')
+        if d < 0:
+            d = Decimal('0')
+        return d
+
+    order_discount = _money(data.get('order_discount'))
     discount_reason = (data.get('discount_reason') or '').strip()[:200]
 
     # Parse line shape without touching the DB (input validation only).
@@ -5069,8 +5080,8 @@ def pos_checkout(request):
         try:
             sid = int(ln['stock_id'])
             qty = int(ln['qty'])
-            line_discount = max(0, float(ln.get('line_discount') or 0))
-            price = float(ln['sale_price'])
+            line_discount = _money(ln.get('line_discount'))
+            price = _money(ln['sale_price'])
         except (KeyError, ValueError, TypeError):
             return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
         if qty <= 0 or price < 0:
