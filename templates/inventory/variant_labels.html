@@ -67,7 +67,7 @@
             {% endcomment %}
             <label class="mb-0" title="Printer o'ngga surib bossa manfiy son kiriting (masalan −6)">
                 <i class="bi bi-arrows-move"></i> Chop siljishi</label>
-            <input type="number" id="lblOffX" value="0" min="-15" max="15" step="0.5"
+            <input type="number" id="lblOffX" value="-5" min="-15" max="15" step="0.5"
                    class="form-control form-control-sm" style="width:76px"> mm
             <span class="text-muted ms-auto">
                 Rulon o'lchamini yozing — har yorliq alohida sahifaga tushadi.
@@ -187,10 +187,12 @@
 
     // Chop siljishi localStorage'da saqlanadi — nusxa/o'lcham o'zgarganda
     // sahifa qayta yuklanadi, sozlama yo'qolmasin.
+    // Standart siljish -5mm (HTML'da). Foydalanuvchi o'zgartirsa —
+    // localStorage'dagi qiymat ustun turadi.
     const OFF_KEY = 'yurit_label_offx';
     if (oEl) {
         const saved = localStorage.getItem(OFF_KEY);
-        if (saved !== null && oEl.value === '0') oEl.value = saved;
+        if (saved !== null) oEl.value = saved;
     }
 
     function applyPageSize() {

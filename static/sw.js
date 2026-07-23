@@ -4,7 +4,7 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'yurit-v164';
+const CACHE_NAME = 'yurit-v165';
 const STATIC_ASSETS = [
   '/static/img/icon-192.png',
   '/static/img/icon-512.png',
