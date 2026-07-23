@@ -2266,12 +2266,23 @@ def variant_labels(request):
             continue
         for _ in range(n):
             render_labels.append(lb)
+    # "Orqaga" qaytadigan manzil: qaysi sahifadan kelingan bo'lsa o'sha.
+    # Yorliq sahifasi yangi oynada ochilgani uchun brauzer tarixi bo'sh —
+    # shuning uchun manzilni aniq beramiz. Faqat ichki yo'l ('/...'), tashqi
+    # havola emas (ochiq-redirect xavfsizligi).
+    back_raw = (request.GET.get('back') or '').strip()
+    if back_raw.startswith('/') and not back_raw.startswith('//'):
+        back_url = back_raw
+    else:
+        back_url = reverse('product_list')
+
     return render(request, 'inventory/variant_labels.html', {
         'store_name': PRICE_LABEL_STORE_NAME,
         'labels': render_labels, 'copies': copies_raw if by_stock else copies,
         'by_stock': by_stock, 'skipped': skipped,
         'uniq_labels': labels,          # o'lcham tanlash paneli uchun
         'variant_count': len(labels),
+        'back_url': back_url,
         # products= bilan kelgan bo'lsa ham "Nusxa" formasi ishlashi uchun
         # aniq tur id'larini qaytaramiz
         'ids': (','.join(str(v.pk) for v in variants) if pids

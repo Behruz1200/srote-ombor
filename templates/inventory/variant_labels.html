@@ -16,7 +16,7 @@
             <div class="dash-hero__actions">
                 <button onclick="window.print()" class="dash-btn dash-btn--primary"><i class="bi bi-printer"></i> <span>Chop etish (dialog)</span></button>
                 <a href="{% url 'price_labels' %}?ids={{ ids }}&size=58x40" class="dash-btn dash-btn--ghost"><i class="bi bi-tag"></i> <span>Narx etiketkasi</span></a>
-                <a href="{% url 'product_list' %}" id="backBtn" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Orqaga</span></a>
+                <a href="{{ back_url|default:'/products/' }}" id="backBtn" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Orqaga</span></a>
             </div>
         </div>
     </header>
@@ -263,14 +263,10 @@
 </script>
 
 <script>
-// "Orqaga" — brauzer tarixi bo'lsa o'sha yerga, aks holda havoladagi manzil
-(function () {
-    var b = document.getElementById('backBtn');
-    if (!b) return;
-    b.addEventListener('click', function (e) {
-        if (window.history.length > 1) { e.preventDefault(); window.history.back(); }
-    });
-})();
+// "Orqaga" — har doim kelib chiqgan sahifaga (back_url). Ilgari history.back()
+// ishlatilardi: yangi oynada tarix bo'sh bo'lgani uchun noto'g'ri sahifaga
+// (Mahsulotlar) olib borardi, nusxa o'zgartirilгач esa oldingi yorliq
+// ko'rinishiga qaytarardi. Endi to'g'ridan-to'g'ri havoladagi manzil ishlaydi.
 </script>
 
 <style>

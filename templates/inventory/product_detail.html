@@ -43,8 +43,8 @@
                         <a href="{% url 'intake_for_product' product.code %}" class="dash-btn dash-btn--primary dash-btn--sm">
                             <i class="bi bi-box-arrow-in-down"></i> <span>Qabul</span>
                         </a>
-                        <a href="{% url 'variant_labels' %}?products={{ product.pk }}&copies=stock"
-                           target="_blank" class="dash-btn dash-btn--ghost dash-btn--sm">
+                        <a href="{% url 'variant_labels' %}?products={{ product.pk }}&copies=stock&back={{ request.path|urlencode }}"
+                           class="dash-btn dash-btn--ghost dash-btn--sm">
                             <i class="bi bi-tags"></i> <span>Etiketka</span>
                         </a>
                         <a href="{% url 'price_labels' %}?code={{ product.code }}&size=58x40" target="_blank" class="dash-btn dash-btn--ghost dash-btn--sm">
@@ -236,8 +236,8 @@
             </strong>
             <div class="d-flex gap-2">
                 {% if variant_ids %}
-                <a href="{% url 'variant_labels' %}?ids={{ variant_ids }}&copies=1"
-                   class="btn btn-sm btn-outline-success" target="_blank"
+                <a href="{% url 'variant_labels' %}?ids={{ variant_ids }}&copies=1&back={{ request.path|urlencode }}"
+                   class="btn btn-sm btn-outline-success"
                    title="Har turga shtrix-kodli termal etiketka">
                     <i class="bi bi-tag"></i> Etiketka
                 </a>
@@ -292,8 +292,8 @@
                             {% else %}{{ r.stock_total }}{% endif %}
                         </td>
                         <td class="text-end">
-                            <a href="{% url 'variant_labels' %}?ids={{ r.variant.pk }}&copies={{ r.stock_total|default:1 }}"
-                               class="btn btn-sm btn-outline-secondary py-0 px-1" target="_blank"
+                            <a href="{% url 'variant_labels' %}?ids={{ r.variant.pk }}&copies={{ r.stock_total|default:1 }}&back={{ request.path|urlencode }}"
+                               class="btn btn-sm btn-outline-secondary py-0 px-1"
                                title="Shu turga etiketka (shtrix-kod bilan)">
                                 <i class="bi bi-tag"></i>
                             </a>
