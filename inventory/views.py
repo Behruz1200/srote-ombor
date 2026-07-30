@@ -7846,6 +7846,7 @@ def _insights_context(request):
         cmax = max((c['revenue'] for c in node['cats']), default=0) or 1
         for c in node['cats']:
             c['bar'] = c['revenue'] / cmax * 100
+    _color_tree(group_tree)
 
     # Sotuv trendi (kunlar bo'yicha)
     daily_map = {}
@@ -9739,6 +9740,34 @@ def product_export(request):
     return resp
 
 
+# Har bo'lim uchun alohida, aniq (professional) rang
+GROUP_COLORS = {
+    'Erkaklar':            '#2563EB',   # ko'k
+    'Ayollar':             '#DB2777',   # pushti
+    'Bolalar':             '#F59E0B',   # amber
+    'Parfumeriya va uy':   '#0D9488',   # teal
+    "Bo'limsiz":           '#6B7280',   # kulrang
+}
+
+
+def _hex_rgba(hexstr, alpha):
+    h = hexstr.lstrip('#')
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f'rgba({r},{g},{b},{alpha:.2f})'
+
+
+def _color_tree(nodes):
+    """Daraxtga rang beradi: har bo'lim o'z rangi, kategoriyalar esa o'sha
+    rangning quyuqdan ochiqqa tuslari (kattadan kichraygan sari ochroq)."""
+    for node in nodes:
+        base = GROUP_COLORS.get(node['name'], '#6B7280')
+        node['color'] = base
+        n = max(len(node['cats']), 1)
+        for i, c in enumerate(node['cats']):
+            alpha = max(0.42, 1.0 - (i / n) * 0.6)
+            c['color'] = _hex_rgba(base, alpha)
+
+
 @admin_required
 def warehouse(request):
     """Ombor — to'liq nazorat va tahlil.
@@ -9872,6 +9901,7 @@ def warehouse(request):
         cmax = max((c['cost_val'] for c in node['cats']), default=0) or 1
         for c in node['cats']:
             c['bar'] = c['cost_val'] / cmax * 100
+    _color_tree(group_tree)
 
     # ---------- ABC tahlili (90 kunlik tushum bo'yicha) ----------
     prod_stock = {r['variant__product_id']: r for r in stock.values(

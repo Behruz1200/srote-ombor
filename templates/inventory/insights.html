@@ -529,7 +529,7 @@
                 <details class="wtree__grp" {% if forloop.counter <= 2 %}open{% endif %}>
                     <summary>
                         <i class="bi bi-chevron-right wtree__caret"></i>
-                        <span class="wtree__dot" style="background:{{ g.name|tile_fg }}"></span>
+                        <span class="wtree__dot" style="background:{{ g.color }}"></span>
                         <span class="wtree__name">{{ g.name }}</span>
                         <span class="wtree__meta">{{ g.cats|length }} kategoriya · {{ g.qty }} dona</span>
                         <span class="wtree__val">{{ g.revenue|floatformat:0|som }} so'm</span>
@@ -539,7 +539,7 @@
                         {% for c in g.cats %}
                         <a href="{% url 'product_list' %}?category={{ c.id }}" class="wtree__cat">
                             <span class="wtree__cname">{{ c.name }}</span>
-                            <span class="wtree__bar"><span style="width:{{ c.bar|floatformat:0 }}%;background:{{ g.name|tile_fg }}"></span></span>
+                            <span class="wtree__bar"><span style="width:{{ c.bar|floatformat:0 }}%;background:{{ c.color }}"></span></span>
                             <span class="wtree__cn">{{ c.qty }} dona</span>
                             <span class="wtree__cval">{{ c.revenue|floatformat:0|som }}</span>
                         </a>
@@ -1542,7 +1542,12 @@
         const labels = [{% for g in by_group %}"{{ g.variant__product__category__group__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
         const values = [{% for g in by_group %}{{ g.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}];
         const total = values.reduce((s, v) => s + (v || 0), 0);
-        const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+        // Bo'lim ranglari — daraxt bilan bir xil (izchil ko'rinish)
+        const GCOL = {
+            'Erkaklar': '#2563EB', 'Ayollar': '#DB2777', 'Bolalar': '#F59E0B',
+            'Parfumeriya va uy': '#0D9488', "Bo'limsiz": '#6B7280'
+        };
+        const colors = labels.map((l, i) => GCOL[l] || PALETTE[i % PALETTE.length]);
         // Jadvaldagi "Ulush" ustunini to'ldiramiz
         document.querySelectorAll('[data-grp-share]').forEach(el => {
             const v = parseFloat(el.dataset.grpShare) || 0;

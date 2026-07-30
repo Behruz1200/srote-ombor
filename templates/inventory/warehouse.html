@@ -136,7 +136,7 @@
         <details class="wtree__grp" open>
             <summary>
                 <i class="bi bi-chevron-right wtree__caret"></i>
-                <span class="wtree__dot" style="background:{{ g.name|tile_fg }}"></span>
+                <span class="wtree__dot" style="background:{{ g.color }}"></span>
                 <span class="wtree__name">{{ g.name }}</span>
                 <span class="wtree__meta">{{ g.cats|length }} kategoriya · {{ g.products }} mahsulot</span>
                 <span class="wtree__val">{{ g.cost_val|floatformat:0|som }} so'm</span>
@@ -146,7 +146,7 @@
                 {% for c in g.cats %}
                 <a href="{% url 'product_list' %}?category={{ c.id }}" class="wtree__cat">
                     <span class="wtree__cname">{{ c.name }}</span>
-                    <span class="wtree__bar"><span style="width:{{ c.bar|floatformat:0 }}%;background:{{ g.name|tile_fg }}"></span></span>
+                    <span class="wtree__bar"><span style="width:{{ c.bar|floatformat:0 }}%;background:{{ c.color }}"></span></span>
                     <span class="wtree__cn">{{ c.products }} ta · {{ c.units|som }} dona</span>
                     <span class="wtree__cval">{{ c.cost_val|floatformat:0|som }}</span>
                 </a>
