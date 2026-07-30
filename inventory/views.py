@@ -7817,6 +7817,36 @@ def _insights_context(request):
         if not r['variant__product__category__group__name']:
             r['variant__product__category__group__name'] = "Bo'limsiz"
 
+    # Ierarxiya daraxti: Bo'lim -> Kategoriya (daromad bo'yicha)
+    _tree_rows = list(sales.values(
+        'variant__product__category__group__name',
+        'variant__product__category__group__sort_order',
+        'variant__product__category__id',
+        'variant__product__category__name',
+    ).annotate(revenue=Sum(revenue_expr), qty=Sum('quantity')))
+    _grand = sum(float(r['revenue'] or 0) for r in _tree_rows) or 1
+    _tree = {}
+    for r in _tree_rows:
+        gname = r['variant__product__category__group__name'] or "Bo'limsiz"
+        gorder = r['variant__product__category__group__sort_order']
+        gorder = 99 if gorder is None else gorder
+        node = _tree.setdefault(gname, {
+            'name': gname, 'order': gorder, 'revenue': 0.0, 'qty': 0, 'cats': []})
+        rev = float(r['revenue'] or 0)
+        node['revenue'] += rev
+        node['qty'] += r['qty'] or 0
+        node['cats'].append({
+            'id': r['variant__product__category__id'],
+            'name': r['variant__product__category__name'] or 'Kategoriyasiz',
+            'revenue': rev, 'qty': r['qty'] or 0})
+    group_tree = sorted(_tree.values(), key=lambda x: (x['order'], -x['revenue']))
+    for node in group_tree:
+        node['share'] = node['revenue'] / _grand * 100
+        node['cats'].sort(key=lambda c: -c['revenue'])
+        cmax = max((c['revenue'] for c in node['cats']), default=0) or 1
+        for c in node['cats']:
+            c['bar'] = c['revenue'] / cmax * 100
+
     # Sotuv trendi (kunlar bo'yicha)
     daily_map = {}
     for i in range(days):
@@ -7928,6 +7958,7 @@ def _insights_context(request):
         'by_branch': by_branch,
         'by_category': by_category,
         'by_group': by_group,
+        'group_tree': group_tree,
         'branch_compare': branch_compare,
         'turnover': turnover,
         'daily_labels': daily_labels,
