@@ -131,9 +131,9 @@
     <h6 class="text-muted text-uppercase small mb-2">
         <i class="bi bi-diagram-3"></i> Ombor tuzilishi — Bo'lim → Kategoriya
     </h6>
-    <div class="wtree">
+    <div class="wtree" data-tree-scope="wh">
         {% for g in group_tree %}
-        <details class="wtree__grp" open>
+        <details class="wtree__grp" data-gkey="{{ g.name }}">
             <summary>
                 <i class="bi bi-chevron-right wtree__caret"></i>
                 <span class="wtree__dot" style="background:{{ g.color }}"></span>
@@ -189,6 +189,23 @@
   .wtree__cname{min-width:90px}.wtree__cn{display:none}
 }
 </style>
+
+<script>
+// Daraxt: standart yopiq; har bo'limning ochiq/yopiq holati brauzerда
+// saqlanadi (sahifa yangilanganda oxirgi holat tiklanadi).
+(function () {
+    document.querySelectorAll('.wtree[data-tree-scope]').forEach(function (wt) {
+        var scope = wt.getAttribute('data-tree-scope');
+        wt.querySelectorAll('details.wtree__grp[data-gkey]').forEach(function (d) {
+            var key = 'yurit_tree:' + scope + ':' + d.getAttribute('data-gkey');
+            try { if (localStorage.getItem(key) === '1') d.open = true; } catch (e) {}
+            d.addEventListener('toggle', function () {
+                try { localStorage.setItem(key, d.open ? '1' : '0'); } catch (e) {}
+            });
+        });
+    });
+})();
+</script>
 
 <!-- ===== Bo'lim bo'yicha (4 katta guruh) ===== -->
 <div class="card p-3 mb-3">

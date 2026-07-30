@@ -524,9 +524,9 @@
             <h2 class="yrt-h2"><i class="bi bi-diagram-3 text-primary"></i> Tuzilma — Bo'lim → Kategoriya</h2>
         </div>
         <div class="yrt-section-body">
-            <div class="wtree">
+            <div class="wtree" data-tree-scope="ins">
                 {% for g in group_tree %}
-                <details class="wtree__grp" {% if forloop.counter <= 2 %}open{% endif %}>
+                <details class="wtree__grp" data-gkey="{{ g.name }}">
                     <summary>
                         <i class="bi bi-chevron-right wtree__caret"></i>
                         <span class="wtree__dot" style="background:{{ g.color }}"></span>
@@ -576,6 +576,22 @@
     .wtree__cval{font-weight:600;font-size:.88rem;white-space:nowrap;min-width:90px;text-align:right}
     @media(max-width:700px){.wtree__meta,.wtree__share{display:none}.wtree__children{padding-left:20px}.wtree__cname{min-width:90px}.wtree__cn{display:none}}
     </style>
+
+    <script>
+    // Daraxt: standart yopiq; ochiq/yopiq holati brauzerда saqlanadi.
+    (function () {
+        document.querySelectorAll('.wtree[data-tree-scope]').forEach(function (wt) {
+            var scope = wt.getAttribute('data-tree-scope');
+            wt.querySelectorAll('details.wtree__grp[data-gkey]').forEach(function (d) {
+                var key = 'yurit_tree:' + scope + ':' + d.getAttribute('data-gkey');
+                try { if (localStorage.getItem(key) === '1') d.open = true; } catch (e) {}
+                d.addEventListener('toggle', function () {
+                    try { localStorage.setItem(key, d.open ? '1' : '0'); } catch (e) {}
+                });
+            });
+        });
+    })();
+    </script>
 
     <!-- ── Category + Out of stock ────────────────────────────────────── -->
     <div class="row g-3">
