@@ -473,6 +473,51 @@
         </div>
     </div>
 
+    <!-- ── Bo'lim (4 katta guruh) bo'yicha ────────────────────────────── -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-collection text-primary"></i> Bo'lim bo'yicha daromad</h2>
+                </div>
+                <div class="yrt-section-body">
+                    <div class="yrt-chart-box" style="height: 320px;"><canvas id="groupChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="yrt-section">
+                <div class="yrt-section-head">
+                    <h2 class="yrt-h2"><i class="bi bi-list-ol text-primary"></i> Bo'lim tafsiloti</h2>
+                </div>
+                <div class="yrt-section-body flush">
+                    <div class="table-responsive">
+                        <table class="yrt-data-table">
+                            <thead><tr>
+                                <th>Bo'lim</th>
+                                <th class="text-end">Daromad</th>
+                                <th class="text-end">Dona</th>
+                                <th class="text-end">Ulush</th>
+                            </tr></thead>
+                            <tbody>
+                            {% for g in by_group %}
+                            <tr>
+                                <td><strong>{{ g.variant__product__category__group__name }}</strong></td>
+                                <td class="text-end">{{ g.revenue|default:0|som }}</td>
+                                <td class="text-end">{{ g.qty|default:0 }}</td>
+                                <td class="text-end"><span class="yrt-tag primary" data-grp-share="{{ g.revenue|default:0|unlocalize }}">—</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">Ma'lumot yo'q.</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ── Category + Out of stock ────────────────────────────────────── -->
     <div class="row g-3">
         <div class="col-md-6">
@@ -1426,6 +1471,51 @@
                         border: { display: false },
                         ticks: { color: muted, font: { family: 'Fira Code', size: 10 } }
                     })
+                }
+            }
+        });
+    })();
+
+    /* ──────────── Bo'lim (4 guruh) doughnut ────────────────────────── */
+    (function() {
+        const el = document.getElementById('groupChart');
+        if (!el) return;
+        const labels = [{% for g in by_group %}"{{ g.variant__product__category__group__name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+        const values = [{% for g in by_group %}{{ g.revenue|default:0|unlocalize }}{% if not forloop.last %},{% endif %}{% endfor %}];
+        const total = values.reduce((s, v) => s + (v || 0), 0);
+        const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+        // Jadvaldagi "Ulush" ustunini to'ldiramiz
+        document.querySelectorAll('[data-grp-share]').forEach(el => {
+            const v = parseFloat(el.dataset.grpShare) || 0;
+            el.textContent = (total ? Math.round(v / total * 100) : 0) + '%';
+        });
+        new Chart(el, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: 'rgba(255,255,255,0.85)',
+                    borderWidth: 2,
+                    hoverOffset: 8,
+                }],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: muted, font: { family: 'Fira Sans', size: 12, weight: 500 },
+                                  padding: 14, usePointStyle: true, pointStyle: 'circle' }
+                    },
+                    tooltip: Object.assign({}, glassTooltip, {
+                        callbacks: {
+                            label: c => ' ' + c.label + ': ' + fmtSom(c.raw) + '  ('
+                                + (total ? Math.round(c.raw/total*100) : 0) + '%)'
+                        }
+                    }),
                 }
             }
         });

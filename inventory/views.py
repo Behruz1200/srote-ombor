@@ -7806,6 +7806,17 @@ def _insights_context(request):
         qty=Sum('quantity'),
     ).order_by('-revenue'))
 
+    # Bo'lim (4 katta guruh) bo'yicha
+    by_group = list(sales.values(
+        'variant__product__category__group__name',
+    ).annotate(
+        revenue=Sum(revenue_expr),
+        qty=Sum('quantity'),
+    ).order_by('-revenue'))
+    for r in by_group:
+        if not r['variant__product__category__group__name']:
+            r['variant__product__category__group__name'] = "Bo'limsiz"
+
     # Sotuv trendi (kunlar bo'yicha)
     daily_map = {}
     for i in range(days):
@@ -7916,6 +7927,7 @@ def _insights_context(request):
         'top_sellers': top_sellers,
         'by_branch': by_branch,
         'by_category': by_category,
+        'by_group': by_group,
         'branch_compare': branch_compare,
         'turnover': turnover,
         'daily_labels': daily_labels,
@@ -9792,6 +9804,44 @@ def warehouse(request):
             'share': (cv / cost_val * 100) if cost_val > 0 else 0,
         })
 
+    # ---------- Ierarxiya daraxti: Bo'lim -> Kategoriya -> mahsulotlar ----------
+    tree_rows = list(stock.values(
+        'variant__product__category__group__id',
+        'variant__product__category__group__name',
+        'variant__product__category__group__sort_order',
+        'variant__product__category__id',
+        'variant__product__category__name',
+    ).annotate(
+        units=Sum('stock_count'),
+        cost_val=Sum(COST),
+        products=Count('variant__product', distinct=True),
+    ))
+    _tree = {}
+    for r in tree_rows:
+        gname = r['variant__product__category__group__name'] or "Bo'limsiz"
+        gorder = r['variant__product__category__group__sort_order'] or 99
+        node = _tree.setdefault(gname, {
+            'name': gname, 'order': gorder, 'cost_val': 0.0,
+            'products': 0, 'units': 0, 'cats': []})
+        cv = float(r['cost_val'] or 0)
+        node['cost_val'] += cv
+        node['products'] += r['products'] or 0
+        node['units'] += r['units'] or 0
+        node['cats'].append({
+            'id': r['variant__product__category__id'],
+            'name': r['variant__product__category__name'] or 'Kategoriyasiz',
+            'cost_val': cv,
+            'products': r['products'] or 0,
+            'units': r['units'] or 0,
+        })
+    group_tree = sorted(_tree.values(), key=lambda x: (x['order'], -x['cost_val']))
+    for node in group_tree:
+        node['share'] = (node['cost_val'] / cost_val * 100) if cost_val > 0 else 0
+        node['cats'].sort(key=lambda c: -c['cost_val'])
+        cmax = max((c['cost_val'] for c in node['cats']), default=0) or 1
+        for c in node['cats']:
+            c['bar'] = c['cost_val'] / cmax * 100
+
     # ---------- ABC tahlili (90 kunlik tushum bo'yicha) ----------
     prod_stock = {r['variant__product_id']: r for r in stock.values(
         'variant__product_id').annotate(
@@ -9917,6 +9967,7 @@ def warehouse(request):
         'matrix_max': max([m['cost_val'] for m in matrix], default=0),
         'groups_matrix': groups_matrix,
         'groups_max': max([g['cost_val'] for g in groups_matrix], default=0),
+        'group_tree': group_tree,
         'abc_rows': abc_rows,
         'dead': dead[:40],
         'dead_total': len(dead),
