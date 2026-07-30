@@ -6169,9 +6169,22 @@ def category_list(request):
 
     # Filter + search
     q = (request.GET.get('q') or '').strip()
-    categories = Category.objects.all()
+    group_slug = (request.GET.get('group') or '').strip()  # men|women|kids|home|none
+    categories = Category.objects.select_related('group')
     if q:
         categories = categories.filter(name__icontains=q)
+    if group_slug == 'none':
+        categories = categories.filter(group__isnull=True)
+    elif group_slug:
+        categories = categories.filter(group__slug=group_slug)
+
+    # Bo'lim tugmalari uchun: har bo'limда nechta kategoriya + bo'limsizlar soni
+    _gc = dict(Category.objects.filter(group__isnull=False)
+               .values_list('group__slug').annotate(n=Count('pk')))
+    groups = list(Group.objects.all())
+    for g in groups:
+        g.n_cats = _gc.get(g.slug, 0)
+    unassigned_count = Category.objects.filter(group__isnull=True).count()
 
     # 30-kunlik sotuvlar va revenue agregati
     since_30d = timezone.now() - timedelta(days=30)
@@ -6228,7 +6241,9 @@ def category_list(request):
     return render(request, 'inventory/category_list.html', {
         'categories': categories, 'form': form,
         'q': q,
-        'groups': Group.objects.all(),
+        'groups': groups,
+        'group_slug': group_slug,
+        'unassigned_count': unassigned_count,
         'total_categories': total_categories,
         'no_category_count': no_category_count,
         'top_cat': top_cat,
