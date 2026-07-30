@@ -108,8 +108,23 @@
     </div>
     {% endif %}
 
+    <!-- Bo'limlar (4 katta guruh) -->
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a href="{% url 'product_list' %}"
+           class="btn btn-sm {% if not group_slug %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+            Hammasi
+        </a>
+        {% for g in groups %}
+        <a href="?group={{ g.slug }}"
+           class="btn btn-sm {% if group_slug == g.slug %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+            {{ g.name }} <span class="opacity-75">· {{ g.n_products }}</span>
+        </a>
+        {% endfor %}
+    </div>
+
     <!-- Filtrlar -->
     <form method="get" class="card p-3 mb-3">
+        <input type="hidden" name="group" value="{{ group_slug }}">
         <div class="row g-2">
             <div class="col-md-4">
                 <label class="form-label small text-muted mb-1">Qidirish</label>

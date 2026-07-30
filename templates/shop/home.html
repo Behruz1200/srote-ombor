@@ -103,12 +103,43 @@
   </div>
 </section>
 
+{% if nav_groups %}
+<section class="wrap" style="padding:64px 24px 8px">
+  <div class="head">
+    <div>
+      <span class="eyebrow">Bo'limlar</span>
+      <h2 class="sec-title" style="margin-top:.5rem">Nimani qidiryapsiz?</h2>
+    </div>
+  </div>
+  <div class="groups4">
+    {% for g in nav_groups %}
+    <a href="{% url 'shop_catalog' %}?group={{ g.slug }}" class="g4"
+       style="background:{{ g.name|tile_bg }};color:{{ g.name|tile_fg }}">
+      <span class="g4__ini">{{ g.name|initials:1 }}</span>
+      <span class="g4__name">{{ g.name }}</span>
+      <span class="g4__n">{{ g.n }} ta mahsulot <i class="bi bi-arrow-right"></i></span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+<style>
+.groups4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.g4{border-radius:16px;padding:24px;min-height:150px;display:flex;flex-direction:column;
+  position:relative;overflow:hidden;transition:transform .18s,box-shadow .18s}
+.g4:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(15,17,21,.12)}
+.g4__ini{font-family:var(--serif);font-size:2.6rem;font-weight:850;line-height:1;opacity:.3;letter-spacing:-.04em}
+.g4__name{font-family:var(--serif);font-weight:600;font-size:1.35rem;margin-top:auto}
+.g4__n{font-size:.82rem;opacity:.8;margin-top:.25rem}
+@media(max-width:768px){.groups4{grid-template-columns:1fr 1fr;gap:10px}.g4{min-height:120px;padding:18px}}
+</style>
+{% endif %}
+
 {% if categories %}
-<section class="wrap" style="padding:72px 24px">
+<section class="wrap" style="padding:56px 24px 72px">
   <div class="head">
     <div>
       <span class="eyebrow">Assortiment</span>
-      <h2 class="sec-title" style="margin-top:.5rem">Bo'limlar</h2>
+      <h2 class="sec-title" style="margin-top:.5rem">Kategoriyalar</h2>
     </div>
     <a href="{% url 'shop_catalog' %}" class="sec-more">Barchasi</a>
   </div>

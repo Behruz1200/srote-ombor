@@ -21,19 +21,30 @@
 
   <div class="cat-head">
     <div>
-      <span class="eyebrow">{% if q %}Qidiruv{% else %}Assortiment{% endif %}</span>
+      <span class="eyebrow">{% if q %}Qidiruv{% elif group_name %}Bo'lim{% else %}Assortiment{% endif %}</span>
       <h1 class="sec-title" style="margin-top:.5rem">
-        {% if q %}“{{ q }}”{% else %}Katalog{% endif %}
+        {% if q %}“{{ q }}”{% elif group_name %}{{ group_name }}{% else %}Katalog{% endif %}
       </h1>
     </div>
     <span class="cat-count">{{ paginator.count }} ta mahsulot</span>
   </div>
 
+  {# Bo'limlar (4 katta guruh) #}
+  <div class="filters" style="margin-bottom:14px">
+    <a href="{% url 'shop_catalog' %}"
+       class="chip {% if not group_slug %}is-on{% endif %}">Hammasi</a>
+    {% for g in nav_groups %}
+    <a href="?group={{ g.slug }}"
+       class="chip {% if group_slug == g.slug %}is-on{% endif %}">{{ g.name }} · {{ g.n }}</a>
+    {% endfor %}
+  </div>
+
+  {# Kategoriyalar (tanlangan bo'lim ichida) #}
   <div class="filters">
-    <a href="{% url 'shop_catalog' %}{% if q %}?q={{ q }}{% endif %}"
-       class="chip {% if not category_id %}is-on{% endif %}">Hammasi</a>
+    <a href="{% if group_slug %}?group={{ group_slug }}{% else %}{% url 'shop_catalog' %}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+       class="chip {% if not category_id %}is-on{% endif %}">Barcha turlar</a>
     {% for c in categories %}
-    <a href="?category={{ c.id }}{% if q %}&q={{ q }}{% endif %}"
+    <a href="?category={{ c.id }}{% if group_slug %}&group={{ group_slug }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
        class="chip {% if category_id == c.id|stringformat:'s' %}is-on{% endif %}">{{ c.name }}</a>
     {% endfor %}
   </div>

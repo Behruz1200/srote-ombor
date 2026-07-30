@@ -35,7 +35,7 @@ from reportlab.platypus import (
 
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
-    Category, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
+    Category, Group, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
@@ -755,11 +755,17 @@ def product_list(request):
     """Mahsulotlar ro'yxati: qidiruv + filtrlar + sortable + 30 kunlik sotilganlik."""
     q = (request.GET.get('q') or '').strip()
     category_id = request.GET.get('category') or ''
+    group_slug = (request.GET.get('group') or '').strip()  # men|women|kids|home
     stock_filter = request.GET.get('stock') or ''  # zero|low|in_stock|''
     price_filter = request.GET.get('price') or ''  # 'zero' = narxsiz sotuvda
     sort = request.GET.get('sort') or '-created_at'
 
-    products = Product.objects.select_related('category').exclude(is_open_price=True)
+    products = (Product.objects
+                .select_related('category', 'category__group')
+                .exclude(is_open_price=True))
+
+    if group_slug:
+        products = products.filter(category__group__slug=group_slug)
 
     if q:
         # Subquery orqali — variant JOIN'lari annotatsiya Sum'larini
@@ -955,7 +961,20 @@ def product_list(request):
             p.unit_profit = 0
             p.margin_percent = 0
 
-    categories = Category.objects.order_by('name')
+    # Kategoriya ro'yxati: bo'lim tanlangan bo'lsa faqat o'sha bo'limnikini
+    categories = Category.objects.select_related('group').order_by('name')
+    if group_slug:
+        categories = categories.filter(group__slug=group_slug)
+
+    # 4 bo'lim + har biriga nechta mahsulot (filtr tugmalari uchun)
+    _grp_counts = dict(
+        Product.objects.exclude(is_open_price=True)
+        .filter(category__group__isnull=False)
+        .values_list('category__group__slug')
+        .annotate(n=Count('pk')))
+    groups = list(Group.objects.all())
+    for g in groups:
+        g.n_products = _grp_counts.get(g.slug, 0)
 
     # Sifat nazorati: sotuvda turgan, lekin narxi 0 bo'lgan tovarlar (0 so'mga ketadi!)
     zero_price_count = (Product.objects.exclude(is_open_price=True)
@@ -990,6 +1009,8 @@ def product_list(request):
         'zero_price_count': zero_price_count,
         'sort': sort,
         'categories': categories,
+        'groups': groups,
+        'group_slug': group_slug,
     })
 
 
@@ -6132,6 +6153,8 @@ def category_list(request):
                     cat.name = new_name
                     if new_prefix:
                         cat.prefix = new_prefix.upper()
+                    grp = (request.POST.get('group') or '').strip()
+                    cat.group_id = int(grp) if grp.isdigit() else None
                     cat.save()
                     messages.success(request, f"\"{cat.name}\" yangilandi.")
             return redirect('category_list')
@@ -6205,6 +6228,7 @@ def category_list(request):
     return render(request, 'inventory/category_list.html', {
         'categories': categories, 'form': form,
         'q': q,
+        'groups': Group.objects.all(),
         'total_categories': total_categories,
         'no_category_count': no_category_count,
         'top_cat': top_cat,
@@ -9729,6 +9753,30 @@ def warehouse(request):
             'share': (cv / cost_val * 100) if cost_val > 0 else 0,
         })
 
+    # ---------- Bo'lim (4 katta guruh) bo'yicha ----------
+    grp_rows = list(stock.values(
+        'variant__product__category__group__id',
+        'variant__product__category__group__name'
+    ).annotate(
+        units=Sum('stock_count'),
+        cost_val=Sum(COST),
+        retail_val=Sum(RETAIL),
+        products=Count('variant__product', distinct=True),
+    ).order_by('-cost_val'))
+    groups_matrix = []
+    for r in grp_rows:
+        cv = float(r['cost_val'] or 0)
+        rv = float(r['retail_val'] or 0)
+        groups_matrix.append({
+            'name': r['variant__product__category__group__name'] or "Bo'limsiz",
+            'units': r['units'] or 0,
+            'products': r['products'] or 0,
+            'cost_val': cv,
+            'retail_val': rv,
+            'margin': ((rv - cv) / cv * 100) if cv > 0 else None,
+            'share': (cv / cost_val * 100) if cost_val > 0 else 0,
+        })
+
     # ---------- ABC tahlili (90 kunlik tushum bo'yicha) ----------
     prod_stock = {r['variant__product_id']: r for r in stock.values(
         'variant__product_id').annotate(
@@ -9852,6 +9900,8 @@ def warehouse(request):
         'adjust_rows': adjust_rows,
         'matrix': matrix,
         'matrix_max': max([m['cost_val'] for m in matrix], default=0),
+        'groups_matrix': groups_matrix,
+        'groups_max': max([g['cost_val'] for g in groups_matrix], default=0),
         'abc_rows': abc_rows,
         'dead': dead[:40],
         'dead_total': len(dead),
@@ -9950,12 +10000,29 @@ def _shop_stock_qs():
                             'variant__product__category'))
 
 
+def _shop_groups():
+    """4 bo'lim + har birida nechta tovar (faqat omborda bori). Bo'sh
+    bo'limlar ko'rsatilmaydi."""
+    counts = dict(
+        _shop_stock_qs()
+        .filter(variant__product__category__group__isnull=False)
+        .values_list('variant__product__category__group__slug')
+        .annotate(n=Count('variant__product', distinct=True)))
+    out = []
+    for g in Group.objects.all():
+        n = counts.get(g.slug, 0)
+        if n:
+            out.append({'slug': g.slug, 'name': g.name, 'n': n})
+    return out
+
+
 def _shop_ctx(request, **extra):
     cart = request.session.get(CART_KEY) or {}
     ctx = {
         'shop_name': SHOP_NAME, 'shop_city': SHOP_CITY,
         'shop_phone': SHOP_PHONE, 'shop_telegram': SHOP_TELEGRAM,
         'cart_count': sum(int(v) for v in cart.values()),
+        'nav_groups': _shop_groups(),   # sayt menyusi — har sahifada
     }
     ctx.update(extra)
     return ctx
@@ -10019,11 +10086,14 @@ def shop_catalog(request):
     stock = _shop_stock_qs()
     q = (request.GET.get('q') or '').strip()
     cat = request.GET.get('category') or ''
+    group = (request.GET.get('group') or '').strip()   # men|women|kids|home
     if q:
         stock = stock.filter(
             Q(variant__product__name__icontains=q) |
             Q(variant__product__brand__icontains=q) |
             Q(variant__product__category__name__icontains=q))
+    if group:
+        stock = stock.filter(variant__product__category__group__slug=group)
     if cat.isdigit():
         stock = stock.filter(variant__product__category_id=int(cat))
 
@@ -10034,13 +10104,24 @@ def shop_catalog(request):
     page = paginator.get_page(request.GET.get('page') or 1)
     products = _shop_cards(list(page.object_list))
 
+    # Kategoriya chiplari: bo'lim tanlangan bo'lsa faqat o'sha bo'limnikini
     categories = (Category.objects.filter(
         products__variants__branch_stocks__in=_shop_stock_qs())
         .annotate(n=Count('products', distinct=True))
         .order_by('name').distinct())
+    if group:
+        categories = categories.filter(group__slug=group)
+
+    # Bo'lim nomi (sarlavha uchun)
+    group_name = ''
+    if group:
+        g = Group.objects.filter(slug=group).first()
+        group_name = g.name if g else ''
+
     return render(request, 'shop/catalog.html', _shop_ctx(
         request, products=products, page_obj=page, paginator=paginator,
-        q=q, category_id=cat, categories=categories))
+        q=q, category_id=cat, categories=categories,
+        group_slug=group, group_name=group_name))
 
 
 def shop_product(request, code):

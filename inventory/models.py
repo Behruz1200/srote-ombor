@@ -71,8 +71,33 @@ class User(AbstractUser):
         return self.role == self.Role.ADMIN or self.is_superuser
 
 
+class Group(models.Model):
+    """Yuqori darajali bo'lim: Erkaklar, Ayollar, Bolalar, Parfumeriya/Uy.
+
+    Kategoriyalar shu bo'limlarga tegishli bo'ladi; mahsulot bo'limni
+    o'z kategoriyasidan oladi. 4 ta bo'lim boshlang'ich migratsiyada
+    yaratiladi (men / women / kids / home).
+    """
+    slug = models.SlugField(max_length=20, unique=True)
+    name = models.CharField(max_length=60)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Bo'lim"
+        verbose_name_plural = "Bo'limlar"
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
 class Category(models.Model):
     name = models.CharField(max_length=120, unique=True)
+    group = models.ForeignKey(
+        'Group', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='categories',
+        help_text="Bo'lim: Erkaklar / Ayollar / Bolalar / Parfumeriya-Uy"
+    )
     prefix = models.CharField(
         max_length=6, unique=True, blank=True,
         help_text="Mahsulot kodi prefiksi (masalan: OYO, KOY). Bo'sh qoldirilsa, "

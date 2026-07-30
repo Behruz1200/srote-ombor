@@ -170,6 +170,9 @@ textarea.field{height:auto;padding:12px 14px;line-height:1.6}
       <button type="submit" aria-label="Qidirish"><i class="bi bi-search"></i></button>
     </form>
     <nav class="navlinks">
+      {% for g in nav_groups %}
+      <a href="{% url 'shop_catalog' %}?group={{ g.slug }}">{{ g.name }}</a>
+      {% endfor %}
       <a href="{% url 'shop_catalog' %}">Katalog</a>
       <a href="#aloqa">Aloqa</a>
     </nav>

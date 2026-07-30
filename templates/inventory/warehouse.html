@@ -126,6 +126,53 @@
     </div>
 </div>
 
+<!-- ===== Bo'lim bo'yicha (4 katta guruh) ===== -->
+<div class="card p-3 mb-3">
+    <h6 class="text-muted text-uppercase small mb-2">
+        <i class="bi bi-collection"></i> Bo'lim bo'yicha
+    </h6>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0" data-colkey="wh-groups">
+            <thead><tr>
+                <th>Bo'lim</th>
+                <th class="text-end">Mahsulot</th>
+                <th class="text-end">Dona</th>
+                <th class="text-end">Ombor puli</th>
+                <th class="text-end">Sotuvda</th>
+                <th class="text-end">Marja</th>
+                <th style="width:22%">Ulush</th>
+            </tr></thead>
+            <tbody>
+            {% for m in groups_matrix %}
+            <tr>
+                <td><strong>{{ m.name }}</strong></td>
+                <td class="text-end">{{ m.products }}</td>
+                <td class="text-end">{{ m.units|som }}</td>
+                <td class="text-end fw-semibold">{{ m.cost_val|floatformat:0|som }}</td>
+                <td class="text-end text-muted">{{ m.retail_val|floatformat:0|som }}</td>
+                <td class="text-end">
+                    {% if m.margin is not None %}
+                        <span class="text-{% if m.margin < 1 %}danger{% elif m.margin < 15 %}warning{% else %}success{% endif %}">{{ m.margin|floatformat:0 }}%</span>
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="flex-fill" style="background:var(--yrt-bg-subtle); border-radius:4px; height:8px; overflow:hidden;">
+                            <div style="height:100%; border-radius:4px; background:var(--yrt-primary);
+                                        width:{{ m.share|floatformat:1 }}%;"></div>
+                        </div>
+                        <span class="small text-muted" style="min-width:3rem">{{ m.share|floatformat:1 }}%</span>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-3">Bo'limlar hali belgilanmagan.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <!-- ===== Kategoriya matritsasi ===== -->
 <div class="card p-3 mb-3">
     <h6 class="text-muted text-uppercase small mb-2">

@@ -120,9 +120,12 @@ class ProductForm(forms.ModelForm):
 class CategoryForm(forms.ModelForm):
     class Meta:
         model = Category
-        fields = ['name']
-        widgets = {'name': forms.TextInput(attrs={'class': 'form-control'})}
-        labels = {'name': 'Kategoriya nomi'}
+        fields = ['name', 'group']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'group': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {'name': 'Kategoriya nomi', 'group': "Bo'lim"}
 
 
 class IntakeForm(forms.Form):

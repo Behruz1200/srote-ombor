@@ -88,6 +88,11 @@
                         <tr>
                             <td>
                                 <strong>{{ c.name }}</strong>
+                                {% if c.group %}
+                                    <span class="yrt-tag primary ms-1" style="font-size:.7rem">{{ c.group.name }}</span>
+                                {% else %}
+                                    <span class="yrt-tag ms-1" style="font-size:.7rem;opacity:.6">bo'limsiz</span>
+                                {% endif %}
                             </td>
                             <td><code>{{ c.prefix }}</code></td>
                             <td class="num">
@@ -125,6 +130,7 @@
                                             data-pk="{{ c.pk }}"
                                             data-name="{{ c.name }}"
                                             data-prefix="{{ c.prefix }}"
+                                            data-group="{{ c.group_id|default:'' }}"
                                             title="Tahrirlash" aria-label="Tahrirlash">
                                         <i class="bi bi-pencil"></i>
                                     </button>
@@ -268,6 +274,16 @@
                         <input type="text" name="name" id="edit_name" class="form-control" required>
                     </div>
                     <div class="mb-2">
+                        <label class="form-label">Bo'lim</label>
+                        <select name="group" id="edit_group" class="form-select">
+                            <option value="">— (belgilanmagan)</option>
+                            {% for g in groups %}
+                            <option value="{{ g.pk }}">{{ g.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Erkaklar / Ayollar / Bolalar / Parfumeriya-Uy</small>
+                    </div>
+                    <div class="mb-2">
                         <label class="form-label">Prefiks</label>
                         <input type="text" name="prefix" id="edit_prefix" class="form-control"
                                maxlength="6" style="text-transform:uppercase;">
@@ -291,6 +307,7 @@ document.querySelectorAll('.edit-cat-btn').forEach(btn => {
         document.getElementById('edit_pk').value = btn.dataset.pk;
         document.getElementById('edit_name').value = btn.dataset.name;
         document.getElementById('edit_prefix').value = btn.dataset.prefix || '';
+        document.getElementById('edit_group').value = btn.dataset.group || '';
         new bootstrap.Modal(document.getElementById('editCatModal')).show();
     });
 });
