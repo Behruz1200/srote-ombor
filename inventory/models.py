@@ -146,6 +146,13 @@ class Product(models.Model):
     )
     category = models.ForeignKey(Category, on_delete=models.PROTECT,
                                  related_name='products', null=True, blank=True)
+    # Nakladnoy (AI qabul) bir xil shtrix-kodga BOSHQA nom bergan bo'lsa —
+    # avtomatik qayta nomlamaymiz: taklif qilingan nomni shu yerga yozamiz
+    # va Mahsulotlar sahifasida "2 xil nom" ogohlantirishi chiqadi. Foydalanuvchi
+    # qaysi nomni qoldirishni tanlaydi (keyin bu maydon bo'shatiladi).
+    pending_name = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text="Nakladnoydan kelgan muqobil nom (tasdiqlanmagan).")
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to='products/', blank=True, null=True)
     default_sale_price = models.DecimalField(max_digits=12, decimal_places=2,

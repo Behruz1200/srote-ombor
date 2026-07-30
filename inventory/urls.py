@@ -76,6 +76,7 @@ urlpatterns = [
 
     path('products/', views.product_list, name='product_list'),
     path('products/bulk/', views.product_bulk_update, name='product_bulk_update'),
+    path('products/resolve-name/', views.product_resolve_name, name='product_resolve_name'),
     path('products/export/', views.product_export, name='product_export'),
     path('products/new/', views.product_create, name='product_create'),
     path('products/merge/', views.product_merge, name='product_merge'),

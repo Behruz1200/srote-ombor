@@ -107,6 +107,22 @@
         <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary ms-auto">Tozalash</a>
     </div>
     {% endif %}
+    {% if name_conflict_count and not name_conflict %}
+    <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2">
+        <i class="bi bi-tags-fill"></i>
+        <strong>Nom ziddiyati:</strong>
+        <span>{{ name_conflict_count }} ta mahsulotда bir shtrix-kodga 2 xil nom kelgan (nakladnoy boshqa nom bilan).</span>
+        <a href="?name_conflict=1" class="btn btn-sm btn-warning ms-auto">
+            <i class="bi bi-list-check"></i> Ko'rish va tanlash
+        </a>
+    </div>
+    {% endif %}
+    {% if name_conflict == '1' %}
+    <div class="alert alert-info d-flex align-items-center gap-2 py-2">
+        <i class="bi bi-funnel"></i> Faqat nom ziddiyati bor mahsulotlar. Har birida qaysi nom qolishini tanlang.
+        <a href="{% url 'product_list' %}" class="btn btn-sm btn-outline-secondary ms-auto">Tozalash</a>
+    </div>
+    {% endif %}
 
     <!-- Bo'limlar (4 katta guruh) -->
     <div class="d-flex flex-wrap gap-2 mb-3">
@@ -259,6 +275,31 @@
                                 </a>
                                 {# Brend nomning ichida bo'lsa — takrorlamaymiz #}
                                 {% if p.brand and p.brand not in p.name %}<span class="badge rounded-pill bg-primary-subtle text-primary border ms-1"><i class="bi bi-tag"></i> {{ p.brand }}</span>{% endif %}
+                                {% if p.pending_name %}
+                                <div class="alert alert-warning py-2 px-2 mt-1 mb-0" style="font-size:.82rem">
+                                    <div class="mb-1"><i class="bi bi-exclamation-triangle-fill"></i>
+                                        <b>Bir kodda 2 xil nom</b> — qaysi biri qolsin?</div>
+                                    <div class="d-flex flex-wrap gap-1 align-items-center">
+                                        <form method="post" action="{% url 'product_resolve_name' %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="pk" value="{{ p.pk }}">
+                                            <input type="hidden" name="choice" value="keep">
+                                            <button class="btn btn-sm btn-outline-dark py-0" title="Hozirgi nomni qoldirish">
+                                                {{ p.name|truncatechars:28 }} <span class="text-muted">(hozirgi)</span>
+                                            </button>
+                                        </form>
+                                        <span class="text-muted">yoki</span>
+                                        <form method="post" action="{% url 'product_resolve_name' %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="pk" value="{{ p.pk }}">
+                                            <input type="hidden" name="choice" value="use">
+                                            <button class="btn btn-sm btn-outline-primary py-0" title="Nakladnoy nomini qo'yish">
+                                                {{ p.pending_name|truncatechars:28 }} <span class="text-primary">(nakladnoy)</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                {% endif %}
                                 <small class="text-muted text-nowrap">{{ p.variants_count }} tur</small>
                                 {% if p.variant_colors %}
                                     <span class="ms-1">

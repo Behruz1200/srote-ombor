@@ -767,6 +767,10 @@ def product_list(request):
     if group_slug:
         products = products.filter(category__group__slug=group_slug)
 
+    name_conflict = request.GET.get('name_conflict') or ''
+    if name_conflict == '1':
+        products = products.exclude(pending_name='')
+
     if q:
         # Subquery orqali — variant JOIN'lari annotatsiya Sum'larini
         # buzmasligi uchun avval mos mahsulot ID'larini topamiz
@@ -1011,7 +1015,41 @@ def product_list(request):
         'categories': categories,
         'groups': groups,
         'group_slug': group_slug,
+        'name_conflict': name_conflict,
+        'name_conflict_count': Product.objects.exclude(is_open_price=True)
+                                      .exclude(pending_name='').count(),
     })
+
+
+@admin_required
+def product_resolve_name(request):
+    """Nom ziddiyatini hal qilish: bir xil shtrix-kodga 2 xil nom bo'lsa,
+    foydalanuvchi qaysi birini qoldirishni tanlaydi.
+
+    choice = 'keep'  -> hozirgi nom qoladi
+    choice = 'use'   -> pending_name (nakladnoy nomi) asosiy nom bo'ladi
+    Ikkalasida ham pending_name bo'shatiladi (ziddiyat yopiladi).
+    """
+    if request.method != 'POST':
+        return redirect('product_list')
+    pk = request.POST.get('pk') or 0
+    choice = (request.POST.get('choice') or '').strip()
+    product = Product.objects.filter(pk=pk).first()
+    if not product or not product.pending_name:
+        return redirect(request.META.get('HTTP_REFERER') or 'product_list')
+    old, alt = product.name, product.pending_name
+    if choice == 'use':
+        product.name = alt
+    product.pending_name = ''
+    product.save(update_fields=['name', 'pending_name'])
+    AuditLog.objects.create(
+        user=request.user, username_snapshot=request.user.username,
+        action=AuditLog.Action.UPDATE, model_name='Product',
+        object_id=str(product.pk),
+        object_repr=(f"Nom ziddiyati hal qilindi: "
+                     f"{'YANGI: ' + alt if choice == 'use' else 'ESKI: ' + old}"))
+    messages.success(request, f"Nom tanlandi: \"{product.name}\".")
+    return redirect(request.META.get('HTTP_REFERER') or 'product_list')
 
 
 @admin_required
@@ -3821,7 +3859,10 @@ def intake_photo_save(request):
              .select_related('product').first())
         if v:
             r['variant'] = v
-            r['name'] = v.product.name      # bazadagi nom AI o'qiganidan ustun
+            # Foydalanuvchi so'rovi: kod bir xil, lekin nakladnoydagi nom
+            # boshqacha bo'lsa — MAHSULOT NOMI AI/nakladnoy nomiga YANGILANADI
+            # (r['name'] o'zgarmaydi; saqlashda mahsulot qayta nomlanadi).
+            r['old_name'] = v.product.name
             continue
         p_clash = Product.objects.filter(external_barcode=r['barcode']).first()
         if p_clash:
@@ -3923,6 +3964,22 @@ def intake_photo_save(request):
             if variant is not None:
                 # Shtrix-kod orqali topildi — mavjud turga qo'shamiz
                 product = variant.product
+                # Nakladnoy (AI) nomi boshqacha bo'lsa — AVTOMATIK qayta
+                # nomlamaymiz. Muqobil nomni pending_name'ga yozamiz; Mahsulotlar
+                # sahifasida "2 xil nom" ogohlantirishi chiqadi va foydalanuvchi
+                # qaysi nomni qoldirishni o'zi tanlaydi.
+                ai_name = (r.get('name') or '').strip()[:200]
+                if (ai_name and _norm_name(ai_name) != _norm_name(product.name)
+                        and _norm_name(ai_name) != _norm_name(product.pending_name)):
+                    product.pending_name = ai_name
+                    product.save(update_fields=['pending_name'])
+                    AuditLog.objects.create(
+                        user=request.user,
+                        username_snapshot=request.user.username,
+                        action=AuditLog.Action.UPDATE,
+                        model_name='Product', object_id=str(product.pk),
+                        object_repr=(f"Nom ziddiyati (nakladnoy): "
+                                     f"'{product.name}' ↔ '{ai_name}'"))
                 products.setdefault(_norm_name(product.name), product)
                 if r['sale'] > 0 and not product.default_sale_price:
                     product.default_sale_price = r['sale']

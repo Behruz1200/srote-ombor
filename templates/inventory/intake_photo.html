@@ -634,6 +634,45 @@
         renderPages();
     });
 
+    // Shtrix-kod kiritilganda — bazadagi mos mahsulotni ko'rsatamiz.
+    // Kod bazada bo'lsa: "mavjud: <nom>" va agar qatordagi nom boshqacha
+    // bo'lsa "→ nomga yangilanadi" (saqlashda mahsulot qayta nomlanadi).
+    function showBarcodeMatch(tr) {
+        const bcEl = tr.querySelector('.row-barcode');
+        const code = (bcEl.value || '').trim();
+        const note = tr.querySelector('.row-src');
+        // eski moslik belgisini olib tashlaymiz
+        const prev = note.querySelector('.bc-match');
+        if (prev) prev.remove();
+        if (!code) return;
+        fetch('{% url "intake_lookup" %}?q=' + encodeURIComponent(code))
+            .then(r => r.json())
+            .then(d => {
+                if (!d || !d.found || !d.product) return;
+                const dbName = d.product.name || '';
+                const rowName = (tr.querySelector('.row-name').value || '').trim();
+                const span = document.createElement('span');
+                span.className = 'bc-match ms-1';
+                const diff = rowName && rowName.toLowerCase() !== dbName.toLowerCase();
+                span.innerHTML = ' <i class="bi bi-upc-scan text-primary"></i> mavjud: <b>'
+                    + dbName.replace(/</g, '&lt;') + '</b>'
+                    + (diff ? ' <span class="text-warning">→ nom ziddiyati belgilanadi</span>' : '');
+                span.title = diff
+                    ? 'Kod bazada bor, lekin nom boshqacha. Saqlaganda "2 xil nom" '
+                      + 'ogohlantirishi chiqadi — Mahsulotlar sahifasida qaysi nomni '
+                      + 'qoldirishni tanlaysiz. Nom avtomatik o\'zgarmaydi.'
+                    : 'Kod bazada bor — shu mahsulotga qo\'shiladi.';
+                note.appendChild(span);
+            })
+            .catch(() => {});
+    }
+    rowsBody.addEventListener('change', function (e) {
+        if (e.target.classList.contains('row-barcode') ||
+            e.target.classList.contains('row-name')) {
+            showBarcodeMatch(e.target.closest('tr'));
+        }
+    });
+
     function recount() {
         let n = 0, i = 1, qty = 0, cost = 0;
         const groups = new Map();
@@ -776,6 +815,7 @@
         if (isScan) {
             if (t.classList.contains('row-barcode')) {
                 t.value = code;
+                showBarcodeMatch(t.closest('tr'));
                 let tr = t.closest('tr').nextElementSibling;
                 if (!tr) { tr = addRow({}, false); }
                 const bc = tr.querySelector('.row-barcode');
@@ -784,7 +824,7 @@
                 if (t.value.endsWith(code))
                     t.value = t.value.slice(0, t.value.length - code.length);
                 const cell = nextEmptyBarcodeCell();
-                if (cell) cell.value = code;
+                if (cell) { cell.value = code; showBarcodeMatch(cell.closest('tr')); }
             }
             recount();
             return;
