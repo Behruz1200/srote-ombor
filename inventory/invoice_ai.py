@@ -53,6 +53,7 @@ Schema:
       "product": "base product WITHOUT the flavour and WITHOUT the volume",
       "type": "the flavour / variety / scent / colour, or \\"\\"",
       "size": "the volume / weight / pack count, or \\"\\"",
+      "barcode": "the ШТРИХ КОД / штрих-код column digits (12-14 digit EAN), or \\"\\"",
       "qty": 0,
       "unit": "шт / крб / кг / dona, or \\"\\"",
       "per_case": 0,
@@ -119,6 +120,27 @@ the shop stores ONE product with many variants. Cut each name three ways:
 - "size"    = number + unit only (100мл, 72шт, 1.8кг, 5 dona). "" if absent.
 - NEVER leave the volume inside "product" or "type".
 - If a product genuinely has no siblings, still split off its size.
+- "barcode" = the value in the ШТРИХ КОД / Штрих код / Barcode column. It is a
+  long number, usually 13 digits (EAN-13), e.g. "8683130033210". Copy the
+  digits exactly.
+  HARD RULE: this is NOT the Артикул / Код column. The Артикул is a shorter
+  supplier code (7-8 digits like "64318029") in its own column — never put it
+  in "barcode". If the ШТРИХ КОД cell for a row is blank, return "" — do not
+  borrow the barcode from another row.
+- "cost"     = the price the shop actually PAYS for ONE PIECE.
+  IMPORTANT: if the invoice has BOTH a list price ("Цена") AND a discounted
+  price ("Цена после скидки" / "Цена со скидкой" / "Цена После Скидки"), use
+  the DISCOUNTED price as "cost" — that is what is really paid. Then "line_sum"
+  must be the DISCOUNTED line total ("Общая сумма после скидки" / "Сумма со
+  скидкой"), so that line_sum ÷ cost = qty. NEVER pair a pre-discount price
+  with a post-discount total. If there is no discount column, use the plain
+  "Цена" and its "Сумма".
+- PROMO / BONUS ROWS: some invoices split one item into a main row and a
+  follow-up row whose code starts with "Promo-" / "Промо" (or is labelled
+  бонус / акция). That promo row repeats the SAME product with the SAME
+  Артикул and SAME ШТРИХ КОД, just extra quantity. MERGE it into the main row:
+  add the quantities together (and the line sums) and output a SINGLE row for
+  that product. This is the ONLY situation where you combine rows.
 - "qty"      = the number in the Количество / Кол-во / Soni column, EXACTLY as
   printed, together with its unit. Do not convert it.
 - "unit"     = the unit written next to it: шт (pieces), крб / кор / коробка /
@@ -143,7 +165,8 @@ the shop stores ONE product with many variants. Cut each name three ways:
   переоценки, задолженность) and any handwritten-only lines.
 - Skip rows with no readable product name.
 - If a number is unreadable use 0; if a string is unreadable use "".
-- Do not invent rows and do not merge two rows together.
+- Do not invent rows. Do not merge two DIFFERENT products — the ONLY rows you
+  merge are a "Promo-"/bonus row into its matching main row (same barcode).
 """
 
 
@@ -413,12 +436,18 @@ def _extract_bytes(raw, media_type, timeout=120):
         if per_case > 1:
             qty_note = '%g %s × %g dona' % (qty, unit or 'quti', per_case)
         product = (r.get('product') or '').strip()[:200]
+        # Shtrix-kod: faqat raqamlar; Артикул (7-8 xonali) tasodifan tushmasin —
+        # haqiqiy EAN odatda 12-14 xonali. Qisqasini tashlab yuboramiz.
+        barcode = re.sub(r'\D', '', str(r.get('barcode') or ''))
+        if len(barcode) < 8 or len(barcode) > 14:
+            barcode = ''
         rows.append({
             'name': name[:200],
             # AI bo'lmagan/bo'sh qoldirgan bo'lsa — butun nom mahsulot bo'ladi
             'product': product or name[:200],
             'type': (r.get('type') or '').strip()[:120],
             'size': (r.get('size') or '').strip()[:60],
+            'barcode': barcode,
             'qty': qty,
             'unit': unit,
             'per_case': per_case,

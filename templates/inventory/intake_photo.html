@@ -619,6 +619,8 @@
         rowsBody.appendChild(tr);
         if (!r.sale) priceCalc(tr, 'cost');
         markCat(tr.querySelector('.row-cat'));
+        // Fakturadan kelgan shtrix-kod bo'lsa — bazadagi moslikni ko'rsatamiz
+        if (r.barcode) showBarcodeMatch(tr);
         if (focus) tr.querySelector('input').focus();
         return tr;
     }
