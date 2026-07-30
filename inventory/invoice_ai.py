@@ -20,8 +20,11 @@ logger = logging.getLogger(__name__)
 
 API_URL = 'https://api.anthropic.com/v1/messages'
 ANTHROPIC_VERSION = '2023-06-01'
-MAX_EDGE = 1600          # rasmni kichraytiramiz — tez va arzon
-JPEG_QUALITY = 85
+# 1568 — Anthropic vision uzun chekka uchun samarali chegara. Kattaroq rasmni
+# API baribir shu o'lchamga tushiradi, ya'ni 1600 yuborish token tejamaydi,
+# faqat yuklashni sekinlashtiradi. Shuning uchun 1568.
+MAX_EDGE = 1568
+JPEG_QUALITY = 82
 
 PROMPT = """You are reading a supplier delivery note (накладная / faktura / hisob-faktura)
 from a shop in Uzbekistan. The document may be in Russian or Uzbek, may be
@@ -334,6 +337,12 @@ def extract_invoice(django_file, timeout=120):
     if best_score >= 1.4:                 # hammasi joyida — burishga hojat yo'q
         return best
 
+    # TOKEN TEJASH: rasm har doim to'g'ri (tik emas) suratga olinsa, burib
+    # qayta o'qish (har biri yana bitta to'liq API chaqiruvi) shart emas.
+    # AI_INVOICE_ROTATE=0 qo'ysangiz — faqat bitta chaqiruv bo'ladi.
+    if not getattr(settings, 'AI_INVOICE_ROTATE', True):
+        return best
+
     for angle in (270, 90, 180):
         try:
             rotated = _rotate_jpeg(raw, angle)
@@ -375,9 +384,20 @@ def _extract_bytes(raw, media_type, timeout=120):
         )
     model = getattr(settings, 'ANTHROPIC_MODEL', 'claude-sonnet-4-5')
 
+    # TOKEN TEJASH — prompt caching:
+    # Katta ko'rsatma (~2500 token) SYSTEM blokka o'tkazildi va "ephemeral"
+    # kesh bilan belgilandi. Shunda u BIR MARTA to'liq hisoblanadi, keyingi
+    # chaqiruvlar (rasmni burib qayta o'qish, ko'p varaqli faktura, ketma-ket
+    # fakturalar — 5 daqiqa ichida) o'sha promptni keshdan oladi va ~90% arzon
+    # bo'ladi. Rasm har chaqiruvda o'zgargani uchun u keshlanmaydi, lekin
+    # prompt ulushi tejaladi.
     body = json.dumps({
         'model': model,
         'max_tokens': 8000,
+        'system': [
+            {'type': 'text', 'text': PROMPT,
+             'cache_control': {'type': 'ephemeral'}},
+        ],
         'messages': [{
             'role': 'user',
             'content': [
@@ -386,7 +406,9 @@ def _extract_bytes(raw, media_type, timeout=120):
                     'media_type': media_type,
                     'data': base64.b64encode(raw).decode('ascii'),
                 }},
-                {'type': 'text', 'text': PROMPT},
+                {'type': 'text',
+                 'text': 'Read this delivery note and return ONLY the JSON '
+                         'object described in the instructions.'},
             ],
         }],
     }).encode('utf-8')
@@ -399,6 +421,12 @@ def _extract_bytes(raw, media_type, timeout=120):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode('utf-8'))
+        u = payload.get('usage') or {}
+        # Kesh ishlayaptimi — logdan ko'rish uchun (cache_read > 0 = tejaldi)
+        logger.info(
+            'invoice_ai tokens: in=%s cache_write=%s cache_read=%s out=%s',
+            u.get('input_tokens'), u.get('cache_creation_input_tokens'),
+            u.get('cache_read_input_tokens'), u.get('output_tokens'))
     except urllib.error.HTTPError as e:
         detail = ''
         try:
