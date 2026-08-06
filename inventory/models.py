@@ -779,10 +779,24 @@ class Shift(models.Model):
         """Smen davomida kassadan olingan naqd (tushlik, xarajat va h.k.)."""
         return self.payouts.aggregate(s=models.Sum('amount'))['s'] or Decimal('0')
 
+    def refunds_total(self):
+        """Smen davomida mijozga qaytarilgan pul (kassadan CHIQADI).
+
+        Mahsulot qaytarilganda kassir pulni qaytaradi — demak kutilgan naqd
+        shu miqdorga KAMAYADI. Ilgari bu hisobga olinmasdi: qaytarishда dona
+        soni tiklanardi, lekin pul aks etmasdi.
+        """
+        total = Decimal('0')
+        for r in Return.objects.filter(shift=self).select_related(
+                'sale__transaction'):
+            total += _dec(r.refund_amount)
+        return total
+
     def expected_cash(self):
-        """Kutilgan naqd = ochilish + naqd sotuvlar − kassadan olingan pul."""
+        """Kutilgan naqd = ochilish + naqd sotuvlar − kassadan olingan pul
+        − mijozga qaytarilgan pul."""
         return (_dec(self.opening_cash) + _dec(self.cash_sales())
-                - _dec(self.payouts_total()))
+                - _dec(self.payouts_total()) - _dec(self.refunds_total()))
 
     def variance(self):
         """Kassa farqi = sanalgan − kutilgan. Manfiy bo'lsa kam, ortiq bo'lsa ko'p.
