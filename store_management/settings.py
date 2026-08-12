@@ -158,6 +158,9 @@ CSRF_TRUSTED_ORIGINS = [
 _extra_csrf = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
 CSRF_TRUSTED_ORIGINS += [o.strip() for o in _extra_csrf.split(',') if o.strip()]
 
+# CSRF xatosini muloyim hal qilamiz (403 sahifasi o'rniga login'ga qaytarish)
+CSRF_FAILURE_VIEW = 'inventory.views.csrf_failure'
+
 
 # ---------- Apps & middleware ----------
 INSTALLED_APPS = [

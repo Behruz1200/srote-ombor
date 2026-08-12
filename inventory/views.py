@@ -12,6 +12,7 @@ from django.db import transaction
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.views.decorators.cache import never_cache
 from django.conf import settings
 from django.core.cache import cache
 import json as _json
@@ -169,6 +170,23 @@ def healthz(request):
 
 # ---------- AUTH ----------
 
+def csrf_failure(request, reason=""):
+    """CSRF xatosini muloyim hal qiladi.
+
+    Ko'pincha sabab — sahifaning ESKIRGANI: bir nechta tab ochiq, brauzer
+    tablarni tiklagan yoki "orqaga" tugmasi bosilgan. Login'da Django CSRF
+    tokenni yangilaydi, shuning uchun eski formadagi token to'g'ri kelmaydi.
+    Qo'rqinchli 403 o'rniga foydalanuvchini yangi token bilan qaytaramiz.
+    """
+    from django.contrib import messages as _messages
+    _messages.warning(
+        request, "Sahifa eskirgan edi — iltimos qaytadan urinib ko'ring.")
+    if '/login' in request.path or not request.user.is_authenticated:
+        return redirect('login')
+    return redirect(request.META.get('HTTP_REFERER') or 'home')
+
+
+@never_cache
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('home')
@@ -213,6 +231,7 @@ def logout_view(request):
     return redirect('login')
 
 
+@never_cache
 def login_2fa(request):
     """Second step: verify a TOTP or recovery code after a valid password."""
     from .twofa import verify_totp, use_recovery_code
