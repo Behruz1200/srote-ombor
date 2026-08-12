@@ -653,6 +653,8 @@
                         <input type="number" id="cashGiven" class="form-control form-control-sm text-end"
                                placeholder="so'm" min="0" step="1000" inputmode="numeric">
                     </div>
+                    <!-- Tayyor summalar — chek summasidan yuqori yaxlit pullar -->
+                    <div class="d-flex flex-wrap gap-1 mt-1" id="cashSuggest"></div>
                     <div class="d-flex justify-content-between align-items-baseline mt-1" id="changeRow" style="display:none;">
                         <span class="small" id="changeLabel">Qaytim:</span>
                         <span class="fs-5 fw-bold" id="changeAmount">0</span>
@@ -1593,6 +1595,8 @@ function renderCart() {
         if (cg) { cg.value = ''; }
         const cr = document.getElementById('changeRow');
         if (cr) { cr.style.display = 'none'; }
+        const cs = document.getElementById('cashSuggest');
+        if (cs) { cs.innerHTML = ''; }
         if (typeof broadcastDisplay === 'function') broadcastDisplay({action: 'idle'});
         saveCart();
         return;
@@ -1659,6 +1663,7 @@ function renderCart() {
     if (typeof schedulePromoEval === 'function') schedulePromoEval();
     if (typeof broadcastCart === 'function') broadcastCart();
     if (typeof updateChange === 'function') updateChange();
+    if (typeof renderCashSuggestions === 'function') renderCashSuggestions();
     saveCart();
 }
 
@@ -1691,6 +1696,40 @@ function updateChange() {
     const el = document.getElementById('cashGiven');
     if (el) el.addEventListener('input', updateChange);
 })();
+
+// Chek summasiga qarab tayyor naqd summalarni chiqaramiz (yaxlit, chekdan katta).
+//   masalan 139 000 -> 139 000(aniq), 150 000, 200 000, 250 000, 500 000
+function cashSuggestions(total) {
+    total = Math.ceil(total || 0);
+    if (!(total > 0)) return [];
+    const set = new Set([total]);                 // aniq summa (qaytimsiz)
+    const step = total < 200000 ? 50000 : 100000; // yaxlit qadam
+    let n = Math.ceil(total / step) * step;
+    if (n === total) n += step;
+    for (let i = 0; i < 3; i++) set.add(n + i * step);
+    [100000, 200000, 500000, 1000000].forEach(v => { if (v > total) set.add(v); });
+    return Array.from(set).sort((a, b) => a - b).slice(0, 5);
+}
+
+function renderCashSuggestions() {
+    const box = document.getElementById('cashSuggest');
+    if (!box) return;
+    const total = (typeof currentTotalAmount === 'function') ? currentTotalAmount() : 0;
+    const list = cashSuggestions(total);
+    box.innerHTML = '';
+    if (!list.length) return;
+    list.forEach((v, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-sm py-0 px-2 ' + (i === 0 ? 'btn-outline-success' : 'btn-outline-secondary');
+        b.textContent = fmt(v) + (i === 0 ? ' (aniq)' : '');
+        b.addEventListener('click', () => {
+            const cg = document.getElementById('cashGiven');
+            if (cg) { cg.value = v; updateChange(); }
+        });
+        box.appendChild(b);
+    });
+}
 
 // ---- Promotion evaluation ----
 const appliedPromosEl = document.getElementById('appliedPromos');
