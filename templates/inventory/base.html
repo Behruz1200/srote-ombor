@@ -3305,6 +3305,8 @@
                             <i class="bi bi-truck me-1 text-warning"></i> Yetkazib beruvchilar</a></li>
                         <li><a class="dropdown-item" href="{% url 'category_list' %}">
                             <i class="bi bi-tags me-1 text-secondary"></i> Kategoriyalar</a></li>
+                        <li><a class="dropdown-item" href="{% url 'employee_debt_list' %}">
+                            <i class="bi bi-person-badge me-1 text-danger"></i> Xodim qarzlari</a></li>
                         <li><a class="dropdown-item" href="{% url 'security_2fa' %}">
                             <i class="bi bi-shield-lock me-1 text-primary"></i> Xavfsizlik (2FA)</a></li>
                         <li><hr class="dropdown-divider"></li>
@@ -3858,6 +3860,7 @@ if ('serviceWorker' in navigator) {
         {label: 'Mijozlar', url: '{% url "customer_list" %}', icon: 'person-rolodex', kw: 'mijoz customer'},
         {label: 'Yetkazib beruvchilar', url: '{% url "supplier_list" %}', icon: 'truck', kw: 'supplier yetkazib'},
         {label: 'Kategoriyalar', url: '{% url "category_list" %}', icon: 'tags', kw: 'category kategoriya'},
+        {label: 'Xodim qarzlari', url: '{% url "employee_debt_list" %}', icon: 'person-badge', kw: 'qarz debt xodim'},
         {label: 'To\'lov QR\'lari', url: '{% url "payment_qr_list" %}', icon: 'qr-code', kw: 'qr tolov payment'},
         {label: 'Audit log', url: '{% url "audit_list" %}', icon: 'clipboard-data', kw: 'audit log'},
         {% endif %}

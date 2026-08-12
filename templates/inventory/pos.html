@@ -48,6 +48,12 @@
     color: #FFFFFF;
     box-shadow: var(--yrt-shadow-indigo);
 }
+/* To'lov turi tanlanmagan bo'lsa — tugmalar chaqnaydi */
+#paymentButtons.needs-choice { border-radius: 10px; animation: needChoice .5s ease 0s 4; }
+@keyframes needChoice {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220,53,69,0); }
+    50%      { box-shadow: 0 0 0 3px rgba(220,53,69,.55); }
+}
 
 /* QR / Muddatli provider buttons — extra touch padding, glass surface */
 .pos-side .qr-provider-btn {
@@ -638,6 +644,20 @@
                 <div class="small text-muted text-end">
                     <span id="cartItemCount">0</span> dona
                 </div>
+                <!-- Qaytim / qolgan hisoblagich (kalkulyator o'rniga) -->
+                <div class="mt-2 pt-2 border-top">
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small text-muted mb-0" for="cashGiven" style="white-space:nowrap">
+                            <i class="bi bi-cash-coin"></i> Naqd berildi
+                        </label>
+                        <input type="number" id="cashGiven" class="form-control form-control-sm text-end"
+                               placeholder="so'm" min="0" step="1000" inputmode="numeric">
+                    </div>
+                    <div class="d-flex justify-content-between align-items-baseline mt-1" id="changeRow" style="display:none;">
+                        <span class="small" id="changeLabel">Qaytim:</span>
+                        <span class="fs-5 fw-bold" id="changeAmount">0</span>
+                    </div>
+                </div>
             </div>
 
             <div class="card p-2 mb-2">
@@ -666,7 +686,7 @@
                     {% for value, label in payment_methods %}
                         <div class="col-6">
                             <button type="button"
-                                    class="btn btn-sm w-100 btn-outline-secondary payment-btn{% if value == 'cash' %} active{% endif %}"
+                                    class="btn btn-sm w-100 btn-outline-secondary payment-btn"
                                     data-value="{{ value }}">
                                 {% if value == 'cash' %}<i class="bi bi-cash"></i>
                                 {% elif value == 'card' %}<i class="bi bi-credit-card"></i>
@@ -677,7 +697,7 @@
                         </div>
                     {% endfor %}
                 </div>
-                <input type="hidden" id="paymentMethod" value="cash">
+                <input type="hidden" id="paymentMethod" value="">
 
                 {% if payment_providers %}
                 <hr class="my-1">
@@ -1551,6 +1571,8 @@ function addToCart(product, variant) {
             max: variant.stock_count,
         };
     }
+    // Eng oxirgi skanerlangan/qo'shilgan tur savat tepasida chiqsin
+    cart[key]._seq = (window.__cartSeq = (window.__cartSeq || 0) + 1);
     renderCart();
 }
 
@@ -1566,13 +1588,20 @@ function renderCart() {
         promoDiscount = 0;
         appliedPromos = [];
         renderAppliedPromos();
+        // Qaytim hisoblagichni tozalaymiz
+        const cg = document.getElementById('cashGiven');
+        if (cg) { cg.value = ''; }
+        const cr = document.getElementById('changeRow');
+        if (cr) { cr.style.display = 'none'; }
         if (typeof broadcastDisplay === 'function') broadcastDisplay({action: 'idle'});
         saveCart();
         return;
     }
     let subtotal = 0, count = 0;
     cartBody.innerHTML = '';
-    for (const k of keys) {
+    // Eng oxirgi qo'shilgani tepada (_seq bo'yicha kamayish tartibida)
+    const ordered = keys.slice().sort((a, b) => (cart[b]._seq || 0) - (cart[a]._seq || 0));
+    for (const k of ordered) {
         const it = cart[k];
         const sub = it.qty * it.sale_price;
         subtotal += sub; count += it.qty;
@@ -1629,8 +1658,39 @@ function renderCart() {
     if (typeof renderMixedSplit === 'function') renderMixedSplit();
     if (typeof schedulePromoEval === 'function') schedulePromoEval();
     if (typeof broadcastCart === 'function') broadcastCart();
+    if (typeof updateChange === 'function') updateChange();
     saveCart();
 }
+
+// Qaytim / qolgan hisoblagich — jismoniy kalkulyator o'rniga.
+//  - berilgan naqd >= jami  -> "Qaytim: berilgan − jami"
+//  - berilgan naqd <  jami  -> "Kartadan olinadi: jami − berilgan"
+function updateChange() {
+    const el = document.getElementById('cashGiven');
+    const row = document.getElementById('changeRow');
+    const lbl = document.getElementById('changeLabel');
+    const amt = document.getElementById('changeAmount');
+    if (!el || !row) return;
+    const given = parseFloat(el.value || '');
+    const total = (typeof currentTotalAmount === 'function') ? currentTotalAmount() : 0;
+    if (!(given > 0) || !(total > 0)) { row.style.display = 'none'; return; }
+    row.style.display = 'flex';
+    if (given >= total) {
+        lbl.textContent = 'Qaytim:';
+        lbl.className = 'small text-success';
+        amt.className = 'fs-5 fw-bold text-success';
+        amt.textContent = fmt(given - total) + " so'm";
+    } else {
+        lbl.textContent = 'Kartadan/qolgan:';
+        lbl.className = 'small text-primary';
+        amt.className = 'fs-5 fw-bold text-primary';
+        amt.textContent = fmt(total - given) + " so'm";
+    }
+}
+(function () {
+    const el = document.getElementById('cashGiven');
+    if (el) el.addEventListener('input', updateChange);
+})();
 
 // ---- Promotion evaluation ----
 const appliedPromosEl = document.getElementById('appliedPromos');
@@ -2133,6 +2193,17 @@ checkoutBtn.addEventListener('click', async () => {
     }));
     if (lines.length === 0) return;
     const paymentMethod = document.getElementById('paymentMethod').value;
+    // To'lov turi TANLANISHI SHART — avval avtomat "naqd" bosilib ketardi.
+    if (!paymentMethod) {
+        checkoutStatus.innerHTML = '<span class="text-danger fw-semibold">'
+            + '<i class="bi bi-exclamation-triangle-fill"></i> '
+            + "To'lov turini tanlang: naqd / karta / o'tkazma</span>";
+        const pc = document.getElementById('paymentButtons');
+        if (pc) { pc.classList.add('needs-choice');
+                  setTimeout(() => pc.classList.remove('needs-choice'), 2500); }
+        checkoutBtn.disabled = false;
+        return;
+    }
     // Mixed breakdown = oddiy input qatorlari + QR orqali to'langan qism(lar)
     const breakdown = paymentMethod === 'mixed'
         ? [...getMixedBreakdown(), ...qrBreakdownExtra]

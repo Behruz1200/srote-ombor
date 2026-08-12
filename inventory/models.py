@@ -775,6 +775,31 @@ class Shift(models.Model):
         ).aggregate(s=models.Sum('order_discount'))['s'] or 0
         return line_rev - order_disc
 
+    def sales_by_method(self):
+        """Smen davomida to'lov turi bo'yicha savdo: {'cash':.., 'card':.., ...}."""
+        end = self.closed_at or timezone.now()
+        rev_expr = models.ExpressionWrapper(
+            models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
+            output_field=models.DecimalField(max_digits=14, decimal_places=2))
+        txns = SaleTransaction.objects.filter(
+            branch=self.branch, sold_at__gte=self.opened_at, sold_at__lt=end)
+        out = {}
+        for m, _lbl in SaleTransaction.PaymentMethod.choices:
+            ids = list(txns.filter(payment_method=m).values_list('id', flat=True))
+            if not ids:
+                out[m] = Decimal('0')
+                continue
+            line_rev = Sale.objects.filter(transaction_id__in=ids).aggregate(
+                s=models.Sum(rev_expr))['s'] or Decimal('0')
+            odisc = txns.filter(id__in=ids).aggregate(
+                s=models.Sum('order_discount'))['s'] or Decimal('0')
+            out[m] = _dec(line_rev) - _dec(odisc)
+        return out
+
+    def total_sales(self):
+        """Barcha to'lov turlari bo'yicha jami savdo."""
+        return sum(self.sales_by_method().values(), Decimal('0'))
+
     def payouts_total(self):
         """Smen davomida kassadan olingan naqd (tushlik, xarajat va h.k.)."""
         return self.payouts.aggregate(s=models.Sum('amount'))['s'] or Decimal('0')
@@ -1088,6 +1113,51 @@ class Return(models.Model):
             per_unit_total = self.sale.total / self.sale.quantity
             return self.quantity * per_unit_total
         return self.quantity * self.sale.sale_price
+
+
+class EmployeeDebt(models.Model):
+    """Xodim do'kondan ojligacha QARZGA olgan tovar/pul.
+
+    Sotuvga kiritilmaydi (aks holda kassa to'g'ri kelmaydi) — bu alohida
+    daftar. Ojlik kuni "to'landi" deb belgilanadi (kassaga ta'sir qilmaydi;
+    ojlikdan ushlab qolish do'kon tashqarisida).
+    """
+    branch = models.ForeignKey(
+        Branch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='employee_debts')
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='debts', help_text='Qarz olgan xodim (ro\'yxatdan)')
+    employee_name = models.CharField(
+        max_length=120, blank=True,
+        help_text='Agar xodim ro\'yxatda bo\'lmasa — ismini yozing')
+    amount = models.DecimalField(max_digits=12, decimal_places=2,
+                                 help_text="Qarz summasi (so'm)")
+    note = models.CharField(max_length=200, blank=True,
+                            help_text='Nima olindi / izoh')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='created_debts')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    is_paid = models.BooleanField(default=False)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    paid_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='settled_debts')
+
+    class Meta:
+        verbose_name = 'Xodim qarzi'
+        verbose_name_plural = 'Xodim qarzlari'
+        ordering = ['is_paid', '-created_at']
+
+    def __str__(self):
+        return f'{self.who}: {self.amount}'
+
+    @property
+    def who(self):
+        if self.employee:
+            return self.employee.get_full_name() or self.employee.username
+        return self.employee_name or '—'
 
 
 class ProductRequest(models.Model):

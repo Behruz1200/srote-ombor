@@ -39,7 +39,7 @@ from .models import (
     Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
-    InvoiceImage, QuickSellItem, WebOrder, WebOrderLine,
+    InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -1018,6 +1018,72 @@ def product_list(request):
         'name_conflict': name_conflict,
         'name_conflict_count': Product.objects.exclude(is_open_price=True)
                                       .exclude(pending_name='').count(),
+    })
+
+
+@admin_required
+def employee_debt_list(request):
+    """Xodim qarzlari daftari — qo'shish, ro'yxat, 'to'landi' belgilash.
+
+    Sotuvga kiritilmaydi (kassa buzilmaydi). Ojlik kuni to'landi belgilanadi.
+    """
+    from decimal import Decimal, InvalidOperation
+    if request.method == 'POST':
+        action = request.POST.get('action') or 'add'
+        if action == 'pay':
+            d = EmployeeDebt.objects.filter(pk=request.POST.get('pk') or 0,
+                                            is_paid=False).first()
+            if d:
+                d.is_paid = True
+                d.paid_at = timezone.now()
+                d.paid_by = request.user
+                d.save(update_fields=['is_paid', 'paid_at', 'paid_by'])
+                messages.success(request, f"\"{d.who}\" qarzi to'landi deb belgilandi.")
+            return redirect('employee_debt_list')
+        if action == 'delete':
+            d = EmployeeDebt.objects.filter(pk=request.POST.get('pk') or 0).first()
+            if d:
+                d.delete()
+                messages.info(request, "Qarz yozuvi o'chirildi.")
+            return redirect('employee_debt_list')
+        # add
+        try:
+            amount = Decimal(str(request.POST.get('amount') or '0').replace(' ', ''))
+        except (InvalidOperation, ValueError):
+            amount = Decimal('0')
+        emp_id = request.POST.get('employee') or ''
+        emp_name = (request.POST.get('employee_name') or '').strip()[:120]
+        if amount <= 0:
+            messages.error(request, "Summani kiriting.")
+        elif not emp_id and not emp_name:
+            messages.error(request, "Xodimni tanlang yoki ismini yozing.")
+        else:
+            EmployeeDebt.objects.create(
+                branch=getattr(request.user, 'branch', None),
+                employee_id=int(emp_id) if emp_id.isdigit() else None,
+                employee_name='' if emp_id.isdigit() else emp_name,
+                amount=amount,
+                note=(request.POST.get('note') or '').strip()[:200],
+                created_by=request.user)
+            messages.success(request, "Qarz qo'shildi.")
+        return redirect('employee_debt_list')
+
+    debts = list(EmployeeDebt.objects.select_related('employee', 'created_by')
+                 .order_by('is_paid', '-created_at'))
+    open_debts = [d for d in debts if not d.is_paid]
+    paid_debts = [d for d in debts if d.is_paid][:50]
+    # Xodim bo'yicha jami ochiq qarz
+    per_emp = {}
+    for d in open_debts:
+        per_emp[d.who] = per_emp.get(d.who, 0) + float(d.amount)
+    per_emp = sorted(per_emp.items(), key=lambda x: -x[1])
+    total_open = sum(float(d.amount) for d in open_debts)
+    from django.contrib.auth import get_user_model
+    employees = get_user_model().objects.filter(is_active=True).order_by('username')
+    return render(request, 'inventory/employee_debt_list.html', {
+        'open_debts': open_debts, 'paid_debts': paid_debts,
+        'per_emp': per_emp, 'total_open': total_open,
+        'employees': employees,
     })
 
 
@@ -4400,11 +4466,19 @@ def shift_close(request):
         # Yopilgach — chek printerida Z-hisobotni chop etish (avtomatik)
         return redirect(f"{reverse('shift_receipt', args=[shift.pk])}?autoprint=1")
 
+    by_method = shift.sales_by_method()
+    from decimal import Decimal as _D
     return render(request, 'inventory/shift_close.html', {
         'shift': shift,
         'expected': shift.expected_cash(),
         'cash_sales': shift.cash_sales(),
         'payouts_total': shift.payouts_total(),
+        'refund_total': shift.refunds_total(),
+        'sales_cash': by_method.get('cash', _D('0')),
+        'sales_card': by_method.get('card', _D('0')),
+        'sales_transfer': by_method.get('transfer', _D('0')),
+        'sales_mixed': by_method.get('mixed', _D('0')),
+        'sales_total': sum(by_method.values(), _D('0')),
     })
 
 

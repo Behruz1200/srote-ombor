@@ -1,0 +1,142 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+{% block title %}Xodim qarzlari — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Qarz daftari</span>
+                <h1 class="dash-hero__title"><i class="bi bi-person-badge"></i> Xodim qarzlari</h1>
+                <p class="dash-hero__sub">Xodimlar do'kondan ojligacha qarzga olgan tovarlar.
+                    Sotuvga kiritilmaydi — kassa to'g'ri qoladi.</p>
+            </div>
+            <div class="text-end">
+                <div class="small text-uppercase" style="color:var(--yrt-fg-muted)">Jami ochiq qarz</div>
+                <div style="font-size:1.8rem;font-weight:800;color:var(--yrt-danger)">{{ total_open|som }} <span class="small">so'm</span></div>
+            </div>
+        </div>
+    </header>
+
+    <div class="row g-3">
+        <!-- Yangi qarz qo'shish -->
+        <div class="col-lg-4">
+            <div class="card p-3 mb-3">
+                <h2 class="yrt-h2"><i class="bi bi-plus-circle text-primary"></i> Yangi qarz</h2>
+                <form method="post" class="mt-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add">
+                    <label class="form-label small mb-1">Xodim</label>
+                    <select name="employee" class="form-select form-select-sm mb-2" id="empSel">
+                        <option value="">— ro'yxatdan tanlang —</option>
+                        {% for e in employees %}
+                        <option value="{{ e.id }}">{{ e.get_full_name|default:e.username }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="employee_name" class="form-control form-control-sm mb-2"
+                           placeholder="yoki ism yozing (ro'yxatda bo'lmasa)">
+                    <label class="form-label small mb-1">Summa (so'm)</label>
+                    <input type="number" name="amount" class="form-control form-control-sm mb-2"
+                           min="0" step="1000" required placeholder="masalan: 150000">
+                    <input type="text" name="note" class="form-control form-control-sm mb-2"
+                           placeholder="Nima olindi / izoh" maxlength="200">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="bi bi-save"></i> Qo'shish
+                    </button>
+                </form>
+            </div>
+
+            {% if per_emp %}
+            <div class="card p-3">
+                <h2 class="yrt-h2"><i class="bi bi-people text-primary"></i> Xodim bo'yicha</h2>
+                <div class="mt-2">
+                    {% for name, amt in per_emp %}
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>{{ name }}</span>
+                        <strong class="text-danger">{{ amt|floatformat:0|som }} so'm</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Ochiq qarzlar -->
+        <div class="col-lg-8">
+            <div class="card p-3 mb-3">
+                <h2 class="yrt-h2"><i class="bi bi-hourglass-split text-warning"></i> Ochiq qarzlar
+                    <span class="yrt-tag ms-1">{{ open_debts|length }}</span></h2>
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr>
+                            <th>Xodim</th><th>Izoh</th><th class="text-end">Summa</th>
+                            <th>Sana</th><th></th>
+                        </tr></thead>
+                        <tbody>
+                        {% for d in open_debts %}
+                        <tr>
+                            <td><strong>{{ d.who }}</strong></td>
+                            <td class="small text-muted">{{ d.note|default:'—' }}</td>
+                            <td class="text-end fw-semibold">{{ d.amount|floatformat:0|som }}</td>
+                            <td class="small text-muted">{{ d.created_at|date:"d.m.Y" }}</td>
+                            <td class="text-end">
+                                <form method="post" class="d-inline"
+                                      onsubmit="return confirm('{{ d.who|escapejs }} qarzi to\'landi deb belgilansinmi?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="pay">
+                                    <input type="hidden" name="pk" value="{{ d.pk }}">
+                                    <button class="btn btn-sm btn-success py-0"><i class="bi bi-check2"></i> To'landi</button>
+                                </form>
+                                <form method="post" class="d-inline" onsubmit="return confirm('O\'chirilsinmi?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="pk" value="{{ d.pk }}">
+                                    <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">Ochiq qarz yo'q.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if paid_debts %}
+            <div class="card p-3">
+                <h2 class="yrt-h2"><i class="bi bi-check2-circle text-success"></i> To'langanlar</h2>
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr><th>Xodim</th><th class="text-end">Summa</th><th>To'landi</th></tr></thead>
+                        <tbody>
+                        {% for d in paid_debts %}
+                        <tr class="text-muted">
+                            <td>{{ d.who }}</td>
+                            <td class="text-end">{{ d.amount|floatformat:0|som }}</td>
+                            <td class="small">{{ d.paid_at|date:"d.m.Y" }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Xodim ro'yxatdan tanlansa — ism maydonini o'chiramiz (chalkashmasin)
+(function(){
+  var sel=document.getElementById('empSel');
+  if(!sel) return;
+  sel.addEventListener('change',function(){
+    var n=document.querySelector('input[name="employee_name"]');
+    if(sel.value && n){ n.value=''; n.disabled=true; } else if(n){ n.disabled=false; }
+  });
+})();
+</script>
+{% endblock %}
