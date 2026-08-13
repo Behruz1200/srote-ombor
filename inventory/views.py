@@ -4738,6 +4738,7 @@ def shift_receipt(request, pk):
         'refunds': refunds,
         'refund_total': refund_total,
         'refund_qty': refund_qty,
+        'net_sales': total_rev - refund_total,
         'printed_at': timezone.now(),
     })
 
