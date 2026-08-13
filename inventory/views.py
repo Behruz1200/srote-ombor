@@ -41,6 +41,7 @@ from .models import (
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
     InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
+    EmployeeDebtItem,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -1060,34 +1061,119 @@ def employee_debt_list(request):
                 messages.success(request, f"\"{d.who}\" qarzi to'landi deb belgilandi.")
             return redirect('employee_debt_list')
         if action == 'delete':
-            d = EmployeeDebt.objects.filter(pk=request.POST.get('pk') or 0).first()
+            d = (EmployeeDebt.objects.filter(pk=request.POST.get('pk') or 0)
+                 .prefetch_related('items').first())
             if d:
-                d.delete()
-                messages.info(request, "Qarz yozuvi o'chirildi.")
+                # Tovarli qarz o'chirilsa — ombor qoldig'ini tiklaymiz
+                # (qo'shilganда kamaytirilgan edi).
+                with transaction.atomic():
+                    for it in d.items.all():
+                        if it.variant_id and it.branch_id:
+                            bs = BranchStock.objects.filter(
+                                variant_id=it.variant_id, branch_id=it.branch_id).first()
+                            if bs:
+                                bs.stock_count = F('stock_count') + it.quantity
+                                bs.save()
+                    d.delete()
+                messages.info(request, "Qarz yozuvi o'chirildi (ombor qoldig'i tiklandi).")
             return redirect('employee_debt_list')
-        # add
-        try:
-            amount = Decimal(str(request.POST.get('amount') or '0').replace(' ', ''))
-        except (InvalidOperation, ValueError):
-            amount = Decimal('0')
+        # ---- add ----
         emp_id = request.POST.get('employee') or ''
         emp_name = (request.POST.get('employee_name') or '').strip()[:120]
-        if amount <= 0:
-            messages.error(request, "Summani kiriting.")
-        elif not emp_id and not emp_name:
+        note = (request.POST.get('note') or '').strip()[:200]
+
+        # Tovarli qatorlar (skaner/tanlash) — [{stock_id, qty, price}]
+        items = []
+        raw = request.POST.get('items_json') or ''
+        if raw:
+            try:
+                parsed = _json.loads(raw)
+                if isinstance(parsed, list):
+                    items = parsed
+            except ValueError:
+                items = []
+
+        try:
+            manual_amount = Decimal(str(request.POST.get('amount') or '0').replace(' ', ''))
+        except (InvalidOperation, ValueError):
+            manual_amount = Decimal('0')
+
+        if not emp_id and not emp_name:
             messages.error(request, "Xodimni tanlang yoki ismini yozing.")
-        else:
-            EmployeeDebt.objects.create(
-                branch=getattr(request.user, 'branch', None),
-                employee_id=int(emp_id) if emp_id.isdigit() else None,
-                employee_name='' if emp_id.isdigit() else emp_name,
-                amount=amount,
-                note=(request.POST.get('note') or '').strip()[:200],
-                created_by=request.user)
-            messages.success(request, "Qarz qo'shildi.")
+            return redirect('employee_debt_list')
+
+        if not items and manual_amount <= 0:
+            messages.error(request, "Tovar qo'shing yoki summani kiriting.")
+            return redirect('employee_debt_list')
+
+        branch = getattr(request.user, 'branch', None)
+        try:
+            with transaction.atomic():
+                debt = EmployeeDebt.objects.create(
+                    branch=branch,
+                    employee_id=int(emp_id) if emp_id.isdigit() else None,
+                    employee_name='' if emp_id.isdigit() else emp_name,
+                    amount=Decimal('0'),
+                    note=note,
+                    created_by=request.user)
+
+                total = Decimal('0')
+                # Tovarli qatorlar: qoldiqni bloklab kamaytiramiz (SOTUV emas)
+                sids = []
+                for ln in items:
+                    try:
+                        sids.append(int(ln['stock_id']))
+                    except (KeyError, ValueError, TypeError):
+                        continue
+                locked = {}
+                if sids:
+                    locked = {s.pk: s for s in BranchStock.objects
+                              .select_for_update()
+                              .select_related('variant__product', 'branch')
+                              .filter(pk__in=sids)}
+                for ln in items:
+                    try:
+                        sid = int(ln['stock_id']); qty = int(ln['qty'])
+                        price = Decimal(str(ln.get('price') or 0))
+                    except (KeyError, ValueError, TypeError, InvalidOperation):
+                        raise ValueError("noto'g'ri qator")
+                    if qty <= 0:
+                        continue
+                    stock = locked.get(sid)
+                    if not stock:
+                        raise ValueError(f"tovar {sid} topilmadi")
+                    is_open = stock.variant.product.is_open_price
+                    if not is_open and qty > stock.stock_count:
+                        raise ValueError(
+                            f"{stock.variant.product.code} "
+                            f"{stock.variant.size}/{stock.variant.color}: "
+                            f"omborda faqat {stock.stock_count} ta bor")
+                    if not is_open:
+                        stock.stock_count = F('stock_count') - qty
+                        stock.save()
+                    name = ' '.join(filter(None, [
+                        stock.variant.product.name,
+                        stock.variant.size, stock.variant.color])) or stock.variant.product.name
+                    EmployeeDebtItem.objects.create(
+                        debt=debt, variant=stock.variant, branch=stock.branch,
+                        product_name=name[:200], quantity=qty, unit_price=price)
+                    total += qty * price
+
+                # Qo'lda summa (tovarsiz yoki qo'shimcha)
+                if manual_amount > 0:
+                    total += manual_amount
+
+                debt.amount = total
+                debt.save(update_fields=['amount'])
+        except ValueError as e:
+            messages.error(request, f"Xatolik: {e}")
+            return redirect('employee_debt_list')
+
+        messages.success(request, "Qarz qo'shildi.")
         return redirect('employee_debt_list')
 
     debts = list(EmployeeDebt.objects.select_related('employee', 'created_by')
+                 .prefetch_related('items')
                  .order_by('is_paid', '-created_at'))
     open_debts = [d for d in debts if not d.is_paid]
     paid_debts = [d for d in debts if d.is_paid][:50]

@@ -1183,6 +1183,41 @@ class EmployeeDebt(models.Model):
             return self.employee.get_full_name() or self.employee.username
         return self.employee_name or '—'
 
+    @property
+    def item_list(self):
+        """Qarzga olingan tovarlar ro'yxati (bo'lsa)."""
+        return list(self.items.all())
+
+
+class EmployeeDebtItem(models.Model):
+    """Xodim qarzga olgan bitta tovar qatori.
+
+    Tovar jismonan do'kondan chiqadi — shuning uchun qo'shilganda ombor qoldig'i
+    kamayadi (SOTUV emas: kassa/savdoga ta'sir qilmaydi). Qarz o'chirilsa qoldiq
+    tiklanadi.
+    """
+    debt = models.ForeignKey(EmployeeDebt, on_delete=models.CASCADE,
+                             related_name='items')
+    variant = models.ForeignKey(ProductVariant, on_delete=models.SET_NULL,
+                                null=True, blank=True, related_name='employee_debt_items')
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL,
+                               null=True, blank=True)
+    product_name = models.CharField(max_length=200,
+                                    help_text='Tovar nomi (snapshot)')
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        verbose_name = 'Xodim qarzi — tovar'
+        verbose_name_plural = 'Xodim qarzi — tovarlar'
+
+    def __str__(self):
+        return f'{self.product_name} × {self.quantity}'
+
+    @property
+    def line_total(self):
+        return self.quantity * self.unit_price
+
 
 class ProductRequest(models.Model):
     """Mijoz so'ragan, lekin bizda yo'q (yoki hech sotmagan) mahsulot.

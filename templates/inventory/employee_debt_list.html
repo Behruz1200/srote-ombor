@@ -25,9 +25,10 @@
         <div class="col-lg-4">
             <div class="card p-3 mb-3">
                 <h2 class="yrt-h2"><i class="bi bi-plus-circle text-primary"></i> Yangi qarz</h2>
-                <form method="post" class="mt-2">
+                <form method="post" class="mt-2" id="debtForm">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="items_json" id="itemsJson" value="">
                     <label class="form-label small mb-1">Xodim</label>
                     <select name="employee" class="form-select form-select-sm mb-2" id="empSel">
                         <option value="">— ro'yxatdan tanlang —</option>
@@ -37,14 +38,38 @@
                     </select>
                     <input type="text" name="employee_name" class="form-control form-control-sm mb-2"
                            placeholder="yoki ism yozing (ro'yxatda bo'lmasa)">
-                    <label class="form-label small mb-1">Summa (so'm)</label>
+
+                    <!-- Tovar skaner/qidiruv -->
+                    <label class="form-label small mb-1">
+                        <i class="bi bi-upc-scan text-primary"></i> Olingan tovar</label>
+                    <div class="input-group input-group-sm mb-1">
+                        <input type="text" id="dbNewInput" class="form-control"
+                               placeholder="Shtrix-kod yoki nom — skaner/qidiruv" autocomplete="off">
+                        <button type="button" class="btn btn-outline-primary" id="dbAddBtn">
+                            <i class="bi bi-plus-lg"></i></button>
+                    </div>
+                    <div id="dbPicker" class="d-flex flex-wrap gap-1 mb-1" style="display:none;"></div>
+                    <div id="dbStatus" class="small text-muted mb-1"></div>
+                    <table class="table table-sm align-middle mb-1" id="dbItemsTable" style="display:none;">
+                        <tbody id="dbItemsBody"></tbody>
+                    </table>
+                    <div id="dbTotalRow" class="d-flex justify-content-between fw-bold small mb-2"
+                         style="display:none !important;">
+                        <span>Jami:</span><span id="dbTotal">0 so'm</span>
+                    </div>
+
+                    <label class="form-label small mb-1">Qo'lda summa (tovarsiz — ixtiyoriy)</label>
                     <input type="number" name="amount" class="form-control form-control-sm mb-2"
-                           min="0" step="1000" required placeholder="masalan: 150000">
+                           min="0" step="1000" placeholder="masalan: 150000" id="dbManual">
                     <input type="text" name="note" class="form-control form-control-sm mb-2"
-                           placeholder="Nima olindi / izoh" maxlength="200">
-                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                           placeholder="Izoh (ixtiyoriy)" maxlength="200">
+                    <button type="submit" class="btn btn-primary btn-sm w-100" id="dbSubmit">
                         <i class="bi bi-save"></i> Qo'shish
                     </button>
+                    <div class="text-muted mt-2" style="font-size:.72rem;">
+                        <i class="bi bi-info-circle"></i> Tovar qo'shilsa — ombor qoldig'i kamayadi
+                        (sotuv emas, kassaga ta'sir yo'q).
+                    </div>
                 </form>
             </div>
 
@@ -78,7 +103,14 @@
                         {% for d in open_debts %}
                         <tr>
                             <td><strong>{{ d.who }}</strong></td>
-                            <td class="small text-muted">{{ d.note|default:'—' }}</td>
+                            <td class="small text-muted">
+                                {% for it in d.items.all %}
+                                <div><i class="bi bi-box-seam" style="font-size:.7rem;"></i>
+                                    {{ it.product_name }} × {{ it.quantity }}</div>
+                                {% endfor %}
+                                {% if d.note %}<div class="fst-italic">{{ d.note }}</div>{% endif %}
+                                {% if not d.items.all and not d.note %}—{% endif %}
+                            </td>
                             <td class="text-end fw-semibold">{{ d.amount|floatformat:0|som }}</td>
                             <td class="small text-muted">{{ d.created_at|date:"d.m.Y" }}</td>
                             <td class="text-end">
@@ -136,6 +168,111 @@
   sel.addEventListener('change',function(){
     var n=document.querySelector('input[name="employee_name"]');
     if(sel.value && n){ n.value=''; n.disabled=true; } else if(n){ n.disabled=false; }
+  });
+})();
+
+// ---- Tovarli qarz: skaner/qidiruv + qatorlar ----
+(function(){
+  var input   = document.getElementById('dbNewInput');
+  var addBtn  = document.getElementById('dbAddBtn');
+  var picker  = document.getElementById('dbPicker');
+  var statusEl= document.getElementById('dbStatus');
+  var table   = document.getElementById('dbItemsTable');
+  var body    = document.getElementById('dbItemsBody');
+  var totalRow= document.getElementById('dbTotalRow');
+  var totalEl = document.getElementById('dbTotal');
+  var itemsJson = document.getElementById('itemsJson');
+  var form    = document.getElementById('debtForm');
+  if(!input || !form) return;
+
+  var items = [];  // {stock_id, name, price, qty, max, open}
+
+  function fmt(n){ return (Math.round(n)||0).toLocaleString('ru-RU').replace(/,/g,' '); }
+
+  function render(){
+    body.innerHTML='';
+    items.forEach(function(it, i){
+      var tr=document.createElement('tr');
+      tr.innerHTML =
+        '<td class="small"><div><strong class="nm"></strong></div>'+
+        '<div class="text-muted" style="font-size:.7rem;"><span class="pr"></span> so\'m/dona</div></td>'+
+        '<td style="width:74px;"><input type="number" class="form-control form-control-sm qty" min="1" value="'+it.qty+'"></td>'+
+        '<td class="text-end sub small"></td>'+
+        '<td style="width:30px;"><button type="button" class="btn btn-sm btn-outline-danger py-0 del"><i class="bi bi-x"></i></button></td>';
+      tr.querySelector('.nm').textContent=it.name;
+      tr.querySelector('.pr').textContent=fmt(it.price);
+      tr.querySelector('.sub').textContent=fmt(it.qty*it.price);
+      var qi=tr.querySelector('.qty');
+      qi.addEventListener('input',function(){
+        var v=parseInt(qi.value)||0; if(v<1)v=1;
+        if(!it.open && v>it.max)v=it.max;
+        qi.value=v; it.qty=v;
+        tr.querySelector('.sub').textContent=fmt(it.qty*it.price);
+        updateTotal();
+      });
+      tr.querySelector('.del').addEventListener('click',function(){
+        items.splice(i,1); render();
+      });
+      body.appendChild(tr);
+    });
+    table.style.display = items.length ? '' : 'none';
+    totalRow.style.setProperty('display', items.length ? 'flex' : 'none', 'important');
+    updateTotal();
+  }
+  function updateTotal(){
+    var t=items.reduce(function(a,it){return a+it.qty*it.price;},0);
+    totalEl.textContent=fmt(t)+" so'm";
+  }
+  function addVariant(v, pname){
+    var ex=items.find(function(x){return x.stock_id===v.stock_id;});
+    if(ex){ if(ex.open||ex.qty<ex.max)ex.qty+=1; }
+    else{
+      var label=[pname, v.size, v.color].filter(Boolean).join(' ');
+      items.push({stock_id:v.stock_id, name:label||pname, price:v.sale_price,
+                  qty:1, max:(typeof v.stock_count==='number')?v.stock_count:9999, open:false});
+    }
+    input.value=''; picker.style.display='none'; picker.innerHTML=''; statusEl.textContent='';
+    render();
+  }
+  async function lookup(q){
+    q=(q||'').trim(); if(!q) return;
+    statusEl.textContent='Qidirilmoqda…'; picker.style.display='none'; picker.innerHTML='';
+    try{
+      var resp=await fetch('/pos/lookup/?q='+encodeURIComponent(q));
+      var d=await resp.json();
+      if(!d.found){
+        statusEl.innerHTML = (d.suggestions&&d.suggestions.length)
+          ? '<span class="text-warning">Bir nechta topildi — aniqroq kiriting.</span>'
+          : '<span class="text-danger">Topilmadi.</span>';
+        return;
+      }
+      var inStock=(d.variants||[]).filter(function(v){return v.stock_count>0||v.sale_price>0;});
+      if(!inStock.length){ statusEl.innerHTML='<span class="text-danger">Omborda yo\'q.</span>'; return; }
+      statusEl.textContent='';
+      if(d.matched_variant_id){
+        var mv=inStock.find(function(v){return v.variant_id===d.matched_variant_id;});
+        if(mv){ addVariant(mv, d.product.name); return; }
+      }
+      if(inStock.length===1){ addVariant(inStock[0], d.product.name); return; }
+      picker.style.display='';
+      inStock.forEach(function(v){
+        var b=document.createElement('button');
+        b.type='button'; b.className='btn btn-sm btn-outline-success';
+        b.innerHTML=(v.size||'')+'/'+(v.color||'')+' · '+fmt(v.sale_price)+
+                    ' <span class="badge bg-light text-dark">'+v.stock_count+'</span>';
+        b.addEventListener('click',function(){ addVariant(v, d.product.name); });
+        picker.appendChild(b);
+      });
+    }catch(e){ statusEl.innerHTML='<span class="text-danger">Tarmoq xatosi.</span>'; }
+  }
+  addBtn.addEventListener('click',function(){ lookup(input.value); });
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){ e.preventDefault(); lookup(input.value); }
+  });
+  form.addEventListener('submit',function(){
+    itemsJson.value = JSON.stringify(items.map(function(it){
+      return {stock_id:it.stock_id, qty:it.qty, price:it.price};
+    }));
   });
 })();
 </script>
