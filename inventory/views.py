@@ -4487,17 +4487,20 @@ def shift_close(request):
 
     by_method = shift.sales_by_method()
     from decimal import Decimal as _D
+    _refund = shift.refunds_total()
     return render(request, 'inventory/shift_close.html', {
         'shift': shift,
         'expected': shift.expected_cash(),
         'cash_sales': shift.cash_sales(),
         'payouts_total': shift.payouts_total(),
-        'refund_total': shift.refunds_total(),
+        'refund_total': _refund,
         'sales_cash': by_method.get('cash', _D('0')),
         'sales_card': by_method.get('card', _D('0')),
         'sales_transfer': by_method.get('transfer', _D('0')),
         'sales_mixed': by_method.get('mixed', _D('0')),
-        'sales_total': sum(by_method.values(), _D('0')),
+        # Jami savdo = SOF (qaytarilgan pul ayirilgan). Ilgari brutto edi:
+        # 48 000 sotib, 48 000 qaytarilsa ham 48 000 ko'rsatardi.
+        'sales_total': sum(by_method.values(), _D('0')) - _D(str(_refund or 0)),
     })
 
 
