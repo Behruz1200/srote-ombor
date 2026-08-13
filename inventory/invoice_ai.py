@@ -97,6 +97,11 @@ Field rules:
   "1130 - GOLD шампунь 1,4 л ( 6 шт )". Keep the whole text in "name", but
   leave that leading number OUT of "product" — it is not part of the product
   name. A trailing "( 6 шт )" is the pack size, so it belongs in "size".
+- DIGITS vs LETTERS: read numbers inside names carefully. A leading "5" is the
+  digit five, not the letter "s" ("5Protection", not "sProtection"); "0" is a
+  zero, not "O/о". Copy punctuation exactly as printed — do NOT insert a hyphen
+  between two separate words that are printed with a space ("Порошок чистящий",
+  not "Порошок-чистящий").
 - "name" = copy the entire product cell: the leading generic word
   (Шампунь / Мыло / Паста / Сок), the brand, and the size or weight
   ("Шампунь Head&Shoulders 400мл"). Do not shorten it to just the brand.
@@ -286,6 +291,23 @@ def _phone(v):
         digits[:3], digits[3:5], digits[5:8], digits[8:10], digits[10:12])
 
 
+def _fix_ocr(s):
+    """Nom matnidagi tez-tez uchraydigan OCR xatolarini tuzatadi.
+
+    Modelga ko'rsatma bergan bo'lsak ham, ba'zan raqamni harf deb o'qiydi.
+    Bu yerda faqat XAVFSIZ, aniq holatlar to'g'irlanadi (sonlar/narxlarga
+    tegilmaydi — faqat nom matni).
+    """
+    if not s:
+        return s
+    # "sProtection"/"5 protection" -> "5Protection" (DEONICA liniyasi: raqam 5)
+    s = re.sub(r'\bs(?=\s?protection\b)', '5', s, flags=re.IGNORECASE)
+    # "Порошок-чистящий" -> "Порошок чистящий" (ikki so'z orasiga qo'yilgan
+    #  ortiqcha chiziqcha; bu aniq iboraga cheklaymiz)
+    s = re.sub(r'(Порошок)\s*-\s*(чистящ)', r'\1 \2', s, flags=re.IGNORECASE)
+    return s
+
+
 def _parse_payload(text):
     """Model javobidan JSON ajratib olamiz (fence bo'lsa ham)."""
     t = (text or '').strip()
@@ -451,7 +473,7 @@ def _extract_bytes(raw, media_type, timeout=120):
 
     rows = []
     for r in (data.get('rows') or []):
-        name = (r.get('name') or '').strip()
+        name = _fix_ocr((r.get('name') or '').strip())
         if not name:
             continue
         qty = _num(r.get('qty'))
@@ -463,7 +485,7 @@ def _extract_bytes(raw, media_type, timeout=120):
         qty_note = ''
         if per_case > 1:
             qty_note = '%g %s × %g dona' % (qty, unit or 'quti', per_case)
-        product = (r.get('product') or '').strip()[:200]
+        product = _fix_ocr((r.get('product') or '').strip())[:200]
         # Shtrix-kod: faqat raqamlar; Артикул (7-8 xonali) tasodifan tushmasin —
         # haqiqiy EAN odatda 12-14 xonali. Qisqasini tashlab yuboramiz.
         barcode = re.sub(r'\D', '', str(r.get('barcode') or ''))
@@ -473,7 +495,7 @@ def _extract_bytes(raw, media_type, timeout=120):
             'name': name[:200],
             # AI bo'lmagan/bo'sh qoldirgan bo'lsa — butun nom mahsulot bo'ladi
             'product': product or name[:200],
-            'type': (r.get('type') or '').strip()[:120],
+            'type': _fix_ocr((r.get('type') or '').strip())[:120],
             'size': (r.get('size') or '').strip()[:60],
             'barcode': barcode,
             'qty': qty,
