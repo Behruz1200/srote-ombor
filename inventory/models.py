@@ -814,7 +814,7 @@ class Shift(models.Model):
         total = Decimal('0')
         for r in Return.objects.filter(shift=self).select_related(
                 'sale__transaction'):
-            total += _dec(r.refund_amount)
+            total += _dec(r.effective_cash_refund)
         return total
 
     def expected_cash(self):
@@ -1097,6 +1097,18 @@ class Return(models.Model):
     refunded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                     related_name='returns')
     refunded_at = models.DateTimeField(default=timezone.now)
+    # ----- Almashtirish (exchange) -----
+    # Oddiy qaytarishда mijozga to'liq summa naqd qaytariladi. Almashtirishда esa
+    # eski tovar qiymati YANGI tovar hisobiga o'tadi — naqd chiqmaydi (yoki faqat
+    # farq chiqadi). Shu sabab kassa hisobiga faqat HAQIQIY qaytarilgan naqd
+    # (cash_refunded) ta'sir qilishi kerak, to'liq refund_amount emas.
+    is_exchange = models.BooleanField(
+        default=False,
+        help_text='Bu qaytarish almashtirish qismimi (eski tovar yangisiga)')
+    cash_refunded = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text='Almashtirishда mijozga HAQIQIY qaytarilgan naqd (odatda 0 yoki '
+                  'faqat farq). None bo\'lsa — oddiy qaytarish, refund_amount ishlatiladi.')
 
     class Meta:
         verbose_name = 'Qaytarilish'
@@ -1113,6 +1125,18 @@ class Return(models.Model):
             per_unit_total = self.sale.total / self.sale.quantity
             return self.quantity * per_unit_total
         return self.quantity * self.sale.sale_price
+
+    @property
+    def effective_cash_refund(self):
+        """Kassadan HAQIQIY chiqqan naqd.
+
+        Almashtirishда eski tovar qiymati yangi tovar hisobiga o'tadi, shuning
+        uchun to'liq refund_amount emas, balki cash_refunded (odatda 0 yoki
+        faqat farq) kassaga ta'sir qiladi. Oddiy qaytarishда — to'liq summa.
+        """
+        if self.is_exchange:
+            return self.cash_refunded or Decimal('0')
+        return self.refund_amount
 
 
 class EmployeeDebt(models.Model):

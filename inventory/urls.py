@@ -62,6 +62,7 @@ urlpatterns = [
     path('pos/parked/<int:pk>/delete/', views.pos_parked_delete, name='pos_parked_delete'),
     path('pos/txn/<int:pk>/refundable/', views.pos_txn_refundable, name='pos_txn_refundable'),
     path('pos/refund/', views.pos_refund, name='pos_refund'),
+    path('pos/exchange/', views.pos_exchange, name='pos_exchange'),
     path('pos/unlock/', views.pos_unlock, name='pos_unlock'),
     path('pos/payment/intent/', views.pos_payment_intent, name='pos_payment_intent'),
     path('pos/payment/status/', views.pos_payment_status, name='pos_payment_status'),

@@ -4634,7 +4634,7 @@ def shift_receipt(request, pk):
     refunds = list(Return.objects.filter(shift=shift)
                    .select_related('sale__variant__product', 'refunded_by')
                    .order_by('refunded_at'))
-    refund_total = sum(float(r.refund_amount) for r in refunds)
+    refund_total = sum(float(r.effective_cash_refund) for r in refunds)
     refund_qty = sum(r.quantity for r in refunds)
 
     return render(request, 'inventory/shift_receipt.html', {
@@ -5977,6 +5977,185 @@ def pos_refund(request):
         'ok': True,
         'refunded_qty': refunded_qty,
         'refunded_total': refunded_total,
+    })
+
+
+@login_required
+def pos_exchange(request):
+    """POST /pos/exchange/ — ALMASHTIRISH: eski tovar(lar) qaytadi, yangi
+    tovar(lar) beriladi, faqat NARX FARQI hisoblanadi.
+
+    JSON body:
+      { returns:  [{sale_id, qty}],                 # qaytadigan eski tovar(lar)
+        new_lines:[{stock_id, qty, sale_price}],    # beriladigan yangi tovar(lar)
+        payment_method: 'cash'|'card'|'transfer',   # yangi qimmat bo'lsa — farq uchun
+        reason: '...' }
+
+    Pul modeli (kassa ANIQ to'g'ri qolishi uchun):
+      old_total = qaytgan tovar qiymati,  new_total = yangi tovar qiymati
+      credit = min(old_total, new_total)  -> yangi chekka order_discount (trade-in krediti)
+      extra  = new_total - old_total
+        extra > 0  -> mijoz farqni to'laydi (tanlangan usul), yangi chek net = extra
+        extra < 0  -> do'kon farqni NAQD qaytaradi (Return.cash_refunded = |extra|)
+        extra == 0 -> pul harakati yo'q
+    Yangi chek net'i (= max(0,extra)) tanlangan usul bo'yicha kassaga tushadi;
+    almashtirish qaytarishlari kassaga faqat cash_refunded miqdorida ta'sir qiladi.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+
+    open_shift = _open_shift_for(branch)
+    if not open_shift:
+        return JsonResponse({'ok': False,
+            'error': "Smen ochilmagan. Almashtirish faqat ochiq smen davomida amalga oshiriladi."},
+            status=400)
+
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+
+    from decimal import Decimal, InvalidOperation
+
+    def _m(v):
+        try:
+            d = Decimal(str(v if v not in (None, '') else 0))
+        except (InvalidOperation, ValueError, TypeError):
+            d = Decimal('0')
+        return d if d >= 0 else Decimal('0')
+
+    ret_items = data.get('returns') or []
+    new_items = data.get('new_lines') or []
+    if not ret_items:
+        return JsonResponse({'ok': False, 'error': 'qaytariladigan tovar tanlanmagan'}, status=400)
+    if not new_items:
+        return JsonResponse({'ok': False, 'error': 'yangi tovar tanlanmagan'}, status=400)
+
+    method = (data.get('payment_method') or 'cash').strip()
+    if method not in ('cash', 'card', 'transfer'):
+        method = 'cash'
+    reason = (data.get('reason') or '').strip()[:200]
+
+    parsed_new = []
+    for ln in new_items:
+        try:
+            sid = int(ln['stock_id']); qty = int(ln['qty']); price = _m(ln['sale_price'])
+        except (KeyError, ValueError, TypeError):
+            return JsonResponse({'ok': False, 'error': "yangi qator noto'g'ri"}, status=400)
+        if qty <= 0:
+            return JsonResponse({'ok': False, 'error': "yangi qator: soni noto'g'ri"}, status=400)
+        parsed_new.append({'sid': sid, 'qty': qty, 'price': price})
+
+    parsed_ret = []
+    for it in ret_items:
+        try:
+            sid = int(it['sale_id']); qty = int(it['qty'])
+        except (KeyError, ValueError, TypeError):
+            return JsonResponse({'ok': False, 'error': "qaytish qatori noto'g'ri"}, status=400)
+        if qty > 0:
+            parsed_ret.append({'sale_id': sid, 'qty': qty})
+    if not parsed_ret:
+        return JsonResponse({'ok': False, 'error': "qaytish soni noto'g'ri"}, status=400)
+
+    class _Abort(Exception):
+        def __init__(self, payload, status=400):
+            self.payload = payload; self.status = status
+
+    try:
+        with transaction.atomic():
+            # ---- eski tovar(lar)ni tekshirib qiymatlash ----
+            old_total = Decimal('0')
+            ret_ctx = []
+            for r in parsed_ret:
+                sale = (Sale.objects.select_for_update()
+                        .select_related('variant__product', 'branch')
+                        .filter(pk=r['sale_id'], branch=branch).first())
+                if not sale:
+                    raise _Abort({'ok': False, 'error': f"sotuv {r['sale_id']} topilmadi"})
+                already = sale.returns.aggregate(s=Sum('quantity'))['s'] or 0
+                remaining = sale.quantity - already
+                if r['qty'] > remaining:
+                    raise _Abort({'ok': False, 'error':
+                        f"{sale.variant.product.code}: faqat {remaining} dona qaytarish mumkin"})
+                per_unit = (sale.total / sale.quantity) if sale.quantity > 0 else sale.sale_price
+                amt = Decimal(r['qty']) * Decimal(per_unit)
+                old_total += amt
+                ret_ctx.append((sale, r['qty']))
+
+            # ---- yangi tovar(lar)ni tekshirib qiymatlash (qoldiqni bloklaymiz) ----
+            sids = sorted({l['sid'] for l in parsed_new})
+            locked = {s.pk: s for s in BranchStock.objects.select_for_update()
+                      .select_related('variant__product', 'branch')
+                      .filter(pk__in=sids, branch=branch)}
+            new_total = Decimal('0')
+            for ln in parsed_new:
+                stock = locked.get(ln['sid'])
+                if not stock:
+                    raise _Abort({'ok': False, 'error': f"yangi tovar {ln['sid']} topilmadi"})
+                if (not stock.variant.product.is_open_price
+                        and ln['qty'] > stock.stock_count):
+                    raise _Abort({'ok': False, 'error':
+                        f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
+                        f"omborda faqat {stock.stock_count} ta bor"})
+                new_total += Decimal(ln['qty']) * Decimal(ln['price'])
+
+            credit = min(old_total, new_total)
+            extra = new_total - old_total
+            cash_back = (old_total - new_total) if old_total > new_total else Decimal('0')
+            new_pm = method if extra > 0 else 'cash'
+
+            txn = SaleTransaction.objects.create(
+                branch=branch, sold_by=request.user,
+                payment_method=new_pm, payment_breakdown=[],
+                note=(reason or 'Almashtirish')[:200],
+                order_discount=credit,
+                discount_reason='Almashtirish: eski tovar hisobiga',
+                shift=open_shift,
+            )
+            for ln in parsed_new:
+                stock = locked[ln['sid']]
+                if not stock.variant.product.is_open_price:
+                    stock.stock_count = F('stock_count') - ln['qty']
+                    stock.save()
+                Sale.objects.create(
+                    transaction=txn, variant=stock.variant, branch=stock.branch,
+                    quantity=ln['qty'], sale_price=ln['price'],
+                    cost_at_sale=stock.cost_price, line_discount=Decimal('0'),
+                    sold_by=request.user,
+                )
+
+            # eski tovar(lar): omborga qaytarish + almashtirish Return'i.
+            # cash_back butun almashtirishga bitta — birinchi qatorga yozamiz.
+            cb_left = cash_back
+            for sale, qty in ret_ctx:
+                stock = BranchStock.objects.filter(
+                    variant=sale.variant, branch=sale.branch).first()
+                if stock:
+                    stock.stock_count = F('stock_count') + qty
+                    stock.save()
+                this_cb = cb_left if cb_left > 0 else Decimal('0')
+                cb_left = Decimal('0')
+                Return.objects.create(
+                    sale=sale, shift=open_shift, quantity=qty,
+                    reason=(reason or f'Almashtirish → chek #{txn.pk}')[:200],
+                    refunded_by=request.user,
+                    is_exchange=True, cash_refunded=this_cb,
+                )
+    except _Abort as e:
+        return JsonResponse(e.payload, status=e.status)
+
+    return JsonResponse({
+        'ok': True,
+        'txn_id': txn.pk,
+        'receipt_url': f'/transaction/{txn.pk}/?autoprint=1',
+        'old_total': float(old_total),
+        'new_total': float(new_total),
+        'extra': float(extra),
+        'cash_back': float(cash_back),
+        'method': new_pm,
     })
 
 

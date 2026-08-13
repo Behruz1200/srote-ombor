@@ -1035,7 +1035,7 @@
       <div class="modal-header">
         <h5 class="modal-title">
             <i class="bi bi-arrow-counterclockwise"></i>
-            Qaytarish — chek #<span id="refundTxnId"></span>
+            Qaytarish / Almashtirish — chek #<span id="refundTxnId"></span>
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
@@ -1059,6 +1059,54 @@
             <label class="form-label small">Sabab (ixtiyoriy, hammasiga umumiy)</label>
             <input type="text" id="refundReason" class="form-control form-control-sm"
                    placeholder="Nuqson, kichik o'lcham, mijoz fikri o'zgardi...">
+
+            <!-- ALMASHTIRISH: yangi tovar (ixtiyoriy) -->
+            <hr class="my-3">
+            <label class="form-label small mb-1">
+                <i class="bi bi-arrow-left-right text-primary"></i>
+                Almashtirish — yangi tovar berish (ixtiyoriy)
+            </label>
+            <div class="text-muted small mb-2">
+                Eski tovarni yuqorida belgilang, yangi tovarni skaner qiling — faqat narx farqi hisoblanadi.
+            </div>
+            <div class="input-group input-group-sm mb-2">
+                <input type="text" id="exNewInput" class="form-control"
+                       placeholder="Yangi tovar shtrix-kodi yoki nomi…"
+                       autocomplete="off">
+                <button type="button" class="btn btn-outline-primary" id="exNewAddBtn">
+                    <i class="bi bi-plus-lg"></i> Qo'shish
+                </button>
+            </div>
+            <div id="exPicker" class="d-flex flex-wrap gap-1 mb-2" style="display:none;"></div>
+            <div id="exNewStatus" class="small text-muted mb-2"></div>
+            <table class="table table-sm align-middle mb-2" id="exNewTable" style="display:none;">
+                <thead class="table-light"><tr>
+                    <th>Yangi tovar</th>
+                    <th class="text-center" style="width:110px;">Soni</th>
+                    <th class="text-end">Summa</th><th style="width:34px;"></th>
+                </tr></thead>
+                <tbody id="exNewBody"></tbody>
+            </table>
+            <div id="exSummary" class="border rounded p-2 small" style="display:none;">
+                <div class="d-flex justify-content-between">
+                    <span>Qaytgan (eski):</span><strong id="exOld">0</strong></div>
+                <div class="d-flex justify-content-between">
+                    <span>Yangi tovar:</span><strong id="exNew">0</strong></div>
+                <div class="d-flex justify-content-between border-top mt-1 pt-1">
+                    <span id="exDiffLabel" class="fw-bold">Farq:</span>
+                    <strong id="exDiff" class="fw-bold">0</strong></div>
+                <div id="exPayWrap" class="mt-2" style="display:none;">
+                    <label class="form-label small mb-1">Mijoz farqni qanday to'laydi?</label>
+                    <div class="btn-group btn-group-sm w-100" id="exPayBtns" role="group">
+                        <button type="button" class="btn btn-outline-success" data-m="cash">Naqd</button>
+                        <button type="button" class="btn btn-outline-primary" data-m="card">Karta</button>
+                        <button type="button" class="btn btn-outline-info" data-m="transfer">O'tkazma</button>
+                    </div>
+                </div>
+                <div id="exCashBack" class="alert alert-warning py-1 px-2 mt-2 mb-0" style="display:none;"></div>
+                <div id="exEven" class="text-success mt-2" style="display:none;">
+                    <i class="bi bi-check-circle"></i> Narx teng — qo'shimcha to'lov yo'q.</div>
+            </div>
         </div>
         <div id="refundStatus" class="small mt-2"></div>
       </div>
@@ -2707,6 +2755,24 @@ document.addEventListener('click', (e) => {
     let currentLines = [];
     let currentTxnId = null;
 
+    // ---- Almashtirish (exchange) holati ----
+    const exInput    = document.getElementById('exNewInput');
+    const exAddBtn   = document.getElementById('exNewAddBtn');
+    const exPicker   = document.getElementById('exPicker');
+    const exNewStatus= document.getElementById('exNewStatus');
+    const exTable    = document.getElementById('exNewTable');
+    const exBody     = document.getElementById('exNewBody');
+    const exSummary  = document.getElementById('exSummary');
+    const exOldEl    = document.getElementById('exOld');
+    const exNewEl    = document.getElementById('exNew');
+    const exDiffEl   = document.getElementById('exDiff');
+    const exDiffLbl  = document.getElementById('exDiffLabel');
+    const exPayWrap  = document.getElementById('exPayWrap');
+    const exCashBack = document.getElementById('exCashBack');
+    const exEven     = document.getElementById('exEven');
+    let exItems  = [];      // [{stock_id, name, size, color, price, qty, max, open}]
+    let exMethod = null;    // 'cash'|'card'|'transfer' — faqat farq>0 bo'lganda
+
     document.querySelectorAll('.refund-btn').forEach(btn => {
         btn.addEventListener('click', () => openRefund(btn.dataset.txnId));
     });
@@ -2720,6 +2786,12 @@ document.addEventListener('click', (e) => {
         statusEl.textContent = '';
         submitBtn.disabled = true;
         reasonEl.value = '';
+        // almashtirishni tozalash
+        exItems = []; exMethod = null;
+        if (exInput) exInput.value = '';
+        exRenderNew();
+        if (exPicker) { exPicker.style.display = 'none'; exPicker.innerHTML = ''; }
+        if (exNewStatus) exNewStatus.textContent = '';
         bsModal.show();
         try {
             const resp = await fetch(`/pos/txn/${txnId}/refundable/`);
@@ -2783,26 +2855,199 @@ document.addEventListener('click', (e) => {
         });
     }
 
-    function updateSubmit() {
-        const total = currentLines.reduce((a, l) => a + (l._qty || 0) * l.sale_price, 0);
-        const anyQty = currentLines.some(l => (l._qty || 0) > 0);
-        submitBtn.disabled = !anyQty;
-        submitBtn.innerHTML = anyQty
-            ? `<i class="bi bi-check2"></i> Qaytarish: ${fmt(total)} so'm`
-            : `<i class="bi bi-check2"></i> Qaytarishni tasdiqlash`;
+    // ---------- Almashtirish: yangi tovar qidirish/qo'shish ----------
+    function exAddVariant(v, productName) {
+        const existing = exItems.find(x => x.stock_id === v.stock_id);
+        if (existing) {
+            if (existing.open || existing.qty < existing.max) existing.qty += 1;
+        } else {
+            const label = [productName, v.size, v.color].filter(Boolean).join(' ');
+            exItems.push({
+                stock_id: v.stock_id, name: label || productName,
+                size: v.size || '', color: v.color || '',
+                price: v.sale_price, qty: 1,
+                max: (typeof v.stock_count === 'number') ? v.stock_count : 9999,
+                open: false,
+            });
+        }
+        exInput.value = '';
+        exPicker.style.display = 'none'; exPicker.innerHTML = '';
+        exNewStatus.textContent = '';
+        exRenderNew();
     }
 
-    submitBtn.addEventListener('click', async () => {
-        const payload = {
-            lines: currentLines
-                .filter(l => (l._qty || 0) > 0)
-                .map(l => ({sale_id: l.sale_id, qty: l._qty, reason: reasonEl.value})),
-        };
-        if (!payload.lines.length) return;
-        submitBtn.disabled = true;
-        statusEl.textContent = 'Saqlanmoqda...';
+    async function exLookup(q) {
+        q = (q || '').trim();
+        if (!q) return;
+        exNewStatus.textContent = 'Qidirilmoqda…';
+        exPicker.style.display = 'none'; exPicker.innerHTML = '';
         try {
-            const resp = await fetch('/pos/refund/', {
+            const resp = await fetch('/pos/lookup/?q=' + encodeURIComponent(q));
+            const d = await resp.json();
+            if (!d.found) {
+                if (d.suggestions && d.suggestions.length) {
+                    exNewStatus.innerHTML = '<span class="text-warning">Bir nechta topildi — aniqroq kiriting yoki shtrix-kod skaner qiling.</span>';
+                } else {
+                    exNewStatus.innerHTML = '<span class="text-danger">Topilmadi.</span>';
+                }
+                return;
+            }
+            const inStock = (d.variants || []).filter(v => v.stock_count > 0 || v.sale_price > 0);
+            if (!inStock.length) {
+                exNewStatus.innerHTML = '<span class="text-danger">Bu filialda omborda yo\'q.</span>';
+                return;
+            }
+            exNewStatus.textContent = '';
+            if (d.matched_variant_id) {
+                const mv = inStock.find(v => v.variant_id === d.matched_variant_id);
+                if (mv) { exAddVariant(mv, d.product.name); return; }
+            }
+            if (inStock.length === 1) { exAddVariant(inStock[0], d.product.name); return; }
+            // bir nechta tur — tanlash tugmalari
+            exPicker.style.display = '';
+            inStock.forEach(v => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn btn-sm btn-outline-success';
+                b.innerHTML = `${(v.size || '')}/${(v.color || '')} · ${fmt(v.sale_price)} ` +
+                              `<span class="badge bg-light text-dark">${v.stock_count}</span>`;
+                b.addEventListener('click', () => exAddVariant(v, d.product.name));
+                exPicker.appendChild(b);
+            });
+        } catch (e) {
+            exNewStatus.innerHTML = `<span class="text-danger">Tarmoq xatosi: ${e.message}</span>`;
+        }
+    }
+
+    function exRenderNew() {
+        if (!exBody) return;
+        exBody.innerHTML = '';
+        exItems.forEach((it, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><div class="small"><strong class="exnm"></strong></div>
+                    <div class="text-muted" style="font-size:.72rem;"><span class="expr"></span> so'm/dona</div></td>
+                <td><input type="number" class="form-control form-control-sm ex-qty" min="1" value="${it.qty}"></td>
+                <td class="text-end ex-sub"></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger py-0 ex-del"><i class="bi bi-x"></i></button></td>`;
+            tr.querySelector('.exnm').textContent = it.name;
+            tr.querySelector('.expr').textContent = fmt(it.price);
+            tr.querySelector('.ex-sub').textContent = fmt(it.qty * it.price);
+            const qi = tr.querySelector('.ex-qty');
+            qi.addEventListener('input', () => {
+                let v = parseInt(qi.value) || 0;
+                if (v < 1) v = 1;
+                if (!it.open && v > it.max) v = it.max;
+                qi.value = v; it.qty = v;
+                tr.querySelector('.ex-sub').textContent = fmt(it.qty * it.price);
+                updateSubmit();
+            });
+            tr.querySelector('.ex-del').addEventListener('click', () => {
+                exItems.splice(i, 1); exRenderNew();
+            });
+            exBody.appendChild(tr);
+        });
+        exTable.style.display = exItems.length ? '' : 'none';
+        updateSubmit();
+    }
+
+    function oldReturnTotal() {
+        return currentLines.reduce((a, l) => a + (l._qty || 0) * l.sale_price, 0);
+    }
+    function exNewTotal() {
+        return exItems.reduce((a, it) => a + it.qty * it.price, 0);
+    }
+
+    function updateSubmit() {
+        const oldTotal = oldReturnTotal();
+        const anyOld = currentLines.some(l => (l._qty || 0) > 0);
+        const isExchange = exItems.length > 0;
+
+        if (!isExchange) {
+            exSummary.style.display = 'none';
+            submitBtn.disabled = !anyOld;
+            submitBtn.className = 'btn btn-warning';
+            submitBtn.innerHTML = anyOld
+                ? `<i class="bi bi-check2"></i> Qaytarish: ${fmt(oldTotal)} so'm`
+                : `<i class="bi bi-check2"></i> Qaytarishni tasdiqlash`;
+            return;
+        }
+
+        // ---- almashtirish rejimi ----
+        const newTotal = exNewTotal();
+        const diff = newTotal - oldTotal;
+        exSummary.style.display = '';
+        exOldEl.textContent = fmt(oldTotal) + " so'm";
+        exNewEl.textContent = fmt(newTotal) + " so'm";
+        exPayWrap.style.display = 'none';
+        exCashBack.style.display = 'none';
+        exEven.style.display = 'none';
+
+        if (diff > 0) {
+            exDiffLbl.textContent = 'Mijoz to\'laydi:';
+            exDiffEl.textContent = fmt(diff) + " so'm";
+            exDiffEl.className = 'fw-bold text-primary';
+            exPayWrap.style.display = '';
+        } else if (diff < 0) {
+            exDiffLbl.textContent = 'Do\'kon qaytaradi (naqd):';
+            exDiffEl.textContent = fmt(-diff) + " so'm";
+            exDiffEl.className = 'fw-bold text-danger';
+            exCashBack.style.display = '';
+            exCashBack.innerHTML = `<i class="bi bi-cash-coin"></i> Mijozga ${fmt(-diff)} so'm naqd qaytariladi.`;
+        } else {
+            exDiffLbl.textContent = 'Farq:';
+            exDiffEl.textContent = "0 so'm";
+            exDiffEl.className = 'fw-bold';
+            exEven.style.display = '';
+        }
+
+        // yaroqlilik: eski tovar tanlangan bo'lishi shart; farq>0 bo'lsa usul tanlansin
+        const needMethod = diff > 0;
+        const ok = anyOld && exItems.every(it => it.qty >= 1) && (!needMethod || exMethod);
+        submitBtn.disabled = !ok;
+        submitBtn.className = 'btn btn-primary';
+        submitBtn.innerHTML = `<i class="bi bi-arrow-left-right"></i> Almashtirishni tasdiqlash`;
+    }
+
+    if (exAddBtn) exAddBtn.addEventListener('click', () => exLookup(exInput.value));
+    if (exInput) exInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); exLookup(exInput.value); }
+    });
+    document.querySelectorAll('#exPayBtns [data-m]').forEach(b => {
+        b.addEventListener('click', () => {
+            exMethod = b.dataset.m;
+            document.querySelectorAll('#exPayBtns [data-m]').forEach(x => x.classList.remove('active'));
+            b.classList.add('active');
+            updateSubmit();
+        });
+    });
+
+    submitBtn.addEventListener('click', async () => {
+        const returns = currentLines
+            .filter(l => (l._qty || 0) > 0)
+            .map(l => ({sale_id: l.sale_id, qty: l._qty}));
+        if (!returns.length) return;
+
+        const isExchange = exItems.length > 0;
+        submitBtn.disabled = true;
+        statusEl.textContent = 'Saqlanmoqda…';
+
+        try {
+            let url, payload;
+            if (isExchange) {
+                const diff = exNewTotal() - oldReturnTotal();
+                url = '/pos/exchange/';
+                payload = {
+                    returns: returns.map(r => ({sale_id: r.sale_id, qty: r.qty})),
+                    new_lines: exItems.map(it => ({stock_id: it.stock_id, qty: it.qty, sale_price: it.price})),
+                    payment_method: (diff > 0 ? (exMethod || 'cash') : 'cash'),
+                    reason: reasonEl.value,
+                };
+            } else {
+                url = '/pos/refund/';
+                payload = { lines: returns.map(r => ({sale_id: r.sale_id, qty: r.qty, reason: reasonEl.value})) };
+            }
+            const resp = await fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
                 body: JSON.stringify(payload),
@@ -2813,9 +3058,17 @@ document.addEventListener('click', (e) => {
                 submitBtn.disabled = false;
                 return;
             }
-            statusEl.innerHTML = `<span class="text-success">
-                ✓ Qaytarildi: ${data.refunded_qty} dona / ${fmt(data.refunded_total)} so'm</span>`;
-            setTimeout(() => { bsModal.hide(); location.reload(); }, 900);
+            if (isExchange) {
+                let msg = `✓ Almashtirildi. `;
+                if (data.extra > 0)      msg += `Mijoz to'ladi: ${fmt(data.extra)} so'm (${data.method}).`;
+                else if (data.cash_back > 0) msg += `Mijozga qaytarildi: ${fmt(data.cash_back)} so'm naqd.`;
+                else                     msg += `Narx teng — qo'shimcha to'lov yo'q.`;
+                statusEl.innerHTML = `<span class="text-success">${msg}</span>`;
+            } else {
+                statusEl.innerHTML = `<span class="text-success">
+                    ✓ Qaytarildi: ${data.refunded_qty} dona / ${fmt(data.refunded_total)} so'm</span>`;
+            }
+            setTimeout(() => { bsModal.hide(); location.reload(); }, 1100);
         } catch (e) {
             statusEl.innerHTML = `<span class="text-danger">Tarmoq xatosi: ${e.message}</span>`;
             submitBtn.disabled = false;
