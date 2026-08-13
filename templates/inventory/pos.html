@@ -1603,6 +1603,15 @@ function renderCart() {
     }
     let subtotal = 0, count = 0;
     cartBody.innerHTML = '';
+    // Turli yo'llar bilan qo'shilgan (tez-sotuv, qo'lda) elementlarga ham
+    // tartib raqami beramiz — aks holda ular _seq'siz qolib eski (asc) tartibда
+    // chiqadi. Yangi qo'shilgani oxirgi kalit bo'lgani uchun eng katta raqamni
+    // oladi va tepada turadi.
+    for (const k of keys) {
+        if (cart[k]._seq === undefined) {
+            cart[k]._seq = (window.__cartSeq = (window.__cartSeq || 0) + 1);
+        }
+    }
     // Eng oxirgi qo'shilgani tepada (_seq bo'yicha kamayish tartibida)
     const ordered = keys.slice().sort((a, b) => (cart[b]._seq || 0) - (cart[a]._seq || 0));
     for (const k of ordered) {
@@ -2518,6 +2527,7 @@ function qsAdd(sid, name, price, stock) {
             max: have, open: false,
         };
     }
+    cart[key]._seq = (window.__cartSeq = (window.__cartSeq || 0) + 1);  // tepaga
     renderCart();
     setStatus("\u2713 " + name + " \u2014 " + fmt(price) + " so'm qo'shildi", 'success');
     refocus();
