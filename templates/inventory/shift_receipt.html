@@ -125,6 +125,12 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi —
             <span>− Kassadan olingan:</span>
             <span>{{ payouts_total|som }} so'm{% if payouts %} <span class="text-muted">({{ payouts|length }})</span>{% endif %}</span>
         </div>
+        {% if refund_total %}
+        <div class="d-flex justify-content-between small text-danger">
+            <span>− Qaytarilgan (naqd):</span>
+            <span>{{ refund_total|som }} so'm</span>
+        </div>
+        {% endif %}
         <div class="d-flex justify-content-between"><span><strong>= Kutilgan:</strong></span><strong>{{ expected|som }} so'm</strong></div>
         {% if shift.counted_cash is not None %}
         <div class="d-flex justify-content-between small"><span>Sanalgan:</span><span>{{ shift.counted_cash|som }} so'm</span></div>
