@@ -644,22 +644,6 @@
                 <div class="small text-muted text-end">
                     <span id="cartItemCount">0</span> dona
                 </div>
-                <!-- Qaytim / qolgan hisoblagich (kalkulyator o'rniga) -->
-                <div class="mt-2 pt-2 border-top">
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="small text-muted mb-0" for="cashGiven" style="white-space:nowrap">
-                            <i class="bi bi-cash-coin"></i> Naqd berildi
-                        </label>
-                        <input type="number" id="cashGiven" class="form-control form-control-sm text-end"
-                               placeholder="so'm" min="0" step="1000" inputmode="numeric">
-                    </div>
-                    <!-- Tayyor summalar — chek summasidan yuqori yaxlit pullar -->
-                    <div class="d-flex flex-wrap gap-1 mt-1" id="cashSuggest"></div>
-                    <div class="d-flex justify-content-between align-items-baseline mt-1" id="changeRow" style="display:none;">
-                        <span class="small" id="changeLabel">Qaytim:</span>
-                        <span class="fs-5 fw-bold" id="changeAmount">0</span>
-                    </div>
-                </div>
             </div>
 
             <div class="card p-2 mb-2">
@@ -682,7 +666,7 @@
                 </div>
             </div>
 
-            <div class="card p-2 mb-2">
+            <div class="card p-2 mb-2" id="payMethodCard">
                 <label class="form-label small text-uppercase mb-1">To'lov turi</label>
                 <div class="row g-1" id="paymentButtons">
                     {% for value, label in payment_methods %}
@@ -789,13 +773,12 @@
 
             <!-- Sticky checkout panel -->
             <div class="pos-checkout-sticky">
-                <button type="button" class="btn btn-success btn-lg w-100" id="checkoutBtn" disabled>
+                <button type="button" class="btn btn-success btn-lg w-100" id="openPayBtn" disabled>
                     <i class="bi bi-check2-circle"></i> SOTUVNI YAKUNLASH
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-warning w-100 mt-1" id="parkBtn" disabled>
                     <i class="bi bi-pause-circle"></i> Savatni saqlab qo'yish
                 </button>
-                <div id="checkoutStatus" class="small text-center mt-1"></div>
             </div>
         </div>
     </div>
@@ -1027,6 +1010,49 @@
             Boshqa foydalanuvchi sifatida kirish
         </a>
     </div>
+</div>
+
+<!-- To'lov modali — "Sotuvni yakunlash" bosilgandan keyin chiqadi -->
+<div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-wallet2"></i> To'lov</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <span class="text-muted">Mijoz to'laydi:</span>
+            <span class="display-6 fw-bold text-primary mb-0"><span id="payModalTotal">0</span> <span class="fs-6">so'm</span></span>
+        </div>
+
+        <!-- To'lov turi kartasi shu yerga ko'chiriladi (JS) -->
+        <div id="payMethodMount"></div>
+
+        <!-- Qaytim / qolgan hisoblagich -->
+        <div class="card p-2 mb-2">
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0" for="cashGiven" style="white-space:nowrap">
+                    <i class="bi bi-cash-coin"></i> Naqd berildi
+                </label>
+                <input type="number" id="cashGiven" class="form-control form-control-sm text-end"
+                       placeholder="so'm" min="0" step="1000" inputmode="numeric">
+            </div>
+            <div class="d-flex flex-wrap gap-1 mt-1" id="cashSuggest"></div>
+            <div class="d-flex justify-content-between align-items-baseline mt-1" id="changeRow" style="display:none;">
+                <span class="small" id="changeLabel">Qaytim:</span>
+                <span class="fs-5 fw-bold" id="changeAmount">0</span>
+            </div>
+        </div>
+      </div>
+      <div class="modal-footer flex-column align-items-stretch">
+        <div id="checkoutStatus" class="small text-center mb-1"></div>
+        <button type="button" class="btn btn-success btn-lg w-100" id="checkoutBtn">
+            <i class="bi bi-check2-circle"></i> TO'LASH VA YAKUNLASH
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Quick refund modal -->
@@ -1389,6 +1415,42 @@ const checkoutBtn    = document.getElementById('checkoutBtn');
 const checkoutStatus = document.getElementById('checkoutStatus');
 const clearCartBtn   = document.getElementById('clearCartBtn');
 const parkBtn        = document.getElementById('parkBtn');
+const openPayBtn     = document.getElementById('openPayBtn');
+
+// To'lov turi kartasini modal ichiga ko'chiramiz (bir marta, yuklanishда)
+(function(){
+    const card = document.getElementById('payMethodCard');
+    const mount = document.getElementById('payMethodMount');
+    if (card && mount) mount.appendChild(card);
+})();
+
+// To'lov modali (lazy — bootstrap content'dan keyin yuklanadi)
+let _payModal = null;
+function getPayModal() {
+    if (_payModal) return _payModal;
+    _payModal = new bootstrap.Modal(document.getElementById('payModal'));
+    return _payModal;
+}
+function openPayModal() {
+    if (Object.keys(cart).length === 0) return;
+    // Har sotuvda to'lov turi qayta tanlansin (avtomat tanlanmaydi)
+    document.getElementById('paymentMethod').value = '';
+    document.querySelectorAll('.payment-btn').forEach(b => {
+        b.classList.remove('active', 'btn-primary');
+        b.classList.add('btn-outline-secondary');
+    });
+    if (typeof renderMixedSplit === 'function') renderMixedSplit();
+    const cg = document.getElementById('cashGiven');
+    if (cg) cg.value = '';
+    if (typeof updateChange === 'function') updateChange();
+    if (typeof renderCashSuggestions === 'function') renderCashSuggestions();
+    const pt = document.getElementById('payModalTotal');
+    if (pt && typeof currentTotalAmount === 'function') pt.textContent = fmt(currentTotalAmount());
+    if (checkoutStatus) checkoutStatus.textContent = '';
+    if (checkoutBtn) checkoutBtn.disabled = false;
+    getPayModal().show();
+}
+if (openPayBtn) openPayBtn.addEventListener('click', openPayModal);
 const parkedCard     = document.getElementById('parkedCard');
 const parkedList     = document.getElementById('parkedList');
 
@@ -1635,6 +1697,7 @@ function renderCart() {
         cartCountEl.textContent = '0';
         checkoutBtn.disabled = true;
         parkBtn.disabled = true;
+        if (openPayBtn) openPayBtn.disabled = true;
         clearCartBtn.style.display = 'none';
         promoDiscount = 0;
         appliedPromos = [];
@@ -1716,6 +1779,7 @@ function renderCart() {
     renderAppliedPromos();
     checkoutBtn.disabled = false;
     parkBtn.disabled = false;
+    if (openPayBtn) openPayBtn.disabled = false;
     clearCartBtn.style.display = 'inline-block';
     if (typeof renderMixedSplit === 'function') renderMixedSplit();
     if (typeof schedulePromoEval === 'function') schedulePromoEval();
@@ -2345,6 +2409,7 @@ checkoutBtn.addEventListener('click', async () => {
             await broadcastQueueCount();
             checkoutStatus.innerHTML = `<span class="text-warning">
                 <i class="bi bi-inbox"></i> Offline: sotuv navbatga olindi, onlayn'da yuboriladi (${reason})</span>`;
+            try { getPayModal().hide(); } catch (e) {}
             cart = {};
             qrBreakdownExtra = [];
             renderCart();
@@ -2382,6 +2447,7 @@ checkoutBtn.addEventListener('click', async () => {
         }
         checkoutStatus.innerHTML = `<span class="text-success">
             ✓ Sotuv #${data.txn_id} saqlandi (${fmt(data.total)} so'm)</span>`;
+        try { getPayModal().hide(); } catch (e) {}
 
         // Auto-open cash drawer if cash was used (any portion)
         const usedCash = (paymentMethod === 'cash')
@@ -3334,7 +3400,10 @@ document.addEventListener('keydown', (e) => {
         scanInput.select();
     } else if (e.key === 'F4') {
         e.preventDefault();
-        if (!checkoutBtn.disabled) checkoutBtn.click();
+        // F4 → to'lov modalini ochadi (modal ochiq bo'lsa — yakunlaydi)
+        const payOpen = document.getElementById('payModal').classList.contains('show');
+        if (payOpen) { if (!checkoutBtn.disabled) checkoutBtn.click(); }
+        else if (openPayBtn && !openPayBtn.disabled) openPayBtn.click();
     } else if (e.key === 'F9') {
         e.preventDefault();
         if (!parkBtn.disabled) parkBtn.click();
