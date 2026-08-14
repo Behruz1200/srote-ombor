@@ -4253,37 +4253,45 @@ window.yuritScan = (function () {
 #oskToggle:hover { background: var(--yrt-primary-deep); }
 #osk {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 3001;
-    background: var(--yrt-surface); border-top: 1px solid var(--yrt-border);
+    background: var(--yrt-surface);
+    border: 1px solid var(--yrt-border); border-bottom: none;
+    border-radius: var(--yrt-radius-lg) var(--yrt-radius-lg) 0 0;
     box-shadow: var(--yrt-shadow-xl);
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    padding: 16px 18px calc(16px + env(safe-area-inset-bottom));
     display: none; user-select: none;
 }
+/* Yon panel (sidebar) ustiga chiqmasin — kontent bilan bir chiziqда boshlansin */
+@media (min-width: 992px) { #osk { left: var(--yrt-sidebar-current); } }
 #osk.osk-open { display: block; }
-.osk-inner { display: flex; gap: 12px; max-width: 1120px; margin: 0 auto; align-items: flex-start; }
+.osk-inner { display: flex; gap: 16px; max-width: 1320px; margin: 0 auto; align-items: flex-start; }
 .osk-main { flex: 1 1 auto; min-width: 0; }
 .osk-numpad {
-    flex: 0 0 236px; display: grid;
-    grid-template-columns: repeat(3, 1fr); gap: 6px;
+    flex: 0 0 300px; display: grid;
+    grid-template-columns: repeat(3, 1fr); gap: 8px;
 }
-.osk-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.osk-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .osk-row:last-child { margin-bottom: 0; }
 .osk-key {
-    flex: 1 1 0; min-width: 0; height: 46px;
-    border: 1px solid var(--yrt-border); border-radius: var(--yrt-radius-sm);
+    flex: 1 1 0; min-width: 0; height: 58px;
+    border: 1px solid var(--yrt-border); border-radius: var(--yrt-radius-md);
     background: var(--yrt-surface-2); color: var(--yrt-fg);
-    font-size: 16px; font-weight: 600; cursor: pointer;
+    font-size: 19px; font-weight: 600; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
     transition: background .08s, border-color .08s;
     font-variant-numeric: tabular-nums;
 }
 .osk-key:hover { border-color: var(--yrt-border-strong); }
 .osk-key:active { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
-.osk-key--special { background: var(--yrt-surface-3); font-size: 13px; font-weight: 600; color: var(--yrt-fg-muted); }
+.osk-key--special { background: var(--yrt-surface-3); font-size: 15px; font-weight: 600; color: var(--yrt-fg-muted); }
 .osk-key--active { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
 .osk-key--accent { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
-.osk-numpad .osk-key { height: 52px; font-size: 19px; }
-@media (max-width: 820px) { .osk-numpad { display: none; } }
-@media (max-width: 600px) { .osk-key { height: 42px; font-size: 15px; } .osk-numpad .osk-key { height: 46px; } }
+.osk-numpad .osk-key { height: 68px; font-size: 24px; }
+@media (max-width: 991px) { .osk-numpad { display: none; } }
+@media (max-width: 600px) {
+    #osk { padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); border-radius: var(--yrt-radius-md) var(--yrt-radius-md) 0 0; }
+    .osk-key { height: 46px; font-size: 16px; }
+    .osk-row { gap: 6px; margin-bottom: 6px; }
+}
 @media print { #osk, #oskToggle { display: none !important; } }
 </style>
 
