@@ -5075,10 +5075,14 @@ def pos_terminal(request):
     if not open_shift:
         return redirect('shift_open')
 
-    recent_txns = (SaleTransaction.objects.filter(branch=branch, shift=open_shift)
+    # POS pastida — FAQAT bugungi sotuvlar (kalendar sana bo'yicha, smenadan
+    # qat'i nazar). Kassir bugun sotgan har qanday chekni qaytarish/almashtirish
+    # qilishi mumkin.
+    recent_txns = (SaleTransaction.objects.filter(
+                       branch=branch, sold_at__date=timezone.localdate())
                    .select_related('sold_by')
                    .prefetch_related('lines')
-                   .order_by('-sold_at')[:5])
+                   .order_by('-sold_at')[:200])
 
     # Top 12 most-sold products in this branch over the last 30 days.
     # Used to populate the "Tez sotiluvchilar" quick-tap grid on the POS.
@@ -6682,6 +6686,11 @@ def sales_list(request):
     seller_id = request.GET.get('seller') or ''
     payment_method = request.GET.get('payment_method') or ''
     export = request.GET.get('export') == 'csv'
+
+    # Standart: oxirgi 1 oy (sana filtri berilmagan bo'lsa). Foydalanuvchi
+    # kengaytirmoqchi bo'lsa — "Sanadan" ni o'zgartiradi.
+    if not date_from_raw and not date_to_raw:
+        date_from_raw = (timezone.localdate() - timedelta(days=30)).strftime('%Y-%m-%d')
 
     qs = Sale.objects.select_related(
         'variant__product', 'branch', 'sold_by', 'transaction'
