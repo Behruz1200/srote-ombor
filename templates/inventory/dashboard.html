@@ -128,6 +128,53 @@
         </article>
     </section>
 
+    <!-- ── Bugungi pul oqimi (to'lov turi bo'yicha) ─────────────────────── -->
+    <article class="dash-card mb-3">
+        <header class="dash-card__head">
+            <div>
+                <h2 class="dash-card__title"><i class="bi bi-wallet2"></i> Bugungi pul oqimi</h2>
+                <p class="dash-card__sub">To'lov turi bo'yicha · naqd / karta / o'tkazma</p>
+            </div>
+            <span class="dash-pill">{{ flow_total|som }} so'm</span>
+        </header>
+        <div class="dash-card__body dash-card__body--padded">
+            {% if flow_total %}
+            <!-- Nisbat chizig'i -->
+            <div style="display:flex; height:12px; border-radius:99px; overflow:hidden; background:var(--yrt-border); margin-bottom:14px;">
+                {% for r in flow_rows %}
+                <div title="{{ r.label }}: {{ r.pct|floatformat:0 }}%"
+                     style="width:{{ r.pct|floatformat:2 }}%; background:{{ r.color }};"></div>
+                {% endfor %}
+            </div>
+            <!-- Qatorlar -->
+            <div class="row g-2">
+                {% for r in flow_rows %}
+                <div class="col-md-4 col-sm-6">
+                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="border:1px solid var(--yrt-border);">
+                        <span style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+                                     border-radius:8px;background:{{ r.color }}1a;color:{{ r.color }};flex:none;">
+                            <i class="bi {{ r.icon }}"></i>
+                        </span>
+                        <div class="flex-grow-1" style="min-width:0;">
+                            <div class="d-flex justify-content-between align-items-baseline">
+                                <span class="small fw-semibold">{{ r.label }}</span>
+                                <span class="small text-muted">{{ r.pct|floatformat:0 }}%</span>
+                            </div>
+                            <div class="fw-bold" style="font-variant-numeric:tabular-nums;">{{ r.amount|som }} <span class="small text-muted">so'm</span></div>
+                            <div class="text-muted" style="font-size:.72rem;">Kecha: {{ r.yesterday|som }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-3">
+                <i class="bi bi-moon-stars"></i> Bugun hali savdo yo'q.
+            </div>
+            {% endif %}
+        </div>
+    </article>
+
     <!-- ── Trend chart + Attention widget ───────────────────────────────── -->
     <div class="row g-3 mb-3">
         <div class="col-lg-8">

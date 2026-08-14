@@ -456,7 +456,7 @@ def lookup(request):
 
 # ---------- DASHBOARD ----------
 
-DASHBOARD_CACHE_KEY = 'dashboard:hq:v1'
+DASHBOARD_CACHE_KEY = 'dashboard:hq:v2'
 DASHBOARD_CACHE_TTL = 60  # seconds — heavy aggregates only; recent_sales stays live
 
 
@@ -507,6 +507,23 @@ def _dashboard_aggregates():
 
     today_stats = _agg(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
     yesterday_stats = _agg(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
+
+    # Bugungi pul oqimi — to'lov turi bo'yicha (naqd/karta/o'tkazma/aralash)
+    def _by_method(qs):
+        out = {'cash': 0.0, 'card': 0.0, 'transfer': 0.0, 'mixed': 0.0, 'other': 0.0}
+        rows = (qs.values('transaction__payment_method')
+                  .annotate(rev=Sum(revenue_expr)))
+        for r in rows:
+            m = r['transaction__payment_method'] or 'other'
+            if m not in out:
+                m = 'other'
+            out[m] += float(r['rev'] or 0)
+        return out
+
+    today_by_method = _by_method(
+        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
+    yesterday_by_method = _by_method(
+        Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
 
     # 7-day trend — single annotated query
     week_start = today_start - timedelta(days=6)
@@ -575,6 +592,8 @@ def _dashboard_aggregates():
         'yesterday_iso': yesterday.isoformat(),
         'today_stats': today_stats,
         'yesterday_stats': yesterday_stats,
+        'today_by_method': today_by_method,
+        'yesterday_by_method': yesterday_by_method,
         'trend_labels': trend_labels,
         'trend_revenue': trend_revenue,
         'trend_qty': trend_qty,
@@ -647,10 +666,37 @@ def dashboard(request):
                     .prefetch_related('lines')
                     .order_by('-sold_at')[:8])
 
+    # Bugungi pul oqimi — to'lov turi bo'yicha tayyor qatorlar (shablon uchun)
+    _tbm = agg['today_by_method']
+    _ybm = agg['yesterday_by_method']
+    flow_total = sum(_tbm.get(k, 0) for k in ('cash', 'card', 'transfer', 'mixed', 'other'))
+    _flow_defs = [
+        ('cash', 'Naqd', 'bi-cash-stack', '#16A34A'),
+        ('card', 'Karta', 'bi-credit-card-2-front', '#2563EB'),
+        ('transfer', "O'tkazma", 'bi-arrow-left-right', '#D97706'),
+        ('mixed', 'Aralash', 'bi-three-dots', '#7C3AED'),
+        ('other', 'Boshqa', 'bi-wallet2', '#64748B'),
+    ]
+    flow_rows = []
+    for key, label, icon, color in _flow_defs:
+        amt = _tbm.get(key, 0)
+        if key in ('mixed', 'other') and not amt:
+            continue
+        flow_rows.append({
+            'key': key, 'label': label, 'icon': icon, 'color': color,
+            'amount': amt,
+            'pct': (amt / flow_total * 100) if flow_total else 0,
+            'yesterday': _ybm.get(key, 0),
+        })
+
     return render(request, 'inventory/dashboard.html', {
         'today': today, 'yesterday': yesterday,
         'today_stats': today_stats,
         'yesterday_stats': yesterday_stats,
+        'today_by_method': agg['today_by_method'],
+        'yesterday_by_method': agg['yesterday_by_method'],
+        'flow_rows': flow_rows,
+        'flow_total': flow_total,
         'deltas': deltas,
         'trend_labels': agg['trend_labels'],
         'trend_revenue': agg['trend_revenue'],
