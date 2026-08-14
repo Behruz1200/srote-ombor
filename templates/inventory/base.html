@@ -4254,20 +4254,15 @@ window.yuritScan = (function () {
 #osk {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 3001;
     background: var(--yrt-surface);
-    border: 1px solid var(--yrt-border); border-bottom: none;
-    border-radius: var(--yrt-radius-lg) var(--yrt-radius-lg) 0 0;
-    box-shadow: var(--yrt-shadow-xl);
-    padding: 16px 18px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--yrt-border);
+    border-radius: var(--dash-radius) var(--dash-radius) 0 0;
+    box-shadow: 0 -6px 22px rgba(11,13,18,0.07);
+    padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
     display: none; user-select: none;
 }
 /* Yon panel (sidebar) ustiga chiqmasin — kontent bilan bir chiziqда boshlansin */
 @media (min-width: 992px) { #osk { left: var(--yrt-sidebar-current); } }
 #osk.osk-open { display: block; }
-#osk::before {
-    content: ''; display: block; width: 46px; height: 5px;
-    border-radius: 99px; background: var(--yrt-border-strong);
-    margin: 0 auto 14px; opacity: .8;
-}
 .osk-inner { display: flex; gap: 16px; max-width: 1320px; margin: 0 auto; align-items: flex-start; }
 .osk-main { flex: 1 1 auto; min-width: 0; }
 .osk-numpad {
@@ -4277,35 +4272,22 @@ window.yuritScan = (function () {
 .osk-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .osk-row:last-child { margin-bottom: 0; }
 .osk-key {
-    flex: 1 1 0; min-width: 0; height: 58px;
-    border: 1px solid var(--yrt-border); border-radius: var(--yrt-radius-md);
-    background: var(--yrt-surface); color: var(--yrt-fg);
-    box-shadow: 0 2px 0 var(--yrt-border-strong);
-    font-size: 19px; font-weight: 600; cursor: pointer;
+    flex: 1 1 0; min-width: 0; height: 56px;
+    border: 1px solid var(--yrt-border); border-radius: var(--dash-radius-sm);
+    background: var(--yrt-surface-2); color: var(--yrt-fg);
+    font-size: 18px; font-weight: 600; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
-    transition: transform .05s, background .1s, box-shadow .05s, border-color .1s;
+    transition: background .1s, border-color .1s, box-shadow .1s;
     font-variant-numeric: tabular-nums;
 }
-.osk-key:hover { background: var(--yrt-surface-2); }
-.osk-key:active {
-    background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff;
-    box-shadow: none; transform: translateY(2px);
-}
-.osk-key--special {
-    background: var(--yrt-surface-2); font-size: 15px; font-weight: 600;
-    color: var(--yrt-fg-muted); box-shadow: 0 2px 0 var(--yrt-border-strong);
-}
-.osk-key--special:hover { background: var(--yrt-surface-3); }
-.osk-key--active {
-    background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff;
-    box-shadow: 0 2px 0 var(--yrt-primary-deep);
-}
-.osk-key--accent {
-    background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff;
-    box-shadow: 0 2px 0 var(--yrt-primary-deep);
-}
+.osk-key:hover { background: var(--yrt-surface); border-color: var(--yrt-border-strong); }
+.osk-key:active { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
+.osk-key--special { background: var(--yrt-surface-3); font-size: 15px; font-weight: 600; color: var(--yrt-fg-muted); }
+.osk-key--special:hover { background: var(--yrt-surface-2); }
+.osk-key--active { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
+.osk-key--accent { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
 .osk-key--accent:hover { background: var(--yrt-primary-deep); }
-.osk-numpad .osk-key { height: 68px; font-size: 24px; font-weight: 700; }
+.osk-numpad .osk-key { height: 64px; font-size: 22px; }
 @media (max-width: 991px) { .osk-numpad { display: none; } }
 @media (max-width: 600px) {
     #osk { padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); border-radius: var(--yrt-radius-md) var(--yrt-radius-md) 0 0; }
@@ -4432,7 +4414,7 @@ window.yuritScan = (function () {
                     b.textContent = charOf(item);
                     b.dataset.kind = 'char';
                 } else {
-                    b.className += (item.k === 'enter') ? ' osk-key--accent' : ' osk-key--special';
+                    b.className += ' osk-key--special';
                     b.textContent = item.label;
                     b.dataset.kind = item.k;
                     if ((item.k === 'shift' && shift) || (item.k === 'caps' && caps)) {
