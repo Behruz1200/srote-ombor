@@ -4263,6 +4263,11 @@ window.yuritScan = (function () {
 /* Yon panel (sidebar) ustiga chiqmasin — kontent bilan bir chiziqда boshlansin */
 @media (min-width: 992px) { #osk { left: var(--yrt-sidebar-current); } }
 #osk.osk-open { display: block; }
+#osk::before {
+    content: ''; display: block; width: 46px; height: 5px;
+    border-radius: 99px; background: var(--yrt-border-strong);
+    margin: 0 auto 14px; opacity: .8;
+}
 .osk-inner { display: flex; gap: 16px; max-width: 1320px; margin: 0 auto; align-items: flex-start; }
 .osk-main { flex: 1 1 auto; min-width: 0; }
 .osk-numpad {
@@ -4274,18 +4279,33 @@ window.yuritScan = (function () {
 .osk-key {
     flex: 1 1 0; min-width: 0; height: 58px;
     border: 1px solid var(--yrt-border); border-radius: var(--yrt-radius-md);
-    background: var(--yrt-surface-2); color: var(--yrt-fg);
+    background: var(--yrt-surface); color: var(--yrt-fg);
+    box-shadow: 0 2px 0 var(--yrt-border-strong);
     font-size: 19px; font-weight: 600; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
-    transition: background .08s, border-color .08s;
+    transition: transform .05s, background .1s, box-shadow .05s, border-color .1s;
     font-variant-numeric: tabular-nums;
 }
-.osk-key:hover { border-color: var(--yrt-border-strong); }
-.osk-key:active { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
-.osk-key--special { background: var(--yrt-surface-3); font-size: 15px; font-weight: 600; color: var(--yrt-fg-muted); }
-.osk-key--active { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
-.osk-key--accent { background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff; }
-.osk-numpad .osk-key { height: 68px; font-size: 24px; }
+.osk-key:hover { background: var(--yrt-surface-2); }
+.osk-key:active {
+    background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff;
+    box-shadow: none; transform: translateY(2px);
+}
+.osk-key--special {
+    background: var(--yrt-surface-2); font-size: 15px; font-weight: 600;
+    color: var(--yrt-fg-muted); box-shadow: 0 2px 0 var(--yrt-border-strong);
+}
+.osk-key--special:hover { background: var(--yrt-surface-3); }
+.osk-key--active {
+    background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff;
+    box-shadow: 0 2px 0 var(--yrt-primary-deep);
+}
+.osk-key--accent {
+    background: var(--yrt-primary); border-color: var(--yrt-primary); color: #fff;
+    box-shadow: 0 2px 0 var(--yrt-primary-deep);
+}
+.osk-key--accent:hover { background: var(--yrt-primary-deep); }
+.osk-numpad .osk-key { height: 68px; font-size: 24px; font-weight: 700; }
 @media (max-width: 991px) { .osk-numpad { display: none; } }
 @media (max-width: 600px) {
     #osk { padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); border-radius: var(--yrt-radius-md) var(--yrt-radius-md) 0 0; }
@@ -4412,7 +4432,7 @@ window.yuritScan = (function () {
                     b.textContent = charOf(item);
                     b.dataset.kind = 'char';
                 } else {
-                    b.className += ' osk-key--special';
+                    b.className += (item.k === 'enter') ? ' osk-key--accent' : ' osk-key--special';
                     b.textContent = item.label;
                     b.dataset.kind = item.k;
                     if ((item.k === 'shift' && shift) || (item.k === 'caps' && caps)) {
