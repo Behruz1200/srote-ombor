@@ -4660,10 +4660,12 @@ def shift_close(request):
     by_method = shift.sales_by_method_split()
     from decimal import Decimal as _D
     _refund = shift.refunds_total()
+    payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
     return render(request, 'inventory/shift_close.html', {
         'shift': shift,
         'expected': shift.expected_cash(),
         'cash_sales': shift.cash_sales(),
+        'payouts': payouts,
         'payouts_total': shift.payouts_total(),
         'refund_total': _refund,
         'sales_cash': by_method.get('cash', _D('0')),
