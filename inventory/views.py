@@ -4656,7 +4656,8 @@ def shift_close(request):
         # Yopilgach — chek printerida Z-hisobotni chop etish (avtomatik)
         return redirect(f"{reverse('shift_receipt', args=[shift.pk])}?autoprint=1")
 
-    by_method = shift.sales_by_method()
+    # Aralash cheklar naqd/karta/o'tkazmaga bo'linadi (alohida "Aralash" yo'q)
+    by_method = shift.sales_by_method_split()
     from decimal import Decimal as _D
     _refund = shift.refunds_total()
     return render(request, 'inventory/shift_close.html', {
@@ -4668,7 +4669,6 @@ def shift_close(request):
         'sales_cash': by_method.get('cash', _D('0')),
         'sales_card': by_method.get('card', _D('0')),
         'sales_transfer': by_method.get('transfer', _D('0')),
-        'sales_mixed': by_method.get('mixed', _D('0')),
         # Jami savdo = SOF (qaytarilgan pul ayirilgan). Ilgari brutto edi:
         # 48 000 sotib, 48 000 qaytarilsa ham 48 000 ko'rsatardi.
         'sales_total': sum(by_method.values(), _D('0')) - _D(str(_refund or 0)),

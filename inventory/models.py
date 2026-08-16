@@ -796,6 +796,64 @@ class Shift(models.Model):
             out[m] = _dec(line_rev) - _dec(odisc)
         return out
 
+    def sales_by_method_split(self):
+        """To'lov turi bo'yicha — lekin 'aralash' (mixed) cheklar
+        payment_breakdown bo'yicha naqd/karta/o'tkazmaga BO'LINADI.
+
+        Har aralash chekning sof summasi qismlar nisbatiga qarab taqsimlanadi
+        (oxirgi qism qoldiqni oladi — yaxlitlash tufayli jami buzilmaydi).
+        Faqat {cash, card, transfer} qaytaradi.
+        """
+        end = self.closed_at or timezone.now()
+        rev_expr = models.ExpressionWrapper(
+            models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
+            output_field=models.DecimalField(max_digits=14, decimal_places=2))
+        txns = SaleTransaction.objects.filter(
+            branch=self.branch, sold_at__gte=self.opened_at, sold_at__lt=end)
+        out = {'cash': Decimal('0'), 'card': Decimal('0'), 'transfer': Decimal('0')}
+        # Aralash bo'lmagan cheklar — o'z ustuniga
+        for m in ('cash', 'card', 'transfer'):
+            ids = list(txns.filter(payment_method=m).values_list('id', flat=True))
+            if not ids:
+                continue
+            line_rev = Sale.objects.filter(transaction_id__in=ids).aggregate(
+                s=models.Sum(rev_expr))['s'] or Decimal('0')
+            odisc = txns.filter(id__in=ids).aggregate(
+                s=models.Sum('order_discount'))['s'] or Decimal('0')
+            out[m] += _dec(line_rev) - _dec(odisc)
+        # Aralash cheklar — payment_breakdown bo'yicha bo'linadi
+        mixed = list(txns.filter(payment_method='mixed')
+                     .values('id', 'payment_breakdown', 'order_discount'))
+        if mixed:
+            mids = [t['id'] for t in mixed]
+            rev_rows = (Sale.objects.filter(transaction_id__in=mids)
+                        .values('transaction_id').annotate(s=models.Sum(rev_expr)))
+            rev_map = {r['transaction_id']: _dec(r['s'] or 0) for r in rev_rows}
+            for t in mixed:
+                net = rev_map.get(t['id'], Decimal('0')) - _dec(t['order_discount'] or 0)
+                parts = {}
+                s = Decimal('0')
+                for e in (t['payment_breakdown'] or []):
+                    try:
+                        mm = (e.get('method') or '').strip()
+                        a = _dec(str(e.get('amount') or 0))
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                    if not mm or a <= 0:
+                        continue
+                    parts[mm] = parts.get(mm, Decimal('0')) + a
+                    s += a
+                if s <= 0:
+                    out['cash'] += net
+                    continue
+                keys = list(parts.keys())
+                done = Decimal('0')
+                for i, mm in enumerate(keys):
+                    share = (net - done) if i == len(keys) - 1 else (net * parts[mm] / s)
+                    done += share
+                    out[mm if mm in out else 'cash'] += share
+        return out
+
     def total_sales(self):
         """Barcha to'lov turlari bo'yicha jami savdo."""
         return sum(self.sales_by_method().values(), Decimal('0'))
