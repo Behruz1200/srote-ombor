@@ -1209,6 +1209,10 @@ def employee_debt_list(request):
                 if manual_amount > 0:
                     total += manual_amount
 
+                # Decimal(12,2) — 10^10 dan oshsa DB overflow (500) bo'ladi
+                if total > Decimal('9999999999.99'):
+                    raise ValueError("summa juda katta")
+
                 debt.amount = total
                 debt.save(update_fields=['amount'])
         except ValueError as e:
@@ -5381,6 +5385,12 @@ def pos_checkout(request):
     # hisoblanganda 500 xato). Shuning uchun hammasini Decimal'ga o'giramiz.
     from decimal import Decimal, InvalidOperation
 
+    # Pul maydonlari DB'da Decimal(12,2) — mutlaq qiymati 10^10 dan kichik
+    # bo'lishi SHART, aks holda "numeric field overflow" (500). Xato terilgan
+    # ulkan raqam (masalan numpad'дa qo'shimcha nol) 500 emas, tushunarli
+    # ogohlantirish berishi kerak.
+    MAX_MONEY = Decimal('9999999999.99')
+
     def _money(v, allow_zero=True):
         try:
             d = Decimal(str(v if v not in (None, '') else 0))
@@ -5391,6 +5401,9 @@ def pos_checkout(request):
         return d
 
     order_discount = _money(data.get('order_discount'))
+    if order_discount > MAX_MONEY:
+        return JsonResponse({'ok': False,
+            'error': "Chegirma juda katta. Iltimos, to'g'ri summa kiriting."}, status=400)
     discount_reason = (data.get('discount_reason') or '').strip()[:200]
 
     # Parse line shape without touching the DB (input validation only).
@@ -5408,6 +5421,9 @@ def pos_checkout(request):
             return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
         if qty <= 0 or price < 0:
             return JsonResponse({'ok': False, 'error': 'qty/narx noto\'g\'ri'}, status=400)
+        if price > MAX_MONEY or line_discount > MAX_MONEY:
+            return JsonResponse({'ok': False,
+                'error': "Narx juda katta. Iltimos, to'g'ri narx kiriting."}, status=400)
         parsed_lines.append({'sid': sid, 'qty': qty, 'price': price, 'ld': line_discount})
 
     # Resolve / auto-create Customer by phone (most reliable key)
@@ -6184,6 +6200,9 @@ def pos_exchange(request):
             return JsonResponse({'ok': False, 'error': "yangi qator noto'g'ri"}, status=400)
         if qty <= 0:
             return JsonResponse({'ok': False, 'error': "yangi qator: soni noto'g'ri"}, status=400)
+        if price > Decimal('9999999999.99'):
+            return JsonResponse({'ok': False,
+                'error': "Narx juda katta. Iltimos, to'g'ri narx kiriting."}, status=400)
         parsed_new.append({'sid': sid, 'qty': qty, 'price': price})
 
     parsed_ret = []
