@@ -456,7 +456,7 @@ def lookup(request):
 
 # ---------- DASHBOARD ----------
 
-DASHBOARD_CACHE_KEY = 'dashboard:hq:v4'
+DASHBOARD_CACHE_KEY = 'dashboard:hq:v5'
 DASHBOARD_CACHE_TTL = 60  # seconds — heavy aggregates only; recent_sales stays live
 
 
@@ -550,7 +550,13 @@ def _dashboard_aggregates():
                 keys = list(parts.keys())
                 done = 0.0
                 for i, mm in enumerate(keys):
-                    share = (rev - done) if i == len(keys) - 1 else rev * (parts[mm] / s)
+                    if i == len(keys) - 1:
+                        share = rev - done
+                    else:
+                        avail = rev - done
+                        share = parts[mm] if parts[mm] <= avail else avail
+                        if share < 0:
+                            share = 0.0
                     done += share
                     out[mm if mm in out else 'other'] += share
         return out
@@ -593,7 +599,13 @@ def _dashboard_aggregates():
                     keys = list(parts.keys())
                     done = 0.0
                     for i, mm in enumerate(keys):
-                        share = (amt - done) if i == len(keys) - 1 else amt * (parts[mm] / s)
+                        if i == len(keys) - 1:
+                            share = amt - done
+                        else:
+                            avail = amt - done
+                            share = parts[mm] if parts[mm] <= avail else avail
+                            if share < 0:
+                                share = 0.0
                         done += share
                         out[mm if mm in out else 'cash'] += share
             else:
@@ -758,17 +770,32 @@ def dashboard(request):
         ('transfer', "O'tkazma", 'bi-arrow-left-right', '#D97706'),
     ]
     _trbm = agg.get('today_returns_by_method', {}) or {}
+
+    # Do'kon 1000 so'mdan mayda summalar ishlatmaydi — ko'rsatishда eng yaqin
+    # 1000 ga yaxlitlaymiz (fraksiya/yuzlik "chiqindi" ko'rinmasin). Yig'indi
+    # ham yaxlitlangan qismlardan olinadi, shuning uchun mos keladi.
+    def _r1k(x):
+        try:
+            return int(round(float(x) / 1000.0)) * 1000
+        except (TypeError, ValueError):
+            return 0
+
     flow_rows = []
+    flow_total = 0
+    _rows_tmp = []
     for key, label, icon, color in _flow_defs:
-        amt = _tbm.get(key, 0)
-        rf = _trbm.get(key, 0)
+        amt = _r1k(_tbm.get(key, 0))
+        rf = _r1k(_trbm.get(key, 0))
+        flow_total += amt
+        _rows_tmp.append((key, label, icon, color, amt, rf))
+    for key, label, icon, color, amt, rf in _rows_tmp:
         flow_rows.append({
             'key': key, 'label': label, 'icon': icon, 'color': color,
             'amount': amt,
             'refunded': rf,
             'net': amt - rf,
             'pct': (amt / flow_total * 100) if flow_total else 0,
-            'yesterday': _ybm.get(key, 0),
+            'yesterday': _r1k(_ybm.get(key, 0)),
         })
 
     return render(request, 'inventory/dashboard.html', {

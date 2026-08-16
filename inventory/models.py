@@ -837,10 +837,18 @@ class Shift(models.Model):
                 if s <= 0:
                     out['cash'] += net
                     continue
+                # Yaxlit chiqishi uchun: har usul KIRITILGAN summasini oladi,
+                # oxirgisi qoldiqni (nisbatga bo'lish/fraksiya yo'q).
                 keys = list(parts.keys())
                 done = Decimal('0')
                 for i, mm in enumerate(keys):
-                    share = (net - done) if i == len(keys) - 1 else (net * parts[mm] / s)
+                    if i == len(keys) - 1:
+                        share = net - done
+                    else:
+                        avail = net - done
+                        share = parts[mm] if parts[mm] <= avail else avail
+                        if share < Decimal('0'):
+                            share = Decimal('0')
                     done += share
                     out[mm if mm in out else 'cash'] += share
         return out
@@ -884,7 +892,13 @@ class Shift(models.Model):
                     keys = list(parts.keys())
                     done = Decimal('0')
                     for i, mm in enumerate(keys):
-                        share = (amt - done) if i == len(keys) - 1 else (amt * parts[mm] / s)
+                        if i == len(keys) - 1:
+                            share = amt - done
+                        else:
+                            avail = amt - done
+                            share = parts[mm] if parts[mm] <= avail else avail
+                            if share < Decimal('0'):
+                                share = Decimal('0')
                         done += share
                         out[mm if mm in out else 'cash'] += share
             else:
