@@ -141,6 +141,12 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
             <span>{{ row.label }} <span class="rcpt-cnt">{{ row.count }}</span></span>
             <span class="v">{{ row.amount|som }}</span>
         </div>
+        {% if row.refunded %}
+        <div class="rcpt-row rcpt-row--muted" style="padding-top:0;">
+            <span>qaytarilgan −{{ row.refunded|som }}</span>
+            <span class="v">sof {{ row.net|som }}</span>
+        </div>
+        {% endif %}
         {% endfor %}
         {% if other_money %}
         <div class="rcpt-row"><span>Boshqa</span><span class="v">{{ other_money|som }}</span></div>

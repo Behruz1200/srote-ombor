@@ -161,6 +161,9 @@
                                 <span class="small text-muted">{{ r.pct|floatformat:0 }}%</span>
                             </div>
                             <div class="fw-bold" style="font-variant-numeric:tabular-nums;">{{ r.amount|som }} <span class="small text-muted">so'm</span></div>
+                            {% if r.refunded %}
+                            <div style="font-size:.72rem;color:var(--yrt-danger);">qaytarilgan −{{ r.refunded|som }} · <span style="color:var(--yrt-fg-muted);">sof {{ r.net|som }}</span></div>
+                            {% endif %}
                             <div class="text-muted" style="font-size:.72rem;">Kecha: {{ r.yesterday|som }}</div>
                         </div>
                     </div>

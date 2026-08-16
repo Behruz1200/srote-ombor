@@ -456,7 +456,7 @@ def lookup(request):
 
 # ---------- DASHBOARD ----------
 
-DASHBOARD_CACHE_KEY = 'dashboard:hq:v3'
+DASHBOARD_CACHE_KEY = 'dashboard:hq:v4'
 DASHBOARD_CACHE_TTL = 60  # seconds — heavy aggregates only; recent_sales stays live
 
 
@@ -560,6 +560,48 @@ def _dashboard_aggregates():
     yesterday_by_method = _by_method(
         Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
 
+    # Bugungi qaytarishlar — ASL to'lov turi bo'yicha (sof savdoni ko'rsatish uchun)
+    def _returns_by_method(start, end):
+        out = {'cash': 0.0, 'card': 0.0, 'transfer': 0.0}
+        rets = (Return.objects.filter(refunded_at__gte=start, refunded_at__lt=end)
+                .select_related('sale__transaction'))
+        for r in rets:
+            amt = float(r.effective_cash_refund)
+            if amt <= 0:
+                continue
+            txn = r.sale.transaction if r.sale_id else None
+            pm = txn.payment_method if txn else 'cash'
+            if pm in out:
+                out[pm] += amt
+                continue
+            if pm == 'mixed' and txn:
+                parts = {}
+                s = 0.0
+                for e in (txn.payment_breakdown or []):
+                    try:
+                        mm = (e.get('method') or '').strip()
+                        a = float(e.get('amount') or 0)
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                    if not mm or a <= 0:
+                        continue
+                    parts[mm] = parts.get(mm, 0.0) + a
+                    s += a
+                if s <= 0:
+                    out['cash'] += amt
+                else:
+                    keys = list(parts.keys())
+                    done = 0.0
+                    for i, mm in enumerate(keys):
+                        share = (amt - done) if i == len(keys) - 1 else amt * (parts[mm] / s)
+                        done += share
+                        out[mm if mm in out else 'cash'] += share
+            else:
+                out['cash'] += amt
+        return out
+
+    today_returns_by_method = _returns_by_method(today_start, today_end)
+
     # 7-day trend — single annotated query
     week_start = today_start - timedelta(days=6)
     trend_qs = (
@@ -629,6 +671,7 @@ def _dashboard_aggregates():
         'yesterday_stats': yesterday_stats,
         'today_by_method': today_by_method,
         'yesterday_by_method': yesterday_by_method,
+        'today_returns_by_method': today_returns_by_method,
         'trend_labels': trend_labels,
         'trend_revenue': trend_revenue,
         'trend_qty': trend_qty,
@@ -714,12 +757,16 @@ def dashboard(request):
         ('card', 'Karta', 'bi-credit-card-2-front', '#2563EB'),
         ('transfer', "O'tkazma", 'bi-arrow-left-right', '#D97706'),
     ]
+    _trbm = agg.get('today_returns_by_method', {}) or {}
     flow_rows = []
     for key, label, icon, color in _flow_defs:
         amt = _tbm.get(key, 0)
+        rf = _trbm.get(key, 0)
         flow_rows.append({
             'key': key, 'label': label, 'icon': icon, 'color': color,
             'amount': amt,
+            'refunded': rf,
+            'net': amt - rf,
             'pct': (amt / flow_total * 100) if flow_total else 0,
             'yesterday': _ybm.get(key, 0),
         })
@@ -4811,8 +4858,14 @@ def shift_receipt(request, pk):
             counts[t.payment_method] += 1
         else:
             other_money += float(t.total)
-    pay_rows = [{'label': labels.get(k, k), 'amount': money[k], 'count': counts[k]}
-                for k in (PM.CASH, PM.CARD, PM.TRANSFER)]
+    # Qaytarish — ASL to'lov turi bo'yicha (sof savdoni ko'rsatish uchun)
+    _ret_by = shift.returns_by_method()
+    pay_rows = []
+    for k in (PM.CASH, PM.CARD, PM.TRANSFER):
+        amt = money[k]
+        rf = float(_ret_by.get(k, 0))
+        pay_rows.append({'label': labels.get(k, k), 'amount': amt,
+                         'count': counts[k], 'refunded': rf, 'net': amt - rf})
 
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
 
