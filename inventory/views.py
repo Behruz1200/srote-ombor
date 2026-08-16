@@ -700,8 +700,21 @@ def dashboard(request):
 
     today = date.fromisoformat(agg['today_iso'])
     yesterday = date.fromisoformat(agg['yesterday_iso'])
-    today_stats = agg['today_stats']
-    yesterday_stats = agg['yesterday_stats']
+    # Ko'rsatish uchun nusxa — sof foyda tannarx (kirim narxi) kasrли bo'lsa
+    # mayda raqamli chiqadi (masalan 5 704 775). Do'kon 1000dan mayda ishlatmaydi,
+    # shuning uchun foyda va tushumni eng yaqin 1000 ga yaxlitlaymiz (marja aniq
+    # foizда qoladi).
+    def _round1k(x):
+        try:
+            return int(round(float(x) / 1000.0)) * 1000
+        except (TypeError, ValueError):
+            return x
+    today_stats = dict(agg['today_stats'])
+    yesterday_stats = dict(agg['yesterday_stats'])
+    today_stats['profit'] = _round1k(today_stats.get('profit'))
+    today_stats['revenue'] = _round1k(today_stats.get('revenue'))
+    yesterday_stats['profit'] = _round1k(yesterday_stats.get('profit'))
+    yesterday_stats['revenue'] = _round1k(yesterday_stats.get('revenue'))
 
     def _delta(now, prev):
         # Kunning boshida (bugun hali 0) -100% ko'rsatmaymiz — bu
