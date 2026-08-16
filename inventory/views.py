@@ -456,7 +456,7 @@ def lookup(request):
 
 # ---------- DASHBOARD ----------
 
-DASHBOARD_CACHE_KEY = 'dashboard:hq:v2'
+DASHBOARD_CACHE_KEY = 'dashboard:hq:v3'
 DASHBOARD_CACHE_TTL = 60  # seconds — heavy aggregates only; recent_sales stays live
 
 
@@ -508,16 +508,51 @@ def _dashboard_aggregates():
     today_stats = _agg(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
     yesterday_stats = _agg(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
 
-    # Bugungi pul oqimi — to'lov turi bo'yicha (naqd/karta/o'tkazma/aralash)
+    # Bugungi pul oqimi — to'lov turi bo'yicha. "Aralash" (mixed) cheklar
+    # payment_breakdown bo'yicha naqd/karta/o'tkazma qismlarига BO'LINADI —
+    # alohida "Aralash" ustuni ko'rsatilmaydi. Har chekning sof summasi
+    # qismlar nisbatiga qarab taqsimlanadi (oxirgi qism qoldiqni oladi —
+    # yaxlitlash tufayli jami buzilmaydi).
     def _by_method(qs):
-        out = {'cash': 0.0, 'card': 0.0, 'transfer': 0.0, 'mixed': 0.0, 'other': 0.0}
-        rows = (qs.values('transaction__payment_method')
+        out = {'cash': 0.0, 'card': 0.0, 'transfer': 0.0, 'other': 0.0}
+        rows = (qs.values('transaction_id', 'transaction__payment_method')
                   .annotate(rev=Sum(revenue_expr)))
+        mixed_rev = {}
         for r in rows:
-            m = r['transaction__payment_method'] or 'other'
-            if m not in out:
-                m = 'other'
-            out[m] += float(r['rev'] or 0)
+            m = r['transaction__payment_method']
+            rev = float(r['rev'] or 0)
+            if m == 'mixed':
+                mixed_rev[r['transaction_id']] = mixed_rev.get(r['transaction_id'], 0.0) + rev
+            elif m in out:
+                out[m] += rev
+            else:
+                out['other'] += rev
+        if mixed_rev:
+            txns = (SaleTransaction.objects.filter(id__in=list(mixed_rev.keys()))
+                    .values('id', 'payment_breakdown'))
+            for t in txns:
+                rev = mixed_rev.get(t['id'], 0.0)
+                parts = {}
+                s = 0.0
+                for e in (t['payment_breakdown'] or []):
+                    try:
+                        mm = (e.get('method') or '').strip()
+                        a = float(e.get('amount') or 0)
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                    if not mm or a <= 0:
+                        continue
+                    parts[mm] = parts.get(mm, 0.0) + a
+                    s += a
+                if s <= 0:
+                    out['cash'] += rev   # breakdown yo'q — naqdga
+                    continue
+                keys = list(parts.keys())
+                done = 0.0
+                for i, mm in enumerate(keys):
+                    share = (rev - done) if i == len(keys) - 1 else rev * (parts[mm] / s)
+                    done += share
+                    out[mm if mm in out else 'other'] += share
         return out
 
     today_by_method = _by_method(
@@ -667,21 +702,21 @@ def dashboard(request):
                     .order_by('-sold_at')[:8])
 
     # Bugungi pul oqimi — to'lov turi bo'yicha tayyor qatorlar (shablon uchun)
-    _tbm = agg['today_by_method']
-    _ybm = agg['yesterday_by_method']
-    flow_total = sum(_tbm.get(k, 0) for k in ('cash', 'card', 'transfer', 'mixed', 'other'))
+    _tbm = dict(agg['today_by_method'])
+    _ybm = dict(agg['yesterday_by_method'])
+    # Noma'lum ("other") summa (eski/legacy sotuvlar) — naqdga qo'shamiz,
+    # shunда faqat 3 ustun ko'rinadi va jami buzilmaydi.
+    _tbm['cash'] = _tbm.get('cash', 0) + _tbm.pop('other', 0)
+    _ybm['cash'] = _ybm.get('cash', 0) + _ybm.pop('other', 0)
+    flow_total = sum(_tbm.get(k, 0) for k in ('cash', 'card', 'transfer'))
     _flow_defs = [
         ('cash', 'Naqd', 'bi-cash-stack', '#16A34A'),
         ('card', 'Karta', 'bi-credit-card-2-front', '#2563EB'),
         ('transfer', "O'tkazma", 'bi-arrow-left-right', '#D97706'),
-        ('mixed', 'Aralash', 'bi-three-dots', '#7C3AED'),
-        ('other', 'Boshqa', 'bi-wallet2', '#64748B'),
     ]
     flow_rows = []
     for key, label, icon, color in _flow_defs:
         amt = _tbm.get(key, 0)
-        if key in ('mixed', 'other') and not amt:
-            continue
         flow_rows.append({
             'key': key, 'label': label, 'icon': icon, 'color': color,
             'amount': amt,
