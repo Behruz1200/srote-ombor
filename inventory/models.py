@@ -757,23 +757,14 @@ class Shift(models.Model):
         return f'Smen #{self.pk} — {self.branch.name} ({self.opened_at:%d.%m %H:%M})'
 
     def cash_sales(self):
-        """Smen davomida naqd to'lov qilingan sotuvlar summasi."""
-        end = self.closed_at or timezone.now()
-        rev_expr = models.ExpressionWrapper(
-            models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
-            output_field=models.DecimalField(max_digits=14, decimal_places=2)
-        )
-        cash_txn_ids = SaleTransaction.objects.filter(
-            branch=self.branch, sold_at__gte=self.opened_at, sold_at__lt=end,
-            payment_method='cash',
-        ).values_list('id', flat=True)
-        line_rev = Sale.objects.filter(
-            transaction_id__in=cash_txn_ids
-        ).aggregate(s=models.Sum(rev_expr))['s'] or 0
-        order_disc = SaleTransaction.objects.filter(
-            id__in=cash_txn_ids
-        ).aggregate(s=models.Sum('order_discount'))['s'] or 0
-        return line_rev - order_disc
+        """Smen davomida kassaga tushgan NAQD sotuvlar.
+
+        Sof naqd cheklar + ARALASH cheklardagi naqd qismi. Aralash naqd ham
+        jismonan kassaga tushadi, shuning uchun kutilgan naqd hisobiga kirishi
+        SHART (aks holda kassa "ortiq" ko'rinardi). Naqd/Karta/O'tkazma bo'lgan
+        bo'linish bilan bir xil qiymat — ko'rsatkichlar mos keladi.
+        """
+        return self.sales_by_method_split()['cash']
 
     def sales_by_method(self):
         """Smen davomida to'lov turi bo'yicha savdo: {'cash':.., 'card':.., ...}."""
