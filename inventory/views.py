@@ -1185,8 +1185,17 @@ def employee_debt_list(request):
                 d.is_paid = True
                 d.paid_at = timezone.now()
                 d.paid_by = request.user
-                d.save(update_fields=['is_paid', 'paid_at', 'paid_by'])
-                messages.success(request, f"\"{d.who}\" qarzi to'landi deb belgilandi.")
+                # Naqd kassaga tushadi — ochiq smenga bog'laymiz (kutilgan naqd oshadi)
+                open_shift = _open_shift_for(d.branch or getattr(request.user, 'branch', None))
+                d.paid_shift = open_shift
+                d.save(update_fields=['is_paid', 'paid_at', 'paid_by', 'paid_shift'])
+                if open_shift:
+                    messages.success(request,
+                        f"\"{d.who}\" qarzi to'landi — {d.amount:,.0f} so'm kassaga qo'shildi.")
+                else:
+                    messages.success(request,
+                        f"\"{d.who}\" qarzi to'landi deb belgilandi. (Ochiq smen yo'q — "
+                        f"kassaga qo'shilmadi.)")
             return redirect('employee_debt_list')
         if action == 'delete':
             d = (EmployeeDebt.objects.filter(pk=request.POST.get('pk') or 0)
@@ -4727,6 +4736,7 @@ def shift_close(request):
         'shift': shift,
         'expected': shift.expected_cash(),
         'cash_sales': shift.cash_sales(),
+        'debt_payments': shift.debt_payments_total(),
         'payouts': payouts,
         'payouts_total': shift.payouts_total(),
         'refund_total': _refund,
@@ -4883,6 +4893,7 @@ def shift_receipt(request, pk):
         'pay_rows': pay_rows,
         'other_money': other_money,
         'cash_sales': shift.cash_sales(),
+        'debt_payments': shift.debt_payments_total(),
         'payouts': payouts,
         'payouts_total': shift.payouts_total(),
         'expected': shift.expected_cash(),

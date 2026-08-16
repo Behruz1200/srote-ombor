@@ -899,6 +899,15 @@ class Shift(models.Model):
         """Smen davomida kassadan olingan naqd (tushlik, xarajat va h.k.)."""
         return self.payouts.aggregate(s=models.Sum('amount'))['s'] or Decimal('0')
 
+    def debt_payments_total(self):
+        """Smen davomida to'langan xodim qarzlari — kassaga NAQD TUSHADI.
+
+        Xodim ojlik kuni qarzini naqd to'lasa, bu pul kassaga kiradi, demak
+        kutilgan naqd shu miqdorga OSHADI.
+        """
+        return (self.debt_payments.filter(is_paid=True)
+                .aggregate(s=models.Sum('amount'))['s'] or Decimal('0'))
+
     def refunds_total(self):
         """Smen davomida mijozga qaytarilgan pul (kassadan CHIQADI).
 
@@ -913,9 +922,10 @@ class Shift(models.Model):
         return total
 
     def expected_cash(self):
-        """Kutilgan naqd = ochilish + naqd sotuvlar − kassadan olingan pul
-        − mijozga qaytarilgan pul."""
+        """Kutilgan naqd = ochilish + naqd sotuvlar + qarz to'lovlari
+        − kassadan olingan pul − mijozga qaytarilgan pul."""
         return (_dec(self.opening_cash) + _dec(self.cash_sales())
+                + _dec(self.debt_payments_total())
                 - _dec(self.payouts_total()) - _dec(self.refunds_total()))
 
     def variance(self):
@@ -1263,6 +1273,11 @@ class EmployeeDebt(models.Model):
     paid_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='settled_debts')
+    paid_shift = models.ForeignKey(
+        'Shift', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='debt_payments',
+        help_text="Qarz qaysi smen davomida to'landi — kassaga naqd tushishi "
+                  "shu smenning kutilgan naqdiга qo'shiladi.")
 
     class Meta:
         verbose_name = 'Xodim qarzi'

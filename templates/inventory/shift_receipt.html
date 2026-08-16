@@ -169,6 +169,9 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
         <div class="rcpt-sec">Kassa hisobi (naqd)</div>
         <div class="rcpt-row"><span>Boshlang'ich qoldiq</span><span class="v">{{ shift.opening_cash|som }}</span></div>
         <div class="rcpt-row rcpt-pos"><span>+ Naqd savdo</span><span class="v">{{ cash_sales|som }}</span></div>
+        {% if debt_payments %}
+        <div class="rcpt-row rcpt-pos"><span>+ Qarz to'lovi</span><span class="v">{{ debt_payments|som }}</span></div>
+        {% endif %}
         {% if payouts_total %}
         <div class="rcpt-row rcpt-neg">
             <span>− Kassadan olingan{% if payouts %} ({{ payouts|length }}){% endif %}</span>
