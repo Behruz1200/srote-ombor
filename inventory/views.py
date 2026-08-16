@@ -4658,9 +4658,24 @@ def shift_close(request):
 
     # Aralash cheklar naqd/karta/o'tkazmaga bo'linadi (alohida "Aralash" yo'q)
     by_method = shift.sales_by_method_split()
+    ret_method = shift.returns_by_method()   # qaytarish ASL to'lov turi bo'yicha
     from decimal import Decimal as _D
     _refund = shift.refunds_total()
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
+    # Har to'lov turi bo'yicha: brutto (kelgan pul) + qaytarilgan + sof savdo
+    _defs = [
+        ('cash', 'Naqd', 'bi-cash', 'text-success'),
+        ('card', 'Karta', 'bi-credit-card', 'text-primary'),
+        ('transfer', "O'tkazma", 'bi-arrow-left-right', 'text-info'),
+    ]
+    method_rows = []
+    for k, label, icon, cls in _defs:
+        g = by_method.get(k, _D('0'))
+        rf = ret_method.get(k, _D('0'))
+        method_rows.append({
+            'label': label, 'icon': icon, 'cls': cls,
+            'gross': g, 'refunded': rf, 'net': g - rf,
+        })
     return render(request, 'inventory/shift_close.html', {
         'shift': shift,
         'expected': shift.expected_cash(),
@@ -4668,11 +4683,8 @@ def shift_close(request):
         'payouts': payouts,
         'payouts_total': shift.payouts_total(),
         'refund_total': _refund,
-        'sales_cash': by_method.get('cash', _D('0')),
-        'sales_card': by_method.get('card', _D('0')),
-        'sales_transfer': by_method.get('transfer', _D('0')),
-        # Jami savdo = SOF (qaytarilgan pul ayirilgan). Ilgari brutto edi:
-        # 48 000 sotib, 48 000 qaytarilsa ham 48 000 ko'rsatardi.
+        'method_rows': method_rows,
+        # Jami savdo = SOF (qaytarilgan pul ayirilgan).
         'sales_total': sum(by_method.values(), _D('0')) - _D(str(_refund or 0)),
     })
 

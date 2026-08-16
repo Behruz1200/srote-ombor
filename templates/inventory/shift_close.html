@@ -60,26 +60,27 @@
                     <h2 class="dash-card__title"><i class="bi bi-wallet2"></i> Savdo — to'lov turi bo'yicha</h2>
                 </header>
                 <div class="dash-card__body dash-card__body--padded">
-                    <div class="d-flex justify-content-between py-1 border-bottom">
-                        <span><i class="bi bi-cash text-success"></i> Naqd</span>
-                        <strong>{{ sales_cash|som }} so'm</strong>
+                    {% for r in method_rows %}
+                    <div class="py-1 border-bottom">
+                        <div class="d-flex justify-content-between">
+                            <span><i class="bi {{ r.icon }} {{ r.cls }}"></i> {{ r.label }}</span>
+                            <strong>{{ r.gross|som }} so'm</strong>
+                        </div>
+                        {% if r.refunded %}
+                        <div class="d-flex justify-content-between small" style="color:var(--yrt-fg-muted);">
+                            <span>qaytarilgan −{{ r.refunded|som }} · <strong>sof {{ r.net|som }}</strong></span>
+                        </div>
+                        {% endif %}
                     </div>
-                    <div class="d-flex justify-content-between py-1 border-bottom">
-                        <span><i class="bi bi-credit-card text-primary"></i> Karta</span>
-                        <strong>{{ sales_card|som }} so'm</strong>
-                    </div>
-                    <div class="d-flex justify-content-between py-1 border-bottom">
-                        <span><i class="bi bi-arrow-left-right text-info"></i> O'tkazma</span>
-                        <strong>{{ sales_transfer|som }} so'm</strong>
-                    </div>
+                    {% endfor %}
                     {% if refund_total %}
                     <div class="d-flex justify-content-between py-1 border-bottom text-danger">
-                        <span><i class="bi bi-arrow-counterclockwise"></i> Qaytarilgan</span>
+                        <span><i class="bi bi-arrow-counterclockwise"></i> Jami qaytarilgan</span>
                         <strong>− {{ refund_total|som }} so'm</strong>
                     </div>
                     {% endif %}
                     <div class="d-flex justify-content-between py-2 mt-1">
-                        <span class="fw-bold">Jami savdo</span>
+                        <span class="fw-bold">Jami savdo (sof)</span>
                         <span class="fw-bold fs-5 text-primary">{{ sales_total|som }} so'm</span>
                     </div>
                 </div>

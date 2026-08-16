@@ -845,6 +845,52 @@ class Shift(models.Model):
                     out[mm if mm in out else 'cash'] += share
         return out
 
+    def returns_by_method(self):
+        """Qaytarilgan pul — ASL sotuvning to'lov turi bo'yicha (chekdan olinadi).
+
+        {cash, card, transfer}. Aralash asl chek — payment_breakdown nisbatiga
+        qarab bo'linadi. Yig'indi = refunds_total (Jami savdo bilan mos keladi).
+        Bu 'sof savdo (to'lov turi bo'yicha)' ni ko'rsatish uchun — kassa
+        (naqd) hisobiga ta'sir qilmaydi.
+        """
+        out = {'cash': Decimal('0'), 'card': Decimal('0'), 'transfer': Decimal('0')}
+        rets = (Return.objects.filter(shift=self)
+                .select_related('sale__transaction'))
+        for r in rets:
+            amt = _dec(r.effective_cash_refund)
+            if amt <= 0:
+                continue
+            txn = r.sale.transaction if r.sale_id else None
+            pm = txn.payment_method if txn else 'cash'
+            if pm in out:
+                out[pm] += amt
+                continue
+            if pm == 'mixed' and txn:
+                parts = {}
+                s = Decimal('0')
+                for e in (txn.payment_breakdown or []):
+                    try:
+                        mm = (e.get('method') or '').strip()
+                        a = _dec(str(e.get('amount') or 0))
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                    if not mm or a <= 0:
+                        continue
+                    parts[mm] = parts.get(mm, Decimal('0')) + a
+                    s += a
+                if s <= 0:
+                    out['cash'] += amt
+                else:
+                    keys = list(parts.keys())
+                    done = Decimal('0')
+                    for i, mm in enumerate(keys):
+                        share = (amt - done) if i == len(keys) - 1 else (amt * parts[mm] / s)
+                        done += share
+                        out[mm if mm in out else 'cash'] += share
+            else:
+                out['cash'] += amt
+        return out
+
     def total_sales(self):
         """Barcha to'lov turlari bo'yicha jami savdo."""
         return sum(self.sales_by_method().values(), Decimal('0'))
