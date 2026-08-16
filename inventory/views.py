@@ -770,30 +770,26 @@ def dashboard(request):
         ('transfer', "O'tkazma", 'bi-arrow-left-right', '#D97706'),
     ]
     _trbm = agg.get('today_returns_by_method', {}) or {}
+    # Qaytarish — bitta NAQD chiqim (usulларга bo'linmaydi). Karta brutto
+    # qoladi (terminal hisoboti bilan mos).
+    flow_returns_total = sum(_trbm.get(k, 0) for k in ('cash', 'card', 'transfer'))
 
     # Do'kon 1000 so'mdan mayda summalar ishlatmaydi — ko'rsatishда eng yaqin
-    # 1000 ga yaxlitlaymiz (fraksiya/yuzlik "chiqindi" ko'rinmasin). Yig'indi
-    # ham yaxlitlangan qismlardan olinadi, shuning uchun mos keladi.
+    # 1000 ga yaxlitlaymiz (fraksiya/yuzlik "chiqindi" ko'rinmasin).
     def _r1k(x):
         try:
             return int(round(float(x) / 1000.0)) * 1000
         except (TypeError, ValueError):
             return 0
 
+    flow_returns_total = _r1k(flow_returns_total)
+    flow_total = sum(_r1k(_tbm.get(k, 0)) for k in ('cash', 'card', 'transfer'))
     flow_rows = []
-    flow_total = 0
-    _rows_tmp = []
     for key, label, icon, color in _flow_defs:
         amt = _r1k(_tbm.get(key, 0))
-        rf = _r1k(_trbm.get(key, 0))
-        flow_total += amt
-        _rows_tmp.append((key, label, icon, color, amt, rf))
-    for key, label, icon, color, amt, rf in _rows_tmp:
         flow_rows.append({
             'key': key, 'label': label, 'icon': icon, 'color': color,
             'amount': amt,
-            'refunded': rf,
-            'net': amt - rf,
             'pct': (amt / flow_total * 100) if flow_total else 0,
             'yesterday': _r1k(_ybm.get(key, 0)),
         })
@@ -806,6 +802,7 @@ def dashboard(request):
         'yesterday_by_method': agg['yesterday_by_method'],
         'flow_rows': flow_rows,
         'flow_total': flow_total,
+        'flow_returns_total': flow_returns_total,
         'deltas': deltas,
         'trend_labels': agg['trend_labels'],
         'trend_revenue': agg['trend_revenue'],
@@ -4739,26 +4736,21 @@ def shift_close(request):
         # Yopilgach — chek printerida Z-hisobotni chop etish (avtomatik)
         return redirect(f"{reverse('shift_receipt', args=[shift.pk])}?autoprint=1")
 
-    # Aralash cheklar naqd/karta/o'tkazmaga bo'linadi (alohida "Aralash" yo'q)
+    # Aralash cheklar naqd/karta/o'tkazmaga bo'linadi (alohida "Aralash" yo'q).
+    # BRUTTO ko'rsatiladi — karta terminal hisoboti bilan solishtirish uchun.
+    # Qaytarish alohida NAQD chiqim sifatida (usulларга bo'linmaydi).
     by_method = shift.sales_by_method_split()
-    ret_method = shift.returns_by_method()   # qaytarish ASL to'lov turi bo'yicha
     from decimal import Decimal as _D
     _refund = shift.refunds_total()
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
-    # Har to'lov turi bo'yicha: brutto (kelgan pul) + qaytarilgan + sof savdo
     _defs = [
         ('cash', 'Naqd', 'bi-cash', 'text-success'),
         ('card', 'Karta', 'bi-credit-card', 'text-primary'),
         ('transfer', "O'tkazma", 'bi-arrow-left-right', 'text-info'),
     ]
-    method_rows = []
-    for k, label, icon, cls in _defs:
-        g = by_method.get(k, _D('0'))
-        rf = ret_method.get(k, _D('0'))
-        method_rows.append({
-            'label': label, 'icon': icon, 'cls': cls,
-            'gross': g, 'refunded': rf, 'net': g - rf,
-        })
+    method_rows = [{'label': label, 'icon': icon, 'cls': cls,
+                    'gross': by_method.get(k, _D('0'))}
+                   for k, label, icon, cls in _defs]
     return render(request, 'inventory/shift_close.html', {
         'shift': shift,
         'expected': shift.expected_cash(),
@@ -4895,14 +4887,10 @@ def shift_receipt(request, pk):
             counts[t.payment_method] += 1
         else:
             other_money += float(t.total)
-    # Qaytarish — ASL to'lov turi bo'yicha (sof savdoni ko'rsatish uchun)
-    _ret_by = shift.returns_by_method()
-    pay_rows = []
-    for k in (PM.CASH, PM.CARD, PM.TRANSFER):
-        amt = money[k]
-        rf = float(_ret_by.get(k, 0))
-        pay_rows.append({'label': labels.get(k, k), 'amount': amt,
-                         'count': counts[k], 'refunded': rf, 'net': amt - rf})
+    # BRUTTO — karta terminal hisoboti bilan solishtirish uchun. Qaytarish
+    # alohida (QAYTARISHLAR bo'limida, bitta naqd chiqim sifatida).
+    pay_rows = [{'label': labels.get(k, k), 'amount': money[k], 'count': counts[k]}
+                for k in (PM.CASH, PM.CARD, PM.TRANSFER)]
 
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
 

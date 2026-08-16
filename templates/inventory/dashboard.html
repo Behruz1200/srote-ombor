@@ -161,15 +161,18 @@
                                 <span class="small text-muted">{{ r.pct|floatformat:0 }}%</span>
                             </div>
                             <div class="fw-bold" style="font-variant-numeric:tabular-nums;">{{ r.amount|som }} <span class="small text-muted">so'm</span></div>
-                            {% if r.refunded %}
-                            <div style="font-size:.72rem;color:var(--yrt-danger);">qaytarilgan −{{ r.refunded|som }} · <span style="color:var(--yrt-fg-muted);">sof {{ r.net|som }}</span></div>
-                            {% endif %}
                             <div class="text-muted" style="font-size:.72rem;">Kecha: {{ r.yesterday|som }}</div>
                         </div>
                     </div>
                 </div>
                 {% endfor %}
             </div>
+            {% if flow_returns_total %}
+            <div class="d-flex justify-content-between align-items-center mt-2 pt-2" style="border-top:1px solid var(--yrt-border);">
+                <span class="small" style="color:var(--yrt-danger);"><i class="bi bi-arrow-counterclockwise"></i> Bugun qaytarilgan (naqd)</span>
+                <strong class="small" style="color:var(--yrt-danger);">− {{ flow_returns_total|som }} so'm</strong>
+            </div>
+            {% endif %}
             {% else %}
             <div class="text-center text-muted py-3">
                 <i class="bi bi-moon-stars"></i> Bugun hali savdo yo'q.
