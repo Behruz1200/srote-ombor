@@ -16,6 +16,20 @@ def _dec(x):
     return Decimal(str(x))
 
 
+def _norm_pay_method(method):
+    """To'lov turini {cash, card, transfer} ga normallashtiradi (MON-11/PAY-2).
+
+    FAQAT aniq 'cash'/'card'/'transfer' o'zicha qoladi. QR-provayder nomlari
+    (payme, click, uzum, humo, ...) va noma'lum/xato ('naqd' kabi) qiymatlar
+    'transfer' bo'ladi — chunki ular kassadagi JISMONIY naqd EMAS. Noma'lum
+    turni jimgina 'cash'ga qo'shib yuborish kassani "ortiq" ko'rsatardi.
+    """
+    m = (method or '').strip().lower()
+    if m in ('cash', 'card', 'transfer'):
+        return m
+    return 'transfer'
+
+
 class Branch(models.Model):
     name = models.CharField(max_length=120, unique=True)
     address = models.CharField(max_length=255, blank=True)
@@ -528,6 +542,13 @@ class SaleTransaction(models.Model):
         help_text="B2B sotuvlar uchun mijozning STIRi (e-faktura beriladi)"
     )
     note = models.CharField(max_length=200, blank=True)
+    # OFF-2: offline savdo qayta yuborilganda (wifi miltillasa) bir sotuv IKKI
+    # marta yozilmasin. Mijoz tomonidagi kalit — bir xil kalit ikkinchi chek
+    # YARATMAYDI (unique). null bo'lsa cheklov yo'q (oddiy onlayn savdo).
+    idempotency_key = models.CharField(
+        max_length=64, null=True, blank=True, unique=True,
+        help_text="Offline replay uchun bir martalik kalit (takroriy chekni bloklaydi)"
+    )
     # ----- Discount (whole-order) -----
     order_discount = models.DecimalField(
         max_digits=12, decimal_places=2, default=0,
@@ -569,6 +590,11 @@ class SaleTransaction(models.Model):
         ]
         constraints = [
             models.CheckConstraint(condition=models.Q(order_discount__gte=0), name='saletxn_orderdisc_nonneg'),
+            # PAY-2: DB darajasida noto'g'ri to'lov turi (masalan 'payme') hech
+            # qachon saqlanmasin — TextChoices o'zi DB constraint qo'ymaydi.
+            models.CheckConstraint(
+                condition=models.Q(payment_method__in=['cash', 'card', 'transfer', 'mixed']),
+                name='saletxn_payment_method_valid'),
         ]
 
     def __str__(self):
@@ -756,6 +782,20 @@ class Shift(models.Model):
     def __str__(self):
         return f'Smen #{self.pk} — {self.branch.name} ({self.opened_at:%d.%m %H:%M})'
 
+    def _txn_qs(self):
+        """Bu smenga tegishli cheklar (ARCH-5).
+
+        FK (shift=self) HUKMRON: offline chek kech sinxron bo'lib, sold_at
+        vaqti smen oynasidan tashqarida bo'lsa ham o'z smeniga tegishli.
+        FK o'rnatilmagan ESKI cheklar uchungina vaqt oynasiga tayanamiz —
+        aks holda boshqa smenning cheki bu yerga tushib qolardi.
+        """
+        end = self.closed_at or timezone.now()
+        return SaleTransaction.objects.filter(branch=self.branch).filter(
+            models.Q(shift=self) |
+            models.Q(shift__isnull=True,
+                     sold_at__gte=self.opened_at, sold_at__lt=end))
+
     def cash_sales(self):
         """Smen davomida kassaga tushgan NAQD sotuvlar.
 
@@ -768,12 +808,10 @@ class Shift(models.Model):
 
     def sales_by_method(self):
         """Smen davomida to'lov turi bo'yicha savdo: {'cash':.., 'card':.., ...}."""
-        end = self.closed_at or timezone.now()
         rev_expr = models.ExpressionWrapper(
             models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
             output_field=models.DecimalField(max_digits=14, decimal_places=2))
-        txns = SaleTransaction.objects.filter(
-            branch=self.branch, sold_at__gte=self.opened_at, sold_at__lt=end)
+        txns = self._txn_qs()
         out = {}
         for m, _lbl in SaleTransaction.PaymentMethod.choices:
             ids = list(txns.filter(payment_method=m).values_list('id', flat=True))
@@ -791,16 +829,15 @@ class Shift(models.Model):
         """To'lov turi bo'yicha — lekin 'aralash' (mixed) cheklar
         payment_breakdown bo'yicha naqd/karta/o'tkazmaga BO'LINADI.
 
-        Har aralash chekning sof summasi qismlar nisbatiga qarab taqsimlanadi
+        Har aralash chek KIRITILGAN summalar bo'yicha bo'linadi (nisbatga bo'lish
+        EMAS — o'zgartirilgan 2026, yaxlit raqamlar chiqishi uchun)
         (oxirgi qism qoldiqni oladi — yaxlitlash tufayli jami buzilmaydi).
         Faqat {cash, card, transfer} qaytaradi.
         """
-        end = self.closed_at or timezone.now()
         rev_expr = models.ExpressionWrapper(
             models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
             output_field=models.DecimalField(max_digits=14, decimal_places=2))
-        txns = SaleTransaction.objects.filter(
-            branch=self.branch, sold_at__gte=self.opened_at, sold_at__lt=end)
+        txns = self._txn_qs()
         out = {'cash': Decimal('0'), 'card': Decimal('0'), 'transfer': Decimal('0')}
         # Aralash bo'lmagan cheklar — o'z ustuniga
         for m in ('cash', 'card', 'transfer'):
@@ -850,14 +887,15 @@ class Shift(models.Model):
                         if share < Decimal('0'):
                             share = Decimal('0')
                     done += share
-                    out[mm if mm in out else 'cash'] += share
+                    out[_norm_pay_method(mm)] += share
         return out
 
     def returns_by_method(self):
         """Qaytarilgan pul — ASL sotuvning to'lov turi bo'yicha (chekdan olinadi).
 
-        {cash, card, transfer}. Aralash asl chek — payment_breakdown nisbatiga
-        qarab bo'linadi. Yig'indi = refunds_total (Jami savdo bilan mos keladi).
+        {cash, card, transfer}. Aralash asl chek — payment_breakdown KIRITILGAN
+        summalari bo'yicha bo'linadi (nisbatga bo'lish EMAS). Yig'indi =
+        refunds_total (Jami savdo bilan mos keladi).
         Bu 'sof savdo (to'lov turi bo'yicha)' ni ko'rsatish uchun — kassa
         (naqd) hisobiga ta'sir qilmaydi.
         """
@@ -870,8 +908,8 @@ class Shift(models.Model):
                 continue
             txn = r.sale.transaction if r.sale_id else None
             pm = txn.payment_method if txn else 'cash'
-            if pm in out:
-                out[pm] += amt
+            if pm != 'mixed':
+                out[_norm_pay_method(pm)] += amt
                 continue
             if pm == 'mixed' and txn:
                 parts = {}
@@ -900,7 +938,7 @@ class Shift(models.Model):
                             if share < Decimal('0'):
                                 share = Decimal('0')
                         done += share
-                        out[mm if mm in out else 'cash'] += share
+                        out[_norm_pay_method(mm)] += share
             else:
                 out['cash'] += amt
         return out
@@ -1261,9 +1299,10 @@ class Return(models.Model):
 class EmployeeDebt(models.Model):
     """Xodim do'kondan ojligacha QARZGA olgan tovar/pul.
 
-    Sotuvga kiritilmaydi (aks holda kassa to'g'ri kelmaydi) — bu alohida
-    daftar. Ojlik kuni "to'landi" deb belgilanadi (kassaga ta'sir qilmaydi;
-    ojlikdan ushlab qolish do'kon tashqarisida).
+    Sotuvga kiritilmaydi — bu alohida daftar. Olinganda ombor qoldig'i kamayadi.
+    Ojlik kuni "to'landi" deb belgilanганда naqd KASSAGA TUSHADI (o'zgartirilgan
+    2026: debt_payments_total() -> expected_cash oshadi, paid_shift'ga bog'lanadi).
+    Ochiq smen bo'lmasa — to'landi bo'ladi, lekin kassaga qo'shilmaydi.
     """
     branch = models.ForeignKey(
         Branch, on_delete=models.SET_NULL, null=True, blank=True,

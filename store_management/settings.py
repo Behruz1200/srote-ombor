@@ -34,22 +34,39 @@ def _bool(name, default=False):
 
 
 # ---------- Core ----------
-DEBUG = _bool('DEBUG', default=True)
+# XAVFSIZ DEFAULT: DEBUG default = FALSE. Bir noto'g'ri/yo'q env o'zgaruvchisi
+# endi production'ni debug-rejimга tushirib qo'ymaydi (SEC-10).
+DEBUG = _bool('DEBUG', default=False)
 
-# In production, SECRET_KEY MUST be set in env. Locally we accept the
-# insecure default so 'manage.py runserver' just works.
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY',
-    'django-insecure-c+=*&dh#&)r!htow17kij3%cax9=bgqa7=a99i#j7=2wimlf#p'
-)
+from django.core.exceptions import ImproperlyConfigured
+
+# Production'da SECRET_KEY MAJBURIY. Yo'q bo'lsa — baland ovozda xato (jimgina
+# repodagi ochiq kalit bilan ishlab ketmaydi). Faqat DEBUG'da lokal default.
+SECRET_KEY = os.environ.get('SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-c+=*&dh#&)r!htow17kij3%cax9=bgqa7=a99i#j7=2wimlf#p'
+    else:
+        raise ImproperlyConfigured(
+            'SECRET_KEY environment variable is required in production '
+            '(DEBUG is off). Set it and redeploy.')
 
 # Comma-separated list. Render auto-injects RENDER_EXTERNAL_HOSTNAME.
-_hosts_env = os.environ.get('ALLOWED_HOSTS', '*' if DEBUG else '')
-ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(',') if h.strip()] or ['*']
+# '*' fallback FAQAT DEBUG'da — production'da host validation o'chib qolmasin.
+_hosts_env = os.environ.get('ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(',') if h.strip()]
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['*'] if DEBUG else []
 _render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if _render_host:
     ALLOWED_HOSTS.append(_render_host)
 
+
+# ---------- Payments webhook (PAY-1) ----------
+# Merchant callback'ini imzolash uchun umumiy maxfiy kalit. BO'SH bo'lsa —
+# webhook HAR QANDAY chaqiruvni RAD etadi (hech qanday to'lov 'paid' bo'lmaydi).
+# Real provider ulanganda kalitni env'ga qo'yib, provider imzosini tekshiring.
+PAYMENTS_WEBHOOK_SECRET = os.environ.get('PAYMENTS_WEBHOOK_SECRET', '')
 
 # ---------- Telegram (optional) ----------
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
@@ -100,11 +117,15 @@ ZOODPAY_API_KEY = os.environ.get('ZOODPAY_API_KEY', '')
 # IMPORTANT: production'da bu MUST be 0 — aks holda real to'lovsiz ham
 # sotuv yakunlanadi. Default xavfsizlik: DEBUG=True bo'lganda 8 (sinov uchun
 # qulaylik), DEBUG=False bo'lganda 0 (real webhook'siz hech narsa paid emas).
-_default_demo_seconds = '8' if DEBUG else '0'
-try:
-    DEMO_AUTO_PAY_SECONDS = int(os.environ.get('DEMO_AUTO_PAY_SECONDS', _default_demo_seconds))
-except ValueError:
-    DEMO_AUTO_PAY_SECONDS = 0 if not DEBUG else 8
+# PAY-3: production'da HARD-PIN = 0 (env'da adashib 8 qo'yilsa ham e'tiborsiz).
+# Faqat DEBUG'da env orqali sozlash mumkin.
+if not DEBUG:
+    DEMO_AUTO_PAY_SECONDS = 0
+else:
+    try:
+        DEMO_AUTO_PAY_SECONDS = int(os.environ.get('DEMO_AUTO_PAY_SECONDS', '8'))
+    except ValueError:
+        DEMO_AUTO_PAY_SECONDS = 8
 
 
 # ---------- Session / Auth security (S2-S6 hardening) ----------

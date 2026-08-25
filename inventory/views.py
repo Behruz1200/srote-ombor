@@ -8,7 +8,7 @@ from django.db.models import (Sum, F, Q, DecimalField, ExpressionWrapper, Count,
 from django.db.models.functions import (
     Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
 )
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -5578,9 +5578,32 @@ def pos_checkout(request):
     payment_breakdown = data.get('payment_breakdown') or []
     if not isinstance(payment_breakdown, list):
         payment_breakdown = []
+
+    # PAY-2 / MON-11: QR provider nomlari ('payme','click'...) 'transfer'ga
+    # moslashtiriladi; NOMA'LUM usul RAD etiladi (jimgina 'cash'ga aylantirilmaydi
+    # — aks holda karta/QR pul kassaga tushган kabi ko'rinib, kamomad bo'lardi).
+    _VALID_METHODS = {'cash', 'card', 'transfer'}
+    _QR_PROVIDERS = {'payme', 'click', 'uzum', 'humo', 'anor', 'alif',
+                     'iman', 'zoodpay', 'other', 'noop'}
+
+    def _norm_method(m):
+        m = (m or '').strip().lower()
+        return 'transfer' if m in _QR_PROVIDERS else m
+
+    if payment_method != 'mixed':
+        _pm = _norm_method(payment_method)
+        if _pm not in _VALID_METHODS:
+            return JsonResponse({'ok': False,
+                'error': f"Noma'lum to'lov turi: {payment_method}"}, status=400)
+        payment_method = _pm
+
     customer_name = (data.get('customer_name') or '').strip()[:120]
     customer_phone = (data.get('customer_phone') or '').strip()[:40]
     note = (data.get('note') or '').strip()[:200]
+    # OFF-2: offline replay bir sotuvni ikki marta yozmasin. Mijoz bir martalik
+    # kalit yuboradi; o'sha kalit bilan chek allaqachon bo'lsa — yangi
+    # yaratmaymiz, mavjudini qaytaramiz.
+    idem_key = (data.get('idempotency_key') or '').strip()[:64] or None
     # Pul qiymatlari Decimal bo'lishi SHART: modeldagi maydonlar DecimalField,
     # float bilan aralashsa `Decimal + float` -> TypeError (chek yig'indisi
     # hisoblanganda 500 xato). Shuning uchun hammasini Decimal'ga o'giramiz.
@@ -5617,9 +5640,12 @@ def pos_checkout(request):
             sid = int(ln['stock_id'])
             qty = int(ln['qty'])
             line_discount = _money(ln.get('line_discount'))
-            price = _money(ln['sale_price'])
-        except (KeyError, ValueError, TypeError):
-            return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
+            # MON-13: narx QAT'IY tekshiriladi — "abc" kabi axlat jimgina 0 ga
+            # aylanib, bepul tovarga aylanmasin. Noto'g'ri narx = xato.
+            _raw_price = ln['sale_price']
+            price = Decimal(str(_raw_price if _raw_price not in (None, '') else 0))
+        except (KeyError, ValueError, TypeError, InvalidOperation):
+            return JsonResponse({'ok': False, 'error': "noto'g'ri narx yoki qator"}, status=400)
         if qty <= 0 or price < 0:
             return JsonResponse({'ok': False, 'error': 'qty/narx noto\'g\'ri'}, status=400)
         if price > MAX_MONEY or line_discount > MAX_MONEY:
@@ -5642,22 +5668,67 @@ def pos_checkout(request):
                 customer.save(update_fields=['name'])
 
     open_shift = _open_shift_for(branch)
+    # MON-9: ochiq smensiz sotuv YO'Q (qaytarish/almashtirishдagidek). Aks holda
+    # shift=None bilan yozilib, hech qaysi Z-hisobotга tushmaydi — kassa "ortiq"
+    # chiqadi.
+    if not open_shift:
+        return JsonResponse({'ok': False,
+            'error': "Smen ochilmagan. Sotuv faqat ochiq smen davomida amalga oshiriladi."},
+            status=400)
 
-    # Sanitize breakdown (drop bad entries, round to nearest som)
+    def _receipt_response(txn):
+        return JsonResponse({
+            'ok': True,
+            'txn_id': txn.pk,
+            'receipt_url': f'/transaction/{txn.pk}/?autoprint=1',
+            'total': float(txn.total),
+            'item_count': txn.item_count,
+            'sms': None,
+            'duplicate': True,
+        })
+
+    # OFF-2: bu kalit bilan chek allaqachon yozilgan bo'lsa — takror EMAS,
+    # o'sha chekni qaytaramiz (ombor ikki marta kamaymaydi, tushum ikki
+    # barobar bo'lmaydi).
+    if idem_key:
+        dup = SaleTransaction.objects.filter(idempotency_key=idem_key).first()
+        if dup:
+            return _receipt_response(dup)
+
+    # Sanitize breakdown: QR provider -> 'transfer'; NOMA'LUM usul RAD etiladi.
     clean_breakdown = []
     for entry in payment_breakdown:
         try:
-            m = (entry.get('method') or '').strip()
+            m = _norm_method(entry.get('method'))
             a = float(entry.get('amount') or 0)
         except (AttributeError, TypeError, ValueError):
             continue
         if not m or a <= 0:
             continue
+        if m not in _VALID_METHODS:
+            return JsonResponse({'ok': False,
+                'error': f"Noma'lum to'lov turi (aralash): {entry.get('method')}"}, status=400)
         clean_breakdown.append({'method': m, 'amount': round(a, 2)})
 
     # If mixed but breakdown empty, fallback to single-method
     if payment_method == 'mixed' and not clean_breakdown:
         payment_method = 'cash'
+
+    # MON-10: ARALASH to'lov summasi chekdan KAM bo'lmasin. Brauzer buni
+    # tekshiradi, lekin devtools yoki offline-replay chetlab o'tishi mumkin —
+    # shuning uchun serverда ham tekshiramiz.
+    if payment_method == 'mixed':
+        _order_total = Decimal('0')
+        for _l in parsed_lines:
+            _order_total += Decimal(_l['qty']) * _l['price'] - _l['ld']
+        _order_total -= order_discount
+        if _order_total < 0:
+            _order_total = Decimal('0')
+        _paid = sum((Decimal(str(e['amount'])) for e in clean_breakdown), Decimal('0'))
+        if _paid < _order_total - Decimal('0.5'):
+            return JsonResponse({'ok': False,
+                'error': f"Aralash to'lov yetishmaydi: {int(_order_total - _paid)} so'm kam."},
+                status=400)
 
     class _CheckoutAbort(Exception):
         def __init__(self, payload, status=400):
@@ -5726,6 +5797,7 @@ def pos_checkout(request):
                 order_discount=order_discount,
                 discount_reason=discount_reason,
                 shift=open_shift,
+                idempotency_key=idem_key,
             )
             for ln in parsed_lines:
                 stock = locked[ln['sid']]
@@ -5743,16 +5815,33 @@ def pos_checkout(request):
                 )
     except _CheckoutAbort as e:
         return JsonResponse(e.payload, status=e.status)
+    except IntegrityError:
+        # OFF-2 poyga: bir vaqtning o'zida ikki replay bir xil kalit bilan
+        # kelsa, ikkinchi create unique cheklovга urилadi. Mavjud chekни
+        # qaytaramiz — sotuv baribir bir marta yozilgan.
+        if idem_key:
+            dup = SaleTransaction.objects.filter(idempotency_key=idem_key).first()
+            if dup:
+                return _receipt_response(dup)
+        raise
 
-    # Best-effort fiscal (noop unless provider configured)
-    from .fiscal import submit_for_transaction
-    submit_for_transaction(txn)
+    # OFF-2: chek ALLAQACHON saqlangan (atomic commit bo'ldi). Bundan keyingi
+    # "best-effort" chaqiruvlar (fiskal, SMS) XATO bersa ham 500 qaytmasligi
+    # kerak — aks holda offline navbat chekни ikkinchi marta yuborib, sotuv
+    # ikki marta yozilardi (ikki barobar tushum, ombor ikki marta kamayadi).
+    try:
+        from .fiscal import submit_for_transaction
+        submit_for_transaction(txn)
+    except Exception:
+        logger.exception('fiscal submit failed for txn %s (sotuv saqlangan)', txn.pk)
 
-    # Best-effort SMS receipt (noop unless provider + opt-in)
     sms_result = None
     if data.get('send_sms') and customer_phone:
-        from .sms import send_receipt
-        sms_result = send_receipt(txn, customer_phone)
+        try:
+            from .sms import send_receipt
+            sms_result = send_receipt(txn, customer_phone)
+        except Exception:
+            logger.exception('SMS receipt failed for txn %s', txn.pk)
 
     return JsonResponse({
         'ok': True,
@@ -5990,13 +6079,38 @@ def pos_payment_check(request, pk):
 def payments_webhook(request, provider):
     """POST /payments/webhook/<provider>/ — real merchant API callback.
 
-    Hozir stub: keladi-keladi log'ga yoziladi va ref_code yoki amount bo'yicha
-    mos PaymentIntent topilsa 'paid' deb belgilanadi. Real Payme/Click ulanganda
-    bu yerga signature verification qo'shiladi."""
+    PAY-1 XAVFSIZLIK: bu endpoint IMZO (signature) bilan himoyalangan.
+      1. PAYMENTS_WEBHOOK_SECRET sozlanmagan bo'lsa — HAMMA chaqiruv RAD etiladi
+         (hech qanday to'lov 'paid' bo'lmaydi). Hozir shунday — QR real ulanмaган.
+      2. Sozlanган bo'lsa — 'X-Signature' sarlavhasi tananing HMAC-SHA256 imzosiga
+         AYNAN mos kelishi shart (hmac.compare_digest).
+      3. Faqat ANIQ ref_code bo'yicha topiladi — 'summa + oxirgi 30 daqiqa'
+         fallback OLIB TASHLANDI (mijoz summani bilса, boshqa chekни paid
+         qilиб qo'ymasin).
+    """
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
 
     body_raw = request.body
+
+    # 1) Imzo tekshiruvi — sirsiz endpoint hech narsani paid qilмaydi
+    import hmac as _hmac, hashlib as _hashlib
+    sig = (request.headers.get('X-Signature') or request.headers.get('X-Signature-Sha256') or '').strip()
+    secret = getattr(settings, 'PAYMENTS_WEBHOOK_SECRET', '') or ''
+    # Imzosiz chaqiruv — HAR DOIM rad (403). Mijoz kassada turib telefonidan
+    # "to'ladim" deb yuborgan xabar hech qachon o'tmasligi SHART.
+    if not sig:
+        logger.warning('[payments webhook %s] REJECTED — missing signature', provider)
+        return JsonResponse({'ok': False, 'error': 'signature required'}, status=403)
+    # Imzo bor, lekin server siri sozlanmagan — tekshirib bo'lmaydi, RAD (503).
+    if not secret:
+        logger.warning('[payments webhook %s] REJECTED — no PAYMENTS_WEBHOOK_SECRET configured', provider)
+        return JsonResponse({'ok': False, 'error': 'webhook not configured'}, status=503)
+    expected = _hmac.new(secret.encode('utf-8'), body_raw, _hashlib.sha256).hexdigest()
+    if not _hmac.compare_digest(sig, expected):
+        logger.warning('[payments webhook %s] REJECTED — bad signature', provider)
+        return JsonResponse({'ok': False, 'error': 'invalid signature'}, status=403)
+
     try:
         payload = _json.loads(body_raw.decode('utf-8')) if body_raw else {}
     except (ValueError, UnicodeDecodeError):
@@ -6004,7 +6118,7 @@ def payments_webhook(request, provider):
 
     logger.info('[payments webhook %s] %s', provider, payload)
 
-    # Eng oson search: ref_code yoki amount + provider bo'yicha
+    # 2) FAQAT aniq ref_code bo'yicha (amount-window fallback yo'q)
     ref_code = (payload.get('ref_code') or payload.get('comment')
                 or payload.get('memo') or '').strip().upper()
     intent = None
@@ -6013,19 +6127,6 @@ def payments_webhook(request, provider):
                   .filter(provider=provider, ref_code=ref_code,
                           status=PaymentIntent.Status.PENDING)
                   .order_by('-created_at').first())
-    if not intent:
-        # Amount + recent window fallback
-        try:
-            amt = float(payload.get('amount') or 0)
-        except (TypeError, ValueError):
-            amt = 0
-        if amt > 0:
-            since = timezone.now() - timedelta(minutes=30)
-            intent = (PaymentIntent.objects
-                      .filter(provider=provider, amount=amt,
-                              status=PaymentIntent.Status.PENDING,
-                              created_at__gte=since)
-                      .order_by('-created_at').first())
     if not intent:
         return JsonResponse({'ok': False, 'error': 'mos intent topilmadi'},
                             status=404)

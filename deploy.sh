@@ -3,10 +3,12 @@
 # Ishlatish: ./deploy.sh
 set -e
 cd "$(dirname "$0")"
+# Lokal darvoza (gate) tekshiruvlari dev rejimida ishlaydi — SEC-10 tufayli
+# DEBUG=0 da SECRET_KEY talab qilinadi; serverда u /etc/yurit/env'da bor.
 echo "== Django check =="
-./venv/bin/python manage.py check
+DEBUG=1 ./venv/bin/python manage.py check
 echo "== JS syntax check (inline <script> on all pages) =="
-./venv/bin/python manage.py check_js
+DEBUG=1 ./venv/bin/python manage.py check_js
 echo "== Kod sinxron (rsync) =="
 rsync -az --delete --chmod=Da+rx,Fa+r \
   --exclude venv --exclude .git --exclude __pycache__ --exclude '*.pyc' \

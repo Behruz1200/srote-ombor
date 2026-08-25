@@ -2313,39 +2313,67 @@ async function queueDelete(id) {
         req.onerror = () => reject(req.error);
     });
 }
+// OFF-6: server offline-sotuvni rad etsa (masalan ombor yetmadi), sotuv
+// yo'qolib ketmasin — localStorage'ga saqlaymiz, admin keyin ko'rib chiqadi.
+const FAILED_KEY = 'yurit_failed_sales';
+async function queueFail(item, error) {
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem(FAILED_KEY) || '[]'); } catch (e) { arr = []; }
+    arr.push({
+        payload: item.payload,
+        error: error || 'nomaʼlum',
+        queued_at: item.queued_at || null,
+        failed_at: Date.now(),
+    });
+    // eng ko'pi 200 tani saqlaymiz, cheksiz o'smasin
+    if (arr.length > 200) arr = arr.slice(arr.length - 200);
+    try { localStorage.setItem(FAILED_KEY, JSON.stringify(arr)); } catch (e) {}
+    window.dispatchEvent(new CustomEvent('yurit:failed-changed',
+        {detail: {count: arr.length}}));
+}
 async function broadcastQueueCount() {
     const items = await queueList().catch(() => []);
     window.dispatchEvent(new CustomEvent('yurit:queue-changed',
         {detail: {count: items.length}}));
     return items.length;
 }
+let __isFlushing = false;   // OFF-2: qayta-kirish (re-entrancy) qulfi
 async function flushQueue() {
     if (!navigator.onLine) return;
-    const items = await queueList().catch(() => []);
-    for (const item of items) {
-        try {
-            // Tag as offline replay so the server can alert admin on conflict
-            const payload = Object.assign({}, item.payload, {is_offline_replay: true});
-            const resp = await fetch('/pos/checkout/', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-                body: JSON.stringify(payload),
-            });
-            const data = await resp.json();
-            if (data && data.ok) {
-                await queueDelete(item.id);
-            } else if (data && data.error) {
-                // Server rejected (e.g. stock conflict) — drop from queue
-                // so we don't get stuck retrying. Tell the user.
-                await queueDelete(item.id);
-                checkoutStatus.innerHTML = `<span class="text-warning">
-                    ⚠ Saqlangan sotuv rad etildi: ${data.error}</span>`;
+    // Wifi "miltillasa" online hodisasi bir necha marta yonib, ikki sikl bir
+    // xil navbatni yuborib, sotuvni IKKI marta yozib qo'yardi. Qulf oldini oladi.
+    if (__isFlushing) return;
+    __isFlushing = true;
+    try {
+        const items = await queueList().catch(() => []);
+        for (const item of items) {
+            try {
+                const payload = Object.assign({}, item.payload, {is_offline_replay: true});
+                const resp = await fetch('/pos/checkout/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (data && data.ok) {
+                    await queueDelete(item.id);
+                } else if (data && data.error) {
+                    // Server rad etdi (masalan ombor yetmadi) — navbatdan olib
+                    // tashlaymiz, lekin FAILED store'ga saqlaymiz (OFF-6) va
+                    // header'da badge ko'rsatamiz, yo'qolib ketmasin.
+                    try { await queueFail(item, data.error); } catch (e) {}
+                    await queueDelete(item.id);
+                    checkoutStatus.innerHTML = `<span class="text-danger">
+                        ⚠ Saqlangan sotuv rad etildi: ${data.error} — "Sync xatolari"ni tekshiring</span>`;
+                }
+            } catch (e) {
+                break; // still offline / server unreachable, stop trying
             }
-        } catch (e) {
-            break; // still offline / server unreachable, stop trying
         }
+        broadcastQueueCount();
+    } finally {
+        __isFlushing = false;
     }
-    broadcastQueueCount();
 }
 window.addEventListener('online', flushQueue);
 broadcastQueueCount();
@@ -2393,6 +2421,12 @@ checkoutBtn.addEventListener('click', async () => {
         const promoLabels = appliedPromos.map(p => p.name).join(', ');
         reason = reason ? `${reason}; ${promoLabels}` : `Aksiya: ${promoLabels}`;
     }
+    // OFF-2: shu urinish uchun bir martalik kalit. Online yuborilsa ham,
+    // offline navbatga tushib keyin qayta yuborilsa ham AYNAN shu kalit
+    // ketadi — server takroriy chek yaratmaydi.
+    const idemKey = (self.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : ('k' + Date.now() + '-' + Math.random().toString(16).slice(2));
     const payload = {
         lines,
         payment_method: paymentMethod,
@@ -2403,6 +2437,7 @@ checkoutBtn.addEventListener('click', async () => {
         discount_reason: reason.slice(0, 200),
         applied_promos: appliedPromos.map(p => ({id: p.id, name: p.name, discount: p.discount})),
         send_sms: document.getElementById('sendSmsCheckbox').checked,
+        idempotency_key: idemKey,
     };
     checkoutBtn.disabled = true;
     checkoutStatus.textContent = 'Saqlanmoqda...';
