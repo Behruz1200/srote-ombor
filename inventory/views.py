@@ -9831,8 +9831,14 @@ def _parse_prices(text):
 PRICE_TAG_SEP = ' · '
 
 
-# Sof narx belgisi: "115 000" yoki "115 000 (2)"
-_PRICE_TAG_RE = re.compile(r'^\d[\d\s]*(\s*\(\d+\))?$')
+# Sof narx belgisi: "115 000" yoki "115 000 (2)".
+# MUHIM: faqat MING-AJRATGICHLI (probelli) sonlar narx deb qaraladi. Ilgari
+# HAR QANDAY raqam ("1273", "3027", "545") ham narx deb belgilanardi — bu
+# raqamli RANG/KOD'larni bir "oila"ga qo'shib yuborardi va qabulда qoldiq
+# NOTO'G'RI turga tushib, kassada "omborda yo'q" chiqardi. Tizim yaratadigan
+# narx belgisi doim probelli (masalan 115 000), shuning uchun probelni talab
+# qilamiz — "1273" kabi kodlar endi o'z rangi bo'lib qoladi.
+_PRICE_TAG_RE = re.compile(r'^\d{1,3}(\s\d{3})+(\s*\(\d+\))?$')
 
 
 def _base_color(color):
