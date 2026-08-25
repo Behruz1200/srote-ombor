@@ -2890,16 +2890,25 @@ def intake_variants(request):
                         supplier_text='' if supplier_obj else supplier_text,
                         received_by=request.user, note=note)
                 for r in rows:
-                    variant, _ = ProductVariant.objects.get_or_create(
-                        product=product, size=r['size'], color=r['color'])
-                    if r['barcode'] and variant.barcode != r['barcode']:
-                        variant.barcode = r['barcode']
-                        variant.save(update_fields=['barcode'])
-                    # Kod kiritilmagan bo'lsa — o'zi beriladi (aks holda tur
-                    # kodsiz qolib, kassada skanerlanmaydi)
-                    ensure_variant_barcode(variant)
-                    # Sotuv narxi boshqacha bo'lsa — alohida tur (o'z kodi bilan)
-                    variant = resolve_price_variant(variant, branch, r['price'])
+                    # HAQIQAT MANBAI = SHTRIX-KOD. Qatorда kod bo'lsa, qoldiq
+                    # AYNAN o'sha kodli turга tushadi va narx bo'yicha "birodar"га
+                    # KO'CHIRILMAYDI (narx-split yo'q). Aks holда skanerlanган
+                    # kod bir turда, qoldiq boshqa turда qolib, kassada "omborda
+                    # yo'q" chiqardi. Faqat kodsiz turlар uchun narx-split ishlaydi.
+                    if r['barcode']:
+                        variant = (ProductVariant.objects
+                                   .filter(barcode=r['barcode']).first())
+                        if variant is None:
+                            variant, _ = ProductVariant.objects.get_or_create(
+                                product=product, size=r['size'], color=r['color'])
+                            if variant.barcode != r['barcode']:
+                                variant.barcode = r['barcode']
+                                variant.save(update_fields=['barcode'])
+                    else:
+                        variant, _ = ProductVariant.objects.get_or_create(
+                            product=product, size=r['size'], color=r['color'])
+                        ensure_variant_barcode(variant)
+                        variant = resolve_price_variant(variant, branch, r['price'])
                     ensure_variant_barcode(variant)
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
