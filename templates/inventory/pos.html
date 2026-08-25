@@ -1820,17 +1820,21 @@ function updateChange() {
 })();
 
 // Chek summasiga qarab tayyor naqd summalarni chiqaramiz (yaxlit, chekdan katta).
-//   masalan 139 000 -> 139 000(aniq), 150 000, 200 000, 250 000, 500 000
+// Summa KICHIK bo'lsa mayda kupyuralar (10 000, 20 000) ham chiqadi.
+//   8 000  -> 8 000(aniq), 10 000, 20 000, 50 000, 100 000, 200 000
+//   139 000 -> 139 000(aniq), 140 000, 150 000, 200 000
 function cashSuggestions(total) {
     total = Math.ceil(total || 0);
     if (!(total > 0)) return [];
     const set = new Set([total]);                 // aniq summa (qaytimsiz)
-    const step = total < 200000 ? 50000 : 100000; // yaxlit qadam
-    let n = Math.ceil(total / step) * step;
-    if (n === total) n += step;
-    for (let i = 0; i < 3; i++) set.add(n + i * step);
-    [100000, 200000, 500000, 1000000].forEach(v => { if (v > total) set.add(v); });
-    return Array.from(set).sort((a, b) => a - b).slice(0, 5);
+    // Turli qadamlarga yaxlitlab, chekdan katta yaqin summalarni beramiz
+    [1000, 5000, 10000, 50000, 100000].forEach(step => {
+        const n = Math.ceil(total / step) * step;
+        if (n > total) set.add(n);
+    });
+    // Qulay kupyura/yaxlit summalar (chekdan katta)
+    [10000, 20000, 50000, 100000, 200000].forEach(v => { if (v > total) set.add(v); });
+    return Array.from(set).sort((a, b) => a - b).slice(0, 6);
 }
 
 function renderCashSuggestions() {
