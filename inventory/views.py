@@ -2001,11 +2001,43 @@ def product_detail(request, code):
                 'sale_min': min(sales), 'sale_max': max(sales),
             })
 
+    # ---- Harakatlar tarixi (log): har tur bo'yicha kirim/sotuv/qaytarish/qoldiq ----
+    _vids = []
+    for row in variant_rows:
+        v = row.get('variant') if isinstance(row, dict) else getattr(row, 'variant', None)
+        if v is not None:
+            _vids.append(v.pk)
+    _intk = {r['variant']: r['s'] for r in Intake.objects.filter(
+        variant_id__in=_vids).values('variant').annotate(s=Sum('quantity'))}
+    _sold = {r['variant']: r['s'] for r in Sale.objects.filter(
+        variant_id__in=_vids).values('variant').annotate(s=Sum('quantity'))}
+    _retn = {r['sale__variant']: r['s'] for r in Return.objects.filter(
+        sale__variant_id__in=_vids).values('sale__variant').annotate(s=Sum('quantity'))}
+    _cur = {r['variant']: r['s'] for r in BranchStock.objects.filter(
+        variant_id__in=_vids).values('variant').annotate(s=Sum('stock_count'))}
+    movement_rows = []
+    for row in variant_rows:
+        v = row.get('variant') if isinstance(row, dict) else getattr(row, 'variant', None)
+        if v is None:
+            continue
+        ki = _intk.get(v.pk, 0) or 0
+        so = _sold.get(v.pk, 0) or 0
+        rq = _retn.get(v.pk, 0) or 0
+        cu = _cur.get(v.pk, 0) or 0
+        if not (ki or so or cu or rq):
+            continue
+        movement_rows.append({
+            'variant': v, 'intake': ki, 'sold': so, 'returned': rq, 'current': cu,
+            'balanced': (ki - so + rq) == cu,
+        })
+    movement_rows.sort(key=lambda r: (not r['balanced'], -(r['current'] or 0)))
+
     return render(request, 'inventory/product_detail.html', {
         'product': product, 'branches_data': branches_data,
         'real_markup': real_markup,
         'avg_price': avg_price,
         'recent_intakes': recent_intakes,
+        'movement_rows': movement_rows,
         'product_kpis': product_kpis,
         'variant_rows': variant_rows,
         'batch_groups': batch_groups,
@@ -5406,12 +5438,14 @@ def pos_lookup(request):
 
     # Tur (variant) shtrix-kodi skanerlangan bo'lishi mumkin — aniq turga moslaymiz
     matched_variant_id = None
+    _matched_variant = None
     if not product:
         _vm = (ProductVariant.objects.filter(barcode=q.strip())
                .select_related('product').first())
         if _vm:
             product = _vm.product
             matched_variant_id = _vm.id
+            _matched_variant = _vm
 
     if not product:
         # "Paypoq", "Ich kiyim" kabi tezkor sotuv toifasi yozilgan bo'lishi
@@ -5470,6 +5504,23 @@ def pos_lookup(request):
         'wholesale_price': float(s.wholesale_price or 0),
         'cost_price': float(s.cost_price),
     } for s in stocks]
+
+    # Skanerlangan barcode turi BO'SH (0), lekin AYNAN SHU RANG+O'LCHAMDAGI
+    # (ya'ni bir xil tovar, boshqa barcode bilan qayta qabul qilingan) birodарда
+    # qoldiq bor bo'lsa — o'shanga yo'naltiramiz. Shunda skaner "omborda yo'q"
+    # deб dead-end bo'lmaydi. Faqat rang BO'SH BO'LMAGANда (aniq bir xil kod).
+    if matched_variant_id and _matched_variant is not None:
+        mv_row = next((v for v in variants if v['variant_id'] == matched_variant_id), None)
+        if (mv_row is None or mv_row['stock_count'] <= 0):
+            mc = (_matched_variant.color or '').strip().lower()
+            ms = (_matched_variant.size or '').strip().lower()
+            if mc:  # faqat aniq (bo'sh bo'lmagan) rang bo'yicha — xavfsiz
+                cands = [v for v in variants if v['stock_count'] > 0
+                         and (v['color'] or '').strip().lower() == mc
+                         and (v['size'] or '').strip().lower() == ms]
+                if cands:
+                    cands.sort(key=lambda v: -v['stock_count'])
+                    matched_variant_id = cands[0]['variant_id']
 
     # If the product exists but has no variants in this branch, tell the
     # user explicitly — the silent "topilmadi" is misleading.

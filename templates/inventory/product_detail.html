@@ -471,6 +471,41 @@
     </div>
     {% endif %}
 
+    <!-- Harakatlar tarixi: har tur bo'yicha kirim / sotuv / qoldiq -->
+    {% if movement_rows %}
+    <div class="card p-3 mb-3">
+        <h6 class="text-muted text-uppercase small mb-2">
+            <i class="bi bi-arrow-left-right"></i> Harakatlar tarixi — tur bo'yicha (kirim / sotuv / qoldiq)</h6>
+        <div class="text-muted small mb-2">
+            Har tur uchun: jami qabul − sotilgan + qaytarilgan = qoldiq. "Nomos" belgisi
+            bo'lsa — qoldiq harakatlarga to'g'ri kelmayapti (qarzga olingan yoki qo'lda
+            tuzatilgan bo'lishi mumkin), tekshiring.
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>Tur (o'lcham / rang)</th><th>Shtrix-kod</th>
+                    <th class="text-end">Kirim</th><th class="text-end">Sotuv</th>
+                    <th class="text-end">Qaytarish</th><th class="text-end">Qoldiq</th><th></th>
+                </tr></thead>
+                <tbody>
+                {% for m in movement_rows %}
+                <tr {% if not m.balanced %}class="table-warning"{% endif %}>
+                    <td><small>{{ m.variant.size|default:"—" }} / {{ m.variant.color|default:"—" }}</small></td>
+                    <td><small><code>{{ m.variant.barcode|default:"—" }}</code></small></td>
+                    <td class="text-end">{{ m.intake }}</td>
+                    <td class="text-end">{{ m.sold }}</td>
+                    <td class="text-end">{{ m.returned }}</td>
+                    <td class="text-end fw-bold">{{ m.current }}</td>
+                    <td>{% if not m.balanced %}<span class="badge bg-warning text-dark" title="Qoldiq harakatlarga mos emas">Nomos</span>{% else %}<i class="bi bi-check2 text-success"></i>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Recent intakes -->
     <div class="card p-3">
         <h6 class="text-muted text-uppercase small mb-2">So'nggi qabullar</h6>
