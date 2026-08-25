@@ -4482,5 +4482,76 @@ window.yuritScan = (function () {
     if (sGet('yurit_osk_open') === '1') setOpen(true);
 })();
 </script>
+
+<style>
+/* Takrorlangan shtrix-kod kiritmasi — qizil ajratib ko'rsatiladi */
+.yrt-dup-bc {
+    border-color: var(--yrt-danger) !important;
+    box-shadow: 0 0 0 3px rgba(220,38,38,.22) !important;
+    background: #fef2f2 !important;
+}
+</style>
+<script>
+/* Qabul sahifalarida — SAQLASHDAN OLDIN takrorlangan shtrix-kodlarni topadi.
+   Sahifani yopmaydi/yubormaydi: takrorlarni qizil qiladi va ro'yxatini qaytaradi.
+   scope — qatorlar joylashgan element; selector — barcode input klasslari. */
+window.yuritDupBarcodes = function (scope, selector) {
+    if (!scope) return { ok: true, dups: [] };
+    selector = selector || 'input.row-barcode, input.r-barcode';
+    const inputs = Array.prototype.slice.call(scope.querySelectorAll(selector));
+    const seen = {}, dupSet = {};
+    inputs.forEach(function (el) { el.classList.remove('yrt-dup-bc'); });
+    inputs.forEach(function (el) {
+        const v = (el.value || '').trim();
+        if (!v) return;
+        if (seen[v]) { dupSet[v] = true; } else { seen[v] = true; }
+    });
+    const dups = Object.keys(dupSet);
+    if (!dups.length) return { ok: true, dups: [] };
+    let first = null;
+    inputs.forEach(function (el) {
+        const v = (el.value || '').trim();
+        if (v && dupSet[v]) { el.classList.add('yrt-dup-bc'); if (!first) first = el; }
+    });
+    if (first) {
+        try { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+        try { first.focus({ preventScroll: true }); } catch (e) {}
+    }
+    return { ok: false, dups: dups };
+};
+
+/* Takror shtrix-kod xabarini forma tepasида ko'rsatadi (sahifa yopilmaydi). */
+window.yuritShowDupMsg = function (anchorEl, dups) {
+    if (!anchorEl) return;
+    let box = anchorEl.querySelector(':scope > .yrt-dup-msg') || anchorEl.querySelector('.yrt-dup-msg');
+    if (!box) {
+        box = document.createElement('div');
+        box.className = 'alert alert-danger yrt-dup-msg';
+        box.setAttribute('role', 'alert');
+        box.style.position = 'sticky'; box.style.top = '8px'; box.style.zIndex = '20';
+        anchorEl.insertBefore(box, anchorEl.firstChild);
+    }
+    box.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Bu shtrix-kodlar '
+        + '<u>takrorlangan</u>: <strong>' + dups.join(', ') + '</strong>. '
+        + 'Qizil kataklarni tuzatib, qaytadan saqlang. (Ma\'lumot saqlanib turibdi.)';
+    box.style.display = '';
+    try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+};
+/* Barcha qabul formasiga bitta qatorда ulash: takror bo'lsa yubormaydi. */
+window.yuritAttachDupGuard = function (form, rowsScope, selector) {
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+        const r = window.yuritDupBarcodes(rowsScope || form, selector);
+        if (r && !r.ok) { e.preventDefault(); window.yuritShowDupMsg(form, r.dups); }
+    });
+};
+/* Foydalanuvchi tuzata boshlаsа — qizil belgini darrov olib tashlaymiz */
+document.addEventListener('input', function (e) {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('yrt-dup-bc')) {
+        t.classList.remove('yrt-dup-bc');
+    }
+});
+</script>
 </body>
 </html>

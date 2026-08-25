@@ -451,6 +451,13 @@
 
     const saveBtn = document.getElementById('saveBtn');
     saveBtn.addEventListener('click', function () {
+        // Saqlashдан oldin takror shtrix-kod (sahifa yopilmaydi)
+        const dup = window.yuritDupBarcodes && window.yuritDupBarcodes(document, '.r-barcode');
+        if (dup && !dup.ok) {
+            show('Bu shtrix-kodlar takrorlangan (qizil): <strong>' + dup.dups.join(', ')
+                 + '</strong>. Tuzatib, qaytadan saqlang.', 'danger');
+            return;
+        }
         const data = payload();
         if (!data.products.length) {
             show("Miqdor kiritilmagan — hech bo'lmasa bitta o'lcham yoki qatorga son yozing.", 'warning');

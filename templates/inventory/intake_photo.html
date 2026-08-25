@@ -990,6 +990,13 @@
     saveBtn.addEventListener('click', async function () {
         const branch = document.getElementById('fBranch').value;
         if (!branch) { setStat(saveStat, 'Filialni tanlang.', 'text-danger'); return; }
+        // Saqlashdan OLDIN takrorlangan shtrix-kodlarni tekshiramiz (sahifa yopilmaydi)
+        const dup = window.yuritDupBarcodes(rowsBody);
+        if (dup && !dup.ok) {
+            setStat(saveStat, 'Bu shtrix-kodlar takrorlangan (qizil): ' + dup.dups.join(', ')
+                    + '. Iltimos, tuzatib qaytadan saqlang.', 'text-danger');
+            return;
+        }
         const rows = collect(true);
         if (!rows.length) { setStat(saveStat, 'Saqlash uchun qator yo\'q.', 'text-danger'); return; }
         saveBtn.disabled = true;
