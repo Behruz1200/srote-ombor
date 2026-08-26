@@ -78,6 +78,26 @@ class ContentSecurityPolicyMiddleware:
         return resp
 
 
+class ShopClosedMiddleware:
+    """SHOP-1/SHOP-2: ochiq (autentifikatsiyasiz) onlayn do'kon ombor
+    zaxirasini bloklamaydi, pul so'ramaydi, hech kimni xabardor qilmaydi
+    (notify_web_order mavjud emas), va buyurtma sahifasi mijoz ma'lumotlarini
+    (ism/telefon/manzil) ochib qo'yadi. Hozircha 0 ta buyurtma — shuning uchun
+    butun /shop/ kanalini YOPAMIZ (SHOP_ENABLED=False). To'g'ri qurilganда
+    (zaxira bron, to'lov, xabar) env'da SHOP_ENABLED=1 bilan ochiladi."""
+    def __init__(self, get_response):
+        self.get_response = get_response
+        from django.conf import settings
+        self.enabled = bool(getattr(settings, 'SHOP_ENABLED', False))
+
+    def __call__(self, request):
+        if not self.enabled and request.path.startswith('/shop/'):
+            from django.http import HttpResponseNotFound
+            return HttpResponseNotFound(
+                "<h3>Onlayn do'kon vaqtincha yopiq.</h3>")
+        return self.get_response(request)
+
+
 class RequireAdminTwoFactorMiddleware:
     """SEC-1: yoqilganда (settings.REQUIRE_ADMIN_2FA=True) 2FA o'rnatmagan
     adminni majburan 2FA sozlash sahifasiga yo'naltiradi. Standart — O'CHIQ

@@ -12,24 +12,10 @@ python manage.py collectstatic --no-input
 # Apply migrations
 python manage.py migrate --no-input
 
-# One-shot production reset. Set RESET_ON_DEPLOY=1 in the host env,
-# push (or trigger a manual deploy), then REMOVE the env var so it
-# never runs again. Preserves Users; optionally also wipes Branches
-# and Categories.
-if [ "$RESET_ON_DEPLOY" = "1" ]; then
-    ARGS="--yes"
-    if [ "$RESET_WIPE_BRANCHES" = "1" ]; then
-        ARGS="$ARGS --wipe-branches"
-    fi
-    if [ "$RESET_WIPE_CATEGORIES" = "1" ]; then
-        ARGS="$ARGS --wipe-categories"
-    fi
-    echo "RESET_ON_DEPLOY=1 → running reset_for_production $ARGS"
-    python manage.py reset_for_production $ARGS
-    echo "⚠  Remember to REMOVE RESET_ON_DEPLOY env var before the next deploy."
-else
-    echo "RESET_ON_DEPLOY not set → skipping production reset"
-fi
+# OPS-2: The deploy-time production reset was REMOVED. A destructive wipe must
+# never live in a deploy path gated on a remembered env var — one re-run or
+# rollback with the var still set would empty the business. `reset_for_production`
+# is now a manual-only command (run it by hand, it prompts for confirmation).
 
 # Auto-create superuser if DJANGO_SUPERUSER_* env vars are set.
 # Idempotent: skips if the username already exists.

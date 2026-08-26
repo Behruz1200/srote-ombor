@@ -1125,8 +1125,21 @@ class Sale(models.Model):
 
     @property
     def total(self):
-        """Chegirmadan keyingi summa."""
+        """Chegirmadan keyingi summa (faqat line_discount)."""
         return self.gross - self.line_discount
+
+    def net_line_total(self):
+        """REF-2: chek bo'yicha umumiy chegirma (order_discount) ham ayirilgan
+        sof qiymat. order_discount chek qatorlariga nisbatan taqsimlanadi.
+        Qaytarish va almashtirish qiymati AYNAN mijoz to'lagani bo'lishi uchun."""
+        total = _dec(self.total)
+        txn = self.transaction if self.transaction_id else None
+        odisc = _dec(txn.order_discount) if txn else Decimal('0')
+        if txn and odisc > 0:
+            receipt_total = sum((_dec(l.total) for l in txn.lines.all()), Decimal('0'))
+            if receipt_total > 0:
+                total = total - (odisc * total / receipt_total)
+        return total if total > 0 else Decimal('0')
 
     @property
     def profit(self):
@@ -1362,11 +1375,19 @@ class Return(models.Model):
 
     @property
     def refund_amount(self):
-        # Use line total (after line_discount) so refunds match actual cash returned
-        if self.sale.quantity > 0:
-            per_unit_total = self.sale.total / self.sale.quantity
-            return self.quantity * per_unit_total
-        return self.quantity * self.sale.sale_price
+        """Qaytariladigan summa — mijoz HAQIQATDA to'lagani bo'yicha.
+
+        REF-2: chek bo'yicha umumiy chegirma (order_discount) ham hisobga
+        olinadi. Ilgari faqat line_discount ayirilardi, order_discount esa
+        e'tiborsiz qolib, chegirmali chekni qaytarganда mijoz to'laganidan
+        KO'PROQ qaytarilardi (har chegirmali chekда zarar). Chegirmani chek
+        qatorlariga nisbatan taqsimlaymiz.
+        """
+        sale = self.sale
+        if sale.quantity <= 0:
+            return self.quantity * sale.sale_price
+        per_unit_total = sale.net_line_total() / sale.quantity
+        return self.quantity * per_unit_total
 
     @property
     def effective_cash_refund(self):

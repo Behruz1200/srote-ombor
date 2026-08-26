@@ -6671,51 +6671,69 @@ def pos_refund(request):
     if not items:
         return JsonResponse({'ok': False, 'error': 'qator yo\'q'}, status=400)
 
-    refunded_total = 0
+    # REF-1: HAMMA qatorni atomic blokдан OLDIN tekshiramiz. Ilgari tekshiruv
+    # atomic ichida `return` qilardi — bitta qator o'tib, keyingisi yiqilса,
+    # o'tgani COMMIT bo'lib, 400 qaytardi. Kassir tuzatib qayta yuborsa —
+    # birinchi qator IKKINCHI marta qaytarilardi (ikki barobar naqd/ombor).
+    parsed = []
+    for it in items:
+        try:
+            sid = int(it['sale_id'])
+            qty = int(it['qty'])
+        except (KeyError, ValueError, TypeError):
+            return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
+        if qty <= 0:
+            continue
+        reason = (it.get('reason') or '').strip()[:200]
+        sale = (Sale.objects.select_related('variant', 'branch')
+                .filter(pk=sid, branch=branch).first())
+        if not sale:
+            return JsonResponse({'ok': False, 'error': f'sale {sid} topilmadi'}, status=400)
+        parsed.append({'sid': sale.pk, 'qty': qty, 'reason': reason,
+                       'code': sale.variant.product.code})
+    if not parsed:
+        return JsonResponse({'ok': False, 'error': 'qator yo\'q'}, status=400)
+
+    class _RefundAbort(Exception):
+        def __init__(self, payload, status=400):
+            self.payload = payload
+            self.status = status
+
+    refunded_total = Decimal('0')
     refunded_qty = 0
-    with transaction.atomic():
-        for it in items:
-            try:
-                sid = int(it['sale_id'])
-                qty = int(it['qty'])
-            except (KeyError, ValueError, TypeError):
-                return JsonResponse({'ok': False, 'error': 'noto\'g\'ri qator'}, status=400)
-            if qty <= 0:
-                continue
-            reason = (it.get('reason') or '').strip()[:200]
-            sale = (Sale.objects.select_related('variant', 'branch')
-                    .filter(pk=sid, branch=branch).first())
-            if not sale:
-                return JsonResponse({'ok': False, 'error': f'sale {sid} topilmadi'}, status=400)
-            already = sale.returns.aggregate(s=Sum('quantity'))['s'] or 0
-            remaining = sale.quantity - already
-            if qty > remaining:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f"{sale.variant.product.code}: faqat {remaining} dona qaytarish mumkin",
-                }, status=400)
-            stock = BranchStock.objects.filter(
-                variant=sale.variant, branch=sale.branch
-            ).first()
-            if stock:
-                stock.stock_count = F('stock_count') + qty
-                stock.save()
-            Return.objects.create(
-                sale=sale, shift=open_shift,
-                quantity=qty, reason=reason,
-                refunded_by=request.user,
-            )
-            refunded_qty += qty
-            # M8 fix: use sale.total (after line_discount) for accurate refund amount
-            if sale.quantity > 0:
-                per_unit = float(sale.total) / sale.quantity
-            else:
-                per_unit = float(sale.sale_price)
-            refunded_total += qty * per_unit
+    try:
+        with transaction.atomic():
+            for p in parsed:
+                # REF-1: qatorni QULFLAB qayta tekshiramiz — bir vaqtда ikki
+                # refund bir xil qatorga o'tmasin (pos_exchange kabi).
+                sale = (Sale.objects.select_for_update()
+                        .select_related('variant', 'branch', 'transaction')
+                        .filter(pk=p['sid'], branch=branch).first())
+                if not sale:
+                    raise _RefundAbort({'ok': False, 'error': f"sale {p['sid']} topilmadi"})
+                already = sale.returns.aggregate(s=Sum('quantity'))['s'] or 0
+                remaining = sale.quantity - already
+                if p['qty'] > remaining:
+                    raise _RefundAbort({'ok': False,
+                        'error': f"{p['code']}: faqat {remaining} dona qaytarish mumkin"})
+                stock = (BranchStock.objects.select_for_update()
+                         .filter(variant=sale.variant, branch=sale.branch).first())
+                if stock:
+                    stock.stock_count = F('stock_count') + p['qty']
+                    stock.save(update_fields=['stock_count'])
+                ret = Return.objects.create(
+                    sale=sale, shift=open_shift,
+                    quantity=p['qty'], reason=p['reason'],
+                    refunded_by=request.user,
+                )
+                refunded_qty += p['qty']
+                refunded_total += ret.refund_amount  # REF-2: order_discount hisobga olingan
+    except _RefundAbort as e:
+        return JsonResponse(e.payload, status=e.status)
     return JsonResponse({
         'ok': True,
         'refunded_qty': refunded_qty,
-        'refunded_total': refunded_total,
+        'refunded_total': float(refunded_total),
     })
 
 
@@ -6822,7 +6840,9 @@ def pos_exchange(request):
                 if r['qty'] > remaining:
                     raise _Abort({'ok': False, 'error':
                         f"{sale.variant.product.code}: faqat {remaining} dona qaytarish mumkin"})
-                per_unit = (sale.total / sale.quantity) if sale.quantity > 0 else sale.sale_price
+                # REF-2: order_discount hisobga olingan sof qiymat (trade-in
+                # mijoz to'laganidan ko'p kreditlanmasin)
+                per_unit = (sale.net_line_total() / sale.quantity) if sale.quantity > 0 else sale.sale_price
                 amt = Decimal(r['qty']) * Decimal(per_unit)
                 old_total += amt
                 ret_ctx.append((sale, r['qty']))

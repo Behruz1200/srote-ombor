@@ -1518,6 +1518,14 @@ let appliedPromos = [];
 let qrBreakdownExtra = [];
 
 function fmt(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' '); }
+// SEC-11: mahsulot nomi/rangi/o'lchami — xodim yozadigan ERKIN matn. innerHTML'ga
+// to'g'ridan-to'g'ri qo'yilsa "<img onerror=...>" kabi XSS ishga tushardi (kassа,
+// mijoz ekrani va chekда). HTML belgilarini zararsizlantiramiz.
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+}
 
 function refocus() { setTimeout(() => scanInput.focus(), 50); }
 
@@ -1744,9 +1752,9 @@ function renderCart() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
-                <strong>${it.product_name}</strong>
+                <strong>${esc(it.product_name)}</strong>
                 <div class="small text-muted">
-                    ${it.open ? `<span class="badge bg-warning-subtle text-warning border">qo'lda kiritilgan</span>` : `<code>${it.product_code}</code> · ${it.size} / ${it.color}`}
+                    ${it.open ? `<span class="badge bg-warning-subtle text-warning border">qo'lda kiritilgan</span>` : `<code>${esc(it.product_code)}</code> · ${esc(it.size)} / ${esc(it.color)}`}
                 </div>
             </td>
             <td>

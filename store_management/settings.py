@@ -207,7 +207,11 @@ MIDDLEWARE = [
     'inventory.middleware.AuditMiddleware',
     'inventory.middleware.ContentSecurityPolicyMiddleware',   # SEC-3
     'inventory.middleware.RequireAdminTwoFactorMiddleware',   # SEC-1 (gated)
+    'inventory.middleware.ShopClosedMiddleware',              # SHOP-1/SHOP-2
 ]
+
+# SHOP-1/SHOP-2: ochiq onlayn do'kon xavfsiz qurilmaguncha YOPIQ (0 buyurtma).
+SHOP_ENABLED = _bool('SHOP_ENABLED', default=False)
 
 # SEC-3: muammo chiqsa CSP_REPORT_ONLY=1 — bloklamay faqat konsolда hisobot.
 CSP_REPORT_ONLY = _bool('CSP_REPORT_ONLY', default=False)
@@ -235,14 +239,22 @@ WSGI_APPLICATION = 'store_management.wsgi.application'
 
 
 # ---------- Database ----------
-# Production: DATABASE_URL set by Render (postgres://...)
-# Dev: fall back to SQLite
+# OPS-3: production DOIM DATABASE_URL (Postgres) talab qiladi. Ilgari u
+# yo'q bo'lsa jimgina BO'SH SQLite'ga tushib, real savdolarni hech kim
+# zaxiralamaydigan faylga yozardi (va TLS talabini ham tashlardi). Endi
+# DEBUG o'chiq bo'lsa-yu DATABASE_URL yo'q bo'lsa — baland ovoz bilan xato.
+_DATABASE_URL = os.environ.get('DATABASE_URL')
+if not DEBUG and not _DATABASE_URL:
+    raise ImproperlyConfigured(
+        'DATABASE_URL environment variable is required in production '
+        '(DEBUG is off). Refusing to start on the SQLite fallback.')
+
 DATABASES = {
     'default': dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
         conn_health_checks=True,
-        ssl_require=not DEBUG and bool(os.environ.get('DATABASE_URL')),
+        ssl_require=not DEBUG and bool(_DATABASE_URL),
     )
 }
 
@@ -273,10 +285,10 @@ CACHES = {
 
 AUTH_USER_MODEL = 'inventory.User'
 
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-     'OPTIONS': {'min_length': 4}},
-]
+# AUTH-1: bu yerда AUTH_PASSWORD_VALIDATORS QAYTA belgilanib, yuqoridagi kuchli
+# ro'yxatni (min_length=8 + common/numeric/similarity) 4 belgigа tushirib
+# yuborardi ('1234' admin paroli sifatida o'tardi). OLIB TASHLANDI — yuqoridagi
+# (142-qator) kuchli ro'yxat amal qiladi.
 
 
 # ---------- Locale & formatting ----------

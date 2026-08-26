@@ -330,6 +330,12 @@ const qrAmount = document.getElementById('qrAmount');
 const qrProviderName = document.getElementById('qrProviderName');
 
 function fmt(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' '); }
+// SEC-11: erkin matnli mahsulot maydonlarini innerHTML uchun zararsizlantirish
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+}
 
 function showScreen(name) {
     Object.entries(screens).forEach(([k, el]) => {
@@ -348,10 +354,10 @@ function renderCart(items) {
         row.className = 'item';
         row.innerHTML = `
             <div>
-                <div class="item-name">${it.product_name}</div>
+                <div class="item-name">${esc(it.product_name)}</div>
                 <div class="item-meta">${it.qty} × ${fmt(it.sale_price)} so'm
-                    ${it.size && it.size !== '—' ? '· ' + it.size : ''}
-                    ${it.color && it.color !== '—' ? '/ ' + it.color : ''}
+                    ${it.size && it.size !== '—' ? '· ' + esc(it.size) : ''}
+                    ${it.color && it.color !== '—' ? '/ ' + esc(it.color) : ''}
                 </div>
             </div>
             <div class="item-total">${fmt(sub)}</div>

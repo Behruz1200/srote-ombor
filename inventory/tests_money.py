@@ -460,6 +460,47 @@ class Stk8WeightedCost(TestCase):
         self.assertEqual(weighted_cost(10, 1000, 0, 1500), Decimal('1500'))
 
 
+class RefundMoney(MoneyTestBase):
+    """REF-1 (atomiklik) va REF-2 (order_discount qaytarishда)."""
+
+    def _txn(self, order_discount='0'):
+        return SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.open_shift(),
+            payment_method='cash', order_discount=Decimal(order_discount))
+
+    def _sale(self, txn, qty=1, price='100000'):
+        return Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=qty, sale_price=Decimal(price),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+
+    def test_ref2_full_return_respects_order_discount(self):
+        # 3×100000, chek chegirmasi 100000 → mijoz 200000 to'lagan
+        txn = self._txn(order_discount='100000')
+        sale = self._sale(txn, qty=3)
+        r = self.client.post('/pos/refund/', data=json.dumps(
+            {'lines': [{'sale_id': sale.pk, 'qty': 3, 'reason': 't'}]}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['refunded_total'], 200000.0,
+                         'qaytarish mijoz TO\'LAGANI (200000) bo\'lishi kerak, 300000 emas')
+
+    def test_ref1_partial_failure_rolls_back_first_line(self):
+        from inventory.models import Return
+        txn = self._txn()
+        s1 = self._sale(txn, qty=1)
+        s2 = self._sale(txn, qty=1)
+        # 1-qator valid, 2-qator qty=5 > mavjud 1 → butun tranzaksiya bekor
+        r = self.client.post('/pos/refund/', data=json.dumps({'lines': [
+            {'sale_id': s1.pk, 'qty': 1}, {'sale_id': s2.pk, 'qty': 5}]}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(Return.objects.count(), 0,
+                         'birinchi qator ham COMMIT bo\'lmasligi kerak (double-refund oldini olish)')
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.stock_count, 10, 'ombor o\'zgarmasligi kerak')
+
+
 class Mon4CashIn(MoneyTestBase):
     """MON-4 — kassaga naqd qo'shish kutilgan naqdни OSHIRadi (payout aksi)."""
 
