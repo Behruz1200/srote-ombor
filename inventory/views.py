@@ -4,7 +4,8 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import (Sum, F, Q, DecimalField, ExpressionWrapper, Count,
-                              Max, Min, Avg, Case, When, Value, FloatField)
+                              Max, Min, Avg, Case, When, Value, FloatField,
+                              Exists, OuterRef)
 from django.db.models.functions import (
     Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
 )
@@ -8019,20 +8020,27 @@ def sales_list(request):
     if not date_from_raw and not date_to_raw:
         date_from_raw = (timezone.localdate() - timedelta(days=30)).strftime('%Y-%m-%d')
 
+    # DIQQAT: _returned annotatsiyasini BAZAVIY qs'ga QO'YMAYMIZ — u returns'га
+    # JOIN qilib qatorlarni ko'paytiradi va aggregate (jami) IKKI barobar
+    # sanardi. Annotatsiya faqat ko'rsatiladigan 300 qatorга qo'shiladi (pastда).
     qs = Sale.objects.select_related(
-        'variant__product', 'branch', 'sold_by', 'transaction'
-    ).annotate(_returned=Coalesce(Sum('returns__quantity'), 0))
+        'variant__product', 'branch', 'sold_by', 'transaction')
 
+    # Sana filtri — sold_at'ni date()'ga O'RAMAYMIZ (aks holда sale_soldat_idx
+    # indeksi ishlamay jadval to'liq skanerlanardi). Aware datetime oralig'i.
+    tz = timezone.get_current_timezone()
     try:
         if date_from_raw:
             df = datetime.strptime(date_from_raw, '%Y-%m-%d').date()
-            qs = qs.filter(sold_at__date__gte=df)
+            qs = qs.filter(sold_at__gte=timezone.make_aware(
+                datetime.combine(df, datetime.min.time()), tz))
     except ValueError:
         date_from_raw = ''
     try:
         if date_to_raw:
             dt = datetime.strptime(date_to_raw, '%Y-%m-%d').date()
-            qs = qs.filter(sold_at__date__lte=dt)
+            qs = qs.filter(sold_at__lt=timezone.make_aware(
+                datetime.combine(dt + timedelta(days=1), datetime.min.time()), tz))
     except ValueError:
         date_to_raw = ''
     if branch_id:
@@ -8047,11 +8055,12 @@ def sales_list(request):
             seller_id = ''
     if payment_method:
         qs = qs.filter(transaction__payment_method=payment_method)
-    # Qaytarilgan holati bo'yicha filtr (annotatsiya _returned ustidan).
+    # Qaytarilgan filtri — Exists() bilan (JOIN fanout emas, aggregate to'g'ri).
+    _has_ret = Return.objects.filter(sale=OuterRef('pk'))
     if returned == 'yes':
-        qs = qs.filter(_returned__gt=0)     # qisman yoki to'liq qaytarilgan
+        qs = qs.filter(Exists(_has_ret))    # qisman yoki to'liq qaytarilgan
     elif returned == 'no':
-        qs = qs.filter(_returned=0)         # umuman qaytarilmagan
+        qs = qs.filter(~Exists(_has_ret))   # umuman qaytarilmagan
     if q:
         cond = (
             Q(variant__product__name__icontains=q)
@@ -8066,7 +8075,9 @@ def sales_list(request):
         #  qo'shilib kelardi.)
         _num = q.lstrip('#').strip()
         _txn = None
-        if _num.isdigit():
+        # len<=12: ulkan raqam int() (>4300 xona → ValueError) yoki bigint
+        # overflow (DataError) bilan 500 bermasin.
+        if _num.isdigit() and len(_num) <= 12:
             _txn = SaleTransaction.objects.filter(pk=int(_num)).first()
         if _txn is not None:
             qs = qs.filter(transaction_id=_txn.pk)
@@ -8102,26 +8113,45 @@ def sales_list(request):
             ]])
         return resp
 
-    sales = list(qs[:300])
-    total = sum(s.total for s in sales)
-    qty_total = sum(s.quantity for s in sales)
+    # Jami — BUTUN filtr bo'yicha DB'da (faqat ko'rsatilган 300 emas). Ilgari
+    # jami faqat oxirgi 300 qatorни qo'shib, oyда 300+ satr bo'lса daromadni
+    # JIMGINA kam ko'rsatardi. 'txns' — HAQIQIY tranzaksiyalar (chek) soni:
+    # 5 tovarli chek 5 emas, 1 marta sanaladi.
+    _rev_expr = F('quantity') * F('sale_price') - F('line_discount')
+    agg = qs.aggregate(
+        total=Sum(_rev_expr),
+        qty=Sum('quantity'),
+        txns=Count('transaction_id', distinct=True),
+    )
+    total = agg['total'] or 0
+    qty_total = agg['qty'] or 0
+    txn_count = agg['txns'] or 0
+    line_count = qs.count()   # "Topilgan qatorlar" — jami satr (300 cheklovsiz)
 
-    # Group by date for daily subtotals (for display only)
-    from collections import OrderedDict
-    daily = OrderedDict()
-    for s in sales:
-        d = s.sold_at.date()
-        if d not in daily:
-            daily[d] = {'date': d, 'total': 0, 'qty': 0, 'count': 0}
-        daily[d]['total'] += float(s.total)
-        daily[d]['qty'] += s.quantity
-        daily[d]['count'] += 1
-    daily_list = list(daily.values())
+    # Ro'yxat — FAQAT ko'rsatish uchun 300 qator (+ _returned strike-through).
+    sales = list(qs.annotate(_returned=Coalesce(Sum('returns__quantity'), 0))[:300])
+    shown_capped = line_count > 300
+
+    # Kunlik jami — BUTUN filtr bo'yicha DB'da (eng eski kun ham to'liq).
+    daily_list = []
+    for row in (qs.values('sold_at__date')
+                  .annotate(total=Sum(_rev_expr), qty=Sum('quantity'),
+                            count=Count('transaction_id', distinct=True))
+                  .order_by('-sold_at__date')[:60]):
+        daily_list.append({
+            'date': row['sold_at__date'],
+            'total': float(row['total'] or 0),
+            'qty': row['qty'] or 0,
+            'count': row['count'] or 0,
+        })
 
     return render(request, 'inventory/sales_list.html', {
         'sales': sales,
         'total': total,
         'qty_total': qty_total,
+        'txn_count': txn_count,
+        'line_count': line_count,
+        'shown_capped': shown_capped,
         'daily_list': daily_list,
         # Filter state
         'q': q,
