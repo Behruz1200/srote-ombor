@@ -2776,6 +2776,9 @@ checkoutBtn.addEventListener('click', async () => {
     // Kosmetik: chek oynasi + ro'yxatга qator. Bularни alohида himoyalaymiz —
     // xato bo'lса ham sotuv holati buzilmaydi va refocus() baribir ishlaydi.
     try {
+        // Qatorни AVVAL qo'shamiz — window.open (kamдан-kam) xato bersа ham
+        // sotuv ro'yxatда ko'rinadi. review #3: takror javob bo'lса qo'shmaymiz.
+        if (!data.duplicate) prependRecentSale(data, paymentMethod);
         const _rcptWin = window.open(data.receipt_url, 'yuritReceipt');
         if (!_rcptWin) {
             // Popup bloklandi (FE-2: QR'да sun'iy bosish) — ko'rinadigan havola.
@@ -2784,9 +2787,6 @@ checkoutBtn.addEventListener('click', async () => {
                 <a href="${data.receipt_url}" target="yuritReceipt"
                    class="btn btn-sm btn-primary ms-2">🧾 Chekni chop etish</a>`;
         }
-        // FIX (review #3): takroriy (idempotent replay) javob bo'lса ro'yxatга
-        // IKKINCHI qator qo'shmaymiz (badge ham oshib ketmasin).
-        if (!data.duplicate) prependRecentSale(data, paymentMethod);
     } catch (e) { /* kosmetik — jim */ }
     refocus();
 });
