@@ -1405,6 +1405,17 @@ class Return(models.Model):
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text='Almashtirishда mijozga HAQIQIY qaytarilgan naqd (odatda 0 yoki '
                   'faqat farq). None bo\'lsa — oddiy qaytarish, refund_amount ishlatiladi.')
+    # REF-3: qaytarish PAYTIDA hisoblangan HAQIQIY naqd (snapshot). Egasining
+    # qoidasi: bir dona qaytганда o'z narxi; butun chek qaytганда — chek JAMISi
+    # (chegirма ayirilgan). Ya'ni har qaytarish = min(dona narxi, chek to'lovi −
+    # shu chekда AVVAL qaytarilgan). Bu NUQTA-VAQT qarori (qaysi qaytarish chekni
+    # yopadi) — shuning uchun saqlanadi, qayta hisoblanmaydi (tarix qotadi,
+    # eski cheklar qayta chop etilganда o'zgarmaydi). None — eski (migratsiyaдan
+    # oldingi) yozuvlar; ularда refund_amount (dona narxi) ishlatiladi.
+    refund_cash = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text='Qaytarishда kassadan HAQIQIY chiqqan naqd (snapshot). '
+                  'Chek to\'loviдan oshmaydi.')
     # S3: ikki marta qaytarishни bloklaydi (timeout/qayta bosishда bir xil kalit).
     idempotency_key = models.CharField(
         max_length=64, null=True, blank=True, unique=True, editable=False,
@@ -1421,6 +1432,10 @@ class Return(models.Model):
                 condition=models.Q(cash_refunded__isnull=True)
                           | models.Q(cash_refunded__gte=0),
                 name='return_cash_refunded_nonneg'),
+            models.CheckConstraint(
+                condition=models.Q(refund_cash__isnull=True)
+                          | models.Q(refund_cash__gte=0),
+                name='return_refund_cash_nonneg'),
         ]
 
     def __str__(self):
@@ -1449,6 +1464,10 @@ class Return(models.Model):
         """
         if self.is_exchange:
             return self.cash_refunded or Decimal('0')
+        # REF-3: qaytarish paytida qotirilgan haqiqiy naqd (chek to'loviga
+        # cheklangan). Eski yozuvlarда None — u holда dona narxiga qaytamiz.
+        if self.refund_cash is not None:
+            return self.refund_cash
         return self.refund_amount
 
 

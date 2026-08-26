@@ -7406,6 +7406,7 @@ def pos_refund(request):
     refunded_total = Decimal('0')
     refunded_qty = 0
     _first_row = True
+    _txn_refunded = {}   # REF-3: chek pk -> shu chekда jami qaytarilgan naqd
     try:
         with transaction.atomic():
             for p in parsed:
@@ -7428,8 +7429,31 @@ def pos_refund(request):
                 if stock and not sale.variant.product.is_open_price:
                     stock.stock_count = F('stock_count') + p['qty']
                     stock.save(update_fields=['stock_count'])
+                # REF-3: qaytariladigan HAQIQIY naqд. Dona O'Z narxida (order_discount
+                # taqsimlanmaydi). AMMO bir chek bo'yicha jami qaytarish chek
+                # TO'LOVIdan oshmaydi — shu bois butun chek qaytганда chegirма
+                # oxirgi qaytarishга singib, jami = to'langan summа bo'ladi
+                # (egasining qoidasi: qisman → dona narxi, to'liq → chek jamisi).
+                _per_unit = (sale.net_line_total() / sale.quantity
+                             if sale.quantity > 0 else Decimal(sale.sale_price))
+                _item_value = Decimal(p['qty']) * _per_unit
+                _txn = sale.transaction
+                if _txn is not None and Decimal(_txn.order_discount or 0) > 0:
+                    _paid = Decimal(_txn.total)
+                    if _txn.pk not in _txn_refunded:
+                        _txn_refunded[_txn.pk] = sum(
+                            (r.effective_cash_refund for r in
+                             Return.objects.filter(sale__transaction_id=_txn.pk)),
+                            Decimal('0'))
+                    _prior = _txn_refunded[_txn.pk]
+                    _cap = _paid - _prior if _paid > _prior else Decimal('0')
+                    _cash = min(_item_value, _cap)
+                    _txn_refunded[_txn.pk] = _prior + _cash
+                else:
+                    _cash = _item_value
                 _rk = dict(sale=sale, shift=open_shift, quantity=p['qty'],
-                           reason=p['reason'], refunded_by=request.user)
+                           reason=p['reason'], refunded_by=request.user,
+                           refund_cash=_cash)
                 if _idem and _first_row:
                     _rk['idempotency_key'] = _idem   # S3: partiyaning bir martalik kaliti
                     _first_row = False
@@ -7440,7 +7464,7 @@ def pos_refund(request):
                     raise _RefundAbort({'ok': True, 'refunded_qty': 0,
                         'refunded_total': 0, 'duplicate': True}, status=200)
                 refunded_qty += p['qty']
-                refunded_total += ret.refund_amount  # qator narxi (order_discount taqsimlanmaydi)
+                refunded_total += _cash
     except _RefundAbort as e:
         return JsonResponse(e.payload, status=e.status)
     return JsonResponse({

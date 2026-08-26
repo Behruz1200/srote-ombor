@@ -671,18 +671,18 @@ class RefundMoney(MoneyTestBase):
         self.assertEqual(r.json()['refunded_total'], 100000.0,
                          'bir dona qaytarish = to\'liq dona narxi (100 000)')
 
-    def test_full_return_refunds_line_total_ignoring_order_discount(self):
-        """To'liq qaytarishда qatorning O'Z jami (300 000) qaytadi — chegirма
-        ayirilmaydi. (Cheklovни egasi bilib qabul qildi: to'liq qaytарishда
-        chegirма miqdorича ortiqcha bo'lishi mumkin.)"""
-        txn = self._txn(order_discount='100000')
+    def test_full_return_caps_at_check_total(self):
+        """REF-3: butun chek qaytганда — mijoz TO'LAGANI (200 000) qaytadi,
+        qatorlar jamisi (300 000) EMAS. Chegirма oxirgi qaytarishга singadi.
+        (Egasining qoidasi: qisman → dona narxi, to'liq → chek jamisi.)"""
+        txn = self._txn(order_discount='100000')   # 3×100 000 − 100 000 = 200 000
         sale = self._sale(txn, qty=3)
         r = self.client.post('/pos/refund/', data=json.dumps(
             {'lines': [{'sale_id': sale.pk, 'qty': 3, 'reason': 't'}]}),
             content_type='application/json')
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()['refunded_total'], 300000.0,
-                         'to\'liq qaytarish = qator jami (300 000), order_discount tegmaydi')
+        self.assertEqual(r.json()['refunded_total'], 200000.0,
+                         'to\'liq qaytarish chek to\'loviga (200 000) cheklanadi')
 
     def test_ref1_partial_failure_rolls_back_first_line(self):
         from inventory.models import Return
@@ -888,9 +888,10 @@ class SalesPageRefundMatchesZReport(MoneyTestBase):
             is_staff=True, branch=self.branch)
 
     def _discounted_sale_fully_returned(self):
-        # 3 x 100 000, chek chegirmasi 60 000. To'liq qaytarishда tovarlar O'Z
-        # narxida (300 000) qaytadi — order_discount qaytarishга taqsimlanmaydi
-        # (egasining qarori). Sahifa va Z-hisobot BARIBIR teng bo'lishi kerak.
+        # 3 x 100 000, chek chegirmasi 60 000. Return TO'G'RIDAN-TO'G'RI ORM orqali
+        # yaratiladi (pos_refund cheklovини chetlab) — refund_cash yo'q, shu bois
+        # effective_cash_refund dona narxiga (fallback) qaytadi. Bu test faqat
+        # sahifa == Z-hisobot (yagona manba) ekanini tekshiradi, summа qiymatini emas.
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=self.shift,
             payment_method='cash', order_discount=Decimal('60000'))
@@ -1120,3 +1121,78 @@ class Mon24SomFilterRoundsHalfUp(TestCase):
         self.assertEqual(som(None), '')
         self.assertEqual(som(''), '')
         self.assertEqual(som('salom'), 'salom')
+
+
+class Ref3RefundCap(MoneyTestBase):
+    """REF-3 — egasining qoidasi: bir dona qaytганда o'z narxi; butun chek
+    qaytганда chek to'lovi (chegirма ayirilgan). Har qaytarish chek to'loviдan
+    oshmaydi, va haqiqiy naqд Return.refund_cash'да SAQLANADI (tarix qotadi)."""
+
+    def _discounted_check(self, order_discount='1000'):
+        # 12 000 + 9 000 = 21 000; chegirма 1 000 → mijoz 20 000 to'lagan.
+        shift = self.open_shift()
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=shift,
+            payment_method='cash', order_discount=Decimal(order_discount))
+        s1 = Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('12000'),
+            cost_at_sale=Decimal('6000'), sold_by=self.cashier)
+        s2 = Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('9000'),
+            cost_at_sale=Decimal('6000'), sold_by=self.cashier)
+        return txn, s1, s2
+
+    def _refund(self, lines):
+        return self.client.post('/pos/refund/', data=json.dumps({'lines': lines}),
+                                content_type='application/json')
+
+    def _all_refunded(self):
+        return sum((r.effective_cash_refund for r in Return.objects.all()),
+                   Decimal('0'))
+
+    def test_partial_return_gets_item_price(self):
+        _, s1, _ = self._discounted_check()
+        r = self._refund([{'sale_id': s1.pk, 'qty': 1, 'reason': 'x'}])
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['refunded_total'], 12000.0,
+                         'qisman qaytarish = dona narxi (12 000), chegirма tegmaydi')
+
+    def test_full_return_one_batch_caps_at_paid(self):
+        _, s1, s2 = self._discounted_check()
+        r = self._refund([{'sale_id': s1.pk, 'qty': 1, 'reason': 'x'},
+                          {'sale_id': s2.pk, 'qty': 1, 'reason': 'x'}])
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['refunded_total'], 20000.0,
+                         'butun chek = to\'langan summа (20 000), 21 000 emas')
+        self.assertEqual(self._all_refunded(), Decimal('20000'))
+
+    def test_split_partial_then_completing_totals_paid(self):
+        txn, s1, s2 = self._discounted_check()
+        self._refund([{'sale_id': s1.pk, 'qty': 1, 'reason': 'x'}])   # 12 000
+        self._refund([{'sale_id': s2.pk, 'qty': 1, 'reason': 'x'}])   # min(9000, 8000)=8000
+        self.assertEqual(self._all_refunded(), Decimal('20000'),
+                         'ikki bosqichда ham jami = chek to\'lovi')
+        self.assertEqual(Decimal(str(txn.total)), Decimal('20000'))
+
+    def test_refund_cash_is_stored_not_recomputed(self):
+        """refund_cash SAQLANADI — snapshot; keyin qayta hisoblanmaydi."""
+        _, s1, s2 = self._discounted_check()
+        self._refund([{'sale_id': s1.pk, 'qty': 1, 'reason': 'x'},
+                      {'sale_id': s2.pk, 'qty': 1, 'reason': 'x'}])
+        for r in Return.objects.all():
+            self.assertIsNotNone(r.refund_cash, 'har qaytarishда refund_cash yozilishi kerak')
+
+    def test_no_discount_check_refunds_item_price(self):
+        shift = self.open_shift()
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=shift,
+            payment_method='cash')   # chegirмasiz
+        s = Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=2, sale_price=Decimal('10000'),
+            cost_at_sale=Decimal('6000'), sold_by=self.cashier)
+        r = self._refund([{'sale_id': s.pk, 'qty': 2, 'reason': 'x'}])
+        self.assertEqual(r.json()['refunded_total'], 20000.0,
+                         'chegirмasiz chek — dona narxi (o\'zgarishsiz)')

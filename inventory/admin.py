@@ -182,7 +182,7 @@ class SaleTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(Return)
 class ReturnAdmin(admin.ModelAdmin):
-    list_display = ('refunded_at', 'sale', 'quantity', 'refund_amount', 'refunded_by')
+    list_display = ('refunded_at', 'sale', 'quantity', 'effective_cash_refund', 'refunded_by')
     list_filter = ('refunded_at',)
     search_fields = ('sale__variant__product__code', 'reason')
 
