@@ -11,6 +11,7 @@ The defaults are dev-friendly so `runserver` works with no env set up.
 """
 from pathlib import Path
 import os
+import sys
 
 import dj_database_url
 
@@ -67,6 +68,10 @@ if _render_host:
 # webhook HAR QANDAY chaqiruvni RAD etadi (hech qanday to'lov 'paid' bo'lmaydi).
 # Real provider ulanganda kalitni env'ga qo'yib, provider imzosini tekshiring.
 PAYMENTS_WEBHOOK_SECRET = os.environ.get('PAYMENTS_WEBHOOK_SECRET', '')
+
+# Test ishga tushirilганда (manage.py test) tashqi bildirishnomalar (Telegram)
+# YUBORILMAYDI — aks holда testdagi soxta sotuvlar haqiqiy kanalни spam qilardi.
+TESTING = ('test' in sys.argv) or ('pytest' in sys.modules)
 
 # ---------- Telegram (optional) ----------
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')

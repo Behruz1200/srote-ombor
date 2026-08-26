@@ -51,6 +51,9 @@ def _chat_ids():
 
 def send_telegram(text, chat_id=None, parse_mode='HTML'):
     """Send a message. If chat_id is None, broadcast to all TELEGRAM_CHAT_IDS."""
+    # Test paytida hech narsa yuborilmaydi (soxta sotuvlar kanalни spam qilmasin).
+    if getattr(settings, 'TESTING', False):
+        return False
     token = getattr(settings, 'TELEGRAM_BOT_TOKEN', None)
     if not token:
         return False
@@ -86,6 +89,8 @@ def send_document(file_path, caption='', chat_id=None):
     """
     import os
     import uuid
+    if getattr(settings, 'TESTING', False):
+        return False
     token = getattr(settings, 'TELEGRAM_BOT_TOKEN', None)
     if not token:
         return False
