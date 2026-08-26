@@ -154,6 +154,12 @@ class SaleInline(admin.TabularInline):
     model = Sale
     extra = 0
     readonly_fields = ('variant', 'quantity', 'sale_price', 'cost_at_sale')
+    # SEC-16: chek qatorini admin'дан qo'shib/o'chirib bo'lmaydi — bu daromad
+    # yozuvi, o'chirilса ombor QAYTMAY hisob buziladi. Faqat ko'rish.
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SaleTransaction)
@@ -278,3 +284,16 @@ class SaleAdmin(admin.ModelAdmin):
     list_display = ('variant', 'branch', 'quantity', 'sale_price', 'sold_by', 'sold_at')
     list_filter = ('branch', 'sold_at')
     search_fields = ('variant__product__code',)
+    readonly_fields = ('variant', 'branch', 'quantity', 'sale_price',
+                       'cost_at_sale', 'sold_by', 'sold_at', 'transaction')
+
+    # SEC-16: Sale — daromad qatori. Admin'да qo'shib/tahrirlab/o'chirib
+    # bo'lmaydi (POS orqali yaratiladi). O'chirilса ombor qaytmay hisob buziladi.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

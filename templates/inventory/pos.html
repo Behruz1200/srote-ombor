@@ -1572,7 +1572,9 @@ function setStatus(msg, type) {
               : type === 'success' ? 'alert-success'
               : 'alert-info';
     searchStatus.className = `alert ${cls} py-2 mb-0 mt-2 fw-bold`;
-    searchStatus.innerHTML = msg;
+    // SEC-11: barcha chaqiruvchilar sof matn (mahsulot nomi, qidiruv so'zi q,
+    // filial nomi) uzatadi — HTML emas. textContent bilan XSS butunlay yopiladi.
+    searchStatus.textContent = msg;
     if (type === 'error') beepError();
     else if (type === 'success') beepOk();
 }
@@ -1612,7 +1614,7 @@ async function search(q) {
                     const b = document.createElement('button');
                     b.type = 'button';
                     b.className = 'btn btn-primary';
-                    b.innerHTML = `<code class="bg-light text-dark px-1">${s.code}</code> ${s.name}`;
+                    b.innerHTML = `<code class="bg-light text-dark px-1">${esc(s.code)}</code> ${esc(s.name)}`;
                     b.addEventListener('click', () => {
                         scanInput.value = s.code;
                         search(s.code);
@@ -1666,7 +1668,7 @@ async function search(q) {
                 const b = document.createElement('button');
                 b.type = 'button';
                 b.className = 'btn btn-success btn-sm';
-                b.innerHTML = `${v.size} / ${v.color} <span class="badge bg-light text-dark">${v.stock_count}</span>`;
+                b.innerHTML = `${esc(v.size)} / ${esc(v.color)} <span class="badge bg-light text-dark">${esc(v.stock_count)}</span>`;
                 b.addEventListener('click', () => {
                     addToCart(product, v);
                     setStatus(`✓ Qo'shildi: ${product.name} ${v.size}/${v.color}`, 'success');
@@ -1899,8 +1901,8 @@ function renderAppliedPromos() {
     appliedPromosEl.style.display = '';
     appliedPromosListEl.innerHTML = appliedPromos.map(p => `
         <div class="small d-flex justify-content-between">
-            <span><i class="bi bi-tag-fill text-success"></i> ${p.name}
-                <span class="text-muted">(${p.detail})</span></span>
+            <span><i class="bi bi-tag-fill text-success"></i> ${esc(p.name)}
+                <span class="text-muted">(${esc(p.detail)})</span></span>
             <span class="text-success fw-bold">−${fmt(p.discount)}</span>
         </div>
     `).join('');
@@ -2622,6 +2624,13 @@ checkoutBtn.addEventListener('click', async () => {
         renderCart();
         document.getElementById('customerName').value = '';
         document.getElementById('customerPhone').value = '';
+        // FE-7: chegirma va aralash-to'lov maydonlarini ham tozalaymiz. Popup
+        // bloklanган holда reload bo'lmaydi — aks holда eski chegirma % va
+        // aralash summalar KEYINGI sotuvга o'tib ketardi.
+        discountPct = 0;
+        clearMixedInputs();
+        orderDiscountInput.value = '';
+        discountReasonInput.value = '';
         scanInput.value = '';
         setStatus('', '');
         hideExtras();
@@ -2838,14 +2847,14 @@ const QS_DATA = (function () {
 
         const head = document.createElement('div');
         head.className = 'small text-muted mb-2';
-        head.innerHTML = name + ' — narxni tanlang:' +
-            (info.code ? ' <code>' + info.code + '</code>' : '');
+        head.innerHTML = esc(name) + ' — narxni tanlang:' +
+            (info.code ? ' <code>' + esc(info.code) + '</code>' : '');
         qsPricesEl.appendChild(head);
 
         if (!list.length) {
             const warn = document.createElement('div');
             warn.className = 'alert alert-warning py-2 mb-0 small';
-            warn.innerHTML = '<i class="bi bi-info-circle"></i> ' + name +
+            warn.innerHTML = '<i class="bi bi-info-circle"></i> ' + esc(name) +
                 ' uchun narxlar hali qo\'shilmagan — <strong>Boshqa summa</strong> ' +
                 'tugmasi bilan qo\'lda kiriting.';
             qsPricesEl.appendChild(warn);
@@ -3141,8 +3150,8 @@ document.addEventListener('click', (e) => {
                 const b = document.createElement('button');
                 b.type = 'button';
                 b.className = 'btn btn-sm btn-outline-success';
-                b.innerHTML = `${(v.size || '')}/${(v.color || '')} · ${fmt(v.sale_price)} ` +
-                              `<span class="badge bg-light text-dark">${v.stock_count}</span>`;
+                b.innerHTML = `${esc(v.size || '')}/${esc(v.color || '')} · ${fmt(v.sale_price)} ` +
+                              `<span class="badge bg-light text-dark">${esc(v.stock_count)}</span>`;
                 b.addEventListener('click', () => exAddVariant(v, d.product.name));
                 exPicker.appendChild(b);
             });

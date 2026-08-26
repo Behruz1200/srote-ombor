@@ -160,6 +160,9 @@ class User(AbstractUser):
     totp_secret = models.CharField(max_length=64, blank=True, editable=False)
     totp_confirmed = models.BooleanField(default=False)
     recovery_codes = models.JSONField(default=list, blank=True, editable=False)
+    # AUTH-3: oxirgi qabul qilingan TOTP vaqt-qadami — bir kod ikki marta
+    # ishlatilmasin (replay). Ushlangan kod 90 soniya amal qilardi.
+    last_totp_step = models.BigIntegerField(null=True, blank=True, editable=False)
 
     def is_admin(self):
         return self.role == self.Role.ADMIN or self.is_superuser
@@ -820,6 +823,9 @@ class TransferLine(models.Model):
     class Meta:
         verbose_name = 'Ko\'chirish qatori'
         verbose_name_plural = "Ko'chirish qatorlari"
+
+    def __str__(self):
+        return f'TransferLine #{self.pk}: {self.variant_id} × {self.quantity}'
 
 
 class StockWriteOff(models.Model):

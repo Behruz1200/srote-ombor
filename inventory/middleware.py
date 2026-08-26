@@ -18,9 +18,13 @@ def get_current_ip():
 
 
 def _client_ip(request):
-    xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if xff:
-        return xff.split(',')[0].strip()
+    # AUTH-5: X-Forwarded-For'ning BIRINCHI elementiga ishonmaymiz — uni
+    # mijoz o'zi soxta qo'yib, lockout budjetini yangilab olardi. Nginx
+    # X-Real-IP'ni $remote_addr (haqiqiy mijoz) ga QAT'IY o'rnatadi va uni
+    # mijoz XFF orqali almashtira olmaydi. Shu bois X-Real-IP hukmron.
+    real = request.META.get('HTTP_X_REAL_IP', '').strip()
+    if real:
+        return real
     return request.META.get('REMOTE_ADDR')
 
 

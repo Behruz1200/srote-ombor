@@ -195,10 +195,12 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect('home')
 
-    # S5: rate limit — max 5 failed attempts per IP in 5 minutes
+    # S5: rate limit — max 5 failed attempts per IP in 5 minutes.
+    # AUTH-5: IP'ni _client_ip orqali (X-Real-IP) olamiz — XFF birinchi
+    # elementi soxta qo'yilib budjet yangilanmasin.
     from django.core.cache import cache
-    ip = (request.META.get('HTTP_X_FORWARDED_FOR') or
-          request.META.get('REMOTE_ADDR') or '0.0.0.0').split(',')[0].strip()
+    from .middleware import _client_ip
+    ip = _client_ip(request) or '0.0.0.0'
     fail_key = f'login_fail:{ip}'
     fail_count = cache.get(fail_key) or 0
     if fail_count >= 5:
@@ -210,11 +212,14 @@ def login_view(request):
     if request.method == 'POST':
         form = LoginForm(request, data=request.POST)
         if form.is_valid():
-            cache.delete(fail_key)  # reset counter on success
             _u = form.get_user()
             if _u.totp_confirmed and _u.totp_secret:
+                # AUTH-2: parol to'g'ri, lekin 2FA hali qolgan — hisoblagichni
+                # TOZALAMAYMIZ. Aks holda parolni bilган hujumchi cheksiz TOTP
+                # taxmin qilardi. Faqat ikkala bosqich o'tганda tozalanadi.
                 request.session['2fa_pending_user'] = _u.id
                 return redirect('login_2fa')
+            cache.delete(fail_key)  # 2FA yo'q — muvaffaqiyat, hisoblagich tozalanadi
             login(request, _u)
             messages.success(request, f'Xush kelibsiz, {_u.username}!')
             return redirect('home')
@@ -238,7 +243,9 @@ def logout_view(request):
 @never_cache
 def login_2fa(request):
     """Second step: verify a TOTP or recovery code after a valid password."""
-    from .twofa import verify_totp, use_recovery_code
+    from .twofa import verify_totp_step, use_recovery_code
+    from django.core.cache import cache
+    from .middleware import _client_ip
     uid = request.session.get('2fa_pending_user')
     if not uid:
         return redirect('login')
@@ -246,13 +253,34 @@ def login_2fa(request):
     if not user:
         request.session.pop('2fa_pending_user', None)
         return redirect('login')
+
+    # AUTH-2: TOTP bosqichi parol bosqichi bilan BIR xil kalitда cheklanadi.
+    # Parolni bilган hujumchi ham 5 tadan ko'p taxmin qila olmaydi.
+    ip = _client_ip(request) or '0.0.0.0'
+    fail_key = f'login_fail:{ip}'
+    fail_count = cache.get(fail_key) or 0
+    if fail_count >= 5:
+        messages.error(request,
+            "Juda ko'p urinish. 5 daqiqa kutib qayta urinib ko'ring.")
+        return render(request, 'inventory/login_2fa.html', {'rate_limited': True})
+
     if request.method == 'POST':
         code = request.POST.get('code', '')
-        if verify_totp(user.totp_secret, code) or use_recovery_code(user, code):
+        # AUTH-3: mos vaqt-qadamни olamiz; oxirgi qabul qilinganдан katta
+        # bo'lса qabul, aks holда replay — rad. Recovery kodlar bir martalik.
+        step = verify_totp_step(user.totp_secret, code)
+        totp_ok = (step is not None
+                   and (user.last_totp_step is None or step > user.last_totp_step))
+        if totp_ok or use_recovery_code(user, code):
+            if totp_ok:
+                user.last_totp_step = step
+                user.save(update_fields=['last_totp_step'])
+            cache.delete(fail_key)  # ikkala bosqich o'tди — hisoblagич tozalanadi
             request.session.pop('2fa_pending_user', None)
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, f'Xush kelibsiz, {user.username}!')
             return redirect('home')
+        cache.set(fail_key, fail_count + 1, timeout=300)
         messages.error(request, "Kod noto'g'ri.")
     return render(request, 'inventory/login_2fa.html', {})
 
@@ -266,9 +294,16 @@ def security_2fa(request):
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'disable':
+            # AUTH-4: 2FA'ni o'chirish uchun joriy parol shart. Aks holда
+            # o'g'irlangan sessiya himoyani parolsiz olib tashlardi.
+            if not user.check_password(request.POST.get('password', '')):
+                messages.error(request,
+                    "Parol noto'g'ri — 2FA o'chirilmadi.")
+                return redirect('security_2fa')
             user.totp_secret = ''
             user.totp_confirmed = False
             user.recovery_codes = []
+            user.last_totp_step = None
             user.save()
             messages.success(request, "Ikki bosqichli himoya o'chirildi.")
             return redirect('security_2fa')
@@ -1559,8 +1594,10 @@ def product_merge(request):
             return redirect('product_list')
         sources = [p for p in products if p.pk != target.pk]
 
+        from django.db.models import ProtectedError
         moved_variants = 0
-        with transaction.atomic():
+        try:
+          with transaction.atomic():
             for src in sources:
                 src_variants = list(src.variants.all())
                 single = len(src_variants) == 1
@@ -1589,6 +1626,9 @@ def product_merge(request):
                         Intake.objects.filter(variant=v).update(variant=tv)
                         TransferLine.objects.filter(variant=v).update(variant=tv)
                         StocktakeCount.objects.filter(variant=v).update(variant=tv)
+                        # R5: StockWriteOff.variant PROTECT — qayta bog'lamasak
+                        # v.delete() ProtectedError berib butun birlashuv buzilardi.
+                        StockWriteOff.objects.filter(variant=v).update(variant=tv)
                         if v.barcode and not tv.barcode:
                             bc = v.barcode
                             v.barcode = None
@@ -1623,6 +1663,13 @@ def product_merge(request):
                 object_repr=(f"Birlashtirildi -> {target.code}: "
                              + ', '.join(x.code for x in sources))[:300],
             )
+        except ProtectedError:
+            # R5: kutilmagan PROTECT bog'lanish (masalan onlayn buyurtma qatori)
+            # — butun birlashuv orqaga qaytadi, ma'lumot buzilmaydi.
+            messages.error(request,
+                "Birlashtirib bo'lmadi: bu turlarga bog'liq himoyalangan "
+                "yozuvlar bor. Avval ularni ko'rib chiqing.")
+            return redirect('product_list')
         messages.success(
             request,
             f"{len(sources)} ta mahsulot '{target.name}' ({target.code}) ga "
@@ -3073,8 +3120,9 @@ def intake_import_template(request):
         c.fill = head_fill
     for v in (ProductVariant.objects.select_related('product')
               .order_by('product__name', 'size', 'color')[:2000]):
-        ws2.append([v.product.name, v.color, v.size, v.barcode or
-                    v.product.external_barcode or ''])
+        ws2.append([_csv_safe(x) for x in   # SEC-20
+                    (v.product.name, v.color, v.size, v.barcode or
+                     v.product.external_barcode or '')])
     for i, w in enumerate([34, 26, 12, 18], 1):
         ws2.column_dimensions[get_column_letter(i)].width = w
 
@@ -3424,6 +3472,22 @@ def _csv_safe(v):
     if isinstance(v, str) and v and v[0] in ('=', '+', '-', '@', '\t', '\r'):
         return "'" + v
     return v
+
+
+_MAX_IMG_BYTES = 20 * 1024 * 1024  # SEC-21: yuklanadigan rasm uchun 20 MB shift
+
+
+def _oversize_image(files):
+    """SEC-21: ro'yxatdagi biror rasm 20 MB'dan katta bo'lsa nomini qaytaradi.
+
+    Ko'p-varaqli yuklashда (getlist) har bir faylни tekshiradi — aks holда
+    ulkan fayl xotira/diskни to'ldirib DoS qilardi (dekompressiya bombасидан
+    tashqari, oddiy hajm ham).
+    """
+    for f in (files or []):
+        if getattr(f, 'size', 0) and f.size > _MAX_IMG_BYTES:
+            return getattr(f, 'name', 'rasm')
+    return None
 
 
 def _clean_text(s, max_len=None):
@@ -4105,6 +4169,11 @@ def intake_photo_draft(request):
     draft.save()
     # Yangi yuborilgan sahifalarni qo'shamiz (eskilari saqlanib qoladi).
     files = request.FILES.getlist('image')
+    _big = _oversize_image(files)   # SEC-21
+    if _big:
+        return JsonResponse({'ok': False,
+                             'error': f"Rasm juda katta ({_big}) — 20 MB dan kichik bo'lsin."},
+                            status=400)
     if files:
         start = draft.pages.count()
         for i, f in enumerate(files, start=1):
@@ -4328,6 +4397,14 @@ def intake_photo_save(request):
                     if supplier_text else None)
     agent_name = (payload.get('agent') or '').strip()[:120]
     agent_phone = (payload.get('agent_phone') or '').strip()[:40]
+
+    # SEC-21: rasm hajmini atomik blokdan OLDIN tekshiramiz — aks holда
+    # blok ichida return commit qilib, ulkan fayl bilan sessiya saqlanardi.
+    _big = _oversize_image(request.FILES.getlist('image'))
+    if _big:
+        return JsonResponse({'ok': False,
+                             'error': f"Rasm juda katta ({_big}) — 20 MB dan kichik bo'lsin."},
+                            status=400)
 
     with transaction.atomic():
         session = IntakeSession.objects.create(
@@ -4794,12 +4871,28 @@ def transfer_receive(request, pk):
     if request.method == 'POST':
         with transaction.atomic():
             for line in t.lines.all():
-                stock, _ = BranchStock.objects.get_or_create(
-                    variant=line.variant, branch=t.to_branch,
-                    defaults={'cost_price': 0, 'sale_price': 0},
-                )
-                stock.stock_count = F('stock_count') + line.quantity
-                stock.save()
+                # R8: ko'chirilayotgan tovarning TANNARXI yo'qolmasin. Manba
+                # filialdagi tannarxni olib, qabul qiluvchi filial zaxirasiga
+                # o'rtacha-tortilgan (STK-8) qo'shamiz. Ilgari yangi qator
+                # cost_price=0 bilan yaratilib, tovar "tekin" ko'rinar edi.
+                src = (BranchStock.objects.filter(
+                    variant=line.variant, branch=t.from_branch).first())
+                src_cost = src.cost_price if src else 0
+                dst = (BranchStock.objects.select_for_update().filter(
+                    variant=line.variant, branch=t.to_branch).first())
+                if dst is None:
+                    BranchStock.objects.create(
+                        variant=line.variant, branch=t.to_branch,
+                        stock_count=line.quantity,
+                        cost_price=src_cost,
+                        sale_price=(src.sale_price if src else 0),
+                    )
+                else:
+                    dst.cost_price = weighted_cost(   # STK-8
+                        dst.stock_count, dst.cost_price,
+                        line.quantity, src_cost)
+                    dst.stock_count = F('stock_count') + line.quantity
+                    dst.save(update_fields=['stock_count', 'cost_price'])
             t.status = Transfer.Status.RECEIVED
             t.received_by = request.user
             t.received_at = timezone.now()
@@ -5149,6 +5242,10 @@ def shift_receipt(request, pk):
                 for k in (PM.CASH, PM.CARD, PM.TRANSFER)]
 
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
+    # R7: kassaga qo'shilган naqd (cash_in) ham Z-hisobotда ko'rinsin — u
+    # kutilган naqdни oshiradi; ko'rsatilmasa reconciliation shaffof bo'lmaydi.
+    cash_ins = list(shift.cash_ins.select_related('created_by').order_by('created_at'))
+    cash_ins_total = shift.cash_ins_total()
 
     refunds = list(Return.objects.filter(shift=shift)
                    .select_related('sale__variant__product', 'refunded_by')
@@ -5167,6 +5264,8 @@ def shift_receipt(request, pk):
         'debt_payments': shift.debt_payments_total(),
         'payouts': payouts,
         'payouts_total': shift.payouts_total(),
+        'cash_ins': cash_ins,
+        'cash_ins_total': cash_ins_total,
         'expected': shift.expected_cash(),
         'variance_value': shift.variance(),
         'refunds': refunds,
@@ -5175,6 +5274,11 @@ def shift_receipt(request, pk):
         'net_sales': total_rev - refund_total,
         'printed_at': timezone.now(),
     })
+
+
+# MON-17: bitta kassa harakati uchun aqlли yuqori chegara (1 milliard so'm).
+# Bundan katta summa — deyarli har doim kiritishда xato yoki suiiste'mol.
+_MAX_CASH_MOVE = 1_000_000_000
 
 
 @login_required
@@ -5215,12 +5319,15 @@ def cash_payout(request):
     if not shift:
         return _fail("Ochiq smen yo'q — avval smen oching.", 400)
 
+    # R6: 'inf'/'1e400' kabi qiymat round()да OverflowError berardi — ushlaymiz.
     try:
         amount = round(float(data.get('amount') or 0))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         amount = 0
     if amount <= 0:
         return _fail("Summa 0 dan katta bo'lishi kerak.", 400)
+    if amount > _MAX_CASH_MOVE:   # MON-17
+        return _fail("Summa juda katta — tekshirib qayta kiriting.", 400)
 
     category = (data.get('category') or 'other').strip()
     if category not in CashPayout.VALID_CATEGORIES:
@@ -5308,12 +5415,15 @@ def cash_in(request):
     if not shift:
         return _fail("Ochiq smen yo'q — avval smen oching.", 400)
 
+    # R6: OverflowError'ни ham ushlaymiz (inf/1e400).
     try:
         amount = round(float(data.get('amount') or 0))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         amount = 0
     if amount <= 0:
         return _fail("Summa 0 dan katta bo'lishi kerak.", 400)
+    if amount > _MAX_CASH_MOVE:   # MON-17
+        return _fail("Summa juda katta — tekshirib qayta kiriting.", 400)
 
     category = (data.get('category') or 'other').strip()
     if category not in CashIn.VALID_CATEGORIES:
@@ -5324,6 +5434,33 @@ def cash_in(request):
         shift=shift, branch=branch, amount=amount,
         category=category, note=note, created_by=request.user,
     )
+
+    # MON-4/17: kassaga naqd qo'shishни ham AUDIT LOGGA yozamiz + katta summада
+    # ogohlantirish (chiqim bilan bir xil nazorat — aks holда qo'shimchalar
+    # hech qayerда qayd etilmай, kutilган naqdни shishirar edi).
+    try:
+        AuditLog.objects.create(
+            user=request.user, username_snapshot=request.user.username,
+            action=AuditLog.Action.CREATE, model_name='CashIn',
+            object_id=str(ci.id),
+            object_repr=(f"Kassaga qo'shildi {int(amount)} so'm — "
+                         f"{ci.get_category_display()} ({branch.name})")[:300],
+            changes={'amount': float(amount), 'category': category,
+                     'note': note, 'shift_id': shift.id},
+        )
+        _threshold = getattr(settings, 'CASH_PAYOUT_ALERT_SOM', 500000)
+        if amount >= _threshold:
+            try:
+                from .notifications import send_telegram
+                send_telegram(
+                    f"💰 <b>Katta kassa qo'shimchasi</b>\n"
+                    f"Filial: {branch.name} · Kassir: {request.user.username}\n"
+                    f"Summa: <b>{int(amount)}</b> so'm — {ci.get_category_display()}\n"
+                    f"Izoh: {note or '—'} · Smen #{shift.id}")
+            except Exception:
+                logger.exception('cash-in telegram alert failed')
+    except Exception:
+        logger.exception('cash-in audit failed (cash_in %s)', ci.id)
 
     if wants_json:
         return JsonResponse({
@@ -5955,21 +6092,14 @@ def pos_checkout(request):
                 'error': "Narx juda katta. Iltimos, to'g'ri narx kiriting."}, status=400)
         parsed_lines.append({'sid': sid, 'qty': qty, 'price': price, 'ld': line_discount})
 
-    # STK-16: bir xil stock_id li qatorlarni BIRLASHTIRAMIZ. Aks holda ikki
-    # qator to'liq qoldiqqa alohida tekshiriladi (ikkalasi ham o'tadi), keyin
-    # F() ikki marta ayiradi — do'stona "omborda faqat N ta" xabari o'rniga
-    # ombor manfiyга tushib, IntegrityError (500) chiqardi.
-    if len({l['sid'] for l in parsed_lines}) != len(parsed_lines):
-        _merged = {}
-        for _l in parsed_lines:
-            m = _merged.get(_l['sid'])
-            if m is None:
-                _merged[_l['sid']] = dict(_l)
-            else:
-                m['qty'] += _l['qty']
-                m['ld'] += _l['ld']
-                m['price'] = _l['price']  # oxirgi narx
-        parsed_lines = list(_merged.values())
+    # STK-16 / R1: bir xil stock_id li qatorlarni BIRLASHTIRMAYMIZ (ochiq
+    # narxli tovarlar bitta stock_id ostida, ammo HAR XIL qo'lда kiritilgan
+    # narxда bo'ladi — birlashtirish oxirgi narxда IKKALASINI yozib, kam pul
+    # olardi). Buning o'rniga QOLDIQ tekshiruvini stock_id bo'yicha JAMLAB
+    # bajaramiz (quyida), narx esa har qatorда o'ziniki bo'lib qoladi.
+    _qty_by_sid = {}
+    for _l in parsed_lines:
+        _qty_by_sid[_l['sid']] = _qty_by_sid.get(_l['sid'], 0) + _l['qty']
 
     # MON-18: chegirma savat summasidan OSHMASLIGI kerak. Ilgari chegirma faqat
     # MAX_MONEY ga tekshirilardi — 1 000 000 chegirma 1 000 so'mlik sotuvга
@@ -6009,8 +6139,12 @@ def pos_checkout(request):
     # vaqti bo'yicha emas (aks holda ertalabki savdo kechki smenга tushardi).
     target_sold_at = None
     target_shift = open_shift
+    # R4: client_ts'ga FAQAT offline replayда ishonamiz. Oddiy onlayn sotuvда
+    # pos.html client_ts yuborса ham, sotuv vaqti = SERVER vaqti bo'lsin (qurilma
+    # soati adashса ertalabki savdo kechki smenга tushib ketmasin). Backdating
+    # faqat haqiqiy navbat-replay uchun.
     _client_ts = (data.get('client_ts') or '').strip()
-    if _client_ts:
+    if _client_ts and data.get('is_offline_replay'):
         from django.utils.dateparse import parse_datetime
         _dt = parse_datetime(_client_ts)
         if _dt is not None:
@@ -6020,15 +6154,38 @@ def pos_checkout(request):
             # kelajak yoki >7 kun eski vaqt — qurilma soati xato, e'tiborsiz
             if _now - timedelta(days=7) <= _dt <= _now + timedelta(minutes=5):
                 target_sold_at = _dt
-                # Offline replay bo'lsa — o'sha payt ochiq bo'lgan smenni topamiz
-                # (hozir yopilgan bo'lsa ham). ARCH-5 tufayli FK bo'yicha o'sha
-                # smen hisobotiga to'g'ri tushadi.
-                if data.get('is_offline_replay'):
-                    _hist = (Shift.objects.filter(branch=branch, opened_at__lte=_dt)
-                             .filter(Q(closed_at__isnull=True) | Q(closed_at__gte=_dt))
-                             .order_by('-opened_at').first())
-                    if _hist:
-                        target_shift = _hist
+                # O'sha payt ochiq bo'lgan smenni topamiz (hozir yopilgan bo'lsa
+                # ham). ARCH-5 tufayli FK bo'yicha o'sha smen hisobotiga tushadi.
+                _hist = (Shift.objects.filter(branch=branch, opened_at__lte=_dt)
+                         .filter(Q(closed_at__isnull=True) | Q(closed_at__gte=_dt))
+                         .order_by('-opened_at').first())
+                if _hist:
+                    target_shift = _hist
+                    # R3: agar bu smen ALLAQACHON yopilган bo'lса, uning
+                    # closing_expected_cash'i (MON-22) QOTIRILган — kech kelган
+                    # bu sotuv o'sha raqamга kirmaydi. Jimgina buzмaslik uchun
+                    # egaга ko'rinadigan qilib belgilaymiz (audit + xabar).
+                    if _hist.closed_at is not None:
+                        try:
+                            AuditLog.objects.create(
+                                user=request.user,
+                                username_snapshot=request.user.username,
+                                action=AuditLog.Action.CREATE,
+                                model_name='SaleTransaction',
+                                object_id='',
+                                object_repr=(f"Kech offline sotuv YOPILGAN smen #{_hist.id} "
+                                             f"ga tushdi ({branch.name}, {_dt:%Y-%m-%d %H:%M}) "
+                                             f"— yopilish naqd hisobiga kirmaydi")[:300],
+                                changes={'shift_id': _hist.id, 'client_ts': _client_ts},
+                            )
+                            from .notifications import send_telegram
+                            send_telegram(
+                                f"⚠️ <b>Kech offline sotuv</b>\n"
+                                f"Filial: {branch.name} · Smen #{_hist.id} allaqachon yopilgan.\n"
+                                f"Sotuv vaqti: {_dt:%Y-%m-%d %H:%M}. Yopilish naqd hisobiga "
+                                f"kirmaydi — Z-hisobotни tekshiring.")
+                        except Exception:
+                            logger.exception('late-replay flag failed (shift %s)', _hist.id)
 
     # MON-9: smensiz sotuv YO'Q. Aks holda shift=None bilan yozilib, hech qaysi
     # Z-hisobotга tushmaydi — kassa "ortiq" chiqadi. (Offline replay o'zining
@@ -6087,10 +6244,17 @@ def pos_checkout(request):
         if _order_total < 0:
             _order_total = Decimal('0')
         _paid = sum((Decimal(str(e['amount'])) for e in clean_breakdown), Decimal('0'))
-        if _paid < _order_total - Decimal('0.5'):
-            return JsonResponse({'ok': False,
-                'error': f"Aralash to'lov yetishmaydi: {int(_order_total - _paid)} so'm kam."},
-                status=400)
+        # MON-16: IKKI TOMONLAMA tekshiruv. Ilgari faqat KAM to'lov rad etilardi;
+        # ORTIQ to'lov ham xuddi shu nolinchi-farq ekspluatatsiyasига olib
+        # kelardi (split_breakdown qoldiqni oxirgi usulga tashlab, kutilgan
+        # naqdни shishiradi). Aralashда summa chekка AYNAN teng bo'lishi kerak
+        # (ortiqcha naqd = qaytim, u alohida maydon — to'lov legi emas).
+        if abs(_paid - _order_total) > Decimal('0.5'):
+            _diff = _order_total - _paid
+            _msg = (f"Aralash to'lov yetishmaydi: {int(_diff)} so'm kam."
+                    if _diff > 0 else
+                    f"Aralash to'lov ortiqcha: {int(-_diff)} so'm. Summa chekка teng bo'lsin.")
+            return JsonResponse({'ok': False, 'error': _msg}, status=400)
 
     class _CheckoutAbort(Exception):
         def __init__(self, payload, status=400):
@@ -6116,12 +6280,15 @@ def pos_checkout(request):
             # Re-validate quantities against the FRESHLY locked stock_count.
             # No concurrent checkout can change it between this check and the
             # F() deduction below — they queue on the row lock instead.
-            for ln in parsed_lines:
-                stock = locked[ln['sid']]
+            for _sid in sids:
+                stock = locked[_sid]
+                # R1/STK-16: shu stock_id bo'yicha JAMI soni (bir nechta qator
+                # bir tovarga tegishli bo'lса) qoldiqдан oshmasin.
+                _need = _qty_by_sid.get(_sid, 0)
                 if (not stock.variant.product.is_open_price
-                        and ln['qty'] > stock.stock_count):
+                        and _need > stock.stock_count):
                     err = (f"{stock.variant.product.code} {stock.variant.size}/{stock.variant.color}: "
-                           f"omborda faqat {stock.stock_count} ta bor, soʻrov {ln['qty']}")
+                           f"omborda faqat {stock.stock_count} ta bor, soʻrov {_need}")
                     # C2: if this is an offline-queue replay, alert admin via Telegram
                     # and log to AuditLog — kassir's offline sale was rejected at sync time.
                     if data.get('is_offline_replay'):
@@ -6896,7 +7063,9 @@ def pos_refund(request):
                         'error': f"{p['code']}: faqat {remaining} dona qaytarish mumkin"})
                 stock = (BranchStock.objects.select_for_update()
                          .filter(variant=sale.variant, branch=sale.branch).first())
-                if stock:
+                # R2: ochiq narxli tovar sotuvда zaxira KAMAYTIRILMAGAN — shuning
+                # uchun qaytarishда ham tiklamaymiz (aks holda yo'qdan zaxira).
+                if stock and not sale.variant.product.is_open_price:
                     stock.stock_count = F('stock_count') + p['qty']
                     stock.save(update_fields=['stock_count'])
                 ret = Return.objects.create(
@@ -7073,7 +7242,8 @@ def pos_exchange(request):
             for sale, qty in ret_ctx:
                 stock = BranchStock.objects.filter(
                     variant=sale.variant, branch=sale.branch).first()
-                if stock:
+                # R2: ochiq narxli tovar zaxira yuritmaydi — tiklamaymiz.
+                if stock and not sale.variant.product.is_open_price:
                     stock.stock_count = F('stock_count') + qty
                     stock.save()
                 this_cb = cb_left if cb_left > 0 else Decimal('0')
@@ -8427,7 +8597,8 @@ def return_create(request, sale_id):
             stock = BranchStock.objects.filter(
                 variant=sale.variant, branch=sale.branch
             ).first()
-            if stock:
+            # R2: ochiq narxli tovar zaxira yuritmaydi — tiklamaymiz.
+            if stock and not sale.variant.product.is_open_price:
                 stock.stock_count = F('stock_count') + qty
                 stock.save()
             Return.objects.create(
@@ -9550,56 +9721,63 @@ def _insights_csv(ctx):
     w.writerow([f"TOP-10 MAHSULOT (DAROMAD BO'YICHA)"])
     w.writerow(['Kod', 'Mahsulot', 'Dona', 'Sotuvlar', "Daromad (so'm)"])
     for p in ctx['top_products']:
-        w.writerow([p['variant__product__code'], p['variant__product__name'],
-                    p['qty'], p['n_sales'], p['revenue']])
+        w.writerow([_csv_safe(c) for c in [   # SEC-20
+                    p['variant__product__code'], p['variant__product__name'],
+                    p['qty'], p['n_sales'], p['revenue']]])
     w.writerow([])
 
     w.writerow([f"TOP-10 MAHSULOT (SOF FOYDA BO'YICHA)"])
     w.writerow(['Kod', 'Mahsulot', 'Dona', "Daromad", "Tannarx", "Foyda", 'Marja %'])
     for p in ctx['top_profit']:
-        w.writerow([p['code'], p['name'], p['qty'], p['revenue'],
-                    p['cost'], p['profit'], f"{p['margin']:.1f}"])
+        w.writerow([_csv_safe(c) for c in [   # SEC-20
+                    p['code'], p['name'], p['qty'], p['revenue'],
+                    p['cost'], p['profit'], f"{p['margin']:.1f}"]])
     w.writerow([])
 
     w.writerow(["SOTILMAYOTGAN MAHSULOTLAR"])
     w.writerow(['Kod', 'Mahsulot', 'Kategoriya', 'Omborda dona'])
     for p in ctx['slow_products']:
-        w.writerow([p.code, p.name,
+        w.writerow([_csv_safe(c) for c in [   # SEC-20
+                    p.code, p.name,
                     p.category.name if p.category else '—',
-                    p.stock or 0])
+                    p.stock or 0]])
     w.writerow([])
 
     w.writerow(["FILIALLAR TAQQOSLASH"])
     w.writerow(['Filial', "Daromad", "Tannarx", "Foyda", 'Marja %',
                 'Sotuvlar', 'Dona', "O'rtacha sotuv", 'Omborda dona'])
     for b in ctx['branch_compare']:
-        w.writerow([b['branch'].name, b['revenue'], b['cost'], b['profit'],
+        w.writerow([_csv_safe(c) for c in [   # SEC-20
+                    b['branch'].name, b['revenue'], b['cost'], b['profit'],
                     f"{b['margin']:.1f}", b['sales_count'], b['qty'],
-                    round(b['avg_sale']), b['stock']])
+                    round(b['avg_sale']), b['stock']]])
     w.writerow([])
 
     w.writerow(["TOP-10 SOTUVCHILAR"])
     w.writerow(['Username', 'Ism', 'Filial', 'Sotuvlar', 'Dona', "Daromad (so'm)"])
     for s in ctx['top_sellers']:
-        w.writerow([
+        w.writerow([_csv_safe(c) for c in [   # SEC-20
             s['sold_by__username'],
             f"{s['sold_by__first_name'] or ''} {s['sold_by__last_name'] or ''}".strip(),
             s['sold_by__branch__name'] or '—',
             s['n_sales'], s['qty'], s['revenue'],
-        ])
+        ]])
     w.writerow([])
 
     w.writerow(["TOVAR AYLANMASI (Top sotilganlar)"])
     w.writerow(['Kod', 'Mahsulot', 'Kunlik o\'rtacha (dona)', 'Hozir omborda', 'Necha kun yetadi'])
     for t in ctx['turnover']:
         dleft = f"{t['days_left']:.0f}" if t['days_left'] is not None else '—'
-        w.writerow([t['code'], t['name'], f"{t['daily_avg']:.2f}", t['stock'], dleft])
+        w.writerow([_csv_safe(c) for c in [   # SEC-20
+                    t['code'], t['name'], f"{t['daily_avg']:.2f}", t['stock'], dleft]])
     w.writerow([])
 
     w.writerow(["OMBORDA TUGAGAN"])
     w.writerow(['Filial', 'Kod', "O'lcham", 'Rang'])
     for o in ctx['out_of_stock']:
-        w.writerow([o.branch.name, o.variant.product.code, o.variant.size, o.variant.color])
+        w.writerow([_csv_safe(c) for c in [   # SEC-20
+                    o.branch.name, o.variant.product.code,
+                    o.variant.size, o.variant.color]])
     return response
 
 
@@ -11038,11 +11216,12 @@ def product_export(request):
         cost = float(st.cost_price or 0)
         sale = float(st.sale_price or 0)
         marja = round((sale - cost) / cost * 100, 1) if cost > 0 else None
-        ws.append([p.code, p.name, p.brand or '',
-                   p.category.name if p.category else '',
-                   v.color or '', v.size or '', v.barcode or '',
-                   st.branch.name, st.stock_count, cost, sale, marja,
-                   round(st.stock_count * cost, 2)])
+        ws.append([_csv_safe(p.code), _csv_safe(p.name), _csv_safe(p.brand or ''),
+                   _csv_safe(p.category.name if p.category else ''),
+                   _csv_safe(v.color or ''), _csv_safe(v.size or ''),
+                   _csv_safe(v.barcode or ''),
+                   _csv_safe(st.branch.name), st.stock_count, cost, sale, marja,
+                   round(st.stock_count * cost, 2)])   # SEC-20
         n += 1
 
     widths = [11, 34, 14, 16, 12, 10, 16, 16, 8, 12, 12, 9, 14]

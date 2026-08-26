@@ -29,12 +29,23 @@ def _totp_at(secret_b32, when, step=30, digits=6):
 
 def verify_totp(secret_b32, code, window=1):
     """True if `code` matches within +/- `window` 30s steps (clock drift)."""
+    return verify_totp_step(secret_b32, code, window) is not None
+
+
+def verify_totp_step(secret_b32, code, window=1, step=30):
+    """AUTH-3: mos kelган vaqt-qadamини (butun son) qaytaradi, yoki None.
+
+    Chaqiruvchi bu qadamни saqlab, o'sha kodни QAYTA ishlatishни bloklaydi.
+    """
     code = (code or '').strip().replace(' ', '')
     if not secret_b32 or not code.isdigit():
-        return False
+        return None
     now = time.time()
-    return any(_totp_at(secret_b32, now + w * 30) == code
-               for w in range(-window, window + 1))
+    for w in range(-window, window + 1):
+        t = now + w * step
+        if _totp_at(secret_b32, t, step=step) == code:
+            return int(t // step)
+    return None
 
 
 def otpauth_uri(secret_b32, username, issuer='yurit'):

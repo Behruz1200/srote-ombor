@@ -54,6 +54,58 @@ class Sec17RecoveryCodes(TestCase):
         self.assertTrue(use_recovery_code(u, 'old-code'))
 
 
+class Auth3TotpReplay(TestCase):
+    """AUTH-3 — bir TOTP kodi ikki marta ishlamasin (replay). verify_totp_step
+    mos vaqt-qadamни qaytaradi; login_2fa oxirgi qabul qilinganдан katta
+    bo'lсагина qabul qiladi."""
+
+    def test_step_is_returned_and_monotonic(self):
+        from inventory.twofa import gen_secret, verify_totp_step, _totp_at
+        import time
+        secret = gen_secret()
+        now = time.time()
+        code = _totp_at(secret, now)
+        step = verify_totp_step(secret, code)
+        self.assertIsNotNone(step)
+        self.assertEqual(step, int(now // 30))
+        # bir xil kod xuddi shu qadamни qaytaradi (chaqiruvchi replayни bloklaydi)
+        self.assertEqual(verify_totp_step(secret, code), step)
+
+    def test_bad_code_returns_none(self):
+        from inventory.twofa import gen_secret, verify_totp_step
+        self.assertIsNone(verify_totp_step(gen_secret(), '000000'))
+        self.assertIsNone(verify_totp_step(gen_secret(), 'abc'))
+
+
+class Sec21OversizeImage(TestCase):
+    """SEC-21 — 20 MB'дан katta yuklama rad etiladi (ko'p-varaqli yo'l ham)."""
+
+    class _F:
+        def __init__(self, size, name='x.jpg'):
+            self.size = size; self.name = name
+
+    def test_oversize_detected(self):
+        from inventory.views import _oversize_image, _MAX_IMG_BYTES
+        ok = self._F(_MAX_IMG_BYTES)
+        big = self._F(_MAX_IMG_BYTES + 1, 'big.jpg')
+        self.assertIsNone(_oversize_image([ok]))
+        self.assertEqual(_oversize_image([ok, big]), 'big.jpg')
+        self.assertIsNone(_oversize_image([]))
+
+
+class Sec20CsvSafe(TestCase):
+    """SEC-20 — formula in'ektsiyasi: =,+,-,@ bilan boshlanган matn apostrof
+    bilan zararsizlanadi; oddiy qiymatlar tegilmaydi."""
+
+    def test_formula_prefixes_quoted(self):
+        from inventory.views import _csv_safe
+        self.assertEqual(_csv_safe('=HYPERLINK("x")'), "'=HYPERLINK(\"x\")")
+        self.assertEqual(_csv_safe('+1'), "'+1")
+        self.assertEqual(_csv_safe('@cmd'), "'@cmd")
+        self.assertEqual(_csv_safe('Chanel'), 'Chanel')
+        self.assertEqual(_csv_safe(1000), 1000)
+
+
 class Arch6SplitBreakdown(TestCase):
     """ARCH-6 — yagona split_breakdown() to'g'ri bo'lishi. Bu funksiya endi
     5 o'rniga 1 marta yozilgan; uning 10 xil holati bu yerda qulflanadi."""

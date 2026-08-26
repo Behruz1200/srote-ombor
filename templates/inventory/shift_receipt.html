@@ -166,6 +166,12 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
         {% if debt_payments %}
         <div class="rcpt-row rcpt-pos"><span>+ Qarz to'lovi</span><span class="v">{{ debt_payments|som }}</span></div>
         {% endif %}
+        {% if cash_ins_total %}
+        <div class="rcpt-row rcpt-pos">
+            <span>+ Kassaga qo'shilgan{% if cash_ins %} ({{ cash_ins|length }}){% endif %}</span>
+            <span class="v">{{ cash_ins_total|som }}</span>
+        </div>
+        {% endif %}
         {% if payouts_total %}
         <div class="rcpt-row rcpt-neg">
             <span>− Kassadan olingan{% if payouts %} ({{ payouts|length }}){% endif %}</span>
@@ -207,6 +213,21 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
         <div class="rcpt-total rcpt-total--sub">
             <span class="lbl">Jami olingan</span>
             <span class="amt rcpt-neg">−{{ payouts_total|som }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Kassaga qo'shilgan tafsiloti (R7) -->
+        {% if cash_ins %}
+        <div class="rcpt-sec">Kassaga qo'shilgan</div>
+        {% for c in cash_ins %}
+        <div class="rcpt-row rcpt-row--muted">
+            <span>{{ c.created_at|date:"H:i" }} · {{ c.get_category_display }}{% if c.note %} ({{ c.note|truncatechars:18 }}){% endif %}</span>
+            <span class="v rcpt-pos">+{{ c.amount|som }}</span>
+        </div>
+        {% endfor %}
+        <div class="rcpt-total rcpt-total--sub">
+            <span class="lbl">Jami qo'shilgan</span>
+            <span class="amt rcpt-pos">+{{ cash_ins_total|som }}</span>
         </div>
         {% endif %}
 
