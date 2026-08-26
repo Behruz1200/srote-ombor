@@ -25,6 +25,22 @@ ANTHROPIC_VERSION = '2023-06-01'
 # faqat yuklashni sekinlashtiradi. Shuning uchun 1568.
 MAX_EDGE = 1568
 JPEG_QUALITY = 82
+# SEC-21: "decompression bomb" — kichik fayl, ammo ulkan o'lcham (masalan
+# 50000×50000) PIL uni ochganда gigabaytlab xotira egallaydi. Piksel sonini
+# cheklaymiz (telefon surati uchun 40 MP yetarlicha katta).
+MAX_PIXELS = 40_000_000
+
+
+def _open_guarded(source):
+    """PIL bilan ochadi, ammo avval e'lon qilingan o'lchamни tekshiradi
+    (pikselni to'liq dekodlashдан OLDIN — .size lazy)."""
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = MAX_PIXELS   # PIL o'zi ham DecompressionBombError bersin
+    img = Image.open(source)
+    w, h = img.size
+    if w * h > MAX_PIXELS:
+        raise ValueError("Rasm juda katta (piksel soni chegaradan oshdi).")
+    return img
 
 PROMPT = """You are reading a supplier delivery note (накладная / faktura / hisob-faktura)
 from a shop in Uzbekistan. The document may be in Russian or Uzbek, may be
@@ -194,7 +210,7 @@ def prepare_image(django_file):
         django_file.seek(0)
         return django_file.read(), 'image/jpeg'
     django_file.seek(0)
-    img = Image.open(django_file)
+    img = _open_guarded(django_file)                     # SEC-21: piksel chegarasi
     img = ImageOps.exif_transpose(img)                   # telefon burilishini to'g'rilash
     if img.mode not in ('RGB', 'L'):
         img = img.convert('RGB')
@@ -395,7 +411,7 @@ def _rotate_jpeg(raw, angle):
         from PIL import Image
     except ImportError:                                   # pragma: no cover
         return None
-    img = Image.open(io.BytesIO(raw)).rotate(angle, expand=True)
+    img = _open_guarded(io.BytesIO(raw)).rotate(angle, expand=True)  # SEC-21
     buf = io.BytesIO()
     img.save(buf, format='JPEG', quality=JPEG_QUALITY, optimize=True)
     return buf.getvalue()

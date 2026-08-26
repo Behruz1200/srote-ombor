@@ -16,16 +16,27 @@ from django.db.models.fields.files import FieldFile
 from .models import (
     AuditLog, Product, ProductVariant, BranchStock, Intake, Sale,
     SaleTransaction, Transfer, Branch, Category, User,
+    Return, CashPayout, Shift, Stocktake, EmployeeDebt, PaymentIntent,
 )
 from .middleware import get_current_user, get_current_ip
 
 # Models we audit. Order matters for the dispatcher.
+# SEC-14: ilgari faqat katalog (Product/Variant/...) kuzatilardi — ichki
+# o'g'irlik tergovi uchun kerak bo'lgan aynan PUL/OMBOR hodisalari
+# (qaytarish, kassa chiqimi, smen, inventarizatsiya, xodim qarzi, to'lov)
+# kuzatilmasdi. Endi ular ham AuditLog'ga tushadi.
 TRACKED_MODELS = [Product, ProductVariant, BranchStock, Intake, Sale,
-                  Branch, Category, User]
+                  Branch, Category, User,
+                  Return, CashPayout, Shift, Stocktake, EmployeeDebt,
+                  PaymentIntent, SaleTransaction, Transfer]
 
 # Fields to skip in diff (noise, sensitive, or auto-managed)
+# SEC-12: totp_secret va recovery_codes 2FA yoqilganда AuditLog.changes'ga
+# tushib, audit sahifasida OCHIQ ko'rinardi — istalgan admin (yoki bazа
+# nusxasi) o'sha foydalanuvchi kodlarini abadiy yarata olardi. Skip qilamiz.
 SKIP_FIELDS = {
     'last_login', 'date_joined', 'password',
+    'totp_secret', 'recovery_codes',        # SEC-12: maxfiy 2FA sirlari
     'received_at', 'sold_at', 'created_at',  # set automatically
 }
 

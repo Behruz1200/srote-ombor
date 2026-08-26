@@ -3414,6 +3414,18 @@ def send_daily_summary_now(request):
     return redirect('dashboard')
 
 
+def _csv_safe(v):
+    """SEC-20: elektron jadval FORMULA IN'EKTSIYASINI zararsizlantiradi.
+
+    Excel/Sheets `=`, `+`, `-`, `@` (yoki tab/CR) bilan boshlangan katakni
+    FORMULA deb bajaradi — masalan `=HYPERLINK(...)` fayl ochilganда ishga
+    tushardi. Bunday matn oldiga apostrof qo'yamiz (ko'rinishга ta'sir qilmaydi).
+    """
+    if isinstance(v, str) and v and v[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + v
+    return v
+
+
 def _clean_text(s, max_len=None):
     """Strip HTML tags and normalize whitespace. Prevents stored XSS from CSV."""
     if not s:
@@ -4005,7 +4017,10 @@ def intake_photo(request):
     from .invoice_ai import is_enabled
     draft = None
     if request.GET.get('draft'):
-        draft = InvoiceDraft.objects.filter(pk=request.GET['draft']).first()
+        # SEC-22: faqat O'Z qoralamang — boshqa adminning qoralamasini o'qib/
+        # tahrirlab/o'chirib bo'lmaydi.
+        draft = InvoiceDraft.objects.filter(
+            pk=request.GET['draft'], created_by=request.user).first()
     draft_data = None
     if draft:
         draft_data = dict(draft.payload or {})
@@ -4022,7 +4037,8 @@ def intake_photo(request):
         'product_names': list(Product.objects.order_by('name')
                               .values_list('name', flat=True)),
         'ai_enabled': is_enabled(),
-        'drafts': (InvoiceDraft.objects.select_related('branch', 'created_by')
+        'drafts': (InvoiceDraft.objects.filter(created_by=request.user)  # SEC-22
+                   .select_related('branch', 'created_by')
                    .exclude(pk=draft.pk if draft else 0)[:10]),
         'draft': draft,
         'draft_data': draft_data,
@@ -4077,7 +4093,8 @@ def intake_photo_draft(request):
 
     draft = None
     if payload.get('draft_id'):
-        draft = InvoiceDraft.objects.filter(pk=payload['draft_id']).first()
+        draft = InvoiceDraft.objects.filter(  # SEC-22: faqat o'z qoralamang
+            pk=payload['draft_id'], created_by=request.user).first()
     if draft is None:
         draft = InvoiceDraft(created_by=request.user)
     draft.branch = Branch.objects.filter(
@@ -4105,7 +4122,7 @@ def intake_photo_draft(request):
 def intake_photo_draft_delete(request, pk):
     if request.method != 'POST':
         return redirect('intake_photo')
-    InvoiceDraft.objects.filter(pk=pk).delete()
+    InvoiceDraft.objects.filter(pk=pk, created_by=request.user).delete()  # SEC-22
     messages.success(request, "Qoralama o'chirildi.")
     return redirect('intake_photo')
 
@@ -4345,7 +4362,8 @@ def intake_photo_save(request):
                 session.save(update_fields=['received_at'])
             except (ValueError, TypeError):
                 pass
-        draft = (InvoiceDraft.objects.filter(pk=payload.get('draft_id')).first()
+        draft = (InvoiceDraft.objects.filter(  # SEC-22: faqat o'z qoralamang
+                    pk=payload.get('draft_id'), created_by=request.user).first()
                  if payload.get('draft_id') else None)
         # --- faktura sahifalari (nakladnoy bir necha varaq bo'lishi mumkin) ---
         files = request.FILES.getlist('image')
@@ -6734,7 +6752,13 @@ def pos_payment_status(request):
     """GET /pos/payment/status/?provider=click&intent_id=..."""
     provider_name = request.GET.get('provider') or ''
     intent_id = request.GET.get('intent_id') or ''
-    from .payments import get_provider
+    from .payments import get_provider, available_providers
+    # SEC-19: mijoz tanlagan provider'ga ISHONMAYMIZ. Faqat ANIQ yoqilgan
+    # provider'lar. Aks holда ?provider=noop&intent_id=har-narsa → 'paid'
+    # qaytarib, istalgan kirgan foydalanuvchи to'lovni "tasdiqlab" olardi.
+    _enabled = {p.name for p in available_providers()}
+    if provider_name not in _enabled:
+        return JsonResponse({'ok': False, 'error': 'provider yoqilmagan'}, status=400)
     provider = get_provider(provider_name)
     if not provider or not intent_id:
         return JsonResponse({'ok': False, 'error': 'parametr yetishmaydi'}, status=400)
@@ -7585,7 +7609,7 @@ def sales_list(request):
                     'To\'lov turi', 'Mijoz'])
         for s in qs[:10000]:
             t = s.transaction
-            w.writerow([
+            w.writerow([_csv_safe(c) for c in [   # SEC-20
                 s.sold_at.strftime('%Y-%m-%d'),
                 s.sold_at.strftime('%H:%M'),
                 s.variant.product.code,
@@ -7599,7 +7623,7 @@ def sales_list(request):
                 float(s.total),
                 t.get_payment_method_display() if t else '',
                 t.customer_name if t else '',
-            ])
+            ]])
         return resp
 
     sales = list(qs[:300])
@@ -8468,7 +8492,7 @@ def audit_list(request):
         w.writerow(['Sana', 'Vaqt', 'Foydalanuvchi', 'Amal', 'Model',
                     'Obyekt ID', 'Obyekt', 'IP'])
         for l in logs[:10000]:
-            w.writerow([
+            w.writerow([_csv_safe(c) for c in [   # SEC-20
                 l.created_at.strftime('%Y-%m-%d'),
                 l.created_at.strftime('%H:%M:%S'),
                 l.username_snapshot or '',
@@ -8476,8 +8500,8 @@ def audit_list(request):
                 l.model_name or '',
                 l.object_id or '',
                 l.object_repr or '',
-                l.ip_address or '',
-            ])
+                l.ip or '',   # SEC-15: model maydoni `ip` (ip_address emas — 500 berardi)
+            ]])
         return resp
 
     # Pagination
@@ -8548,13 +8572,13 @@ def customer_list(request):
                     "O'rtacha chek", 'Oxirgi tashrif'])
         for c in customers:
             avg = (c.total_spent / c.txn_count) if c.txn_count else 0
-            w.writerow([
+            w.writerow([_csv_safe(c2) for c2 in [   # SEC-20
                 c.name or '', c.phone or '', c.tags or '',
                 c.txn_count or 0,
                 float(c.total_spent or 0),
                 float(avg),
                 c.last_visit.strftime('%Y-%m-%d %H:%M') if c.last_visit else '',
-            ])
+            ]])
         return resp
 
     customers = list(customers)
@@ -9727,11 +9751,11 @@ def _csv_response(title, headers, rows, summary, d_start, d_end, branch):
     writer.writerow([])
     writer.writerow(headers)
     for r in rows:
-        writer.writerow(r)
+        writer.writerow([_csv_safe(c) for c in r])   # SEC-20
     writer.writerow([])
     writer.writerow(['Xulosa:'])
     for k, v in summary.items():
-        writer.writerow([k, v])
+        writer.writerow([_csv_safe(k), _csv_safe(v)])   # SEC-20
     return response
 
 

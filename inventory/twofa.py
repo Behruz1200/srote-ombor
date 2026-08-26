@@ -56,21 +56,39 @@ def qr_datauri(text):
 # ----- recovery codes -----
 
 def gen_recovery_codes(n=8):
-    """Return n human-friendly one-time codes (plaintext, shown once)."""
-    return ['-'.join(secrets.token_hex(2) for _ in range(2)) for _ in range(n)]
+    """Return n human-friendly one-time codes (plaintext, shown once).
+
+    SEC-17: har kod ~72 bit entropiya (ilgari 32 bit edi — GPUда tez topilardi).
+    """
+    return ['-'.join(secrets.token_hex(3) for _ in range(3)) for _ in range(n)]
 
 
 def hash_code(code):
+    """SEC-17: tuzlangan, ko'p-raundli PBKDF2 hash (Django hasher) — bir raundli
+    tuzsiz SHA-256 emas. Bazа sizib chiqса ham kodlar oson topilmaydi."""
+    from django.contrib.auth.hashers import make_password
+    return make_password((code or '').strip().lower())
+
+
+def _legacy_sha256(code):
     return hashlib.sha256((code or '').strip().lower().encode('utf-8')).hexdigest()
 
 
 def use_recovery_code(user, code):
-    """If `code` matches an unused recovery hash, consume it and return True."""
-    h = hash_code(code)
+    """If `code` matches an unused recovery hash, consume it and return True.
+    Yangi (PBKDF2) va eski (SHA-256) formatларни ham qo'llab-quvvatlaydi."""
+    from django.contrib.auth.hashers import check_password
+    norm = (code or '').strip().lower()
     codes = list(user.recovery_codes or [])
-    if h in codes:
-        codes.remove(h)
-        user.recovery_codes = codes
-        user.save(update_fields=['recovery_codes'])
-        return True
+    for stored in codes:
+        # Eski format = 64 belgili sof hex; yangisi = 'pbkdf2_sha256$...'
+        if len(stored) == 64 and all(c in '0123456789abcdef' for c in stored):
+            ok = (stored == _legacy_sha256(code))
+        else:
+            ok = check_password(norm, stored)
+        if ok:
+            codes.remove(stored)
+            user.recovery_codes = codes
+            user.save(update_fields=['recovery_codes'])
+            return True
     return False

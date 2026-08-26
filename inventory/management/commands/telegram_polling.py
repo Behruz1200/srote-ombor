@@ -60,7 +60,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f'Telegram polling started. offset={offset}, '
-            f'allowed_chats={sorted(allowed) or "(any)"}'
+            f'allowed_chats={sorted(allowed) or "(NONE — all blocked)"}'
         ))
 
         while True:
@@ -86,7 +86,11 @@ class Command(BaseCommand):
                 if not chat_id or not text:
                     continue
 
-                if allowed and chat_id not in allowed:
+                # SEC-13: FAIL-CLOSED. Ilgari `if allowed and ...` edi — ro'yxat
+                # bo'sh bo'lsa (TELEGRAM_CHAT_IDS sozlanmagan), HAMMA chat o'tar
+                # va istalgan kishi /today tushum, foyda, ombor ro'yxatini
+                # olardi. Endi ro'yxat bo'sh bo'lsa — HAMMASI bloklanadi.
+                if not allowed or chat_id not in allowed:
                     self.stdout.write(f'(blocked) chat={chat_id} text={text!r}')
                     send_telegram(
                         "Ruxsat yo'q. Administrator bilan bog'laning.",

@@ -251,11 +251,15 @@ _REGISTRY = {
 
 
 def available_providers() -> list[PaymentProvider]:
-    """Faqat sozlamada yoqilgan provider'lar. Default: hammasi noop bilan."""
+    """Faqat sozlamada ANIQ yoqilgan provider'lar.
+
+    SEC-18: ilgari env yo'q bo'lsa 7 ta providerni HAMMASINI yoqar edi —
+    real ulanmagan to'lov usullari kassirга ko'rinardi. Endi yoqilmagan
+    bo'lsa — BO'SH (hech biri).
+    """
     enabled = getattr(settings, 'PAYMENT_PROVIDERS_ENABLED', None)
     if not enabled:
-        # Default — barchasini ko'rsatamiz, demo rejimda
-        enabled = ['click', 'payme', 'uzum', 'anor', 'alif', 'iman', 'zoodpay']
+        enabled = []
     out = []
     for name in enabled:
         cls = _REGISTRY.get(name)

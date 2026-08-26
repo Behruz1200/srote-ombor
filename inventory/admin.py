@@ -95,12 +95,24 @@ class PaymentIntentAdmin(admin.ModelAdmin):
     actions = ['mark_paid', 'mark_cancelled']
 
     def mark_paid(self, request, queryset):
+        # SEC-16: PRODUCTIONда to'lovni QO'LDA "paid" qilib bo'lmaydi — bu
+        # pulsiz sotuvni tasdiqlash yo'li edi. Faqat DEBUG (test)да ishlaydi.
+        from django.conf import settings
+        if not settings.DEBUG:
+            self.message_user(
+                request,
+                "Ishlab chiqarishda qo'lda 'to'landi' qilish o'chirilgan "
+                "(faqat real webhook orqali).", level=30)  # WARNING
+            return
         from django.utils import timezone
         n = queryset.filter(status='pending').update(
             status='paid', paid_at=timezone.now()
         )
-        self.message_user(request, f"{n} ta intent paid deb belgilandi.")
-    mark_paid.short_description = "Tanlanganlarni 'To'landi' deb belgilash (test)"
+        self.message_user(request, f"{n} ta intent paid deb belgilandi (TEST).")
+    mark_paid.short_description = "Tanlanganlarni 'To'landi' deb belgilash (faqat TEST)"
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     def mark_cancelled(self, request, queryset):
         n = queryset.filter(status='pending').update(status='cancelled')
@@ -152,12 +164,32 @@ class SaleTransactionAdmin(admin.ModelAdmin):
     search_fields = ('customer_name', 'customer_phone')
     inlines = [SaleInline]
 
+    # SEC-16: chekni admin'дан O'CHIRIB bo'lmaydi. Sale.transaction CASCADE
+    # bo'lgani uchun chek o'chirilса, uning daromad qatorlari ham o'chib,
+    # ombor esa QAYTMASdi. Chek — moliyaviy yozuv, qo'shib/o'chirmaymiz.
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(Return)
 class ReturnAdmin(admin.ModelAdmin):
     list_display = ('refunded_at', 'sale', 'quantity', 'refund_amount', 'refunded_by')
     list_filter = ('refunded_at',)
     search_fields = ('sale__variant__product__code', 'reason')
+
+    # SEC-16: qaytarish — moliyaviy yozuv. Admin'дан tahrirlab/o'chirib
+    # bo'lmaydi (POS orqali yaratiladi). Faqat ko'rish.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(AuditLog)

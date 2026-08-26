@@ -30,6 +30,30 @@ User = get_user_model()
 CHECKOUT_URL = '/pos/checkout/'
 
 
+class Sec17RecoveryCodes(TestCase):
+    """SEC-17 — recovery kodlar tuzlangan PBKDF2 bilan hashlanadi, eski
+    SHA-256 format ham ishlaydi, kod bir marta ishlatiladi."""
+
+    def test_roundtrip_and_single_use(self):
+        from inventory.twofa import gen_recovery_codes, hash_code, use_recovery_code
+        u = User.objects.create_user(username='r1', password='x', role=User.Role.ADMIN)
+        codes = gen_recovery_codes(3)
+        u.recovery_codes = [hash_code(c) for c in codes]
+        u.save(update_fields=['recovery_codes'])
+        self.assertFalse(use_recovery_code(u, 'nope-nope-nope'))
+        self.assertTrue(use_recovery_code(u, codes[0]))
+        u.refresh_from_db()
+        self.assertEqual(len(u.recovery_codes), 2)
+        self.assertFalse(use_recovery_code(u, codes[0]))  # qayta ishlatib bo'lmaydi
+
+    def test_legacy_sha256_still_accepted(self):
+        from inventory.twofa import _legacy_sha256, use_recovery_code
+        u = User.objects.create_user(username='r2', password='x', role=User.Role.ADMIN)
+        u.recovery_codes = [_legacy_sha256('old-code')]
+        u.save(update_fields=['recovery_codes'])
+        self.assertTrue(use_recovery_code(u, 'old-code'))
+
+
 class Arch6SplitBreakdown(TestCase):
     """ARCH-6 — yagona split_breakdown() to'g'ri bo'lishi. Bu funksiya endi
     5 o'rniga 1 marta yozilgan; uning 10 xil holati bu yerda qulflanadi."""
