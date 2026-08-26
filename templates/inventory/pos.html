@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% load yurit_extras %}
 
 {% block title %}POS — yurit{% endblock %}
@@ -1325,7 +1326,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{% static "vendor/html5-qrcode.min.js" %}"></script>
 <script>
 // POS kamera skaneri: har skan savatga qo'shiladi (hardware skaner bilan bir xil yo'l).
 (function () {

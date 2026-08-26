@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% load yurit_extras %}
 
 {% block title %}Smen #{{ shift.pk }} — yurit{% endblock %}
@@ -275,7 +276,7 @@
 </div>
 
 {% if hour_qty %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static "vendor/chart.umd.min.js" %}"></script>
 {{ hour_labels|json_script:"hour-labels" }}
 {{ hour_qty|json_script:"hour-qty" }}
 <script>

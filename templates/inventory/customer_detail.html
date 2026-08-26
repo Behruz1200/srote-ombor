@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% load yurit_extras %}
 
 {% block title %}{{ customer.name|default:"Mijoz" }} — yurit{% endblock %}
@@ -173,7 +174,7 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static "vendor/chart.umd.min.js" %}"></script>
 {{ chart_labels|json_script:"chart-labels" }}
 {{ chart_data|json_script:"chart-data" }}
 <script>

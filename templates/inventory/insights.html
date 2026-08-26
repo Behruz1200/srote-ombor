@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% load yurit_extras l10n %}
 
 {% block title %}Tahlil — yurit{% endblock %}
@@ -1030,8 +1031,8 @@
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="{% static "vendor/chart.umd.min.js" %}"></script>
+<script src="{% static "vendor/chartjs-plugin-datalabels.min.js" %}"></script>
 {{ fc_actual_labels|json_script:"fc-actual-labels" }}
 {{ fc_actual_values|json_script:"fc-actual-values" }}
 {{ fc_forecast_labels|json_script:"fc-forecast-labels" }}

@@ -4,15 +4,15 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'yurit-v200';
+const CACHE_NAME = 'yurit-v201';
+// SEC-2: kutubxonalar endi o'zimizda (static/vendor/) — CDN emas. Bu yerда
+// oldindan keshlamaymiz (WhiteNoise hash'li nom beradi); /static/ so'rovlari
+// runtime'да cache-first bo'lib avtomat keshlanadi (pastдаgi handler).
 const STATIC_ASSETS = [
   '/static/img/icon-192.png',
   '/static/img/icon-512.png',
   '/static/img/icon-180.png',
   '/static/img/favicon.png',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js',
 ];
 
 self.addEventListener('install', (event) => {

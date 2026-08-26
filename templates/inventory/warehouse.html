@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% load yurit_extras %}
 {% block title %}Ombor — yurit{% endblock %}
 {% block backbar %}{% endblock %}{# sahifaning o'z orqaga havolasi bor #}
@@ -445,7 +446,7 @@
 </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static "vendor/chart.umd.min.js" %}"></script>
 {{ weeks|json_script:"whWeeks" }}
 {{ flow_in|json_script:"whIn" }}
 {{ flow_out|json_script:"whOut" }}

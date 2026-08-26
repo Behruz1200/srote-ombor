@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% load yurit_extras %}
 
 {% block title %}Boshqaruv — yurit{% endblock %}
@@ -483,8 +484,8 @@
 </div>
 
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="{% static "vendor/chart.umd.min.js" %}"></script>
+<script src="{% static "vendor/chartjs-plugin-datalabels.min.js" %}"></script>
 {{ trend_labels|json_script:"trend-labels" }}
 {{ trend_revenue|json_script:"trend-revenue" }}
 <script>
