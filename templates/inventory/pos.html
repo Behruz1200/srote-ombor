@@ -2093,6 +2093,7 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
     let current = null;     // {provider, providerDisplay, amount, intentId, refCode}
     let pollTimer = null;
     let finalized = false;
+    let _pollBusy = false;   // FE-3: pollStatus qayta-kirish qulfi
 
     function setStatusBadge(text, bg) {
         statusBadge.className = `badge ${bg}`;
@@ -2127,6 +2128,11 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
     }
 
     async function openQR(provider, providerDisplay, isInstallment, staticQrId) {
+        // FE-3: oldingi poll intervalini TO'XTATAMIZ. Ilgari ikkinchi provider
+        // bosilса, eski interval to'xtamay, ikkita interval bir vaqtда tekshirib,
+        // to'lov "paid" bo'lganда checkout IKKI marta bosilardi (ikki sotuv).
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        finalized = false;
         const fullTotal = currentTotalAmount();
         if (fullTotal <= 0) {
             setStatus("Savat bo'sh", 'error');
@@ -2235,7 +2241,10 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
     }
 
     async function pollStatus() {
-        if (!current || !current.intentId || finalized) return;
+        // FE-3: qayta-kirish qulfi — ustma-ust tiklар (await davomida) checkout'ни
+        // ikki marta bosmasin.
+        if (!current || !current.intentId || finalized || _pollBusy) return;
+        _pollBusy = true;
         try {
             const r = await fetch(`/pos/payment/check/${current.intentId}/`);
             const d = await r.json();
@@ -2271,6 +2280,7 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
                 beepError();
             }
         } catch (e) { /* network blip — retry */ }
+        finally { _pollBusy = false; }   // FE-3
     }
 
     cancelBtn.addEventListener('click', () => {
@@ -2335,9 +2345,16 @@ async function queuePut(payload) {
     const db = await openQueueDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(QUEUE_STORE, 'readwrite');
+        let newId = null;
         const req = tx.objectStore(QUEUE_STORE).add({payload, queued_at: Date.now()});
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        req.onsuccess = () => { newId = req.result; };
+        // FE-4: onsuccess tranzaksiya COMMIT bo'lishдан OLDIN ishga tushadi.
+        // Kvota (quota) sababли abort bo'lsa, UI "navbatga olindi" deb, savatни
+        // tozalab, sotuv izsiz yo'qolardi. Endi FAQAT tx.oncomplete (durable
+        // commit) da resolve, abort/error da reject qilamiz.
+        tx.oncomplete = () => resolve(newId);
+        tx.onerror = () => reject(tx.error || (req && req.error));
+        tx.onabort = () => reject(tx.error || new Error('IndexedDB abort (quota?)'));
     });
 }
 async function queueList() {
