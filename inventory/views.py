@@ -5623,13 +5623,17 @@ def pos_checkout(request):
     customer = None
     if customer_phone:
         cleaned_phone = ''.join(c for c in customer_phone if c.isdigit() or c == '+')
+        _digits = sum(c.isdigit() for c in cleaned_phone)
         if cleaned_phone:
             customer = Customer.objects.filter(phone=cleaned_phone).first()
-            if not customer:
+            # SEC-8: juda qisqa/soxta raqamдан YANGI mijoz yaratmaymiz (baza
+            # ifloslanishi va enumeratsiya oldini oladi). O'zbek raqami kamida
+            # 9 raqam. Mavjud mijozni topsak bog'laymiz; aks holda mijozsiz sotuv.
+            if not customer and _digits >= 9:
                 customer = Customer.objects.create(
                     phone=cleaned_phone, name=customer_name,
                 )
-            elif customer_name and not customer.name:
+            elif customer and customer_name and not customer.name:
                 customer.name = customer_name
                 customer.save(update_fields=['name'])
 
