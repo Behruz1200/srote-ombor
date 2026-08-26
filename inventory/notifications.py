@@ -269,61 +269,72 @@ def daily_summary_text(d=None):
     return '\n'.join(lines)
 
 
-def low_stock_report_text(threshold=None, limit_per_section=40):
-    """Kam qolgan / tugagan tovarlar RO'YXATI (kunlik 22:00 xulosaga qo'shimcha,
-    ALOHIDA xabar). Har sotuvда emas, kuniga bir marta keladi.
+# Mahsulot DARAJASIDA "kam qolgan" chegarasi: barcha o'lchamlar bo'yicha JAMI
+# qoldiq shu sondan kam bo'lsa — reorder signal. Do'kon asosan 1 o'lcham=1 dona
+# kiyim/poyabzal, shuning uchun VARIANT darajasidagi "≤3" butun katalogni
+# belgilab, foydasiz bo'lardi — mahsulot jami bo'yicha hisoblaymiz.
+PRODUCT_LOW_TOTAL = 3
 
-    Ikki bo'lim: ⛔ tugagan (0 dona) va ⚠️ kam qolgan (1..threshold). Ochiq
-    narxli (is_open_price) tovarlar qoldiq yuritmaydi — ro'yxatga kirmaydi.
+
+def low_stock_report_text(threshold=None, limit_per_section=40):
+    """Kam qolgan / tugagan tovarlar RO'YXATI — MAHSULOT darajasida (kunlik
+    22:00 xulosaga ALOHIDA qo'shimcha xabar; har sotuvда emas).
+
+    Har bir mahsulotning barcha o'lchamlari bo'yicha JAMI qoldiq hisoblanadi:
+      ⛔ Butunlay tugagan — jami 0 dona (hech bir o'lcham qolmagan)
+      ⚠️ Kam qolgan       — jami 1..threshold dona (oxirgi bir nechta dona)
+    Ochiq narxli (is_open_price) tovarlar qoldiq yuritmaydi — kirmaydi.
     Hech narsa bo'lmasa None qaytaradi (xabar yuborilmaydi).
     """
+    from django.db.models import Sum, Count, Q
     from django.utils import timezone
     from .models import BranchStock
 
-    thr = LOW_STOCK_THRESHOLD if threshold is None else int(threshold)
+    thr = PRODUCT_LOW_TOTAL if threshold is None else int(threshold)
     today = timezone.localdate()
 
-    qs = (BranchStock.objects
-          .filter(stock_count__lte=thr)
-          .exclude(variant__product__is_open_price=True)
-          .select_related('variant__product', 'branch')
-          .order_by('stock_count', 'variant__product__name'))
+    rows = list(BranchStock.objects
+                .exclude(variant__product__is_open_price=True)
+                .values('variant__product_id',
+                        'variant__product__name',
+                        'variant__product__code',
+                        'variant__product__brand')
+                .annotate(total=Sum('stock_count'),
+                          sizes=Count('id', filter=Q(stock_count__gt=0)))
+                .filter(total__lte=thr)
+                .order_by('total', 'variant__product__name'))
 
-    out_rows, low_rows = [], []
-    for bs in qs:
-        (out_rows if bs.stock_count <= 0 else low_rows).append(bs)
+    out_rows = [r for r in rows if (r['total'] or 0) <= 0]
+    low_rows = [r for r in rows if 0 < (r['total'] or 0) <= thr]
 
     if not out_rows and not low_rows:
         return None
 
-    multi_branch = len({bs.branch_id for bs in out_rows + low_rows}) > 1
+    def _label(r):
+        brand = r['variant__product__brand']
+        brand = f"{brand} · " if brand else ''
+        return (f"• {brand}{r['variant__product__name']} — "
+                f"<code>{r['variant__product__code']}</code>")
 
-    def _line(bs, show_qty):
-        p = bs.variant.product
-        brand = f"{p.brand} · " if getattr(p, 'brand', '') else ''
-        br = f" · {bs.branch.name}" if multi_branch else ''
-        base = (f"• {brand}{p.name} — <code>{p.code}</code> · "
-                f"{_variant_descr(bs.variant)}{br}")
-        if show_qty:
-            base += f" — <b>{bs.stock_count}</b> dona"
-        return base
-
-    lines = [f"📦 <b>Kam qolgan / tugagan tovarlar — {today:%d.%m.%Y}</b>"]
+    lines = [f"📦 <b>Kam qolgan / tugagan tovarlar — {today:%d.%m.%Y}</b>",
+             "<i>(mahsulot bo'yicha jami qoldiq)</i>"]
 
     if out_rows:
-        lines.append(f"\n⛔ <b>Tugagan (0 dona): {len(out_rows)} ta</b>")
-        for bs in out_rows[:limit_per_section]:
-            lines.append(_line(bs, show_qty=False))
+        lines.append(f"\n⛔ <b>Butunlay tugagan: {len(out_rows)} ta mahsulot</b>")
+        for r in out_rows[:limit_per_section]:
+            lines.append(_label(r))
         if len(out_rows) > limit_per_section:
             lines.append(f"… yana {len(out_rows) - limit_per_section} ta")
 
     if low_rows:
-        lines.append(f"\n⚠️ <b>Kam qolgan (≤{thr} dona): {len(low_rows)} ta</b>")
-        for bs in low_rows[:limit_per_section]:
-            lines.append(_line(bs, show_qty=True))
+        lines.append(f"\n⚠️ <b>Kam qolgan (≤{thr} dona): {len(low_rows)} ta mahsulot</b>")
+        for r in low_rows[:limit_per_section]:
+            lines.append(f"{_label(r)} — <b>{r['total']}</b> dona "
+                         f"({r['sizes']} o'lcham)")
         if len(low_rows) > limit_per_section:
             lines.append(f"… yana {len(low_rows) - limit_per_section} ta")
 
+    lines.append("\n🔗 To'liq ro'yxat: koreysbozor.uz/reorder")
     return '\n'.join(lines)
 
 
