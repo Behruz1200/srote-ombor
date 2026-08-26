@@ -8161,7 +8161,10 @@ def sales_list(request):
                       .annotate(qty=Sum('quantity'), money=Sum(_ret_money))}
     for s in sales:
         r = _ret_by_sale.get(s.pk)
-        s.returned_qty = r['qty'] if r else 0
+        # DIQQAT: Sale.returned_qty — read-only @property (u _returned'ni o'qiydi).
+        # Unga to'g'ridan-to'g'ri yozib bo'lmaydi (Attribute: no setter → 500).
+        # Shu bois annotatsiya maydoni _returned'ni to'ldiramiz — property uni oladi.
+        s._returned = r['qty'] if r else 0
         s.returned_money = r['money'] if r else 0
         s.net_total = s.total - s.returned_money
 
