@@ -71,14 +71,14 @@
                     <tbody id="editRows">
                         {% for r in rows %}
                         <tr>
-                            <input type="hidden" name="v_id" value="{{ r.variant.id }}">
+                            <input type="hidden" name="v_id" value="{{ r.v_id }}">
                             <td class="text-center align-middle">
                                 <input type="checkbox" class="form-check-input mv-pick" form="moveForm"
-                                       name="mv" value="{{ r.variant.id }}">
+                                       name="mv" value="{{ r.v_id }}">
                             </td>
-                            <td><input type="text" name="v_color" class="form-control form-control-sm" value="{{ r.variant.color }}"></td>
-                            <td><input type="text" name="v_size" class="form-control form-control-sm" value="{{ r.variant.size }}"></td>
-                            <td><input type="text" name="v_barcode" class="form-control form-control-sm" value="{{ r.variant.barcode|default:'' }}" placeholder="—"></td>
+                            <td><input type="text" name="v_color" class="form-control form-control-sm" value="{{ r.color }}"></td>
+                            <td><input type="text" name="v_size" class="form-control form-control-sm" value="{{ r.size }}"></td>
+                            <td><input type="text" name="v_barcode" class="form-control form-control-sm" value="{{ r.barcode }}" placeholder="—"></td>
                             <td><input type="text" name="v_cost" class="form-control form-control-sm text-end v-cost" inputmode="decimal" value="{{ r.cost|floatformat:'0u' }}"></td>
                             <td><input type="text" name="v_marja" class="form-control form-control-sm text-end v-marja" inputmode="decimal" placeholder="%"></td>
                             <td><input type="text" name="v_sale" class="form-control form-control-sm text-end v-sale" inputmode="decimal" value="{{ r.sale|floatformat:'0u' }}"></td>
@@ -86,8 +86,8 @@
                             <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" value="{{ r.stock|unlocalize }}"></td>
                             <td class="text-center align-middle">
                                 <button type="button" class="btn btn-sm btn-outline-danger v-del" tabindex="-1"
-                                        data-pk="{{ r.variant.id }}"
-                                        data-label="{{ r.variant.size|default:'—' }} / {{ r.variant.color|default:'—' }}"
+                                        data-pk="{{ r.v_id }}"
+                                        data-label="{{ r.size|default:'—' }} / {{ r.color|default:'—' }}"
                                         title="Turni o'chirish">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -186,6 +186,28 @@
 </template>
 
 <script>
+// V2: jadvalда Enter FORMANI YUBORMAYDI — keyingi katakka o'tadi.
+(function () {
+    const form = document.getElementById('editForm');
+    if (!form) return;
+    form.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        const t = e.target;
+        if (!t || t.tagName !== 'INPUT') return;
+        if (t.type === 'submit' || t.type === 'button') return;
+        e.preventDefault();
+        const inputs = Array.prototype.slice.call(
+            form.querySelectorAll('input:not([type=hidden]):not([disabled])'));
+        const idx = inputs.indexOf(t);
+        if (idx > -1 && idx < inputs.length - 1) {
+            const nxt = inputs[idx + 1];
+            nxt.focus();
+            if (nxt.select) nxt.select();
+        } else {
+            t.blur();
+        }
+    });
+})();
 // Tur o'chirish
 (function () {
     const delForm = document.getElementById('vdelForm');

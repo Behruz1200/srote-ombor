@@ -123,13 +123,15 @@
                     <h2 class="dash-card__title"><i class="bi bi-clipboard-check"></i> Sanab chiqilgan naqdni kiriting</h2>
                 </header>
                 <div class="dash-card__body dash-card__body--padded">
-                    <form method="post">
+                    <form method="post"
+                          onsubmit="return confirm('Smenni yopasizmi? Bu amalni qaytarib bo‘lmaydi. Sanab chiqilgan naqd summasi to‘g‘riligini tekshiring.');">
                         {% csrf_token %}
                         <div class="mb-3">
                             <label class="form-label" style="font-size: 0.86rem; text-transform: none; letter-spacing: 0;">
                                 Kassadan sanab chiqilgan naqd
                             </label>
                             <input type="number" name="counted_cash" min="0" step="1000"
+                                   autocomplete="off"
                                    class="form-control form-control-lg" required autofocus
                                    placeholder="masalan: {{ expected|floatformat:0 }}"
                                    style="font-family: var(--yrt-font-mono); font-variant-numeric: tabular-nums;">

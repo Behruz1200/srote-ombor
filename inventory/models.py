@@ -435,6 +435,10 @@ class IntakeSession(models.Model):
                                       help_text="Faktura/dostavka fotografiyasi")
     note = models.TextField(blank=True)
     received_at = models.DateTimeField(default=timezone.now)
+    # S4: foto-qabulни ikki marta qabul qilishни bloklaydi (LocMemCache workerlar
+    # aro ishlamaydi — DB unikал kaliti ishonchli).
+    idempotency_key = models.CharField(
+        max_length=64, null=True, blank=True, unique=True, editable=False)
 
     class Meta:
         verbose_name = 'Qabul sessiyasi'
@@ -1397,6 +1401,10 @@ class Return(models.Model):
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text='Almashtirishда mijozga HAQIQIY qaytarilgan naqd (odatda 0 yoki '
                   'faqat farq). None bo\'lsa — oddiy qaytarish, refund_amount ishlatiladi.')
+    # S3: ikki marta qaytarishни bloklaydi (timeout/qayta bosishда bir xil kalit).
+    idempotency_key = models.CharField(
+        max_length=64, null=True, blank=True, unique=True, editable=False,
+        help_text='Takroriy qaytarishni bloklovchi bir martalik kalit')
 
     class Meta:
         verbose_name = 'Qaytarilish'
@@ -1614,6 +1622,9 @@ class CashPayout(models.Model):
         related_name='cash_payouts'
     )
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    # S5: touchscreen'да ikki marta bosishни bloklaydi (bir martalik kalit).
+    idempotency_key = models.CharField(
+        max_length=64, null=True, blank=True, unique=True, editable=False)
 
     #: valid category keys — used to validate incoming POST values
     VALID_CATEGORIES = {c[0] for c in Category.choices}
@@ -1662,6 +1673,9 @@ class CashIn(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                    related_name='cash_ins')
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    # S5: touchscreen'да ikki marta bosishни bloklaydi (bir martalik kalit).
+    idempotency_key = models.CharField(
+        max_length=64, null=True, blank=True, unique=True, editable=False)
 
     VALID_CATEGORIES = {c[0] for c in Category.choices}
 

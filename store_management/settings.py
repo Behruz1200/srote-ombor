@@ -317,7 +317,11 @@ AUTH_USER_MODEL = 'inventory.User'
 
 
 # ---------- Locale & formatting ----------
-LANGUAGE_CODE = 'en-us'
+# E3/V6: UI butunlay o'zbekcha — Django'ning o'rnatilgan forma xatolari ham
+# o'zbekcha chiqsin ("Ensure this value is less than..." emas). Raqam formati
+# DECIMAL_SEPARATOR='.' va USE_THOUSAND_SEPARATOR=False bilan qat'iy, shu bois
+# lokal o'zgargani bilan pul maydonlari NUQTA-o'nlik bo'lib qoladi.
+LANGUAGE_CODE = 'uz'
 TIME_ZONE = 'Asia/Tashkent'
 USE_I18N = True
 USE_TZ = True

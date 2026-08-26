@@ -249,6 +249,30 @@
 </div>
 
 <script>
+// V1: jadvalда Enter FORMANI YUBORMAYDI — keyingi katakka o'tadi. Aks holда
+// katakni tozalab qayta yozmoqchi bo'lган kassir Enter bosиб butun sahifani
+// yuborar (va bo'sh katak endi "o'zgarmadi" bo'lса ham, tasodifan saqlanardi).
+(function () {
+    const form = document.getElementById('priceForm');
+    if (!form) return;
+    form.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        const t = e.target;
+        if (!t || t.tagName !== 'INPUT') return;
+        if (t.type === 'submit' || t.type === 'button') return;
+        e.preventDefault();
+        const inputs = Array.prototype.slice.call(
+            form.querySelectorAll('input:not([type=hidden]):not([disabled])'));
+        const idx = inputs.indexOf(t);
+        if (idx > -1 && idx < inputs.length - 1) {
+            const nxt = inputs[idx + 1];
+            nxt.focus();
+            if (nxt.select) nxt.select();
+        } else {
+            t.blur();
+        }
+    });
+})();
 (function () {
     const table = document.getElementById('priceTable');
     if (!table) return;

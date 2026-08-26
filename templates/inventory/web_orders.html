@@ -12,9 +12,8 @@
             <p class="dash-hero__sub"><span>Mijozlar saytdan yuborgan buyurtmalar</span></p>
         </div>
         <div class="dash-hero__actions">
-            <a href="{% url 'shop_home' %}" target="_blank" class="dash-btn dash-btn--ghost">
-                <i class="bi bi-box-arrow-up-right"></i> <span>Saytni ochish</span>
-            </a>
+            {# SHOP-1/2: onlayn do'kon marshrutlari yopilgan — "Saytni ochish"
+               havolasi olib tashlandi (aks holда NoReverseMatch). #}
             <a href="{% url 'dashboard' %}" class="dash-btn dash-btn--ghost">
                 <i class="bi bi-arrow-left"></i> <span>Orqaga</span>
             </a>

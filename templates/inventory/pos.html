@@ -1525,6 +1525,18 @@ let appliedPromos = [];
 // QR amounts paid as part of a mixed-payment cheque. Combined with the
 // cash/card inputs at checkout into the final payment_breakdown.
 let qrBreakdownExtra = [];
+// S1: OFF-2 idempotentlik kaliti SAVATГА bog'lanadi, bosishга emas. Bir savat
+// uchun bitta kalit — takroriy bosishда server takroriy chek ochmaydi.
+// checkoutInFlight: so'rov ketayotган paytда renderCart() tugmani QAYTA
+// yoqmasin (aks holда ikkinchi bosish yangi kalit bilan ikkinchi chek yasardi).
+let cartIdemKey = null;
+let checkoutInFlight = false;
+
+function newIdemKey() {
+    return (self.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : ('k' + Date.now() + '-' + Math.random().toString(16).slice(2));
+}
 
 function fmt(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' '); }
 // SEC-11: mahsulot nomi/rangi/o'lchami — xodim yozadigan ERKIN matn. innerHTML'ga
@@ -1729,6 +1741,8 @@ function renderCart() {
         parkBtn.disabled = true;
         if (openPayBtn) openPayBtn.disabled = true;
         clearCartBtn.style.display = 'none';
+        // Savat bo'shadi — keyingi savat yangi idempotentlik kaliti oladi (S1).
+        if (!checkoutInFlight) cartIdemKey = null;
         promoDiscount = 0;
         appliedPromos = [];
         renderAppliedPromos();
@@ -1807,9 +1821,11 @@ function renderCart() {
     cartTotalEl.textContent = fmt(total);
     cartCountEl.textContent = count;
     renderAppliedPromos();
-    checkoutBtn.disabled = false;
-    parkBtn.disabled = false;
-    if (openPayBtn) openPayBtn.disabled = false;
+    // S1: so'rov ketayotган bo'lса tugmalarni QAYTA yoqmaymiz — ikkinchi
+    // checkout (yangi kalit bilan) ketib ikki marta yozilmasin.
+    checkoutBtn.disabled = checkoutInFlight;
+    parkBtn.disabled = checkoutInFlight;
+    if (openPayBtn) openPayBtn.disabled = checkoutInFlight;
     clearCartBtn.style.display = 'inline-block';
     if (typeof renderMixedSplit === 'function') renderMixedSplit();
     if (typeof schedulePromoEval === 'function') schedulePromoEval();
@@ -2491,6 +2507,9 @@ renderFailedBanner();
 
 // Checkout
 checkoutBtn.addEventListener('click', async () => {
+    // S1: so'rov ketayotган bo'lса qayta kirishни bloklaymiz (skaner vedji yoki
+    // auto-trigger tugmani ikkinchi marta bossа ham ikkinchi chek ketmaydi).
+    if (checkoutInFlight) return;
     const lines = Object.values(cart).map(it => ({
         stock_id: it.stock_id, qty: it.qty, sale_price: it.sale_price,
     }));
@@ -2531,12 +2550,11 @@ checkoutBtn.addEventListener('click', async () => {
         const promoLabels = appliedPromos.map(p => p.name).join(', ');
         reason = reason ? `${reason}; ${promoLabels}` : `Aksiya: ${promoLabels}`;
     }
-    // OFF-2: shu urinish uchun bir martalik kalit. Online yuborilsa ham,
-    // offline navbatga tushib keyin qayta yuborilsa ham AYNAN shu kalit
-    // ketadi — server takroriy chek yaratmaydi.
-    const idemKey = (self.crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : ('k' + Date.now() + '-' + Math.random().toString(16).slice(2));
+    // OFF-2/S1: bir martalik kalit SAVATГА bog'lanadi — bosishга emas. Bir savat
+    // uchun bitta kalit; takroriy bosishда (yoki offline qayta yuborishда) AYNAN
+    // shu kalit ketadi, server takroriy chek yaratmaydi.
+    if (!cartIdemKey) cartIdemKey = newIdemKey();
+    const idemKey = cartIdemKey;
     const payload = {
         lines,
         payment_method: paymentMethod,
@@ -2554,6 +2572,7 @@ checkoutBtn.addEventListener('click', async () => {
         client_ts: new Date().toISOString(),
     };
     checkoutBtn.disabled = true;
+    checkoutInFlight = true;   // S1: renderCart() tugmani qayta yoqmasin
     checkoutStatus.textContent = 'Saqlanmoqda...';
 
     async function queueOffline(reason) {
@@ -2563,6 +2582,10 @@ checkoutBtn.addEventListener('click', async () => {
             checkoutStatus.innerHTML = `<span class="text-warning">
                 <i class="bi bi-inbox"></i> Offline: sotuv navbatga olindi, onlayn'da yuboriladi (${reason})</span>`;
             try { getPayModal().hide(); } catch (e) {}
+            // S1: sotuv navbatга o'z kaliti bilan tushdi — keyingi savat yangi
+            // kalit olsin, tugmalar qayta yoqilsin.
+            checkoutInFlight = false;
+            cartIdemKey = null;
             cart = {};
             qrBreakdownExtra = [];
             renderCart();
@@ -2578,6 +2601,8 @@ checkoutBtn.addEventListener('click', async () => {
         } catch (e) {
             checkoutStatus.innerHTML = `<span class="text-danger">
                 Navbatga saqlab bo'lmadi: ${e.message}</span>`;
+            // Xato — o'sha savat/kalit qoladi, qayta urinса ayni kalit ketadi.
+            checkoutInFlight = false;
             checkoutBtn.disabled = false;
         }
     }
@@ -2597,6 +2622,9 @@ checkoutBtn.addEventListener('click', async () => {
         const data = await resp.json();
         if (!data.ok) {
             checkoutStatus.innerHTML = `<span class="text-danger">${data.error || 'Xatolik'}</span>`;
+            // Server rad etди — chek yaratilmadi. O'sha savat/kalit qoladi;
+            // tuzatib qayta urinса ayni kalit ketadi (takror yozilmaydi).
+            checkoutInFlight = false;
             checkoutBtn.disabled = false;
             return;
         }
@@ -2618,7 +2646,10 @@ checkoutBtn.addEventListener('click', async () => {
         // bloklansa — kassir bosadigan ko'rinadigan havola beramiz (u haqiqiy
         // harakat, popup ochiladi) va avto-reload qilmaymiz (havola yo'qolmasin).
         const _rcptBlocked = !_rcptWin;
-        // Reset for next customer
+        // Reset for next customer — S1: sotuv yakunlandi, keyingi savat yangi
+        // kalit oladi va tugmalar qayta yoqiladi.
+        checkoutInFlight = false;
+        cartIdemKey = null;
         cart = {};
         qrBreakdownExtra = [];
         renderCart();
@@ -2995,6 +3026,10 @@ document.addEventListener('click', (e) => {
     const submitBtn  = document.getElementById('refundSubmitBtn');
     let currentLines = [];
     let currentTxnId = null;
+    // S3: bir qaytarish uchun bitta kalit (timeout/qayta bosishда ikki marta
+    // pul chiqmasin). So'rov ketayotган bo'lса qayta kirishни bloklaymiz.
+    let refundInFlight = false;
+    let refundIdemKey = null;
 
     // ---- Almashtirish (exchange) holati ----
     const exInput    = document.getElementById('exNewInput');
@@ -3268,8 +3303,19 @@ document.addEventListener('click', (e) => {
             .filter(l => (l._qty || 0) > 0)
             .map(l => ({sale_id: l.sale_id, qty: l._qty}));
         if (!returns.length) return;
+        if (refundInFlight) return;   // S3: qayta kirishni bloklaymiz
 
         const isExchange = exItems.length > 0;
+        // S3: oddiy qaytarishда kassadan naqd chiqadi — tasdiqlaymiz.
+        if (!isExchange && !confirm('Qaytarishni tasdiqlaysizmi? Kassadan naqd chiqadi.')) {
+            return;
+        }
+        if (!refundIdemKey) {
+            refundIdemKey = (self.crypto && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : ('r' + Date.now() + '-' + Math.random().toString(16).slice(2));
+        }
+        refundInFlight = true;
         submitBtn.disabled = true;
         statusEl.textContent = 'Saqlanmoqda…';
 
@@ -3283,10 +3329,14 @@ document.addEventListener('click', (e) => {
                     new_lines: exItems.map(it => ({stock_id: it.stock_id, qty: it.qty, sale_price: it.price})),
                     payment_method: (diff > 0 ? (exMethod || 'cash') : 'cash'),
                     reason: reasonEl.value,
+                    idempotency_key: refundIdemKey,   // S3
                 };
             } else {
                 url = '/pos/refund/';
-                payload = { lines: returns.map(r => ({sale_id: r.sale_id, qty: r.qty, reason: reasonEl.value})) };
+                payload = {
+                    lines: returns.map(r => ({sale_id: r.sale_id, qty: r.qty, reason: reasonEl.value})),
+                    idempotency_key: refundIdemKey,   // S3
+                };
             }
             const resp = await fetch(url, {
                 method: 'POST',
@@ -3296,6 +3346,7 @@ document.addEventListener('click', (e) => {
             const data = await resp.json();
             if (!data.ok) {
                 statusEl.innerHTML = `<span class="text-danger">${data.error || 'Xatolik'}</span>`;
+                refundInFlight = false;   // S3: xato — o'sha kalit bilan qayta urinса bo'ladi
                 submitBtn.disabled = false;
                 return;
             }
@@ -3312,6 +3363,9 @@ document.addEventListener('click', (e) => {
             setTimeout(() => { bsModal.hide(); location.reload(); }, 1100);
         } catch (e) {
             statusEl.innerHTML = `<span class="text-danger">Tarmoq xatosi: ${e.message}</span>`;
+            // Tarmoq xatosi — server yozgan bo'lishi mumkin. AYNI kalit bilan
+            // qayta urinса server takrorни bloklaydi (ikki marta pul chiqmaydi).
+            refundInFlight = false;
             submitBtn.disabled = false;
         }
     });

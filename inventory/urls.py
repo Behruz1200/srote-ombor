@@ -9,15 +9,21 @@ urlpatterns = [
     path('healthz', views.healthz, name='healthz'),
     path('', views.home, name='home'),
 
-    # --- Onlayn do'kon (ochiq sayt) ---
-    path('shop/', views.shop_home, name='shop_home'),
-    path('shop/catalog/', views.shop_catalog, name='shop_catalog'),
-    path('shop/p/<str:code>/', views.shop_product, name='shop_product'),
-    path('shop/cart/', views.shop_cart, name='shop_cart'),
-    path('shop/cart/add/', views.shop_cart_add, name='shop_cart_add'),
-    path('shop/cart/update/', views.shop_cart_update, name='shop_cart_update'),
-    path('shop/checkout/', views.shop_checkout, name='shop_checkout'),
-    path('shop/order/<int:pk>/', views.shop_order_done, name='shop_order_done'),
+    # --- Onlayn do'kon (ochiq sayt) — SHOP-1/SHOP-2: KANAL YOPIQ ---
+    # Uchinchi auditda ham ochiq turgan yagona kritik: /shop/order/<pk>/ har bir
+    # mijozning ismi/telefoni/manzilini autentifikatsiyasiz ochib qo'yardi va
+    # /shop/checkout/ zaxira bron qilmasдан, pul olмасдан buyurtma qabul qilardi.
+    # Marshrutlarни BUTUNLAY olib tashlaymiz (ShopClosedMiddleware'ga qo'shimcha,
+    # ikki qavatli himoya). Kanal to'g'ri qurilганда (zaxira bron + to'lov + xabar)
+    # bu bloknи ochamiz.
+    # path('shop/', views.shop_home, name='shop_home'),
+    # path('shop/catalog/', views.shop_catalog, name='shop_catalog'),
+    # path('shop/p/<str:code>/', views.shop_product, name='shop_product'),
+    # path('shop/cart/', views.shop_cart, name='shop_cart'),
+    # path('shop/cart/add/', views.shop_cart_add, name='shop_cart_add'),
+    # path('shop/cart/update/', views.shop_cart_update, name='shop_cart_update'),
+    # path('shop/checkout/', views.shop_checkout, name='shop_checkout'),
+    # path('shop/order/<int:pk>/', views.shop_order_done, name='shop_order_done'),
     # Xodimlar uchun
     path('web-orders/', views.web_orders, name='web_orders'),
     path('web-orders/<int:pk>/status/', views.web_order_status,

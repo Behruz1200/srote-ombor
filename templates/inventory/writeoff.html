@@ -21,7 +21,8 @@
             <article class="dash-card">
                 <div class="dash-card__body dash-card__body--padded">
                     <h5 class="mb-3">Yangi yozuv</h5>
-                    <form method="post">
+                    <form method="post"
+                          onsubmit="return confirm('Tovarni hisobdan chiqarasizmi? Ombor qoldig‘i kamayadi va buni orqaga qaytarish yo‘q. Miqdor va sababni tekshiring.');">
                         {% csrf_token %}
                         <div class="mb-2">
                             <label class="form-label small text-muted">Filial</label>

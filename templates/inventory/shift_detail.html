@@ -129,12 +129,13 @@
         </div>
 
         {% if shift.status == 'open' %}
-        <form method="post" action="{% url 'cash_payout' %}" class="row g-2 align-items-end mb-3">
+        <form method="post" action="{% url 'cash_payout' %}" class="row g-2 align-items-end mb-3 cash-form">
             {% csrf_token %}
             <input type="hidden" name="next" value="{% url 'shift_detail' shift.pk %}">
+            <input type="hidden" name="idempotency_key" class="cash-idem" value=""><!-- S5 -->
             <div class="col-6 col-md-3">
                 <label class="form-label small mb-1">Summa (so'm)</label>
-                <input type="number" name="amount" min="1" step="1000" required
+                <input type="number" name="amount" min="1" step="1000" required autocomplete="off"
                        class="form-control" placeholder="0">
             </div>
             <div class="col-6 col-md-3">
@@ -193,12 +194,13 @@
         </div>
 
         {% if shift.status == 'open' %}
-        <form method="post" action="{% url 'cash_in' %}" class="row g-2 align-items-end mb-3">
+        <form method="post" action="{% url 'cash_in' %}" class="row g-2 align-items-end mb-3 cash-form">
             {% csrf_token %}
             <input type="hidden" name="next" value="{% url 'shift_detail' shift.pk %}">
+            <input type="hidden" name="idempotency_key" class="cash-idem" value=""><!-- S5 -->
             <div class="col-6 col-md-3">
                 <label class="form-label small mb-1">Summa (so'm)</label>
-                <input type="number" name="amount" min="1" step="1000" required
+                <input type="number" name="amount" min="1" step="1000" required autocomplete="off"
                        class="form-control" placeholder="0">
             </div>
             <div class="col-6 col-md-3">
@@ -363,4 +365,23 @@ new Chart(document.getElementById('hourlyChart'), {
 });
 </script>
 {% endif %}
+<script>
+// S5: kassa kirim/chiqim formalari uchun ikki marta yuborishдан himoya.
+// Har forma yuklanганда bir martalik kalit oladi (server takrorни bloklaydi),
+// va yuborilganда tugma o'chadi (touchscreen'да ikki tegishни to'xtatadi).
+(function () {
+    function uuid() {
+        return (self.crypto && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : ('c' + Date.now() + '-' + Math.random().toString(16).slice(2));
+    }
+    document.querySelectorAll('.cash-idem').forEach(function (el) { el.value = uuid(); });
+    document.querySelectorAll('form.cash-form').forEach(function (f) {
+        f.addEventListener('submit', function () {
+            const btn = f.querySelector('button[type=submit]');
+            if (btn) { setTimeout(function () { btn.disabled = true; }, 0); }
+        });
+    });
+})();
+</script>
 {% endblock %}

@@ -22,7 +22,7 @@ from django.utils import timezone
 
 from inventory.models import (
     Branch, Product, ProductVariant, BranchStock, Shift,
-    SaleTransaction, Sale, CashPayout, PaymentIntent,
+    SaleTransaction, Sale, CashPayout, PaymentIntent, Return,
     split_breakdown,
 )
 
@@ -52,6 +52,47 @@ class Sec17RecoveryCodes(TestCase):
         u.recovery_codes = [_legacy_sha256('old-code')]
         u.save(update_fields=['recovery_codes'])
         self.assertTrue(use_recovery_code(u, 'old-code'))
+
+
+class V5PromoServerClamp(MoneyTestBase):
+    """V5 — chegirма SERVERда tekshiriladi. Soxta aksiya rad etiladi; aksiyadan
+    tashqari qo'lда chegirма SABAB talab qiladi."""
+
+    def test_fake_promo_discount_rejected(self):
+        self.open_shift()
+        r = self.checkout(order_discount='100000',
+                          applied_promos=[{'id': 1, 'name': 'SOXTA', 'discount': 100000}])
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(SaleTransaction.objects.exists())
+
+    def test_manual_discount_without_reason_rejected(self):
+        self.open_shift()
+        r = self.checkout(order_discount='5000')   # sabab yo'q
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(SaleTransaction.objects.exists())
+
+    def test_manual_discount_with_reason_ok(self):
+        self.open_shift()
+        r = self.checkout(order_discount='5000', discount_reason='shikast')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(SaleTransaction.objects.exists())
+
+
+class S3RefundIdempotency(MoneyTestBase):
+    """S3 — bir xil kalit bilan qaytarish IKKI marta pul chiqarmaydi."""
+
+    def test_duplicate_refund_key_blocked(self):
+        self.open_shift()
+        self.checkout()   # bitta sotuv yaratadi
+        sale = Sale.objects.first()
+        body = {'lines': [{'sale_id': sale.pk, 'qty': 1, 'reason': 'x'}],
+                'idempotency_key': 'refund-key-1'}
+        j = json.dumps(body)
+        r1 = self.client.post('/pos/refund/', j, content_type='application/json')
+        r2 = self.client.post('/pos/refund/', j, content_type='application/json')
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(Return.objects.count(), 1)   # faqat BITTA qaytarish
 
 
 class Auth3TotpReplay(TestCase):

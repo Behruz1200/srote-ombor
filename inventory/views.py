@@ -848,12 +848,24 @@ def product_bulk_update(request):
     except Exception:
         messages.error(request, "Noto'g'ri qiymat.")
         return redirect('product_list')
+    if not value.is_finite():      # 'inf'/'nan' — N3/V4
+        messages.error(request, "Noto'g'ri qiymat.")
+        return redirect('product_list')
 
     # STK-19: narx amallari uchun qiymat 0 bo'lса — RAD etamiz. Ilgari bo'sh
     # qiymat 0 ga tushib, `multiply_price` butun katalog narxini NOLGA
     # aylantirar (yoki `set_price` hammani 0 qilar) edi.
     if op in ('set_price', 'set_markup', 'multiply_price') and value <= 0:
         messages.error(request, "Qiymat 0 dan katta bo'lishi kerak.")
+        return redirect('product_list')
+
+    # N3/V4: YUQORI chegara ham SERVERда — brauzer max faqat maslahat. "×1000"
+    # yoki 13-xonali narx butun katalogni buzmasin.
+    _caps = {'set_price': Decimal('100000000'),
+             'multiply_price': Decimal('1000'),
+             'set_markup': Decimal('10000')}
+    if op in _caps and value > _caps[op]:
+        messages.error(request, "Qiymat juda katta — tekshirib qayta kiriting.")
         return redirect('product_list')
 
     products = Product.objects.filter(id__in=[int(i) for i in ids if str(i).isdigit()])
@@ -2129,7 +2141,7 @@ def _split_csv(text):
 @admin_required
 def intake_for_product(request, code):
     """Bulk intake: matrix of (size × color) → counts in one form."""
-    from decimal import Decimal
+    from decimal import Decimal, InvalidOperation
     product = get_object_or_404(Product, code=normalize_code(code))
 
     if request.method == 'POST':
@@ -2140,11 +2152,33 @@ def intake_for_product(request, code):
                 messages.error(request, "Filial tanlang.")
                 return redirect('intake_for_product', code=product.code)
 
-            cost = Decimal(request.POST.get('cost_per_unit') or '0')
-            markup = Decimal(request.POST.get('markup_percent') or '0')
-            sale_price_raw = request.POST.get('sale_price') or ''
-            if sale_price_raw.strip():
-                sale_price = Decimal(sale_price_raw)
+            # V3: min="0" faqat brauzerда — devtools orqali chetlab o'tilардi va
+            # MANFIY cost weighted_cost orqali cost_price'ni manfiyга tortib,
+            # o'sha variantning butun marja hisobini buzardi. Shu bois pul
+            # maydonlarини SERVERда tekshiramiz (IntakeForm bilan bir xil chegara:
+            # min 0, max_digits 12/6). Noto'g'ri bo'lsa ValueError → pastda ushlanib
+            # "Maydonlarni tekshiring" xabari chiqadi, hech narsa saqlanmaydi.
+            def _money(field, max_int_digits=10):
+                raw = (request.POST.get(field) or '').strip()
+                for ch in (' ', ' ', ' ', "'"):
+                    raw = raw.replace(ch, '')
+                raw = raw.replace(',', '.')
+                if raw == '':
+                    return Decimal('0')
+                try:
+                    d = Decimal(raw)
+                except InvalidOperation:
+                    raise ValueError(f"{field} — raqam emas")
+                if (not d.is_finite() or d < 0
+                        or abs(d) >= (Decimal(10) ** max_int_digits)):
+                    raise ValueError(f"{field} — noto'g'ri qiymat")
+                return d
+
+            cost = _money('cost_per_unit')
+            markup = _money('markup_percent', max_int_digits=4)
+            sale_price_raw = (request.POST.get('sale_price') or '').strip()
+            if sale_price_raw:
+                sale_price = _money('sale_price')
             else:
                 sale_price = (cost * (1 + markup / 100)).quantize(Decimal('1'))
             # STK-11: tannarx 0 (bonus/tekin tovar yoki o'qilmagan faktura)
@@ -2153,7 +2187,7 @@ def intake_for_product(request, code):
             # stock.sale_price umuman o'zgartirilmaydi (0 yozilmaydi).
             if sale_price <= 0:
                 sale_price = product.default_sale_price or Decimal('0')
-            wholesale_price = Decimal(request.POST.get('wholesale_price') or '0')
+            wholesale_price = _money('wholesale_price')
 
             supplier = (request.POST.get('supplier') or '').strip()
             note = (request.POST.get('note') or '').strip()
@@ -2283,6 +2317,11 @@ def product_variants_edit(request, code):
         stocks = request.POST.getlist('v_stock')
 
         variants = {v.pk: v for v in product.variants.all()}
+        # V2: bo'sh katak = "o'zgarmadi". Har bir mavjud tur uchun joriy
+        # BranchStock qiymatlarini oldindan olamiz — bo'sh maydon o'shанга
+        # tenglashadi, natijaда hech narsa o'zgarmaydi (0 ga tushmaydi).
+        cur_stocks = {bs.variant_id: bs for bs in BranchStock.objects.filter(
+            branch=branch, variant__product=product)}
         rows = []
         seen_pairs, seen_barcodes = {}, set()   # {(o'lcham, rang): narx}
         for i in range(len(ids)):
@@ -2301,14 +2340,30 @@ def product_variants_edit(request, code):
                 if not (color or size or barcode):
                     continue
                 variant = None
+            # V2/N2: bo'sh katak = None ("o'zgarmadi"); 'inf'/'nan' rad etiladi.
+            def _decn(s):
+                s = (s or '').strip()
+                if s == '':
+                    return None
+                d = _dec(s)
+                if not d.is_finite():
+                    raise InvalidOperation
+                return d
             try:
-                cost = _dec(get(costs))
-                sale = _dec(get(sales))
-                wholesale = _dec(get(wholesales))
-                stock_new = int(_dec(get(stocks)))
+                cost_i = _decn(get(costs))
+                sale_i = _decn(get(sales))
+                ws_i = _decn(get(wholesales))
+                stock_i = _decn(get(stocks))
             except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"{i + 1}-qator: raqam maydonlari noto'g'ri.")
                 continue
+            # Bo'sh maydon: mavjud tur uchun JORIY qiymat, yangi tur uchun 0.
+            _cur = cur_stocks.get(variant.pk) if variant is not None else None
+            cost = cost_i if cost_i is not None else (_cur.cost_price if _cur else Decimal('0'))
+            sale = sale_i if sale_i is not None else (_cur.sale_price if _cur else Decimal('0'))
+            wholesale = ws_i if ws_i is not None else (_cur.wholesale_price if _cur else Decimal('0'))
+            stock_new = (int(stock_i) if stock_i is not None
+                         else (_cur.stock_count if _cur else 0))
             if min(cost, sale, wholesale) < 0 or stock_new < 0:
                 errors.append(f"{i + 1}-qator: manfiy qiymat kiritilmaydi.")
                 continue
@@ -2456,19 +2511,39 @@ def product_variants_edit(request, code):
                 messages.info(request, "O'zgarish yo'q.")
             return redirect('product_detail', code=product.code)
 
-    # GET (yoki xatodan keyin) — joriy holatni chizamiz
-    stocks = {st.variant_id: st for st in BranchStock.objects.filter(
-        variant__product=product, branch=branch)}
-    rows = []
-    for v in product.variants.all():
-        st = stocks.get(v.pk)
-        rows.append({
-            'variant': v,
-            'cost': st.cost_price if st else '',
-            'sale': st.sale_price if st else '',
-            'wholesale': st.wholesale_price if st else '',
-            'stock': st.stock_count if st else 0,
-        })
+    # E1: POST xato bo'lса — submitlaган qatorlarni QAYTA ko'rsatamiz (bitta
+    # xato tufayli barcha qatorlar yo'qolmasin; intake_variants'даgi post_back
+    # namunasi). Aks holда joriy holatни DB'дан chizamiz.
+    def _clean_num(s):
+        s = (s or '')
+        for ch in (' ', ' ', ' ', "'"):
+            s = s.replace(ch, '')
+        return s.replace(',', '.')
+
+    if request.method == 'POST' and errors:
+        rows = []
+        for i in range(len(ids)):
+            g = lambda lst: (lst[i] if i < len(lst) else '')
+            rows.append({
+                'v_id': g(ids), 'color': g(colors), 'size': g(sizes),
+                'barcode': g(barcodes),
+                'cost': _clean_num(g(costs)), 'sale': _clean_num(g(sales)),
+                'wholesale': _clean_num(g(wholesales)), 'stock': _clean_num(g(stocks)),
+            })
+    else:
+        stocks = {st.variant_id: st for st in BranchStock.objects.filter(
+            variant__product=product, branch=branch)}
+        rows = []
+        for v in product.variants.all():
+            st = stocks.get(v.pk)
+            rows.append({
+                'v_id': v.pk, 'color': v.color, 'size': v.size,
+                'barcode': v.barcode or '',
+                'cost': st.cost_price if st else '',
+                'sale': st.sale_price if st else '',
+                'wholesale': st.wholesale_price if st else '',
+                'stock': st.stock_count if st else 0,
+            })
     return render(request, 'inventory/product_variants_edit.html', {
         'product': product, 'branch': branch, 'branches': branches,
         'rows': rows,
@@ -4300,9 +4375,16 @@ def intake_photo_save(request):
     if not _idem:
         _idem = _hl.sha256((request.POST.get('payload') or '').encode('utf-8')).hexdigest()[:32]
     _idem_key = f'intake_save:{_idem}'
+    _dup_resp = JsonResponse({'ok': True, 'duplicate': True, 'saved': 0,
+                              'error': 'Bu qabul allaqachon saqlangan (takror bosildi).'})
+    # Tez yo'l: bir workerда takror bosish (LocMemCache).
     if not _cache.add(_idem_key, True, 300):
-        return JsonResponse({'ok': True, 'duplicate': True, 'saved': 0,
-                             'error': 'Bu qabul allaqachon saqlangan (takror bosildi).'})
+        return _dup_resp
+    # S4: ASOSIY himoya — DB unikал kaliti. LocMemCache har Gunicorn workerда
+    # alohида, shu bois turli workerlarга tushган ikki tegish ikkalasи ham
+    # cache'дан o'tar edi. IntakeSession.idempotency_key esa BUTUN bazada yagona.
+    if IntakeSession.objects.filter(idempotency_key=_idem).exists():
+        return _dup_resp
 
     # Har qatorning o'z kategoriyasi bo'lishi mumkin — bitta yetkazib beruvchi
     # turli toifadagi mahsulot keltiradi. Ro'yxatda yo'q nom yozilsa, yangi
@@ -4416,6 +4498,7 @@ def intake_photo_save(request):
             agent_name=agent_name,
             agent_phone=agent_phone,
             note=(payload.get('note') or '').strip()[:500] or 'Faktura rasmidan (AI)',
+            idempotency_key=_idem,   # S4: DB unikал kaliti (cross-worker himoya)
         )
         # Yetkazib beruvchi kartochkasi bo'sh bo'lsa — agent ma'lumoti bilan
         # to'ldiramiz. Mavjud qiymatlar hech qachon ustidan yozilmaydi.
@@ -4689,6 +4772,21 @@ def stocktake_detail(request, pk):
                     return redirect('stocktake_detail', pk=session.pk)
                 # Re-fetch counts under the lock window
                 fresh_counts = list(locked.counts.select_related('variant__product'))
+                # D2: "Tasdiqlash" bosilганда ham formadagi HOZIRGI kataklarни
+                # saqlaymiz. Aks holда "Saqlash" bosilmagan bo'lса counted_qty ==
+                # system_qty bo'lib, barcha delta 0 chiqar, sanoq yo'qolib
+                # "tasdiqlandi" degan yolg'on xabar chiqardi.
+                for c in fresh_counts:
+                    _v = request.POST.get(f'count[{c.pk}]')
+                    if _v is None or _v == '':
+                        continue
+                    try:
+                        _iv = max(0, int(_v))
+                    except (ValueError, TypeError):
+                        continue
+                    if _iv != c.counted_qty:
+                        c.counted_qty = _iv
+                        c.save(update_fields=['counted_qty'])
                 adjustments = []
                 for c in fresh_counts:
                     bs = BranchStock.objects.filter(
@@ -5047,10 +5145,25 @@ def shift_close(request):
         return redirect('pos_terminal')
 
     if request.method == 'POST':
+        # N1: sanab chiqilган naqд MAJBURIY. Bo'sh bo'lса 0 yozib, kunlik
+        # tushumга teng SOXTA kamomad qotirib qo'yardi. Bo'shликни serverда rad
+        # etamiz va bo'shликка sabab bo'ladigan "1 200 000" (probel) formatни ham
+        # qabul qilamiz (type=number bo'sh qaytaradi).
+        _cc = (request.POST.get('counted_cash') or '').strip()
+        for ch in (' ', ' ', ' ', "'"):
+            _cc = _cc.replace(ch, '')
+        _cc = _cc.replace(',', '.')
+        if _cc == '':
+            messages.error(request, "Sanab chiqilgan naqd summasini kiriting.")
+            return redirect('shift_close')
         try:
-            counted = max(0, float(request.POST.get('counted_cash') or 0))
+            counted = max(0.0, float(_cc))
         except ValueError:
-            counted = 0
+            messages.error(request, "Naqd summasi noto'g'ri — faqat raqam kiriting.")
+            return redirect('shift_close')
+        if counted > 1e12:
+            messages.error(request, "Summa juda katta — tekshirib qayta kiriting.")
+            return redirect('shift_close')
         with transaction.atomic():
             shift.counted_cash = counted
             shift.closed_by = request.user
@@ -5334,10 +5447,38 @@ def cash_payout(request):
         category = 'other'
     note = (data.get('note') or '').strip()[:200]
 
-    payout = CashPayout.objects.create(
-        shift=shift, branch=branch, amount=amount,
-        category=category, note=note, created_by=request.user,
-    )
+    # S5: takroriy yuborishни (double-tap / timeout) bloklaymiz — bir martalik
+    # kalit bilan. Mavjud kalit bo'lsa yangi yozuv YARATMAYMIZ.
+    _idem = (data.get('idempotency_key') or '').strip()[:64] or None
+
+    def _payout_result(p, dup=False):
+        if wants_json:
+            return JsonResponse({'ok': True, 'id': p.id, 'amount': int(p.amount),
+                'category': p.get_category_display(),
+                'payouts_total': float(shift.payouts_total()),
+                'expected': float(shift.expected_cash()), 'duplicate': dup})
+        if dup:
+            messages.info(request, "Bu chiqim allaqachon yozilgan.")
+        else:
+            messages.success(request,
+                f"Kassadan olindi: {int(p.amount):,} so'm — {p.get_category_display()}.")
+        return redirect('shift_detail', pk=shift.pk)
+
+    if _idem:
+        _dupe = CashPayout.objects.filter(idempotency_key=_idem).first()
+        if _dupe:
+            return _payout_result(_dupe, dup=True)
+    try:
+        payout = CashPayout.objects.create(
+            shift=shift, branch=branch, amount=amount,
+            category=category, note=note, created_by=request.user,
+            idempotency_key=_idem,
+        )
+    except IntegrityError:
+        _dupe = CashPayout.objects.filter(idempotency_key=_idem).first()
+        if _dupe:
+            return _payout_result(_dupe, dup=True)
+        raise
 
     # MON-17: har bir kassa chiqimini AUDIT LOGGA yozamiz + katta summада
     # Telegram ogohlantirish. Ilgari chiqim hech qayerда qayd etilmasdi —
@@ -5430,10 +5571,37 @@ def cash_in(request):
         category = 'other'
     note = (data.get('note') or '').strip()[:200]
 
-    ci = CashIn.objects.create(
-        shift=shift, branch=branch, amount=amount,
-        category=category, note=note, created_by=request.user,
-    )
+    # S5: takroriy yuborish (double-tap/timeout) bir martalik kalit bilan bloklanadi.
+    _idem = (data.get('idempotency_key') or '').strip()[:64] or None
+
+    def _cashin_result(c, dup=False):
+        if wants_json:
+            return JsonResponse({'ok': True, 'id': c.id, 'amount': int(c.amount),
+                'category': c.get_category_display(),
+                'cash_ins_total': float(shift.cash_ins_total()),
+                'expected': float(shift.expected_cash()), 'duplicate': dup})
+        if dup:
+            messages.info(request, "Bu qo'shimcha allaqachon yozilgan.")
+        else:
+            messages.success(request,
+                f"Kassaga qo'shildi: {int(c.amount):,} so'm — {c.get_category_display()}.")
+        return redirect('shift_detail', pk=shift.pk)
+
+    if _idem:
+        _dupe = CashIn.objects.filter(idempotency_key=_idem).first()
+        if _dupe:
+            return _cashin_result(_dupe, dup=True)
+    try:
+        ci = CashIn.objects.create(
+            shift=shift, branch=branch, amount=amount,
+            category=category, note=note, created_by=request.user,
+            idempotency_key=_idem,
+        )
+    except IntegrityError:
+        _dupe = CashIn.objects.filter(idempotency_key=_idem).first()
+        if _dupe:
+            return _cashin_result(_dupe, dup=True)
+        raise
 
     # MON-4/17: kassaga naqd qo'shishни ham AUDIT LOGGA yozamiz + katta summада
     # ogohlantirish (chiqim bilan bir xil nazorat — aks holда qo'shimchalar
@@ -6112,6 +6280,49 @@ def pos_checkout(request):
             _l['ld'] = _line_gross
         _subtotal += _line_gross - _l['ld']
     if order_discount > _subtotal:      # chek chegirmasi savatdan oshmasin
+        order_discount = _subtotal
+
+    # V5/S2: aksiya chegirmasini SERVERда qayta hisoblaymiz — mijoz yuborган
+    # applied_promos ga ishonmaymiz (aks holда soxta aksiya nomi bilan butun
+    # savatni 0 ga tushirish mumkin edi). Aksiyадан tashqari qo'lда chegirма
+    # esa SABAB talab qiladi (auditда ko'rinsin).
+    _promo_stocks = {s.id: s for s in BranchStock.objects
+                     .filter(id__in=list(_qty_by_sid.keys()))
+                     .select_related('variant__product')}
+    _cart_lines = []
+    for _l in parsed_lines:
+        _s = _promo_stocks.get(_l['sid'])
+        if not _s:
+            continue
+        _cart_lines.append({
+            'stock_id': _l['sid'], 'qty': _l['qty'], 'price': float(_l['price']),
+            'product_id': _s.variant.product_id,
+            'category_id': _s.variant.product.category_id,
+        })
+    _server_applied, _server_promo_f = _evaluate_promotions(_cart_lines)
+    _server_promo = Decimal(str(_server_promo_f))
+    _claimed_promo = Decimal('0')
+    for _p in (data.get('applied_promos') or []):
+        try:
+            _claimed_promo += Decimal(str(_p.get('discount') or 0))
+        except (InvalidOperation, TypeError):
+            pass
+    if _claimed_promo > _server_promo + Decimal('1'):
+        return JsonResponse({'ok': False,
+            'error': "Aksiya chegirmasi tekshiruvdan o'tmadi — savatni yangilang."},
+            status=400)
+    _manual_disc = order_discount - _claimed_promo
+    if _manual_disc < Decimal('-1'):
+        return JsonResponse({'ok': False,
+            'error': "Chegirma summasi mos emas — qayta urinib ko'ring."}, status=400)
+    if _manual_disc < 0:
+        _manual_disc = Decimal('0')
+    if _manual_disc > Decimal('0.5') and not discount_reason:
+        return JsonResponse({'ok': False,
+            'error': "Qo'lda chegirma uchun sabab kiriting."}, status=400)
+    # Klient sonига emas, SERVER hisoblаган aksiyaga + qo'lда qismga ishonamiz.
+    order_discount = _server_promo + _manual_disc
+    if order_discount > _subtotal:
         order_discount = _subtotal
 
     # Resolve / auto-create Customer by phone (most reliable key)
@@ -6803,6 +7014,22 @@ def pos_promo_eval(request):
             'category_id': s.variant.product.category_id,
         })
 
+    applied, total_discount = _evaluate_promotions(cart_lines)
+    return JsonResponse({
+        'ok': True,
+        'promotions': applied,
+        'total_discount': round(total_discount, 2),
+    })
+
+
+def _evaluate_promotions(cart_lines):
+    """V5: aktiv aksiyalardan kelib chiqadigan chegirmani SERVERда hisoblaydi.
+
+    cart_lines: [{stock_id, qty, price, product_id, category_id}]. Bu yagona
+    manba — pos_promo_eval (ko'rsatish) ham, pos_checkout (tekshirish) ham shuni
+    chaqiradi, shunда mijoz o'ylab topган aksiya chegirmasi qabul qilinmaydi.
+    (applied_list, total_discount_float) qaytaradi.
+    """
     now = timezone.now()
     promos = (Promotion.objects
               .filter(is_active=True, valid_from__lte=now)
@@ -6870,11 +7097,7 @@ def pos_promo_eval(request):
             })
             total_discount += discount
 
-    return JsonResponse({
-        'ok': True,
-        'promotions': applied,
-        'total_discount': round(total_discount, 2),
-    })
+    return applied, total_discount
 
 
 @login_required
@@ -7016,6 +7239,14 @@ def pos_refund(request):
     if not items:
         return JsonResponse({'ok': False, 'error': 'qator yo\'q'}, status=400)
 
+    # S3: takroriy qaytarishни (timeout/qayta bosish) bloklaymiz. Bir martalik
+    # kalit butun qaytarish partiyasига tegishli — birinchi Return qatoriga
+    # yoziladi. O'sha kalit bilan qaytarish bo'lган bo'lса — takror emas.
+    _idem = (data.get('idempotency_key') or '').strip()[:64] or None
+    if _idem and Return.objects.filter(idempotency_key=_idem).exists():
+        return JsonResponse({'ok': True, 'refunded_qty': 0,
+                             'refunded_total': 0, 'duplicate': True})
+
     # REF-1: HAMMA qatorni atomic blokдан OLDIN tekshiramiz. Ilgari tekshiruv
     # atomic ichida `return` qilardi — bitta qator o'tib, keyingisi yiqilса,
     # o'tgani COMMIT bo'lib, 400 qaytardi. Kassir tuzatib qayta yuborsa —
@@ -7046,6 +7277,7 @@ def pos_refund(request):
 
     refunded_total = Decimal('0')
     refunded_qty = 0
+    _first_row = True
     try:
         with transaction.atomic():
             for p in parsed:
@@ -7068,11 +7300,17 @@ def pos_refund(request):
                 if stock and not sale.variant.product.is_open_price:
                     stock.stock_count = F('stock_count') + p['qty']
                     stock.save(update_fields=['stock_count'])
-                ret = Return.objects.create(
-                    sale=sale, shift=open_shift,
-                    quantity=p['qty'], reason=p['reason'],
-                    refunded_by=request.user,
-                )
+                _rk = dict(sale=sale, shift=open_shift, quantity=p['qty'],
+                           reason=p['reason'], refunded_by=request.user)
+                if _idem and _first_row:
+                    _rk['idempotency_key'] = _idem   # S3: partiyaning bir martalik kaliti
+                    _first_row = False
+                try:
+                    ret = Return.objects.create(**_rk)
+                except IntegrityError:
+                    # Poyga: boshqa so'rov ayni kalitни yozib ulgurdi — takror.
+                    raise _RefundAbort({'ok': True, 'refunded_qty': 0,
+                        'refunded_total': 0, 'duplicate': True}, status=200)
                 refunded_qty += p['qty']
                 refunded_total += ret.refund_amount  # REF-2: order_discount hisobga olingan
     except _RefundAbort as e:
@@ -10308,18 +10546,34 @@ def price_apply(request):
     back = request.POST.get('back') or reverse('price_list')
 
     def dec(v, allow_negative=False):
-        """Narxlar manfiy bo'lmaydi; foiz esa manfiy bo'lishi mumkin (-5%)."""
+        """Narxlar manfiy bo'lmaydi; foiz esa manfiy bo'lishi mumkin (-5%).
+
+        V1: BO'SH katak = "o'zgarmadi" (None), NOL emas — aks holда katakни
+        tozalab qayta yozmoqchi bo'lган kassir narxni 0 ga tushirib, tovar
+        tekinга sotilar edi.
+        V4: 10 xonaдан katta son (max_digits=12, decimal_places=2) saqlashда
+        InvalidOperation berib butun atomik blokни orqага qaytarardi — shu yerда
+        rad etamiz.
+        """
+        s = str(v).replace(' ', '').replace(',', '.').strip()
+        if s == '':
+            return None
         try:
-            d = Decimal(str(v).replace(' ', '').replace(',', '.') or '0')
+            d = Decimal(s)
         except (InvalidOperation, ValueError, TypeError):
             return None
+        if not d.is_finite():          # 'inf' / 'nan' — N2
+            return None
         if not allow_negative and d < 0:
+            return None
+        if abs(d) >= Decimal('10000000000'):   # 10 butun xona chegarasi
             return None
         return d
 
     mode = request.POST.get('mode') or 'rows'
     changed = 0
 
+    skipped = 0
     if mode == 'rows':
         # Jadvalda qo'lda o'zgartirilgan kataklar
         ids = request.POST.getlist('row_id')
@@ -10330,9 +10584,15 @@ def price_apply(request):
                     continue
                 get = lambda n: (request.POST.getlist(n)[i]
                                  if i < len(request.POST.getlist(n)) else '')
-                new_cost = dec(get('row_cost'))
-                new_sale = dec(get('row_sale'))
-                new_ws = dec(get('row_ws'))
+                rc, rs, rw = get('row_cost'), get('row_sale'), get('row_ws')
+                new_cost = dec(rc)
+                new_sale = dec(rs)
+                new_ws = dec(rw)
+                # E2: bo'sh EMAS, lekin rad etilган (manfiy/noto'g'ri/juda katta)
+                # qiymatlarни sanaymiz — jim "muvaffaqiyat" o'rniga ogohlantiramiz.
+                for _rv, _pv in ((rc, new_cost), (rs, new_sale), (rw, new_ws)):
+                    if (_rv or '').strip() != '' and _pv is None:
+                        skipped += 1
                 ch = {}
                 if new_cost is not None and new_cost != stock.cost_price:
                     ch['tannarx'] = [str(stock.cost_price), str(new_cost)]
@@ -10348,6 +10608,10 @@ def price_apply(request):
                                               'wholesale_price'])
                     changed += 1
         messages.success(request, f"{changed} ta qator yangilandi.")
+        if skipped:
+            messages.warning(request,
+                f"{skipped} ta qiymat qabul qilinmadi (manfiy yoki noto'g'ri) — "
+                "o'sha kataklarni tekshiring.")
         return redirect(back)
 
     # ---- ommaviy amal ----
@@ -10526,13 +10790,26 @@ def promotion_save(request):
         ptype = Promotion.Type.PERCENT_OFF
 
     def num(v, default=0):
+        # V7: "50%", "50 " kabi kiritishlar ham ishlasin — ilgari '%' belgisi
+        # InvalidOperation berib, num() 0 qaytarар va "50%" JIM 0% aksiyaга
+        # aylanardi.
+        s = str(v if v is not None else '').strip()
+        for ch in (' ', ' ', ' ', '%', "'"):
+            s = s.replace(ch, '')
+        s = s.replace(',', '.')
         try:
-            return Decimal(str(v).replace(',', '.') or default)
+            d = Decimal(s or default)
+            return d if d.is_finite() else Decimal(default)
         except (InvalidOperation, ValueError, TypeError):
             return Decimal(default)
 
     percent = num(request.POST.get('percent'))
     percent = max(Decimal('0'), min(Decimal('100'), percent))
+    # V7: foizli aksiya turlari uchun foiz 0 bo'lsa — bu foydasiz "0% chegirma"
+    # bo'lardi (lekin muvaffaqiyat deб ko'rsatilardi). Rad etamiz.
+    if ptype in (Promotion.Type.PERCENT_OFF, Promotion.Type.NTH_PERCENT) and percent <= 0:
+        messages.error(request, "Foizli aksiya uchun foiz 0 dan katta bo'lishi kerak.")
+        return redirect('promotion_list')
     try:
         qty_required = max(1, int(request.POST.get('qty_required') or 1))
     except (TypeError, ValueError):
@@ -10567,6 +10844,13 @@ def promotion_save(request):
                 datetime.strptime(vu, '%Y-%m-%d').replace(hour=23, minute=59), tz)
         except (ValueError, TypeError):
             pass
+    # V7: tugash sanasi boshlanish sanasidан oldин bo'lmasин — aks holда aksiya
+    # hech qachon ishlamaydi (lekin "saqlandi" deб ko'rsatilardi).
+    if (promo.valid_from and promo.valid_until
+            and promo.valid_until < promo.valid_from):
+        messages.error(request,
+            "Tugash sanasi boshlanish sanasidan oldin bo'lmasin.")
+        return redirect('promotion_list')
     promo.save()
 
     AuditLog.objects.create(

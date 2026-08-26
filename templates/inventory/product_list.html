@@ -594,20 +594,26 @@
         bulkCatWrap.classList.add('d-none');
         bulkDeleteWarn.style.display = 'none';
         bulkSubmit.className = 'btn btn-primary';
+        // N3: har amal uchun aqlли yuqori chegara — "×1000" kabi halokatli
+        // xatoni to'xtatadi (server ham tekshiradi).
+        bulkValue.min = '0';
         if (op === 'set_price') {
             bulkValueLabel.textContent = "Yangi sotuv narxi (so'm)";
             bulkValueHint.textContent = "Hammasi shu narxda bo'ladi.";
             bulkValue.step = '1';
+            bulkValue.max = '100000000';
             bulkValue.placeholder = '850000';
         } else if (op === 'multiply_price') {
             bulkValueLabel.textContent = "Foiz (joriydan)";
             bulkValueHint.textContent = "Masalan 110 = joriy × 1.10 (10% qimmatroq). 90 = arzonroq.";
             bulkValue.step = '0.1';
+            bulkValue.max = '1000';
             bulkValue.placeholder = '110';
         } else if (op === 'set_markup') {
             bulkValueLabel.textContent = "Yangi markup foizi";
             bulkValueHint.textContent = "Tannarx × (1 + foiz/100) — keyingi qabullarda sotuv narxi shunday hisoblanadi.";
             bulkValue.step = '0.1';
+            bulkValue.max = '10000';
             bulkValue.placeholder = '40';
         } else if (op === 'change_category') {
             bulkValueWrap.classList.add('d-none');
@@ -636,6 +642,17 @@
         }
         if (bulkOp.value === 'delete') {
             if (!confirm("HAQIQATAN ham tanlangan mahsulotlarni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.")) {
+                e.preventDefault();
+            }
+        }
+        // D1: narxни ommaviy o'zgartirish — tasdiq + orqага qaytarib bo'lmasligi.
+        const _priceOps = {set_price: 1, multiply_price: 1, set_markup: 1};
+        if (_priceOps[bulkOp.value]) {
+            const n = document.querySelectorAll('.pick:checked').length;
+            const labels = {set_price: 'narxni belgilash', multiply_price: 'narxni foizga ko\'paytirish',
+                            set_markup: 'markupни belgilash'};
+            if (!confirm(`${n} ta mahsulotda "${labels[bulkOp.value]}" (${bulkValue.value}) `
+                        + `bajarilsinmi?\nBu ommaviy narx o'zgarishi — orqага qaytarish qo'lда bo'ladi.`)) {
                 e.preventDefault();
             }
         }
