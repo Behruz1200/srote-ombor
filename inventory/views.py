@@ -1190,18 +1190,37 @@ def employee_debt_list(request):
             return redirect('employee_debt_list')
         if action == 'delete':
             d = (EmployeeDebt.objects.filter(pk=request.POST.get('pk') or 0)
-                 .prefetch_related('items').first())
+                 .prefetch_related('items__variant__product').first())
             if d:
-                # Tovarli qarz o'chirilsa — ombor qoldig'ini tiklaymiz
-                # (qo'shilganда kamaytirilgan edi).
+                # MON-24: TO'LANGAN qarzни o'chirib bo'lmaydi. Aks holda tovar
+                # ketgan, pul to'langan bo'lса ham — ombor tiklanib, to'langan
+                # naqd smen hisobidan yo'qolib, qarz izsiz g'oyib bo'lardi.
+                if d.is_paid:
+                    messages.error(request,
+                        "To'langan qarzni o'chirib bo'lmaydi (moliyaviy yozuv).")
+                    return redirect('employee_debt_list')
+                _restored = []
                 with transaction.atomic():
                     for it in d.items.all():
-                        if it.variant_id and it.branch_id:
+                        # MON-25: FAQAT zaxira kamaytirilgan (ochiq narxsiz)
+                        # tovar tiklanadi. Ochiq narxli qarzда zaxira
+                        # kamaytirilmagan — tiklasak, yo'qdan zaxira "yaratilardi".
+                        prod = it.variant.product if it.variant_id else None
+                        if (it.variant_id and it.branch_id and prod
+                                and not prod.is_open_price):
                             bs = BranchStock.objects.filter(
                                 variant_id=it.variant_id, branch_id=it.branch_id).first()
                             if bs:
                                 bs.stock_count = F('stock_count') + it.quantity
-                                bs.save()
+                                bs.save(update_fields=['stock_count'])
+                                _restored.append(f"{prod.code}×{it.quantity}")
+                    AuditLog.objects.create(
+                        user=request.user, username_snapshot=request.user.username,
+                        action=AuditLog.Action.DELETE, model_name='EmployeeDebt',
+                        object_id=str(d.pk),
+                        object_repr=f"Qarz o'chirildi: {d.who} — {int(d.amount)} so'm"[:300],
+                        changes={'amount': float(d.amount), 'who': d.who,
+                                 'restored_stock': _restored})
                     d.delete()
                 messages.info(request, "Qarz yozuvi o'chirildi (ombor qoldig'i tiklandi).")
             return redirect('employee_debt_list')
@@ -4849,6 +4868,9 @@ def shift_close(request):
             shift.counted_cash = counted
             shift.closed_by = request.user
             shift.closed_at = timezone.now()
+            # MON-22: kutilgan naqdни YOPILISH paytida qotiramiz (keyingi
+            # tahrirlar tarixiy farqni qayta yozmasin).
+            shift.closing_expected_cash = shift.compute_expected_cash()
             shift.status = Shift.Status.CLOSED
             shift.note = (
                 (shift.note + ' | ' if shift.note else '')
@@ -6991,6 +7013,12 @@ def sale_create(request, stock_id):
         if form.is_valid():
             cd = form.cleaned_data
             qty = cd['quantity']
+            # MON-21: smensiz sotuv YO'Q — aks holda shift=None bilan yozilib,
+            # Z-hisobotга tushmaydi.
+            open_shift = _open_shift_for(stock.branch)
+            if not open_shift:
+                messages.error(request, "Smen ochilmagan. Avval smen oching.")
+                return redirect('sale_create', stock_id=stock.id)
             if qty > stock.stock_count:
                 messages.error(request,
                     f"Omborda yetarli emas. Mavjud: {stock.stock_count}, so'rov: {qty}.")
@@ -7004,6 +7032,7 @@ def sale_create(request, stock_id):
                     branch=stock.branch,
                     sold_by=request.user,
                     payment_method=SaleTransaction.PaymentMethod.CASH,
+                    shift=open_shift,   # MON-21
                     note=cd.get('note') or '',
                 )
                 Sale.objects.create(
@@ -8183,12 +8212,25 @@ def checkout(request):
         return redirect('cart_view')
 
     if request.method == 'POST':
+        branch = lines[0]['stock'].branch
+        # MON-21: smensiz sotuv YO'Q (pos_checkout kabi) — aks holda shift=None
+        # bilan yozilib, Z-hisobotга tushmaydi.
+        open_shift = _open_shift_for(branch)
+        if not open_shift:
+            messages.error(request, "Smen ochilmagan. Avval smen oching.")
+            return redirect('cart_view')
+        # MON-20: to'lov turini normallashtiramiz + tekshiramiz (xom qiymat
+        # DB constraint'ga urилиб 500 bermasin, va soxta bucket'га tushmasin).
+        _pm = _norm_pay_method(request.POST.get('payment_method') or 'cash')
+        if _pm not in ('cash', 'card', 'transfer'):
+            messages.error(request, "To'lov turi noto'g'ri.")
+            return redirect('cart_view')
         with transaction.atomic():
-            branch = lines[0]['stock'].branch
             txn = SaleTransaction.objects.create(
                 branch=branch,
                 sold_by=request.user,
-                payment_method=request.POST.get('payment_method') or 'cash',
+                payment_method=_pm,
+                shift=open_shift,
                 customer_name=request.POST.get('customer_name') or '',
                 customer_phone=request.POST.get('customer_phone') or '',
                 note=request.POST.get('note') or '',

@@ -460,6 +460,31 @@ class Stk8WeightedCost(TestCase):
         self.assertEqual(weighted_cost(10, 1000, 0, 1500), Decimal('1500'))
 
 
+class Mon22ShiftSnapshot(MoneyTestBase):
+    """MON-22 — yopilgan smenning farqi keyingi tahrirlardan o'zgarmaydi."""
+
+    def test_closed_shift_variance_is_frozen(self):
+        shift = self.open_shift(opening_cash='0')
+        self.checkout(payment_method='cash')  # 100000 naqd
+        shift.counted_cash = shift.compute_expected_cash()
+        shift.closing_expected_cash = shift.compute_expected_cash()
+        shift.status = Shift.Status.CLOSED
+        shift.closed_at = timezone.now()
+        shift.save()
+        self.assertEqual(shift.variance(), Decimal('0'))
+        # keyinchalik shu smenга yana sotuv qo'shilса ham farq o'zgarmasin
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=shift,
+            payment_method='cash')
+        Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('50000'),
+            cost_at_sale=Decimal('30000'), sold_by=self.cashier)
+        shift.refresh_from_db()
+        self.assertEqual(shift.variance(), Decimal('0'),
+                         'yopilgan smen farqi qotirilgan bo\'lishi kerak')
+
+
 class RefundMoney(MoneyTestBase):
     """REF-1 (atomiklik) va REF-2 (order_discount qaytarishда)."""
 

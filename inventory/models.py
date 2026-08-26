@@ -888,6 +888,14 @@ class Shift(models.Model):
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text="Smen oxirida sanab chiqilgan naqd"
     )
+    # MON-22: yopilishда KUTILGAN naqd SNAPSHOT'i. Ilgari variance() doim
+    # jonli hisoblanardi — keyinroq bir sotuv o'chirilса/qaytarilса, oylar
+    # oldingi smenning farqi jimgina qayta yozilib, aybni o'sha kassirга
+    # ag'darardi. Yopilgан smen uchun shu qotirilgan qiymat ishlatiladi.
+    closing_expected_cash = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Yopilish paytida hisoblangan kutilgan naqd (qotirilgan)"
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
     note = models.CharField(max_length=200, blank=True)
 
@@ -1062,18 +1070,23 @@ class Shift(models.Model):
 
     def expected_cash(self):
         """Kutilgan naqd = ochilish + naqd sotuvlar + qarz to'lovlari
-        + kassaga qo'shilgan naqd − kassadan olingan pul − qaytarilgan pul."""
+        + kassaga qo'shilgan naqd − kassadan olingan pul − qaytarilgan pul.
+
+        MON-22: yopilgan smen uchun — YOPILISHDAGI qotirilgan qiymat (keyingi
+        tahrirlar tarixni qayta yozmasin). Ochiq smen uchun jonli hisob.
+        """
+        if self.status == self.Status.CLOSED and self.closing_expected_cash is not None:
+            return _dec(self.closing_expected_cash)
+        return self.compute_expected_cash()
+
+    def compute_expected_cash(self):
+        """Jonli hisoblangan kutilgan naqd (snapshot'siz)."""
         return (_dec(self.opening_cash) + _dec(self.cash_sales())
                 + _dec(self.debt_payments_total()) + _dec(self.cash_ins_total())
                 - _dec(self.payouts_total()) - _dec(self.refunds_total()))
 
     def variance(self):
-        """Kassa farqi = sanalgan − kutilgan. Manfiy bo'lsa kam, ortiq bo'lsa ko'p.
-
-        counted_cash smen yopish formasidan float sifatida kelishi mumkin,
-        expected_cash() esa Decimal — shuning uchun ikkalasini ham Decimal'ga
-        keltiramiz (aks holda float − Decimal TypeError beradi).
-        """
+        """Kassa farqi = sanalgan − kutilgan. Manfiy bo'lsa kam, ortiq bo'lsa ko'p."""
         if self.counted_cash is None:
             return None
         return _dec(self.counted_cash) - _dec(self.expected_cash())
