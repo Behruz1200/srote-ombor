@@ -11,7 +11,6 @@ Guruhlar:
     Bug*            — tasdiqlangan nuqson; tuzatilgunча yiqiladi
 """
 import json
-import unittest
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -249,28 +248,46 @@ class BugMon11UnknownMethodBecomesCash(MoneyTestBase):
         self.assertEqual(shift.sales_by_method_split()['cash'], Decimal('0'))
 
 
-class BugMon8ClientSuppliedPrice(MoneyTestBase):
-    """MON-8 — narx brauzerdan keladi va DB bilan solishtirilmaydi.
+class Mon8PriceOverrideAudited(MoneyTestBase):
+    """MON-8 — siyosat: FLAG-AND-AUDIT.
 
-    ATAYLAB KUTILGAN XATO (expectedFailure): do'kon narxni QO'LDA kiritadi —
-    "Boshqa summa" (kiyim/poyabzal), ulgurji, kelishilgan narx. Serverда narxni
-    qattiq DB narxiga majburlash real ish jarayonini buzadi. Buni tuzatish
-    siyosat qarori talab qiladi (flag-and-audit yoki open_price bayrog'i) —
-    egasidan tasdiq kutmoqda. Shuning uchun bu test ataylab qizil, lekin
-    suite'ni yiqitmaydi.
+    Do'kon narxni QO'LDA kiritadi (kelishilgan/ulgurji/"Boshqa summa") — shuning
+    uchun narx QABUL qilinadi (ish jarayoni buzilmaydi). LEKIN katalog narxidan
+    sezilarli farq yoki tannarxdan past sotuv AUDIT LOGGA yoziladi — ko'rinsin.
     """
 
-    @unittest.expectedFailure
-    def test_server_does_not_accept_arbitrary_price(self):
+    def test_material_override_is_accepted_and_logged(self):
+        from inventory.models import AuditLog
+        self.open_shift()
+        resp = self.checkout(lines=[{'stock_id': self.stock.pk, 'qty': 1,
+                                     'sale_price': '1'}])  # katalog 100 000
+        self.assertEqual(resp.status_code, 200)
+        sale = Sale.objects.first()
+        self.assertIsNotNone(sale, 'qo\'lda narxli sotuv qabul qilinishi kerak')
+        self.assertEqual(sale.sale_price, Decimal('1'),
+                         'kiritilgan narx saqlanadi (buzilmaydi)')
+        log = AuditLog.objects.filter(model_name='PriceOverride').first()
+        self.assertIsNotNone(log, 'sezilarli narx farqi audit logга tushishi kerak')
+        self.assertTrue(log.changes.get('price_override', {}).get('below_cost'),
+                        'tannarxdan past — below_cost bayrog\'i yoqilishi kerak')
+
+    def test_catalog_price_sale_is_not_logged(self):
+        from inventory.models import AuditLog
         self.open_shift()
         self.checkout(lines=[{'stock_id': self.stock.pk, 'qty': 1,
-                              'sale_price': '1'}])  # DB narxi 100 000
-        sale = Sale.objects.first()
-        if sale is not None:
-            self.assertEqual(
-                sale.sale_price, Decimal('100000'),
-                'narx serverда qayta hisoblanishi kerak, mijozdan olinmaydi',
-            )
+                              'sale_price': '100000'}])  # katalogга teng
+        self.assertEqual(
+            AuditLog.objects.filter(model_name='PriceOverride').count(), 0,
+            'katalog narxida sotuv — audit yozuvi bo\'lmasligi kerak')
+
+    def test_small_rounding_diff_is_not_logged(self):
+        from inventory.models import AuditLog
+        self.open_shift()
+        self.checkout(lines=[{'stock_id': self.stock.pk, 'qty': 1,
+                              'sale_price': '99500'}])  # ~0.5% farq
+        self.assertEqual(
+            AuditLog.objects.filter(model_name='PriceOverride').count(), 0,
+            'kichik (5% dan kam) farq shovqin — yozilmaydi')
 
 
 class BugMon13GarbagePriceBecomesFree(MoneyTestBase):

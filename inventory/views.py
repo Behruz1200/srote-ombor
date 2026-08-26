@@ -8,6 +8,7 @@ from django.db.models import (Sum, F, Q, DecimalField, ExpressionWrapper, Count,
 from django.db.models.functions import (
     Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
 )
+from decimal import Decimal
 from django.db import transaction, IntegrityError
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
@@ -5548,6 +5549,13 @@ def pos_lookup(request):
     })
 
 
+# MON-8 flag-and-audit: qo'lda kiritilgan narx katalog narxidan shu chegaralardan
+# ko'proq farq qilsa — audit logga yoziladi (sotuv baribir o'tadi). Ikki shart
+# ham bajarilishi kerak: kamida N% VA kamida M so'm — rounding shovqinini kesadi.
+PRICE_OVERRIDE_PCT = Decimal('5')       # 5%
+PRICE_OVERRIDE_MIN_ABS = Decimal('1000')  # 1000 so'm
+
+
 @login_required
 def pos_checkout(request):
     """POST /pos/checkout/ with JSON body:
@@ -5799,9 +5807,11 @@ def pos_checkout(request):
                 shift=open_shift,
                 idempotency_key=idem_key,
             )
+            price_overrides = []  # MON-8: qo'lda kiritilgan narx auditи
             for ln in parsed_lines:
                 stock = locked[ln['sid']]
-                if not stock.variant.product.is_open_price:
+                prod = stock.variant.product
+                if not prod.is_open_price:
                     stock.stock_count = F('stock_count') - ln['qty']
                     stock.save()
                 Sale.objects.create(
@@ -5813,6 +5823,33 @@ def pos_checkout(request):
                     line_discount=ln['ld'],
                     sold_by=request.user,
                 )
+                # MON-8 (flag-and-audit): qo'lda kiritilgan narxni QABUL qilamiz
+                # (kelishilgan/ulgurji narx — ish jarayoni buzilmaydi), LEKIN
+                # katalog narxidan sezilarli farq qilsa yoki TANNARXDAN past
+                # bo'lsa — audit uchun belgilaymiz (kim, qachon, qancha).
+                if not prod.is_open_price:
+                    catalog = stock.sale_price or Decimal('0')
+                    entered = ln['price']
+                    cost = stock.cost_price or Decimal('0')
+                    below_cost = bool(cost > 0 and entered < cost)
+                    material = False
+                    pct = Decimal('0')
+                    if catalog > 0:
+                        pct = abs(entered - catalog) / catalog * 100
+                        # rounding shovqinidan qochish: kamida 5% VA 1000 so'm farq
+                        material = (pct >= PRICE_OVERRIDE_PCT
+                                    and abs(entered - catalog) >= PRICE_OVERRIDE_MIN_ABS)
+                    if material or below_cost:
+                        price_overrides.append({
+                            'code': prod.code, 'name': prod.name,
+                            'variant': ('/'.join(p for p in
+                                        (stock.variant.size, stock.variant.color) if p)
+                                        or (stock.variant.barcode or '')),
+                            'catalog': float(catalog), 'entered': float(entered),
+                            'cost': float(cost), 'qty': ln['qty'],
+                            'diff_pct': round(float(pct), 1),
+                            'below_cost': below_cost,
+                        })
     except _CheckoutAbort as e:
         return JsonResponse(e.payload, status=e.status)
     except IntegrityError:
@@ -5829,6 +5866,39 @@ def pos_checkout(request):
     # "best-effort" chaqiruvlar (fiskal, SMS) XATO bersa ham 500 qaytmasligi
     # kerak — aks holda offline navbat chekни ikkinchi marta yuborib, sotuv
     # ikki marta yozilardi (ikki barobar tushum, ombor ikki marta kamayadi).
+    # MON-8: narx o'zgartirishlarini audit logga yozamiz (best-effort).
+    if price_overrides:
+        try:
+            for ov in price_overrides:
+                flag = ', TANNARXDAN PAST!' if ov['below_cost'] else ''
+                AuditLog.objects.create(
+                    user=request.user,
+                    username_snapshot=request.user.username,
+                    action=AuditLog.Action.UPDATE,
+                    model_name='PriceOverride',
+                    object_id=str(txn.pk),
+                    object_repr=(f"{ov['code']} {ov['variant']}: katalog "
+                                 f"{int(ov['catalog'])} → kiritilgan "
+                                 f"{int(ov['entered'])} ({ov['diff_pct']}%{flag})")[:300],
+                    changes={'price_override': ov, 'txn_id': txn.pk},
+                )
+            # Faqat TANNARXDAN PAST (zararli) sotuvга Telegram ogohlantirish —
+            # bu eng o'tkir "pul oqib ketmoqda" signali, kamdan-kam bo'ladi.
+            loss = [o for o in price_overrides if o['below_cost']]
+            if loss:
+                try:
+                    from .notifications import send_telegram
+                    rows = '\n'.join(
+                        f"• {o['code']} {o['variant']}: {int(o['entered'])} so'm "
+                        f"(tannarx {int(o['cost'])})" for o in loss)
+                    send_telegram(
+                        f"🔴 <b>Tannarxdan past sotuv</b>\n"
+                        f"Kassir: {request.user.username} · Chek #{txn.pk}\n{rows}")
+                except Exception:
+                    logger.exception('below-cost telegram alert failed (txn %s)', txn.pk)
+        except Exception:
+            logger.exception('price-override audit failed for txn %s', txn.pk)
+
     try:
         from .fiscal import submit_for_transaction
         submit_for_transaction(txn)
