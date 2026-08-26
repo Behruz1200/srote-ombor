@@ -9288,6 +9288,7 @@ def _insights_context(request):
     branch_id = request.GET.get('branch') or ''
 
     today = timezone.localdate()
+    end_date = today   # davr oxirgi (kiritilган) kuni; odatda bugun
     if period == 'week':
         d_start = today - timedelta(days=7)
         days = 7
@@ -9297,14 +9298,28 @@ def _insights_context(request):
     elif period == 'quarter':
         d_start = today - timedelta(days=90)
         days = 90
+    elif period == 'this_month':
+        # Kalendar oy: shu oyning 1-kunidan BUGUNГА qadar (rolling 30 kun EMAS).
+        d_start = today.replace(day=1)
+        days = (today - d_start).days + 1
+    elif period == 'last_month':
+        # To'liq o'tgan oy: 1-kunidan oxirgi kunigача.
+        end_date = today.replace(day=1) - timedelta(days=1)   # o'tgan oy oxiri
+        d_start = end_date.replace(day=1)                      # o'tgan oy boshi
+        days = (end_date - d_start).days + 1
     else:
         period = 'month'
         d_start = today - timedelta(days=30)
         days = 30
 
+    _PERIOD_LABELS = {'today': 'Bugun', 'week': '7 kun', 'month': '30 kun',
+                      'quarter': '90 kun', 'this_month': 'Bu oy',
+                      'last_month': "O'tgan oy"}
+    period_label = _PERIOD_LABELS.get(period, period)
+
     tz = timezone.get_current_timezone()
     dt_start = datetime.combine(d_start, datetime.min.time()).replace(tzinfo=tz)
-    dt_end = datetime.combine(today + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz)
+    dt_end = datetime.combine(end_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz)
     # Oldingi davr (taqqoslash uchun)
     prev_d_start = d_start - timedelta(days=days)
     prev_dt_start = datetime.combine(prev_d_start, datetime.min.time()).replace(tzinfo=tz)
@@ -9642,8 +9657,9 @@ def _insights_context(request):
 
     context = {
         'period': period,
+        'period_label': period_label,
         'd_start': d_start,
-        'd_end': today,
+        'd_end': end_date,
         'days': days,
         'discount_total': discount_total,
         'selected_branch': selected_branch,

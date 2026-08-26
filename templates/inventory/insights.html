@@ -15,7 +15,7 @@
             <div class="dash-hero__heading">
                 <span class="dash-hero__eyebrow">
                     <span class="dash-pulse"></span>
-                    Biznes tahlili · {{ period|default:"week" }}
+                    Biznes tahlili · {{ period_label|default:"7 kun" }}
                 </span>
                 <h1 class="dash-hero__title">
                     <i class="bi bi-graph-up-arrow"></i> Tahlil
@@ -78,6 +78,10 @@
                        class="dash-chip {% if period == 'month' %}is-active{% endif %}">30 kun</a>
                     <a href="?period=quarter{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
                        class="dash-chip {% if period == 'quarter' %}is-active{% endif %}">90 kun</a>
+                    <a href="?period=this_month{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+                       class="dash-chip {% if period == 'this_month' %}is-active{% endif %}">Bu oy</a>
+                    <a href="?period=last_month{% if selected_branch %}&branch={{ selected_branch.id }}{% endif %}"
+                       class="dash-chip {% if period == 'last_month' %}is-active{% endif %}">O'tgan oy</a>
                 </div>
             </div>
             <div class="dash-filter-group">
