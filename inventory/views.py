@@ -5116,6 +5116,33 @@ def cash_payout(request):
         category=category, note=note, created_by=request.user,
     )
 
+    # MON-17: har bir kassa chiqimini AUDIT LOGGA yozamiz + katta summада
+    # Telegram ogohlantirish. Ilgari chiqim hech qayerда qayd etilmasdi —
+    # kassir 500 000 olib, "chiqim" yozib, smenни nol farq bilan yopardi.
+    try:
+        AuditLog.objects.create(
+            user=request.user, username_snapshot=request.user.username,
+            action=AuditLog.Action.CREATE, model_name='CashPayout',
+            object_id=str(payout.id),
+            object_repr=(f"Kassa chiqimi {int(amount)} so'm — "
+                         f"{payout.get_category_display()} ({branch.name})")[:300],
+            changes={'amount': float(amount), 'category': category,
+                     'note': note, 'shift_id': shift.id},
+        )
+        _threshold = getattr(settings, 'CASH_PAYOUT_ALERT_SOM', 500000)
+        if amount >= _threshold:
+            try:
+                from .notifications import send_telegram
+                send_telegram(
+                    f"💸 <b>Katta kassa chiqimi</b>\n"
+                    f"Filial: {branch.name} · Kassir: {request.user.username}\n"
+                    f"Summa: <b>{int(amount)}</b> so'm — {payout.get_category_display()}\n"
+                    f"Izoh: {note or '—'} · Smen #{shift.id}")
+            except Exception:
+                logger.exception('cash-payout telegram alert failed')
+    except Exception:
+        logger.exception('cash-payout audit failed (payout %s)', payout.id)
+
     if wants_json:
         return JsonResponse({
             'ok': True,
@@ -5811,6 +5838,19 @@ def pos_checkout(request):
             return JsonResponse({'ok': False,
                 'error': "Narx juda katta. Iltimos, to'g'ri narx kiriting."}, status=400)
         parsed_lines.append({'sid': sid, 'qty': qty, 'price': price, 'ld': line_discount})
+
+    # MON-18: chegirma savat summasidan OSHMASLIGI kerak. Ilgari chegirma faqat
+    # MAX_MONEY ga tekshirilardi — 1 000 000 chegirma 1 000 so'mlik sotuvга
+    # qo'yilsa, jami −999 000 bo'lib, cash_sales()/expected_cash() minusга
+    # tushib, kassadan yashirin pul olish yo'li ochilardi. Endi cheklaymiz.
+    _subtotal = Decimal('0')
+    for _l in parsed_lines:
+        _line_gross = Decimal(_l['qty']) * _l['price']
+        if _l['ld'] > _line_gross:      # qator chegirmasi qatordan oshmasin
+            _l['ld'] = _line_gross
+        _subtotal += _line_gross - _l['ld']
+    if order_discount > _subtotal:      # chek chegirmasi savatdan oshmasin
+        order_discount = _subtotal
 
     # Resolve / auto-create Customer by phone (most reliable key)
     customer = None

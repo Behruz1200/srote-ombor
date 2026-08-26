@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal, InvalidOperation
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.utils import timezone
@@ -147,7 +148,8 @@ class User(AbstractUser):
                                help_text="Sotuvchi ishlaydigan filial")
     commission_percent = models.DecimalField(
         max_digits=5, decimal_places=2, default=0,
-        help_text="Sotuvchi komissiyasi (sotuv summasidan foiz). 0 = komissiyasiz."
+        validators=[MinValueValidator(0), MaxValueValidator(100)],  # MON-27
+        help_text="Sotuvchi komissiyasi (sotuv summasidan foiz, 0-100). 0 = komissiyasiz."
     )
     # ----- Opt-in TOTP 2FA -----
     totp_secret = models.CharField(max_length=64, blank=True, editable=False)
@@ -1274,6 +1276,7 @@ class Promotion(models.Model):
                                   default=Type.PERCENT_OFF)
     percent = models.DecimalField(
         max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],  # MON-26
         help_text="Foiz chegirma (0-100). percent_off va nth_percent_off uchun."
     )
     qty_required = models.PositiveIntegerField(
@@ -1369,6 +1372,14 @@ class Return(models.Model):
         verbose_name = 'Qaytarilish'
         verbose_name_plural = 'Qaytarilishlar'
         ordering = ['-refunded_at']
+        constraints = [
+            # MON-23: manfiy cash_refunded kutilgan naqdни OSHIRib, haqiqiy
+            # kamomadni "toza farq"ga aylantirardi — DB darajasида bloklaymiz.
+            models.CheckConstraint(
+                condition=models.Q(cash_refunded__isnull=True)
+                          | models.Q(cash_refunded__gte=0),
+                name='return_cash_refunded_nonneg'),
+        ]
 
     def __str__(self):
         return f'Qaytarilish: {self.sale.variant.product.code} × {self.quantity}'
