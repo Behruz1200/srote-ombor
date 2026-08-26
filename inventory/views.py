@@ -4526,6 +4526,15 @@ def stocktake_create(request):
         if not branch:
             messages.error(request, "Filial tanlang.")
             return redirect('stocktake_create')
+        # STK-9: bitta filialда bir vaqtда faqat BITTA ochiq inventarizatsiya.
+        # Aks holда ikkita ochiq sessiya bir-birining tuzatishini bekor qilardi.
+        existing = Stocktake.objects.filter(
+            branch=branch, status=Stocktake.Status.OPEN).first()
+        if existing:
+            messages.warning(request,
+                f"{branch.name}да allaqachon ochiq inventarizatsiya bor "
+                f"(#{existing.pk}). Avval uni yakunlang.")
+            return redirect('stocktake_detail', pk=existing.pk)
         # Snapshot every variant with stock>0 in this branch
         with transaction.atomic():
             session = Stocktake.objects.create(
@@ -4584,18 +4593,42 @@ def stocktake_detail(request, pk):
                         "Bu inventarizatsiya allaqachon tasdiqlangan yoki bekor qilingan.")
                     return redirect('stocktake_detail', pk=session.pk)
                 # Re-fetch counts under the lock window
-                fresh_counts = list(locked.counts.select_related('variant'))
+                fresh_counts = list(locked.counts.select_related('variant__product'))
+                adjustments = []
                 for c in fresh_counts:
                     bs = BranchStock.objects.filter(
                         variant=c.variant, branch=locked.branch
                     ).select_for_update().first()
-                    if bs:
-                        bs.stock_count = c.counted_qty
+                    if not bs:
+                        continue
+                    # STK-9: MUTLAQ yozish EMAS — sanashда topilgan FARQ (counted −
+                    # system_qty) HOZIRGI qoldiqqa qo'shiladi. Ilgari counted_qty
+                    # to'g'ridan-to'g'ri yozilib, sanash bilan tasdiq orasidagi
+                    # BARCHA sotuvlar jimgina bekor bo'lardi (dushanba sanog'ini
+                    # jumada qo'llasa — bir haftalik savdo yo'qolardi).
+                    delta = int(c.counted_qty) - int(c.system_qty)
+                    if delta != 0:
+                        bs.stock_count = F('stock_count') + delta
                         bs.save(update_fields=['stock_count'])
+                        adjustments.append({
+                            'code': c.variant.product.code,
+                            'variant': f"{c.variant.size or ''}/{c.variant.color or ''}",
+                            'system': int(c.system_qty), 'counted': int(c.counted_qty),
+                            'delta': delta})
                 locked.status = Stocktake.Status.APPLIED
                 locked.applied_by = request.user
                 locked.applied_at = timezone.now()
                 locked.save()
+                # STK-9: har tasdiqni AUDIT LOGGA yozamiz (ombor tuzatishlari
+                # ilgari umuman iz qoldirmasdi).
+                AuditLog.objects.create(
+                    user=request.user, username_snapshot=request.user.username,
+                    action=AuditLog.Action.UPDATE, model_name='Stocktake',
+                    object_id=str(locked.pk),
+                    object_repr=(f"Inventarizatsiya #{locked.pk} tasdiqlandi "
+                                 f"({locked.branch.name}): {len(adjustments)} tuzatish")[:300],
+                    changes={'branch': locked.branch.name,
+                             'adjustments': adjustments[:500]})
             messages.success(request, "Inventarizatsiya tasdiqlandi va ombor yangilandi.")
             return redirect('stocktake_detail', pk=session.pk)
 
@@ -9964,20 +9997,24 @@ PRICE_ISSUES = [
 ]
 
 
-def _price_qs(request):
-    """Filtrlangan BranchStock queryset + tanlangan filtr qiymatlari."""
+def _price_qs(request, params=None):
+    """Filtrlangan BranchStock queryset. STK-9: `params` — GET yoki POST.
+    price_apply POST bo'lgani uchun filtrlar GET'да YO'Q edi; natijada
+    `_price_qs` BUTUN katalogni qaytarib, hammani qayta narxlardi."""
     from decimal import Decimal
+    if params is None:
+        params = request.GET
     qs = (BranchStock.objects
           .select_related('variant__product__category', 'branch')
           .order_by('variant__product__name', 'variant__color', 'variant__size'))
 
-    branch_id = (request.GET.get('branch') or '').strip()
+    branch_id = (params.get('branch') or '').strip()
     if branch_id:
         qs = qs.filter(branch_id=branch_id)
     elif getattr(request.user, 'branch_id', None) and request.user.role != 'admin':
         qs = qs.filter(branch=request.user.branch)
 
-    q = (request.GET.get('q') or '').strip()
+    q = (params.get('q') or '').strip()
     if q:
         qs = qs.filter(Q(variant__product__name__icontains=q)
                        | Q(variant__product__code__icontains=q)
@@ -9985,11 +10022,11 @@ def _price_qs(request):
                        | Q(variant__color__icontains=q)
                        | Q(variant__size__icontains=q))
 
-    cat = (request.GET.get('category') or '').strip()
+    cat = (params.get('category') or '').strip()
     if cat:
         qs = qs.filter(variant__product__category_id=cat)
 
-    issue = (request.GET.get('issue') or '').strip()
+    issue = (params.get('issue') or '').strip()
     if issue == 'no_cost':
         qs = qs.filter(cost_price__lte=0)
     elif issue == 'zero':
@@ -10126,7 +10163,17 @@ def price_apply(request):
             return redirect(back)
         targets = BranchStock.objects.filter(pk__in=sel)
     else:
-        targets = _price_qs(request)      # filtrdagi HAMMA qator
+        # STK-9: filtrlarni POST'дан o'qiymiz (GET bo'sh). Va agar HECH QANDAY
+        # filtr bo'lmasa — bu BUTUN katalogni qamrab oladi. Tasodifan hammani
+        # qayta narxlamaslik uchun aniq filtr yoki tasdiq talab qilamiz.
+        _has_filter = any((request.POST.get(k) or '').strip()
+                          for k in ('branch', 'q', 'category', 'issue'))
+        if not _has_filter and request.POST.get('confirm_all') != '1':
+            messages.error(request,
+                "Filtr tanlanmagan — bu BUTUN katalogга ta'sir qiladi. "
+                "Avval filtrlang yoki qatorlarni belgilab tanlang.")
+            return redirect(back)
+        targets = _price_qs(request, request.POST)      # POST filtridagi qatorlar
 
     targets = targets.select_related('variant__product')
     factor = Decimal('1') + pct / Decimal('100')
@@ -11314,13 +11361,20 @@ def warehouse_adjust(request):
         return redirect(back)
 
     reason = (request.POST.get('reason') or '').strip()[:60] or "Qo'lda tuzatish"
-    delta = new_count - st.stock_count
-    if delta == 0:
-        messages.info(request, "O'zgarish yo'q.")
-        return redirect(back)
 
     with transaction.atomic():
+        # STK-9: qatorni QULFLAB, HOZIRGI (yangi) qoldiqni o'qiymiz — delta va
+        # Intake yozuvi eskirgan o'qishга emas, jonli qiymatga nisbatan.
+        st = (BranchStock.objects.select_for_update()
+              .select_related('variant__product', 'branch').filter(pk=st.pk).first())
+        if st is None:
+            messages.error(request, "Zaxira yozuvi topilmadi.")
+            return redirect(back)
         old = st.stock_count
+        delta = new_count - old
+        if delta == 0:
+            messages.info(request, "O'zgarish yo'q.")
+            return redirect(back)
         st.stock_count = new_count
         st.save(update_fields=['stock_count'])
         Intake.objects.create(

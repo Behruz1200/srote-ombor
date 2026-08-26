@@ -460,6 +460,32 @@ class Stk8WeightedCost(TestCase):
         self.assertEqual(weighted_cost(10, 1000, 0, 1500), Decimal('1500'))
 
 
+class Stk9StocktakeDelta(MoneyTestBase):
+    """STK-9 — inventarizatsiya tasdiqi FARQni (delta) qo'llaydi, mutlaq
+    yozib sanashдan keyingi sotuvlarni bekor QILMAYDI."""
+
+    def test_apply_uses_delta_not_absolute(self):
+        from inventory.models import Stocktake, StocktakeCount
+        admin = User.objects.create_user(
+            username='boss2', password='x', role=User.Role.ADMIN, branch=self.branch)
+        c = Client()
+        c.force_login(admin)
+        # Snapshot: tizim 10, sanaб 8 topildi (2 kam). Keyin 3 dona sotildi → 7.
+        st = Stocktake.objects.create(branch=self.branch, started_by=admin)
+        StocktakeCount.objects.create(
+            session=st, variant=self.variant, system_qty=10, counted_qty=8)
+        self.stock.stock_count = 7
+        self.stock.save(update_fields=['stock_count'])
+        resp = c.post(reverse('stocktake_detail', args=[st.pk]), {'action': 'apply'})
+        self.assertEqual(resp.status_code, 302)
+        self.stock.refresh_from_db()
+        # delta = 8 − 10 = −2, hozirgi 7 ga: 5. Mutlaq 8 EMAS.
+        self.assertEqual(self.stock.stock_count, 5,
+                         'delta qo\'llanishi kerak (sotuvlar bekor bo\'lmasin)')
+        st.refresh_from_db()
+        self.assertEqual(st.status, Stocktake.Status.APPLIED)
+
+
 class Mon22ShiftSnapshot(MoneyTestBase):
     """MON-22 — yopilgan smenning farqi keyingi tahrirlardan o'zgarmaydi."""
 
