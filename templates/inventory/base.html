@@ -3827,6 +3827,70 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// FE-5: offline navbatдаgi sotuvlarni ISTALGAN sahifadan sinxronlaymiz. Ilgari
+// flush faqat /pos/ sahifasида ishlardi — kassir boshqa sahifага o'tса, sotuv
+// POSга qaytguncha yuborilmasdi. Bu minimal, mustaqil flush faqat MUVAFFAQIYATLI
+// sotuvni yuboradi va o'chiradi; rad etilganini POS (failed-store bilan) hal
+// qiladi. Server idempotency_key takrorlanишни bloklaydi — POS bilan bir vaqtда
+// ishlasa ham ikki marta yozilmaydi.
+{% if user.is_authenticated %}
+(function () {
+    if (location.pathname === '/pos/') return;   // POS o'zi hal qiladi
+    function _csrf() {
+        const m = document.cookie.match(/(?:^|;)\s*csrftoken\s*=\s*([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+    function _openDB() {
+        return new Promise((res, rej) => {
+            const r = indexedDB.open('yurit-pos', 1);
+            r.onupgradeneeded = () => { try {
+                r.result.createObjectStore('checkout-queue', {keyPath: 'id', autoIncrement: true});
+            } catch (e) {} };
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => rej(r.error);
+        });
+    }
+    function _list(db) {
+        return new Promise((res) => { try {
+            const rq = db.transaction('checkout-queue', 'readonly')
+                         .objectStore('checkout-queue').getAll();
+            rq.onsuccess = () => res(rq.result || []); rq.onerror = () => res([]);
+        } catch (e) { res([]); } });
+    }
+    function _del(db, id) {
+        return new Promise((res) => { try {
+            const tx = db.transaction('checkout-queue', 'readwrite');
+            tx.objectStore('checkout-queue').delete(id);
+            tx.oncomplete = () => res(); tx.onerror = () => res();
+        } catch (e) { res(); } });
+    }
+    let _busy = false;
+    async function _flush() {
+        if (!navigator.onLine || _busy) return;
+        _busy = true;
+        try {
+            const db = await _openDB();
+            const items = await _list(db);
+            for (const it of items) {
+                try {
+                    const payload = Object.assign({}, it.payload, {is_offline_replay: true});
+                    const resp = await fetch('/pos/checkout/', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrf()},
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await resp.json();
+                    if (data && data.ok) { await _del(db, it.id); }
+                    // rad etilganini (data.error) POS failed-store bilan hal qiladi
+                } catch (e) { break; }   // hali offline / server yo'q
+            }
+        } catch (e) {} finally { _busy = false; }
+    }
+    window.addEventListener('online', _flush);
+    if (navigator.onLine) setTimeout(_flush, 2000);
+})();
+{% endif %}
+
 // Cmd+K / Ctrl+K global search palette
 {% if user.is_authenticated %}
 (function() {

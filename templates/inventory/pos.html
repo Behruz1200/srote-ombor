@@ -2610,7 +2610,12 @@ checkoutBtn.addEventListener('click', async () => {
         }
 
         // Open receipt in new tab → auto-prints
-        window.open(data.receipt_url, '_blank');
+        const _rcptWin = window.open(data.receipt_url, '_blank');
+        // FE-2: QR to'lovда checkout SUN'IY bosish bilan yakunlanadi (foydalanuvchi
+        // harakati yo'q), shuning uchun popup BLOKLANADI va chek chiqmaydi. Popup
+        // bloklansa — kassir bosadigan ko'rinadigan havola beramiz (u haqiqiy
+        // harakat, popup ochiladi) va avto-reload qilmaymiz (havola yo'qolmasin).
+        const _rcptBlocked = !_rcptWin;
         // Reset for next customer
         cart = {};
         qrBreakdownExtra = [];
@@ -2620,8 +2625,15 @@ checkoutBtn.addEventListener('click', async () => {
         scanInput.value = '';
         setStatus('', '');
         hideExtras();
-        // Reload after short delay to refresh recent_txns list
-        setTimeout(() => location.reload(), 1500);
+        if (_rcptBlocked) {
+            checkoutStatus.innerHTML = `<span class="text-success">
+                ✓ Sotuv #${data.txn_id} saqlandi</span>
+                <a href="${data.receipt_url}" target="_blank"
+                   class="btn btn-sm btn-primary ms-2">🧾 Chekni chop etish</a>`;
+        } else {
+            // Reload after short delay to refresh recent_txns list
+            setTimeout(() => location.reload(), 1500);
+        }
     } catch (e) {
         // Network error — queue instead of failing the cashier
         await queueOffline('tarmoq xatosi');

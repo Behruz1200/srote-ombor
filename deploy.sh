@@ -9,6 +9,16 @@ echo "== Django check =="
 DEBUG=1 ./venv/bin/python manage.py check
 echo "== JS syntax check (inline <script> on all pages) =="
 DEBUG=1 ./venv/bin/python manage.py check_js
+# OPS-10: rsync HOZIRGI kodni almashtirishдан OLDIN uni releases'ga saqlaymiz,
+# shunda yomon deploy'ни bitta buyruq bilan qaytarish mumkin (yurit-rollback).
+# Oxirgi 5 ta releaseни saqlaymiz (venv/media saqlanmaydi).
+echo "== Oldingi releaseни saqlash (rollback uchun) =="
+ssh root@45.138.159.120 'REL=/opt/yurit/releases; mkdir -p "$REL"; \
+  TS=$(date +%Y%m%d-%H%M%S); \
+  rsync -a --delete --exclude venv --exclude media --exclude __pycache__ \
+    --exclude "*.pyc" /opt/yurit/app/ "$REL/$TS/" 2>/dev/null && echo "snapshot $TS"; \
+  ls -1dt "$REL"/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf' || \
+  echo "(snapshot o'tkazib yuborildi)"
 echo "== Kod sinxron (rsync) =="
 rsync -az --delete --chmod=Da+rx,Fa+r \
   --exclude venv --exclude .git --exclude __pycache__ --exclude '*.pyc' \
