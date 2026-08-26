@@ -23,33 +23,51 @@
 
     <!-- Filtrlangan davr xulosasi -->
     {% if sales %}
-    <section class="dash-kpis dash-kpis--three yrt-stagger" aria-label="Filtrlangan davr xulosasi">
+    <section class="dash-kpis dash-kpis--five yrt-stagger" aria-label="Filtrlangan davr xulosasi">
         <article class="dash-kpi dash-kpi--lead">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Sof tushum</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ net_total|default:0 }}">{{ net_total|som }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · qaytgani ayirilgan</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="indigo">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami tushum</span>
             </div>
             <div class="dash-kpi__value">
                 <span data-countup="{{ total|default:0 }}">{{ total|som }}</span>
             </div>
-            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm</span></div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · qaytishsiz</span></div>
         </article>
-        <article class="dash-kpi" data-tone="indigo">
+        <article class="dash-kpi" data-tone="danger">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-arrow-counterclockwise"></i> Shu davr sotuvlaridan qaytgan</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span class="text-danger" data-countup="{{ returned_total|default:0 }}">{{ returned_total|som }}</span>
+            </div>
+            <div class="dash-kpi__footer"><span>{{ returned_count }} ta · {{ returned_qty }} dona</span></div>
+        </article>
+        <article class="dash-kpi" data-tone="amber">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-receipt"></i> Tranzaksiyalar</span>
             </div>
             <div class="dash-kpi__value">
                 <span data-countup="{{ txn_count }}">{{ txn_count }}</span>
             </div>
-            <div class="dash-kpi__footer"><span>filtrlangan natijada (cheklar)</span></div>
+            <div class="dash-kpi__footer"><span>cheklar</span></div>
         </article>
-        <article class="dash-kpi" data-tone="amber">
+        <article class="dash-kpi">
             <div class="dash-kpi__head">
-                <span class="dash-kpi__label"><i class="bi bi-box-seam"></i> Sotilgan dona</span>
+                <span class="dash-kpi__label"><i class="bi bi-box-seam"></i> Dona (sof)</span>
             </div>
             <div class="dash-kpi__value">
-                <span data-countup="{{ qty_total|default:0 }}">{{ qty_total }}</span>
+                <span data-countup="{{ net_qty|default:0 }}">{{ net_qty }}</span>
             </div>
-            <div class="dash-kpi__footer"><span>jami birlik</span></div>
+            <div class="dash-kpi__footer"><span>sotilgan − qaytgan</span></div>
         </article>
     </section>
     {% endif %}
@@ -152,6 +170,7 @@
                 <span class="badge bg-light text-dark border">
                     {{ d.date|date:"d.m" }}:
                     <strong>{{ d.total|som }}</strong>
+                    {% if d.returned %}<span class="text-danger">−{{ d.returned|som }}</span>{% endif %}
                     <span class="text-muted">· {{ d.count }} chek · {{ d.qty }} dona</span>
                 </span>
             {% endfor %}
@@ -190,7 +209,15 @@
                         <td><small>{{ s.variant.size }}/{{ s.variant.color }}</small></td>
                         <td class="text-end">{{ s.quantity }}</td>
                         <td class="text-end">{{ s.sale_price|som }}</td>
-                        <td class="text-end"><strong>{{ s.total|som }}</strong></td>
+                        <td class="text-end">
+                            <strong>{{ s.total|som }}</strong>
+                            {% if s.returned_qty %}
+                                <div class="small text-danger">
+                                    −{{ s.returned_money|som }} · {{ s.returned_qty }} dona qaytdi
+                                </div>
+                                <div class="small text-muted">sof: {{ s.net_total|som }}</div>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if s.transaction %}
                                 <span class="badge bg-light text-dark">

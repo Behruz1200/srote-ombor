@@ -8113,10 +8113,11 @@ def sales_list(request):
             ]])
         return resp
 
-    # Jami — BUTUN filtr bo'yicha DB'da (faqat ko'rsatilган 300 emas). Ilgari
-    # jami faqat oxirgi 300 qatorни qo'shib, oyда 300+ satr bo'lса daromadni
-    # JIMGINA kam ko'rsatardi. 'txns' — HAQIQIY tranzaksiyalar (chek) soni:
-    # 5 tovarli chek 5 emas, 1 marta sanaladi.
+    from decimal import Decimal
+    # Jami — BUTUN filtr bo'yicha DB'da (faqat 300 emas). aggregate() Django 6'да
+    # annotatsiyali so'rovni SUBQUERY'ga o'raydi (fanout xavfsiz), AMMO pastдаgi
+    # KUNLIK values().annotate() o'ralmaydi — shu bois returns'ни bazaviy qs'ga
+    # umuman qo'shmaymiz, alohida so'rovда olamiz. 'txns' — HAQIQIY chek soni.
     _rev_expr = F('quantity') * F('sale_price') - F('line_discount')
     agg = qs.aggregate(
         total=Sum(_rev_expr),
@@ -8128,21 +8129,61 @@ def sales_list(request):
     txn_count = agg['txns'] or 0
     line_count = qs.count()   # "Topilgan qatorlar" — jami satr (300 cheklovsiz)
 
-    # Ro'yxat — FAQAT ko'rsatish uchun 300 qator (+ _returned strike-through).
-    sales = list(qs.annotate(_returned=Coalesce(Sum('returns__quantity'), 0))[:300])
-    shown_capped = line_count > 300
+    # ---- Qaytarishlar: ALOHIDA so'rov (sales qs'ga JOIN qilmaymiz — fanout yo'q).
+    # Almashtirishда haqiqiy naqd = cash_refunded; oddiy qaytarishда prorata
+    # (line_discount hisobga olingan). Bu effective_cash_refund mantig'ini
+    # takrorlaydi (order_discount taqsimotisiz — "shu davr sotuvidan qaytgan qiymat").
+    _MONEY = DecimalField(max_digits=14, decimal_places=2)
+    _ret_money = Case(
+        When(is_exchange=True, then=Coalesce(
+            F('cash_refunded'), Value(Decimal('0')), output_field=_MONEY)),
+        default=ExpressionWrapper(
+            F('quantity') * (F('sale__quantity') * F('sale__sale_price')
+                             - F('sale__line_discount')) / F('sale__quantity'),
+            output_field=_MONEY),
+        output_field=_MONEY,
+    )
+    ret_qs = Return.objects.filter(sale__in=qs)
+    ret_agg = ret_qs.aggregate(money=Sum(_ret_money), qty=Sum('quantity'),
+                               n=Count('id'))
+    returned_total = ret_agg['money'] or 0
+    returned_qty = ret_agg['qty'] or 0
+    returned_count = ret_agg['n'] or 0
+    net_total = total - returned_total
 
-    # Kunlik jami — BUTUN filtr bo'yicha DB'da (eng eski kun ham to'liq).
+    # Ro'yxat — FAQAT ko'rsatish uchun 300 qator. Qaytarishlarни alohida so'rovда
+    # olib har satrга biriktiramiz (dead _returned annotatsiyasi olib tashlandi).
+    sales = list(qs[:300])
+    shown_capped = line_count > 300
+    _ret_by_sale = {r['sale_id']: r for r in
+        Return.objects.filter(sale_id__in=[s.pk for s in sales])
+                      .values('sale_id')
+                      .annotate(qty=Sum('quantity'), money=Sum(_ret_money))}
+    for s in sales:
+        r = _ret_by_sale.get(s.pk)
+        s.returned_qty = r['qty'] if r else 0
+        s.returned_money = r['money'] if r else 0
+        s.net_total = s.total - s.returned_money
+
+    # Kunlik jami — DB'da (+ qaytarish alohida so'rov, sana bo'yicha).
+    ret_by_day = {r['sale__sold_at__date']: r for r in
+        ret_qs.values('sale__sold_at__date')
+              .annotate(money=Sum(_ret_money), qty=Sum('quantity'))}
     daily_list = []
     for row in (qs.values('sold_at__date')
                   .annotate(total=Sum(_rev_expr), qty=Sum('quantity'),
                             count=Count('transaction_id', distinct=True))
                   .order_by('-sold_at__date')[:60]):
+        _d = row['sold_at__date']
+        _rmoney = float((ret_by_day.get(_d) or {}).get('money') or 0)
+        _rtotal = float(row['total'] or 0)
         daily_list.append({
-            'date': row['sold_at__date'],
-            'total': float(row['total'] or 0),
+            'date': _d,
+            'total': _rtotal,
             'qty': row['qty'] or 0,
             'count': row['count'] or 0,
+            'returned': _rmoney,
+            'net': _rtotal - _rmoney,
         })
 
     return render(request, 'inventory/sales_list.html', {
@@ -8152,6 +8193,11 @@ def sales_list(request):
         'txn_count': txn_count,
         'line_count': line_count,
         'shown_capped': shown_capped,
+        'returned_total': returned_total,
+        'returned_qty': returned_qty,
+        'returned_count': returned_count,
+        'net_total': net_total,
+        'net_qty': (qty_total or 0) - (returned_qty or 0),
         'daily_list': daily_list,
         # Filter state
         'q': q,
