@@ -160,7 +160,7 @@ def submit_for_transaction(txn) -> None:
     except FiscalError as e:
         txn.fiscal_status = 'failed'
         txn.fiscal_error = str(e)
-        logger.warning('Fiscal submit failed for txn=%s: %s', txn.pk, e)
+        logger.error('Fiscal submit failed for txn=%s: %s', txn.pk, e)  # OPS-12: -> Telegram
     except NotImplementedError:
         txn.fiscal_status = 'skipped'
         logger.info('Fiscal provider not implemented; skipped txn=%s', txn.pk)
@@ -171,3 +171,14 @@ def submit_for_transaction(txn) -> None:
     txn.save(update_fields=[
         'fiscal_receipt_number', 'fiscal_qr_url', 'fiscal_status', 'fiscal_error'
     ])
+    # FIS-1: fiskal chek YUBORILMASA — egani ogohlantirmasdi (hech bir shablon/
+    # view fiscal_status='failed' ni o'qimasdi). Endi Telegram xabari boradi —
+    # soliq cheki qo'lda qayta yuborilishi kerak.
+    if txn.fiscal_status == 'failed':
+        try:
+            from .notifications import send_telegram
+            send_telegram(f"🧾 <b>Fiskal chek YUBORILMADI</b>\n"
+                          f"Chek #{txn.pk} — {(txn.fiscal_error or '')[:150]}\n"
+                          f"Qo'lda qayta yuborish kerak.")
+        except Exception:
+            logger.exception('fiscal-failure telegram alert failed (txn %s)', txn.pk)

@@ -1,7 +1,17 @@
 """Boy dummy ma'lumotlar — kiyim + aksessuar + uy + parfyumeriya."""
-import os, django, random
+import os, sys, django, random
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'store_management.settings')
 django.setup()
+
+# OPS-9: demo urug'ini FAQAT DEBUG (dev) rejimда ekamiz. Ilgari hech qanday
+# himoyasiz edi — ishlab chiqarish bazasiga demo mahsulotlar va paroli
+# hammaga ma'lum ("sotuvchi123") xodim akkauntlari tushib ketishi mumkin edi.
+from django.conf import settings as _dj_settings
+if not _dj_settings.DEBUG and os.environ.get('SEED_FORCE') != '1':
+    sys.stderr.write(
+        "seed.py ishlab chiqarishда o'chirilgan (DEBUG=0). Kerak bo'lsa "
+        "SEED_FORCE=1 bilan majburlang.\n")
+    sys.exit(1)
 
 from datetime import timedelta
 from django.utils import timezone

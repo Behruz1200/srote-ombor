@@ -14,6 +14,7 @@ rsync -az --delete --chmod=Da+rx,Fa+r \
   --exclude venv --exclude .git --exclude __pycache__ --exclude '*.pyc' \
   --exclude db.sqlite3 --exclude 'db.sqlite3-*' --exclude staticfiles --exclude .DS_Store \
   --exclude media --exclude .env \
+  --exclude scripts --exclude seed.py \
   ./ root@45.138.159.120:/opt/yurit/app/
 echo "== Server deploy (migrate + collectstatic + restart) =="
 ssh root@45.138.159.120 '/usr/local/bin/yurit-deploy'

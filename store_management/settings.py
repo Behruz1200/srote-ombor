@@ -267,6 +267,14 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     DATABASES['default'].setdefault('OPTIONS', {})
     DATABASES['default']['OPTIONS'].setdefault('timeout', 20)
 
+# OPS-14: Postgres uchun timeout'lar. Ilgari faqat SQLite'да timeout bor edi —
+# sekin so'rov (yoki bloklangan DB) HAR bir worker'ni cheksiz ushlab, kassa
+# butunlay to'xtardi, xatosiz. Endi ulanish 10s, so'rov 30s dan oshsa uziladi.
+if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    DATABASES['default'].setdefault('OPTIONS', {})
+    DATABASES['default']['OPTIONS'].setdefault('connect_timeout', 10)
+    DATABASES['default']['OPTIONS'].setdefault('options', '-c statement_timeout=30000')
+
 
 # ---------- Cache ----------
 # Per-process local memory cache. Each Gunicorn worker keeps its own copy —
@@ -378,6 +386,13 @@ LOGGING = {
         'django.db.backends': {'level': 'WARNING'},
         # Unhandled 500s -> Telegram (production only)
         'django.request': {
+            'handlers': ['console'] + ([] if DEBUG else ['telegram']),
+            'level': 'ERROR', 'propagate': False,
+        },
+        # OPS-12: ilova o'z logger.exception chaqiruvlari (fiskal, to'lov, SMS
+        # xatolari) ilgari HECH QAYERDA ko'rinmasdi — endi ular ham prodда
+        # Telegram'ga chiqadi.
+        'inventory': {
             'handlers': ['console'] + ([] if DEBUG else ['telegram']),
             'level': 'ERROR', 'propagate': False,
         },
