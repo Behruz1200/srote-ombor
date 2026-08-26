@@ -237,8 +237,17 @@
                             <span class="badge bg-secondary">Yopilgan</span>
                         {% endif %}
                     </td>
-                    <td><a href="{% url 'shift_detail' s.pk %}" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-eye"></i></a></td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'shift_detail' s.pk %}" class="btn btn-outline-primary"
+                               title="Batafsil"><i class="bi bi-eye"></i></a>
+                            {% if s.status != 'open' %}
+                            <a href="{% url 'shift_receipt' s.pk %}" target="_blank"
+                               class="btn btn-outline-secondary" title="Z-hisobot (yopilish cheki)">
+                                <i class="bi bi-receipt"></i></a>
+                            {% endif %}
+                        </div>
+                    </td>
                 </tr>
             {% empty %}
                 <tr><td colspan="10" class="text-muted text-center py-3">
