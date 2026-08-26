@@ -2379,6 +2379,52 @@ window.addEventListener('online', flushQueue);
 broadcastQueueCount();
 if (navigator.onLine) flushQueue();
 
+// OFF-6: sinxron bo'lmagan (rad etilgan) sotuvlar uchun DOIMIY banner.
+// Kassir smenni yopishdan oldin buni ko'rib, tozalashi kerak — status div
+// kabi yo'qolib ketmaydi. Payload localStorage'да (queueFail) saqlangan.
+function failedSales() {
+    try { return JSON.parse(localStorage.getItem('yurit_failed_sales') || '[]'); }
+    catch (e) { return []; }
+}
+function renderFailedBanner() {
+    const arr = failedSales();
+    let bar = document.getElementById('failedSyncBar');
+    if (!arr.length) { if (bar) bar.remove(); return; }
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'failedSyncBar';
+        bar.style.cssText = 'position:sticky;top:0;z-index:1080;background:#dc3545;'
+            + 'color:#fff;padding:8px 12px;font-weight:600;display:flex;'
+            + 'align-items:center;gap:10px;justify-content:space-between;'
+            + 'box-shadow:0 2px 6px rgba(0,0,0,.25)';
+        document.body.prepend(bar);
+    }
+    bar.innerHTML =
+        `<span><i class="bi bi-exclamation-triangle-fill"></i> `
+        + `${arr.length} ta sotuv sinxron bo'lmadi — ko'rib chiqing</span>`
+        + `<span><button type="button" class="btn btn-sm btn-light me-2" `
+        + `id="failedViewBtn">Ko'rish</button>`
+        + `<button type="button" class="btn btn-sm btn-outline-light" `
+        + `id="failedClearBtn">Tozaladim</button></span>`;
+    document.getElementById('failedViewBtn').onclick = () => {
+        const rows = failedSales().map((f, i) => {
+            const ls = (f.payload && f.payload.lines || [])
+                .map(l => `${l.stock_id||l.sid}×${l.qty||''}`).join(', ');
+            const when = f.failed_at ? new Date(f.failed_at).toLocaleString() : '';
+            return `${i + 1}) ${when}\n   ${ls}\n   Sabab: ${f.error || '-'}`;
+        }).join('\n\n');
+        alert("Sinxron bo'lmagan sotuvlar:\n\n" + rows);
+    };
+    document.getElementById('failedClearBtn').onclick = () => {
+        if (confirm("Bu sotuvlarni qo'lda tekshirib bo'ldingizmi? Ro'yxat tozalanadi.")) {
+            try { localStorage.removeItem('yurit_failed_sales'); } catch (e) {}
+            renderFailedBanner();
+        }
+    };
+}
+window.addEventListener('yurit:failed-changed', renderFailedBanner);
+renderFailedBanner();
+
 // Checkout
 checkoutBtn.addEventListener('click', async () => {
     const lines = Object.values(cart).map(it => ({

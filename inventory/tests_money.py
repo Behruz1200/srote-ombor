@@ -23,10 +23,77 @@ from django.utils import timezone
 from inventory.models import (
     Branch, Product, ProductVariant, BranchStock, Shift,
     SaleTransaction, Sale, CashPayout, PaymentIntent,
+    split_breakdown,
 )
 
 User = get_user_model()
 CHECKOUT_URL = '/pos/checkout/'
+
+
+class Arch6SplitBreakdown(TestCase):
+    """ARCH-6 — yagona split_breakdown() to'g'ri bo'lishi. Bu funksiya endi
+    5 o'rniga 1 marta yozilgan; uning 10 xil holati bu yerda qulflanadi."""
+
+    def test_pure_cash(self):
+        r = split_breakdown(100000, [{'method': 'cash', 'amount': 100000}])
+        self.assertEqual(r, {'cash': Decimal('100000'),
+                             'card': Decimal('0'), 'transfer': Decimal('0')})
+
+    def test_cash_card_split_by_entered(self):
+        r = split_breakdown(100000, [{'method': 'cash', 'amount': 30000},
+                                     {'method': 'card', 'amount': 70000}])
+        self.assertEqual(r['cash'], Decimal('30000'))
+        self.assertEqual(r['card'], Decimal('70000'))
+
+    def test_last_method_absorbs_remainder(self):
+        # net (90 000) < kiritilgan (100 000): oxirgi usul qoldiqni oladi
+        r = split_breakdown(90000, [{'method': 'cash', 'amount': 30000},
+                                    {'method': 'card', 'amount': 70000}])
+        self.assertEqual(r['cash'], Decimal('30000'))
+        self.assertEqual(r['card'], Decimal('60000'))
+        self.assertEqual(sum(r.values()), Decimal('90000'))
+
+    def test_qr_provider_maps_to_transfer(self):
+        r = split_breakdown(100000, [{'method': 'payme', 'amount': 100000}])
+        self.assertEqual(r['transfer'], Decimal('100000'))
+        self.assertEqual(r['cash'], Decimal('0'))
+
+    def test_typo_method_maps_to_transfer_not_cash(self):
+        r = split_breakdown(100000, [{'method': 'naqd', 'amount': 100000}])
+        self.assertEqual(r['cash'], Decimal('0'))
+        self.assertEqual(r['transfer'], Decimal('100000'))
+
+    def test_empty_breakdown_falls_to_cash(self):
+        self.assertEqual(split_breakdown(50000, [])['cash'], Decimal('50000'))
+
+    def test_invalid_amounts_ignored(self):
+        r = split_breakdown(40000, [{'method': 'cash', 'amount': 'abc'},
+                                    {'method': 'card', 'amount': 40000}])
+        self.assertEqual(r['card'], Decimal('40000'))
+        self.assertEqual(r['cash'], Decimal('0'))
+
+    def test_negative_and_zero_entries_skipped(self):
+        r = split_breakdown(20000, [{'method': 'cash', 'amount': 0},
+                                    {'method': 'card', 'amount': -5},
+                                    {'method': 'transfer', 'amount': 20000}])
+        self.assertEqual(r['transfer'], Decimal('20000'))
+
+    def test_total_always_conserved(self):
+        r = split_breakdown(100000, [{'method': 'cash', 'amount': 33333},
+                                     {'method': 'card', 'amount': 33333},
+                                     {'method': 'transfer', 'amount': 33334}])
+        self.assertEqual(sum(r.values()), Decimal('100000'))
+
+    def test_duplicate_methods_merge(self):
+        r = split_breakdown(100000, [{'method': 'cash', 'amount': 40000},
+                                     {'method': 'cash', 'amount': 10000},
+                                     {'method': 'card', 'amount': 50000}])
+        self.assertEqual(r['cash'], Decimal('50000'))
+        self.assertEqual(r['card'], Decimal('50000'))
+
+    def test_returns_only_three_keys(self):
+        r = split_breakdown(100, [{'method': 'cash', 'amount': 100}])
+        self.assertEqual(set(r.keys()), {'cash', 'card', 'transfer'})
 
 
 class MoneyTestBase(TestCase):

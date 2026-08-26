@@ -43,6 +43,7 @@ from .models import (
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
     InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
     EmployeeDebtItem,
+    split_breakdown, _norm_pay_method,  # ARCH-6: yagona to'lov-split manbai
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -533,33 +534,10 @@ def _dashboard_aggregates():
                     .values('id', 'payment_breakdown'))
             for t in txns:
                 rev = mixed_rev.get(t['id'], 0.0)
-                parts = {}
-                s = 0.0
-                for e in (t['payment_breakdown'] or []):
-                    try:
-                        mm = (e.get('method') or '').strip()
-                        a = float(e.get('amount') or 0)
-                    except (AttributeError, TypeError, ValueError):
-                        continue
-                    if not mm or a <= 0:
-                        continue
-                    parts[mm] = parts.get(mm, 0.0) + a
-                    s += a
-                if s <= 0:
-                    out['cash'] += rev   # breakdown yo'q — naqdga
-                    continue
-                keys = list(parts.keys())
-                done = 0.0
-                for i, mm in enumerate(keys):
-                    if i == len(keys) - 1:
-                        share = rev - done
-                    else:
-                        avail = rev - done
-                        share = parts[mm] if parts[mm] <= avail else avail
-                        if share < 0:
-                            share = 0.0
-                    done += share
-                    out[mm if mm in out else 'other'] += share
+                # ARCH-6: yagona split_breakdown() — modeldagi bilan bir xil
+                part = split_breakdown(rev, t['payment_breakdown'])
+                for k in ('cash', 'card', 'transfer'):
+                    out[k] += float(part[k])
         return out
 
     today_by_method = _by_method(
@@ -578,39 +556,13 @@ def _dashboard_aggregates():
                 continue
             txn = r.sale.transaction if r.sale_id else None
             pm = txn.payment_method if txn else 'cash'
-            if pm in out:
-                out[pm] += amt
+            if pm != 'mixed' or not txn:
+                out[_norm_pay_method(pm)] += amt
                 continue
-            if pm == 'mixed' and txn:
-                parts = {}
-                s = 0.0
-                for e in (txn.payment_breakdown or []):
-                    try:
-                        mm = (e.get('method') or '').strip()
-                        a = float(e.get('amount') or 0)
-                    except (AttributeError, TypeError, ValueError):
-                        continue
-                    if not mm or a <= 0:
-                        continue
-                    parts[mm] = parts.get(mm, 0.0) + a
-                    s += a
-                if s <= 0:
-                    out['cash'] += amt
-                else:
-                    keys = list(parts.keys())
-                    done = 0.0
-                    for i, mm in enumerate(keys):
-                        if i == len(keys) - 1:
-                            share = amt - done
-                        else:
-                            avail = amt - done
-                            share = parts[mm] if parts[mm] <= avail else avail
-                            if share < 0:
-                                share = 0.0
-                        done += share
-                        out[mm if mm in out else 'cash'] += share
-            else:
-                out['cash'] += amt
+            # ARCH-6: yagona split_breakdown()
+            part = split_breakdown(amt, txn.payment_breakdown)
+            for k in out:
+                out[k] += float(part[k])
         return out
 
     today_returns_by_method = _returns_by_method(today_start, today_end)
@@ -4904,8 +4856,12 @@ def shift_receipt(request, pk):
     txns = list(shift.transactions.select_related('sold_by').prefetch_related('lines'))
     total_rev = 0.0
     item_qty = 0
-    # Pul har bir to'lov turi bo'yicha alohida. "Aralash" chek payment_breakdown
-    # bo'yicha bo'linadi — naqd/karta/o'tkazma qismi o'z ustuniga tushadi.
+    # DIQQAT (ARCH-6): bu Z-hisobot ATAYLAB split_breakdown()'dan farq qiladi.
+    # Bu yerda maqsad — karta terminal hisoboti bilan solishtirish uchun har
+    # to'lov turining BRUTTO (kiritilgan) summasini ko'rsatish; sof (net)
+    # taqsimlash EMAS. Shuning uchun kiritilgan summalar to'g'ridan-to'g'ri
+    # olinadi va qoldiq "Boshqa"ga tushadi. Usul nomlari _norm_pay_method
+    # orqali normallashtiriladi (payme/click → transfer), jimgina cash'ga emas.
     PM = SaleTransaction.PaymentMethod
     labels = dict(PM.choices)
     money = {PM.CASH: 0.0, PM.CARD: 0.0, PM.TRANSFER: 0.0}
@@ -4919,11 +4875,13 @@ def shift_receipt(request, pk):
             used = set()
             covered = 0.0
             for part in (t.payment_breakdown or []):
-                m = (part.get('method') or '').strip()
+                m = _norm_pay_method(part.get('method'))
                 try:
                     amt = float(part.get('amount') or 0)
                 except (TypeError, ValueError):
                     amt = 0.0
+                if amt <= 0:
+                    continue
                 covered += amt
                 if m in money:
                     money[m] += amt
@@ -5773,14 +5731,34 @@ def pos_checkout(request):
                     if data.get('is_offline_replay'):
                         try:
                             from .notifications import send_telegram
+                            # OFF-6: TO'LIQ payload — sotuv yo'qolib ketmasin.
+                            # Barcha qatorlar, narxlar, to'lov turi, mijoz.
+                            _pl_lines = []
+                            for _l in parsed_lines:
+                                _s = locked.get(_l['sid'])
+                                _nm = (f"{_s.variant.product.code} "
+                                       f"{_s.variant.size or ''}/{_s.variant.color or ''}"
+                                       if _s else f"stock {_l['sid']}")
+                                _pl_lines.append(
+                                    f"  • {_nm} — {_l['qty']} × {int(_l['price'])}")
+                            _payload = {
+                                'lines': [{'sid': _l['sid'], 'qty': _l['qty'],
+                                           'price': float(_l['price'])}
+                                          for _l in parsed_lines],
+                                'payment_method': payment_method,
+                                'payment_breakdown': clean_breakdown,
+                                'customer_phone': customer_phone,
+                                'idempotency_key': idem_key,
+                            }
+                            _cust = f"\nMijoz: {customer_phone}" if customer_phone else ""
                             send_telegram(
-                                f"⚠️ <b>Offline sotuv konflikti</b>\n"
+                                f"⚠️ <b>Offline sotuv RAD ETILDI</b>\n"
                                 f"Filial: {branch.name}\n"
                                 f"Kassir: {request.user.username}\n"
-                                f"Mahsulot: {stock.variant.product.code} "
-                                f"{stock.variant.size}/{stock.variant.color}\n"
-                                f"Soʻrov: {ln['qty']} dona · Omborda: {stock.stock_count}\n"
-                                f"Pul allaqachon kassada bo'lishi mumkin — manual reconcile kerak."
+                                f"Sabab: {err}\n"
+                                f"<b>Sotuv tarkibi:</b>\n" + "\n".join(_pl_lines) +
+                                f"\nTo'lov: {payment_method}{_cust}\n"
+                                f"⚠️ Pul allaqachon kassada bo'lishi mumkin — qo'lda tekshiring."
                             )
                             AuditLog.objects.create(
                                 user=request.user,
@@ -5788,9 +5766,10 @@ def pos_checkout(request):
                                 action=AuditLog.Action.UPDATE,
                                 model_name='OfflineConflict',
                                 object_repr=err[:200],
+                                changes={'rejected_sale': _payload, 'reason': err[:200]},
                             )
                         except Exception:
-                            pass
+                            logger.exception('offline-conflict alert failed')
                     raise _CheckoutAbort({'ok': False, 'error': err})
 
             txn = SaleTransaction.objects.create(
@@ -5813,7 +5792,7 @@ def pos_checkout(request):
                 prod = stock.variant.product
                 if not prod.is_open_price:
                     stock.stock_count = F('stock_count') - ln['qty']
-                    stock.save()
+                    stock.save(update_fields=['stock_count'])  # STK-7
                 Sale.objects.create(
                     transaction=txn,
                     variant=stock.variant, branch=stock.branch,

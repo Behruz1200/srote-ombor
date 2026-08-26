@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
@@ -28,6 +28,56 @@ def _norm_pay_method(method):
     if m in ('cash', 'card', 'transfer'):
         return m
     return 'transfer'
+
+
+def split_breakdown(net, breakdown):
+    """Aralash (mixed) chekning SOF summasini {cash, card, transfer} ga bo'ladi.
+
+    ARCH-6: bu YAGONA manba. Ilgari bu mantiq 4 joyда qayta yozilgan edi
+    (models: sales_by_method_split, returns_by_method; views: dashboard
+    _by_method, _returns_by_method) — ular asta-sekin bir-biridan farq qilib,
+    §3.2 regressiyalarining ildizi bo'lgan. Endi hammasi shuni chaqiradi.
+
+    Qoidalar:
+      • KIRITILGAN summalar bo'yicha bo'linadi (nisbatga bo'lish EMAS).
+      • Oxirgi usul qoldiqni oladi (yaxlitlash tufayli jami buzilmaydi).
+      • Usullar _norm_pay_method orqali normallashtiriladi: 'payme'/'click'/
+        noma'lum → 'transfer' (jimgina 'cash'ga aylanmaydi — MON-11).
+      • Breakdown bo'sh/yaroqsiz bo'lsa — butun summa 'cash' (mavjud xatti-
+        harakat saqlanadi; bunday cheklar checkoutда 'cash'ga aylantiriladi).
+    net va amount har xil turdan (int/float/str/Decimal) kelishi mumkin —
+    hammasi Decimalga o'giriladi.
+    """
+    net = _dec(net)
+    out = {'cash': Decimal('0'), 'card': Decimal('0'), 'transfer': Decimal('0')}
+    parts = {}
+    s = Decimal('0')
+    for e in (breakdown or []):
+        try:
+            mm = _norm_pay_method(e.get('method'))
+            a = _dec(str(e.get('amount') or 0))
+        except (AttributeError, TypeError, ValueError, InvalidOperation):
+            continue
+        if a <= 0:
+            continue
+        parts[mm] = parts.get(mm, Decimal('0')) + a
+        s += a
+    if s <= 0:
+        out['cash'] += net
+        return out
+    keys = list(parts.keys())
+    done = Decimal('0')
+    for i, mm in enumerate(keys):
+        if i == len(keys) - 1:
+            share = net - done
+        else:
+            avail = net - done
+            share = parts[mm] if parts[mm] <= avail else avail
+            if share < Decimal('0'):
+                share = Decimal('0')
+        done += share
+        out[mm] += share  # mm allaqachon cash/card/transfer
+    return out
 
 
 class Branch(models.Model):
@@ -859,35 +909,9 @@ class Shift(models.Model):
             rev_map = {r['transaction_id']: _dec(r['s'] or 0) for r in rev_rows}
             for t in mixed:
                 net = rev_map.get(t['id'], Decimal('0')) - _dec(t['order_discount'] or 0)
-                parts = {}
-                s = Decimal('0')
-                for e in (t['payment_breakdown'] or []):
-                    try:
-                        mm = (e.get('method') or '').strip()
-                        a = _dec(str(e.get('amount') or 0))
-                    except (AttributeError, TypeError, ValueError):
-                        continue
-                    if not mm or a <= 0:
-                        continue
-                    parts[mm] = parts.get(mm, Decimal('0')) + a
-                    s += a
-                if s <= 0:
-                    out['cash'] += net
-                    continue
-                # Yaxlit chiqishi uchun: har usul KIRITILGAN summasini oladi,
-                # oxirgisi qoldiqni (nisbatga bo'lish/fraksiya yo'q).
-                keys = list(parts.keys())
-                done = Decimal('0')
-                for i, mm in enumerate(keys):
-                    if i == len(keys) - 1:
-                        share = net - done
-                    else:
-                        avail = net - done
-                        share = parts[mm] if parts[mm] <= avail else avail
-                        if share < Decimal('0'):
-                            share = Decimal('0')
-                    done += share
-                    out[_norm_pay_method(mm)] += share
+                part = split_breakdown(net, t['payment_breakdown'])  # ARCH-6
+                for k in out:
+                    out[k] += part[k]
         return out
 
     def returns_by_method(self):
@@ -908,39 +932,12 @@ class Shift(models.Model):
                 continue
             txn = r.sale.transaction if r.sale_id else None
             pm = txn.payment_method if txn else 'cash'
-            if pm != 'mixed':
+            if pm != 'mixed' or not txn:
                 out[_norm_pay_method(pm)] += amt
                 continue
-            if pm == 'mixed' and txn:
-                parts = {}
-                s = Decimal('0')
-                for e in (txn.payment_breakdown or []):
-                    try:
-                        mm = (e.get('method') or '').strip()
-                        a = _dec(str(e.get('amount') or 0))
-                    except (AttributeError, TypeError, ValueError):
-                        continue
-                    if not mm or a <= 0:
-                        continue
-                    parts[mm] = parts.get(mm, Decimal('0')) + a
-                    s += a
-                if s <= 0:
-                    out['cash'] += amt
-                else:
-                    keys = list(parts.keys())
-                    done = Decimal('0')
-                    for i, mm in enumerate(keys):
-                        if i == len(keys) - 1:
-                            share = amt - done
-                        else:
-                            avail = amt - done
-                            share = parts[mm] if parts[mm] <= avail else avail
-                            if share < Decimal('0'):
-                                share = Decimal('0')
-                        done += share
-                        out[_norm_pay_method(mm)] += share
-            else:
-                out['cash'] += amt
+            part = split_breakdown(amt, txn.payment_breakdown)  # ARCH-6
+            for k in out:
+                out[k] += part[k]
         return out
 
     def total_sales(self):
