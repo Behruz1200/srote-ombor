@@ -828,7 +828,7 @@
                     <td><small>{{ t.get_payment_method_display }}</small></td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <a href="{% url 'transaction_detail' t.pk %}" target="_blank"
+                            <a href="{% url 'transaction_detail' t.public_id %}" target="_blank"
                                class="btn btn-outline-secondary" title="Chekni ko'rish">
                                 <i class="bi bi-receipt"></i>
                             </a>

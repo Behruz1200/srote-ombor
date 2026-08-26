@@ -437,6 +437,29 @@ class BugOff2NoIdempotency(MoneyTestBase):
                          'qoldiq faqat bir marta kamayishi kerak')
 
 
+class Stk8WeightedCost(TestCase):
+    """STK-8 — o'rtacha-tortilgan tannarx (butun so'mga yaxlitlangan)."""
+
+    def test_basic_weighted_average(self):
+        from inventory.models import weighted_cost
+        self.assertEqual(weighted_cost(10, 1000, 10, 2000), Decimal('1500'))
+
+    def test_rounds_to_whole_som(self):
+        from inventory.models import weighted_cost
+        # 3×1000 + 1×1100 = 4100/4 = 1025
+        self.assertEqual(weighted_cost(3, 1000, 1, 1100), Decimal('1025'))
+        # 3×1000 + 2×1001 = 5002/5 = 1000.4 -> 1000
+        self.assertEqual(weighted_cost(3, 1000, 2, 1001), Decimal('1000'))
+
+    def test_zero_old_qty_takes_new(self):
+        from inventory.models import weighted_cost
+        self.assertEqual(weighted_cost(0, 0, 5, 1234), Decimal('1234'))
+
+    def test_zero_add_qty_is_direct_cost_correction(self):
+        from inventory.models import weighted_cost
+        self.assertEqual(weighted_cost(10, 1000, 0, 1500), Decimal('1500'))
+
+
 class Mon4CashIn(MoneyTestBase):
     """MON-4 — kassaga naqd qo'shish kutilgan naqdни OSHIRadi (payout aksi)."""
 

@@ -159,7 +159,7 @@
                         <td class="text-end"><strong>{{ t.total|som }}</strong></td>
                         <td><small>{{ t.get_payment_method_display }}</small></td>
                         <td>
-                            <a href="{% url 'transaction_detail' t.pk %}" target="_blank"
+                            <a href="{% url 'transaction_detail' t.public_id %}" target="_blank"
                                class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-receipt"></i>
                             </a>

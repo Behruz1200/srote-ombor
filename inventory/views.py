@@ -44,6 +44,7 @@ from .models import (
     InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
     EmployeeDebtItem,
     split_breakdown, _norm_pay_method,  # ARCH-6: yagona to'lov-split manbai
+    weighted_cost,  # STK-8: o'rtacha-tortilgan tannarx
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
 
@@ -2108,8 +2109,10 @@ def intake_for_product(request, code):
                         defaults={'cost_price': cost, 'sale_price': sale_price,
                                   'wholesale_price': wholesale_price},
                     )
+                    stock.cost_price = weighted_cost(  # STK-8 weighted-average
+                        stock.stock_count if isinstance(stock.stock_count, int) else 0,
+                        stock.cost_price, qty, cost)
                     stock.stock_count = F('stock_count') + qty
-                    stock.cost_price = cost
                     stock.sale_price = sale_price
                     if wholesale_price > 0:
                         stock.wholesale_price = wholesale_price
@@ -2512,7 +2515,9 @@ def clothes_intake(request):
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': cost, 'sale_price': price})
-                    stock.cost_price = cost
+                    stock.cost_price = weighted_cost(  # STK-8
+                        stock.stock_count if isinstance(stock.stock_count, int) else 0,
+                        stock.cost_price, qty, cost)
                     stock.sale_price = price
                     stock.stock_count = F('stock_count') + qty
                     stock.save()
@@ -2916,7 +2921,9 @@ def intake_variants(request):
                         variant=variant, branch=branch,
                         defaults={'cost_price': r['cost'],
                                   'sale_price': r['price']})
-                    stock.cost_price = r['cost']
+                    stock.cost_price = weighted_cost(  # STK-8
+                        stock.stock_count if isinstance(stock.stock_count, int) else 0,
+                        stock.cost_price, r['qty'], r['cost'])
                     if r['price'] > 0:
                         stock.sale_price = r['price']
                     if r['qty'] > 0:
@@ -3211,7 +3218,9 @@ def intake_import(request):
                         variant=variant, branch=branch,
                         defaults={'cost_price': cost,
                                   'sale_price': r['price']})
-                    stock.cost_price = cost
+                    stock.cost_price = weighted_cost(  # STK-8
+                        stock.stock_count if isinstance(stock.stock_count, int) else 0,
+                        stock.cost_price, r['qty'], cost)
                     if r['price'] > 0:
                         stock.sale_price = r['price']
                     if r['qty'] > 0:
@@ -3534,8 +3543,11 @@ def csv_import(request):
                                           'stock_count': qty},
                             )
                             if not was_created:
+                                if cost > 0:  # STK-8 weighted-average
+                                    stock.cost_price = weighted_cost(
+                                        stock.stock_count if isinstance(stock.stock_count, int) else 0,
+                                        stock.cost_price, qty, cost)
                                 stock.stock_count = F('stock_count') + qty
-                                if cost > 0: stock.cost_price = cost
                                 if sale > 0: stock.sale_price = sale
                                 stock.save()
                             # Create intake record
@@ -4356,7 +4368,9 @@ def intake_photo_save(request):
             stock, _ = BranchStock.objects.get_or_create(
                 variant=variant, branch=branch,
                 defaults={'cost_price': r['cost'], 'sale_price': r['sale']})
-            stock.cost_price = r['cost']
+            stock.cost_price = weighted_cost(  # STK-8
+                stock.stock_count if isinstance(stock.stock_count, int) else 0,
+                stock.cost_price, r['qty'], r['cost'])
             if r['sale'] > 0:
                 stock.sale_price = r['sale']
             stock.stock_count = F('stock_count') + r['qty']
@@ -5856,7 +5870,7 @@ def pos_checkout(request):
         return JsonResponse({
             'ok': True,
             'txn_id': txn.pk,
-            'receipt_url': f'/transaction/{txn.pk}/?autoprint=1',
+            'receipt_url': f'/transaction/{txn.public_id}/?autoprint=1',
             'total': float(txn.total),
             'item_count': txn.item_count,
             'sms': None,
@@ -6116,7 +6130,7 @@ def pos_checkout(request):
     return JsonResponse({
         'ok': True,
         'txn_id': txn.pk,
-        'receipt_url': f'/transaction/{txn.pk}/?autoprint=1',
+        'receipt_url': f'/transaction/{txn.public_id}/?autoprint=1',
         'total': float(txn.total),
         'item_count': txn.item_count,
         'sms': sms_result,
@@ -6878,7 +6892,7 @@ def pos_exchange(request):
     return JsonResponse({
         'ok': True,
         'txn_id': txn.pk,
-        'receipt_url': f'/transaction/{txn.pk}/?autoprint=1',
+        'receipt_url': f'/transaction/{txn.public_id}/?autoprint=1',
         'old_total': float(old_total),
         'new_total': float(new_total),
         'extra': float(extra),
@@ -8149,11 +8163,11 @@ def checkout(request):
 
 
 @login_required
-def transaction_detail(request, pk):
+def transaction_detail(request, token):
     txn = get_object_or_404(
         SaleTransaction.objects.select_related('branch', 'sold_by')
             .prefetch_related('lines__variant__product'),
-        pk=pk,
+        public_id=token,   # SEC-6: ketma-ket PK emas, tasodifiy token
     )
     if not request.user.is_admin() and request.user.branch_id != txn.branch_id:
         return HttpResponseForbidden("Bu chekni ko'rishga ruxsat yo'q.")
@@ -10644,9 +10658,11 @@ def intake_mixed_save(request):
                     stock, _ = BranchStock.objects.get_or_create(
                         variant=variant, branch=branch,
                         defaults={'cost_price': cost, 'sale_price': price})
+                    if cost > 0:  # STK-8 weighted-average
+                        stock.cost_price = weighted_cost(
+                            stock.stock_count if isinstance(stock.stock_count, int) else 0,
+                            stock.cost_price, qty, cost)
                     stock.stock_count = F('stock_count') + qty
-                    if cost > 0:
-                        stock.cost_price = cost
                     stock.sale_price = price
                     stock.save(update_fields=['stock_count', 'cost_price', 'sale_price'])
 

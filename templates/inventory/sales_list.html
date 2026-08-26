@@ -193,7 +193,7 @@
                         <td><small>{{ s.sold_by.username }}</small></td>
                         <td class="text-nowrap">
                             {% if s.transaction_id %}
-                                <a href="{% url 'transaction_detail' s.transaction_id %}"
+                                <a href="{% url 'transaction_detail' s.transaction.public_id %}"
                                    class="btn btn-sm btn-outline-secondary" title="Chek">
                                     <i class="bi bi-receipt"></i>
                                 </a>

@@ -463,7 +463,7 @@
                                     <span class="dash-pill dash-pill--muted">{{ t.get_payment_method_display }}</span>
                                 </span>
                                 <strong class="dash-feed__total">{{ t.total|som }} <small>so'm</small></strong>
-                                <a href="{% url 'transaction_detail' t.pk %}" class="dash-feed__view"
+                                <a href="{% url 'transaction_detail' t.public_id %}" class="dash-feed__view"
                                    aria-label="Chek tafsilotlari">
                                     <i class="bi bi-arrow-up-right"></i>
                                 </a>

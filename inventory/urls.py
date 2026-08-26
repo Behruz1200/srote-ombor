@@ -154,7 +154,7 @@ urlpatterns = [
     path('cart/update/', views.cart_update, name='cart_update'),
     path('cart/clear/', views.cart_clear, name='cart_clear'),
     path('checkout/', views.checkout, name='checkout'),
-    path('transaction/<int:pk>/', views.transaction_detail, name='transaction_detail'),
+    path('transaction/<uuid:token>/', views.transaction_detail, name='transaction_detail'),
 
     # Returns
     path('sale/<int:sale_id>/return/', views.return_create, name='return_create'),

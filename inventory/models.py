@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal, InvalidOperation
 from django.db import models
 from django.contrib.auth.models import AbstractUser
@@ -28,6 +29,28 @@ def _norm_pay_method(method):
     if m in ('cash', 'card', 'transfer'):
         return m
     return 'transfer'
+
+
+def weighted_cost(old_qty, old_cost, add_qty, add_cost):
+    """STK-8: o'rtacha-tortilgan (weighted-average) tannarx.
+
+    Do'kon bir tovarni turli vaqtда har xil narxда oladi. Ilgari yangi qabul
+    ESKI tannarxни butunlay almashtirar edi ('last cost') — javonда turgan eski
+    zaxira ham yangi narxда hisoblanib, marja noto'g'ri chiqardi. Endi:
+        yangi_tannarx = (eski_qoldiq×eski_tannarx + yangi×yangi) / jami
+    Butun so'mga yaxlitlanadi (kopek yo'q — so'mда mayda birlik ishlatilmaydi).
+    Eski qoldiq <= 0 bo'lsa — shunchaki yangi tannarx.
+    """
+    oq = max(0, int(old_qty or 0))
+    aq = max(0, int(add_qty or 0))
+    oc = _dec(old_cost or 0)
+    ac = _dec(add_cost or 0)
+    denom = oq + aq
+    # Yangi qabul yo'q (aq=0 — narx tuzatish) yoki eski qoldiq yo'q → yangi tannarx
+    if denom <= 0 or oq <= 0 or aq <= 0:
+        return ac
+    total = oq * oc + aq * ac
+    return (total / denom).quantize(Decimal('1'))  # butun so'm
 
 
 def split_breakdown(net, breakdown):
@@ -564,6 +587,11 @@ class SaleTransaction(models.Model):
         TRANSFER = 'transfer', "O'tkazma"
         MIXED = 'mixed', 'Aralash'
 
+    # SEC-6: URL'да ketma-ket ID o'rniga tasodifiy token — chekни tashqi havolada
+    # ochganда umumiy savdo sonini oshkor qilmaydi va ID'larni "yurib" chiqib
+    # bo'lmaydi. Ichki PK o'zgarmaydi.
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False,
+                                 db_index=True, null=True)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='transactions')
     sold_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                 related_name='transactions')
