@@ -642,7 +642,7 @@ class Mon22ShiftSnapshot(MoneyTestBase):
 
 
 class RefundMoney(MoneyTestBase):
-    """REF-1 (atomiklik) va REF-2 (order_discount qaytarishда)."""
+    """REF-1 (atomiklik) va qaytarish qiymati siyosati (order_discount)."""
 
     def _txn(self, order_discount='0'):
         return SaleTransaction.objects.create(
@@ -655,16 +655,34 @@ class RefundMoney(MoneyTestBase):
             quantity=qty, sale_price=Decimal(price),
             cost_at_sale=Decimal('60000'), sold_by=self.cashier)
 
-    def test_ref2_full_return_respects_order_discount(self):
-        # 3×100000, chek chegirmasi 100000 → mijoz 200000 to'lagan
+    def test_order_discount_not_split_into_refund(self):
+        """Egasining qarori (2026): butun-buyurtma chegirmasi qaytarishга
+        TAQSIMLANMAYDI — tovar O'Z narxida qaytadi.
+
+        3×100 000, chek chegirmasi 100 000. Bitta dona qaytганда — to'liq
+        100 000 (33 333.33 EMAS). Bu ataylab REF-2 prorata'sini bekor qiladi
+        (chalkash fraksiyalar va Z-hisobot 1 so'm siljishi shundan edi)."""
+        txn = self._txn(order_discount='100000')
+        sale = self._sale(txn, qty=3)
+        r = self.client.post('/pos/refund/', data=json.dumps(
+            {'lines': [{'sale_id': sale.pk, 'qty': 1, 'reason': 't'}]}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['refunded_total'], 100000.0,
+                         'bir dona qaytarish = to\'liq dona narxi (100 000)')
+
+    def test_full_return_refunds_line_total_ignoring_order_discount(self):
+        """To'liq qaytarishда qatorning O'Z jami (300 000) qaytadi — chegirма
+        ayirilmaydi. (Cheklovни egasi bilib qabul qildi: to'liq qaytарishда
+        chegirма miqdorича ortiqcha bo'lishi mumkin.)"""
         txn = self._txn(order_discount='100000')
         sale = self._sale(txn, qty=3)
         r = self.client.post('/pos/refund/', data=json.dumps(
             {'lines': [{'sale_id': sale.pk, 'qty': 3, 'reason': 't'}]}),
             content_type='application/json')
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()['refunded_total'], 200000.0,
-                         'qaytarish mijoz TO\'LAGANI (200000) bo\'lishi kerak, 300000 emas')
+        self.assertEqual(r.json()['refunded_total'], 300000.0,
+                         'to\'liq qaytarish = qator jami (300 000), order_discount tegmaydi')
 
     def test_ref1_partial_failure_rolls_back_first_line(self):
         from inventory.models import Return
@@ -856,11 +874,10 @@ class BugPay1UnauthenticatedWebhook(MoneyTestBase):
 class SalesPageRefundMatchesZReport(MoneyTestBase):
     """Sotuvlar sahifasidagi "Qaytarilgan" == Z-hisobotdagi qaytarilgan pul.
 
-    Ilgari sales_list refund formulasini SQL'da QAYTA yozgan edi va u
-    order_discount taqsimotini hisobga olmasdi (REF-2 aynan shu edi):
-    chegirmali chek qaytarilganda sahifa 300 000, Z-hisobot 240 000
-    ko'rsatardi. Endi ikkalasi ham Return.effective_cash_refund'ni
-    ishlatadi — bu test o'sha yagona manbani qulflaydi.
+    Ilgari sales_list refund formulasini SQL'da QAYTA yozgan edi va ikki joy
+    ikki xil son ko'rsatardi. Endi HAR IKKALASI ham yagona manba —
+    Return.effective_cash_refund — orqali hisoblaydi. Bu test o'sha yagona
+    manbani qulflaydi (formula qanday bo'lishidan qat'i nazar teng chiqsin).
     """
 
     def setUp(self):
@@ -871,7 +888,9 @@ class SalesPageRefundMatchesZReport(MoneyTestBase):
             is_staff=True, branch=self.branch)
 
     def _discounted_sale_fully_returned(self):
-        # 3 x 100 000 = 300 000, chek chegirmasi 60 000 -> mijoz 240 000 to'lagan
+        # 3 x 100 000, chek chegirmasi 60 000. To'liq qaytarishда tovarlar O'Z
+        # narxida (300 000) qaytadi — order_discount qaytarishга taqsimlanmaydi
+        # (egasining qarori). Sahifa va Z-hisobot BARIBIR teng bo'lishi kerak.
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=self.shift,
             payment_method='cash', order_discount=Decimal('60000'))
@@ -899,77 +918,6 @@ class SalesPageRefundMatchesZReport(MoneyTestBase):
         c = Client()
         c.force_login(self.admin)
         self.assertEqual(c.get('/sales/').status_code, 200)
-
-
-class ShiftReceiptKassaReconciles(MoneyTestBase):
-    """MON-24: Z-hisobot chop etilgan KASSA qatorlari YIG'INDISI = chop etilgan
-    JAMI (kassir qo'lда qayta hisoblasa aynan chiqadi). Ilgari refund float'да,
-    expected_cash() Decimal'да edi — REF-2 fraksiyali refund kiritgach 1 so'mга
-    farq qilib, chek yopilmay qolardi. Va aralash chek ikki to'lov bucket'ini
-    oshirib, badge'lar Cheklar'дan oshardi. Ikkalasi ham shu yerда qulflanadi."""
-
-    def _som(self, v):
-        return int(round(float(v or 0)))   # `som` filtri bilan bir xil
-
-    def _mk_sale(self, txn, qty=1, price='100000'):
-        return Sale.objects.create(
-            transaction=txn, variant=self.variant, branch=self.branch,
-            quantity=qty, sale_price=Decimal(price),
-            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
-
-    def setUp(self):
-        super().setUp()
-        self.shift = self.open_shift(opening_cash='500000')
-        # 1) oddiy naqd chek
-        t1 = SaleTransaction.objects.create(
-            branch=self.branch, sold_by=self.cashier, shift=self.shift,
-            payment_method='cash')
-        self._mk_sale(t1)
-        # 2) aralash chek — BITTA chek, naqd 10k + karta 90k
-        t2 = SaleTransaction.objects.create(
-            branch=self.branch, sold_by=self.cashier, shift=self.shift,
-            payment_method='mixed',
-            payment_breakdown=[{'method': 'cash', 'amount': 10000},
-                               {'method': 'card', 'amount': 90000}])
-        self._mk_sale(t2)
-        # 3) chegirmali chek + QISMAN qaytarish → FRAKSIYALI refund (REF-2):
-        #    (300 000 − 10 000)/3 = 96 666.67 → fraksiya bor.
-        t3 = SaleTransaction.objects.create(
-            branch=self.branch, sold_by=self.cashier, shift=self.shift,
-            payment_method='cash', order_discount=Decimal('10000'))
-        s3 = self._mk_sale(t3, qty=3)
-        Return.objects.create(sale=s3, shift=self.shift, quantity=1,
-                              refunded_by=self.cashier)
-        # 4) kassadan olingan
-        CashPayout.objects.create(
-            shift=self.shift, branch=self.branch, amount=Decimal('216000'),
-            category='other', created_by=self.cashier)
-
-    def _ctx(self):
-        r = self.client.get(reverse('shift_receipt', args=[self.shift.pk]))
-        self.assertEqual(r.status_code, 200)
-        return r.context
-
-    def test_refund_total_is_fractional(self):
-        """Test bug yo'lini haqiqatan bosib o'tishini kafolatlaydi."""
-        rt = Decimal(str(self._ctx()['refund_total']))
-        self.assertNotEqual(rt, rt.to_integral_value(),
-                            "refund fraksiyali bo'lishi kerak — aks holda test bug'ni yashiradi")
-
-    def test_kassa_lines_sum_to_printed_total(self):
-        c = self._ctx()
-        recon = (self._som(c['shift'].opening_cash) + self._som(c['cash_sales'])
-                 + self._som(c['debt_payments']) + self._som(c['cash_ins_total'])
-                 - self._som(c['payouts_total']) - self._som(c['refund_total']))
-        self.assertEqual(recon, c['expected'],
-                         "chop etilgan KASSA qatorlari JAMI (= HOZIRGI QOLDIQ) bilan yopilmadi")
-
-    def test_payment_counts_reconcile_with_receipts(self):
-        c = self._ctx()
-        counted = (sum(row['count'] for row in c['pay_rows'])
-                   + c['mixed_count'] + c['other_count'])
-        self.assertEqual(counted, c['txn_count'],
-                         "to'lov badge'lari + aralash + boshqa == Cheklar SHART")
 
 
 def _printed(value):
@@ -1014,18 +962,21 @@ class Mon24ZReportReconciles(MoneyTestBase):
         return txn
 
     def _fractional_refund_sale(self):
-        """Chek chegirmasi 3 donaga BO'LINMAYDI → qaytarish KASR chiqadi.
+        """QATOR jami 3 donaga BO'LINMAYDI → qisman qaytarish KASR chiqadi.
 
-        3×100 000, chek chegirmasi 1 000 → net 299 000; 1 dona = 99 666.67 —
-        ya'ni REF-2 dan keyin kassa hisobiga kasr kiradi. Aynan shu kasr
-        ishlab chiqarishда 1 so'mlik farqni ochgan edi.
+        3×100 000, QATOR chegirmasi (line_discount) 1 000 → qator jami 299 000;
+        1 dona qaytганда 299 000/3 = 99 666.67 — kassa hisobiga kasr kiradi.
+        (order_discount emas, line_discount ishlatamiz: butun-buyurtma chegirmasi
+        endi qaytarishга taqsimlanmaydi — egasining qarori. Kasr baribir qator
+        chegirmasi yoki bo'linmaydigan jamidan kelib chiqadi.)
         """
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=self.shift,
-            payment_method='cash', order_discount=Decimal('1000'))
+            payment_method='cash')
         sale = Sale.objects.create(
             transaction=txn, variant=self.variant, branch=self.branch,
             quantity=3, sale_price=Decimal('100000'),
+            line_discount=Decimal('1000'),
             cost_at_sale=Decimal('60000'), sold_by=self.cashier)
         Return.objects.create(sale=sale, shift=self.shift, quantity=1,
                               refunded_by=self.cashier)

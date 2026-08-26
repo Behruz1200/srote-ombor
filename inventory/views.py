@@ -5478,7 +5478,7 @@ def shift_returns(request, pk):
         sale = r.sale
         # sale_price / refund_amount / effective_cash_refund allaqачон Decimal.
         sticker = Decimal(r.quantity) * sale.sale_price   # yorliq narx × dona
-        refund = r.refund_amount            # chegirma hisobga olingan (REF-2)
+        refund = r.refund_amount            # qatorning o'z narxi (order_discount taqsimlanmaydi)
         cash = r.effective_cash_refund      # kassaдан HAQIQIY chiqqan
         disc = sticker - refund
         pct = (disc / sticker * 100) if sticker > 0 else Decimal('0')
@@ -7440,7 +7440,7 @@ def pos_refund(request):
                     raise _RefundAbort({'ok': True, 'refunded_qty': 0,
                         'refunded_total': 0, 'duplicate': True}, status=200)
                 refunded_qty += p['qty']
-                refunded_total += ret.refund_amount  # REF-2: order_discount hisobga olingan
+                refunded_total += ret.refund_amount  # qator narxi (order_discount taqsimlanmaydi)
     except _RefundAbort as e:
         return JsonResponse(e.payload, status=e.status)
     return JsonResponse({
@@ -7553,8 +7553,8 @@ def pos_exchange(request):
                 if r['qty'] > remaining:
                     raise _Abort({'ok': False, 'error':
                         f"{sale.variant.product.code}: faqat {remaining} dona qaytarish mumkin"})
-                # REF-2: order_discount hisobga olingan sof qiymat (trade-in
-                # mijoz to'laganidan ko'p kreditlanmasin)
+                # Trade-in qiymati = tovarning O'Z qatori narxi (order_discount
+                # taqsimlanmaydi — qaytarish bilan bir xil siyosat, egasi qarori).
                 per_unit = (sale.net_line_total() / sale.quantity) if sale.quantity > 0 else sale.sale_price
                 amt = Decimal(r['qty']) * Decimal(per_unit)
                 old_total += amt

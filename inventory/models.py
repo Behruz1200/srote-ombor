@@ -1165,17 +1165,21 @@ class Sale(models.Model):
         return self.gross - self.line_discount
 
     def net_line_total(self):
-        """REF-2: chek bo'yicha umumiy chegirma (order_discount) ham ayirilgan
-        sof qiymat. order_discount chek qatorlariga nisbatan taqsimlanadi.
-        Qaytarish va almashtirish qiymati AYNAN mijoz to'lagani bo'lishi uchun."""
-        total = _dec(self.total)
-        txn = self.transaction if self.transaction_id else None
-        odisc = _dec(txn.order_discount) if txn else Decimal('0')
-        if txn and odisc > 0:
-            receipt_total = sum((_dec(l.total) for l in txn.lines.all()), Decimal('0'))
-            if receipt_total > 0:
-                total = total - (odisc * total / receipt_total)
-        return total if total > 0 else Decimal('0')
+        """Bu qatorning O'Z sof qiymati — faqat o'zining line_discount'i
+        ayirilgan. Butun-buyurtma chegirmasi (order_discount) BU YERGA
+        TAQSIMLANMAYDI.
+
+        Egasining qarori (2026): qaytarish/almashtirishда tovar O'Z narxida
+        baholanadi. Butun-chek chegirmasi (masalan 1 000) yaxlitlash/xushmuomala
+        uchun — bitta tovarга tegishli emas; shuning uchun bir dona qaytганда
+        24 000 qaytadi, 23 883 emas. (Ilgari REF-2 order_discount'ni har qatorга
+        proporsional ayirar, fraksiyali/chalkash summalar chiqarardi.)
+
+        CHEKLOV: agar chek TO'LIQ qaytarilса, mijoz to'laganidan order_discount
+        miqdorича ko'proq qaytishi mumkin. Egasi buni bilib qabul qildi —
+        summa kichik va bunday holat kam."""
+        t = _dec(self.total)
+        return t if t > 0 else Decimal('0')
 
     @property
     def profit(self):
@@ -1424,13 +1428,10 @@ class Return(models.Model):
 
     @property
     def refund_amount(self):
-        """Qaytariladigan summa — mijoz HAQIQATDA to'lagani bo'yicha.
-
-        REF-2: chek bo'yicha umumiy chegirma (order_discount) ham hisobga
-        olinadi. Ilgari faqat line_discount ayirilardi, order_discount esa
-        e'tiborsiz qolib, chegirmali chekni qaytarganда mijoz to'laganidan
-        KO'PROQ qaytarilardi (har chegirmali chekда zarar). Chegirmani chek
-        qatorlariga nisbatan taqsimlaymiz.
+        """Qaytariladigan summa — tovar O'Z qatori narxi bo'yicha (o'zining
+        line_discount'i ayirilgan). Butun-buyurtma chegirmasi (order_discount)
+        qaytarishга TAQSIMLANMAYDI — egasining qarori (net_line_total'ga qarang):
+        bir dona qaytганда to'liq dona narxi qaytadi, chalkash fraksiya emas.
         """
         sale = self.sale
         if sale.quantity <= 0:
