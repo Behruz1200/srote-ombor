@@ -8130,35 +8130,39 @@ def sales_list(request):
     line_count = qs.count()   # "Topilgan qatorlar" — jami satr (300 cheklovsiz)
 
     # ---- Qaytarishlar: ALOHIDA so'rov (sales qs'ga JOIN qilmaymiz — fanout yo'q).
-    # Almashtirishда haqiqiy naqd = cash_refunded; oddiy qaytarishда prorata
-    # (line_discount hisobga olingan). Bu effective_cash_refund mantig'ini
-    # takrorlaydi (order_discount taqsimotisiz — "shu davr sotuvidan qaytgan qiymat").
-    _MONEY = DecimalField(max_digits=14, decimal_places=2)
-    _ret_money = Case(
-        When(is_exchange=True, then=Coalesce(
-            F('cash_refunded'), Value(Decimal('0')), output_field=_MONEY)),
-        default=ExpressionWrapper(
-            F('quantity') * (F('sale__quantity') * F('sale__sale_price')
-                             - F('sale__line_discount')) / F('sale__quantity'),
-            output_field=_MONEY),
-        output_field=_MONEY,
-    )
-    ret_qs = Return.objects.filter(sale__in=qs)
-    ret_agg = ret_qs.aggregate(money=Sum(_ret_money), qty=Sum('quantity'),
-                               n=Count('id'))
-    returned_total = ret_agg['money'] or 0
-    returned_qty = ret_agg['qty'] or 0
-    returned_count = ret_agg['n'] or 0
+    # DIQQAT: refund summasini SQL'da QAYTA YOZMAYMIZ. Ilgari bu yerda formula
+    # ORM ifodasi sifatida takrorlangan edi va order_discount taqsimotini
+    # HISOBGA OLMASDI — chegirmali chek qaytarilganda bu sahifa Z-hisobotdan
+    # KO'PROQ ko'rsatardi (300 000 vs 240 000). Endi ikkala joy ham yagona
+    # manbani — Return.effective_cash_refund'ni — ishlatadi (ARCH-6 darsi).
+    ret_qs = (Return.objects
+              .filter(sale__in=qs)
+              .select_related('sale__transaction')
+              .prefetch_related('sale__transaction__lines'))
+
+    returned_total = Decimal('0')
+    returned_qty = 0
+    returned_count = 0
+    _ret_by_sale = {}    # sale_id -> {'qty', 'money'}
+    ret_by_day = {}      # date    -> {'qty', 'money'}
+    for _r in ret_qs:
+        _m = _r.effective_cash_refund or Decimal('0')
+        returned_total += _m
+        returned_qty += _r.quantity
+        returned_count += 1
+        _e = _ret_by_sale.setdefault(_r.sale_id, {'qty': 0, 'money': Decimal('0')})
+        _e['qty'] += _r.quantity
+        _e['money'] += _m
+        _d = timezone.localtime(_r.sale.sold_at).date()
+        _dd = ret_by_day.setdefault(_d, {'qty': 0, 'money': Decimal('0')})
+        _dd['qty'] += _r.quantity
+        _dd['money'] += _m
     net_total = total - returned_total
 
     # Ro'yxat — FAQAT ko'rsatish uchun 300 qator. Qaytarishlarни alohida so'rovда
     # olib har satrга biriktiramiz (dead _returned annotatsiyasi olib tashlandi).
     sales = list(qs[:300])
     shown_capped = line_count > 300
-    _ret_by_sale = {r['sale_id']: r for r in
-        Return.objects.filter(sale_id__in=[s.pk for s in sales])
-                      .values('sale_id')
-                      .annotate(qty=Sum('quantity'), money=Sum(_ret_money))}
     for s in sales:
         r = _ret_by_sale.get(s.pk)
         # DIQQAT: Sale.returned_qty — read-only @property (u _returned'ni o'qiydi).
@@ -8169,9 +8173,6 @@ def sales_list(request):
         s.net_total = s.total - s.returned_money
 
     # Kunlik jami — DB'da (+ qaytarish alohida so'rov, sana bo'yicha).
-    ret_by_day = {r['sale__sold_at__date']: r for r in
-        ret_qs.values('sale__sold_at__date')
-              .annotate(money=Sum(_ret_money), qty=Sum('quantity'))}
     daily_list = []
     for row in (qs.values('sold_at__date')
                   .annotate(total=Sum(_rev_expr), qty=Sum('quantity'),
