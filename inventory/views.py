@@ -5910,11 +5910,15 @@ def pos_terminal(request):
     # POS pastida — FAQAT bugungi sotuvlar (kalendar sana bo'yicha, smenadan
     # qat'i nazar). Kassir bugun sotgan har qanday chekni qaytarish/almashtirish
     # qilishi mumkin.
+    # Patch 1e: yangi qatorlar jonli kelib turgani uchun boshlang'ich ro'yxat
+    # qisqa (12 ta) bo'lsa yetadi — 200 ta chek + har chekning barcha `lines`
+    # prefetch'i (item_count hisoblash uchun) POS yuklanishini sekinlashtirardi.
+    # To'liq tarix "Hammasi →" (sales_list) orqali bir bosishда ochiladi.
     recent_txns = (SaleTransaction.objects.filter(
                        branch=branch, sold_at__date=timezone.localdate())
                    .select_related('sold_by')
                    .prefetch_related('lines')
-                   .order_by('-sold_at')[:200])
+                   .order_by('-sold_at')[:12])
 
     # Top 12 most-sold products in this branch over the last 30 days.
     # Used to populate the "Tez sotiluvchilar" quick-tap grid on the POS.

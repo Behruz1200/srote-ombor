@@ -42,6 +42,12 @@
 .pos-side .payment-btn:hover { transform: translateY(-1px); }
 .pos-side .payment-btn:active { transform: scale(0.97); transition-duration: 80ms; }
 .pos-side .payment-btn i { font-size: 1rem; }
+/* Patch 3: to'lov usuli tugmasidagi klaviatura yorlig'i */
+.pos-key {
+    display: inline-block; min-width: 1.1em; padding: 0 .3em;
+    font-size: .72rem; line-height: 1.4; border-radius: 4px;
+    background: rgba(0,0,0,.18); color: inherit; font-weight: 700;
+}
 .pos-side .payment-btn.btn-primary,
 .pos-side .payment-btn.active {
     background: linear-gradient(135deg, var(--yrt-primary), var(--yrt-primary-soft));
@@ -675,9 +681,10 @@
                             <button type="button"
                                     class="btn btn-sm w-100 btn-outline-secondary payment-btn"
                                     data-value="{{ value }}">
-                                {% if value == 'cash' %}<i class="bi bi-cash"></i>
-                                {% elif value == 'card' %}<i class="bi bi-credit-card"></i>
-                                {% elif value == 'transfer' %}<i class="bi bi-arrow-left-right"></i>
+                                {# Patch 3: raqam tugmasi shu usulni tanlaydi #}
+                                {% if value == 'cash' %}<kbd class="pos-key">1</kbd> <i class="bi bi-cash"></i>
+                                {% elif value == 'card' %}<kbd class="pos-key">2</kbd> <i class="bi bi-credit-card"></i>
+                                {% elif value == 'transfer' %}<kbd class="pos-key">3</kbd> <i class="bi bi-arrow-left-right"></i>
                                 {% else %}<i class="bi bi-three-dots"></i>{% endif %}
                                 {{ label }}
                             </button>
@@ -808,17 +815,20 @@
         </div>
     </div>
 
-    <!-- Recent transactions -->
-    {% if recent_txns %}
-    <div class="card p-3 mt-3">
-        <h6 class="text-muted text-uppercase small mb-2">Bugungi sotuvlar
-            <span class="badge bg-light text-dark">{{ recent_txns|length }}</span></h6>
+    <!-- Recent transactions — Patch 1b: DOIM chiziladi (kunning birinchi sotuvida
+         ham prepend qilish uchun joy bo'lsin). #recentBody/#recentCount ilmoqlari. -->
+    <div class="card p-3 mt-3" id="recentCard">
+        <h6 class="text-muted text-uppercase small mb-2 d-flex justify-content-between align-items-center">
+            <span>Bugungi sotuvlar
+                <span class="badge bg-light text-dark" id="recentCount">{{ recent_txns|length }}</span></span>
+            <a href="{% url 'sales_list' %}" class="small text-decoration-none">Hammasi →</a>
+        </h6>
         <div class="table-responsive" style="max-height:340px; overflow-y:auto;">
         <table class="table table-sm mb-0">
             <thead class="table-light"><tr>
                 <th>Vaqt</th><th>Kim</th><th>Dona</th><th>Summa</th><th>To'lov</th><th></th>
             </tr></thead>
-            <tbody>
+            <tbody id="recentBody">
             {% for t in recent_txns %}
                 <tr>
                     <td><small>{{ t.sold_at|date:"H:i" }}</small></td>
@@ -844,7 +854,6 @@
         </table>
         </div>
     </div>
-    {% endif %}
 </div>
 
 <!-- QR / Installment payment modal -->
@@ -930,9 +939,15 @@
                 <table class="table table-sm mb-0">
                   <tbody>
                     <tr><td><kbd>F2</kbd></td><td>Skanerga focus qilish</td></tr>
+                    <tr><td><kbd>F3</kbd></td><td>Chegirma maydoniga o'tish</td></tr>
                     <tr><td><kbd>F4</kbd></td><td>Sotuvni yakunlash</td></tr>
+                    <tr><td><kbd>F6</kbd></td><td>Savatdagi oxirgi qatorni o'chirish</td></tr>
+                    <tr><td><kbd>F7</kbd></td><td>Oxirgi chekni qayta chop etish</td></tr>
+                    <tr><td><kbd>F8</kbd></td><td>Savatni tozalash</td></tr>
                     <tr><td><kbd>F9</kbd></td><td>Savatni saqlab qo'yish (park)</td></tr>
                     <tr><td><kbd>F10</kbd></td><td>Tovushni yoqish/o'chirish</td></tr>
+                    <tr><td><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd></td><td>To'lov oynasida: Naqd / Karta / O'tkazma</td></tr>
+                    <tr><td><kbd>son</kbd> <kbd>*</kbd></td><td>Skanердан oldин miqdor (masalan 3 *)</td></tr>
                     <tr><td><kbd>F1</kbd></td><td>Bu oynani ko'rsatish</td></tr>
                     <tr><td><kbd>Esc</kbd></td><td>Joriy modal'ni yopish</td></tr>
                     <tr><td><kbd>Cmd</kbd>+<kbd>K</kbd></td><td>Tezkor qidirish (global)</td></tr>
@@ -1399,6 +1414,11 @@ const CSRF = (function () {
     const el = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]');
     return el ? el.value : '';
 })();
+// Patch 1: jonli prepend qilinган qator uchun kerak (kassir nomi + to'lov yorlig'i).
+// esc() orqali o'tadi (SEC-11).
+const CURRENT_USER = "{{ request.user.username|escapejs }}";
+const PAY_LABELS = {cash: "Naqd", card: "Karta",
+                    transfer: "O'tkazma", mixed: "Aralash"};
 // Safe localStorage — some mobile contexts (PWA standalone / Safari private
 // mode) THROW on access, which would abort the whole script and kill every
 // handler below (e.g. the collapse toggles). These wrappers never throw.
@@ -1462,6 +1482,27 @@ function openPayModal() {
     getPayModal().show();
 }
 if (openPayBtn) openPayBtn.addEventListener('click', openPayModal);
+
+// Patch 3: to'lov modalида RAQAM tugmalari usulni tanlaydi (1=Naqd, 2=Karta,
+// 3=O'tkazma). Karta/o'tkazmада qaytim bo'lmaydi — darhol yakunlanadi; naqd esa
+// to'xtaydi (kassir xohласа "Naqd berildi" ni kiritадi). INPUT ichида terilса
+// tegmaymiz — aks holда "Naqd berildi"га 1/2/3 terish usulni jimgina almashtirardi.
+(function () {
+    const pm = document.getElementById('payModal');
+    if (!pm) return;
+    pm.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        const map = {'1': 'cash', '2': 'card', '3': 'transfer'};
+        const m = map[e.key];
+        if (!m) return;
+        e.preventDefault();
+        const btn = document.querySelector(`.payment-btn[data-value="${m}"]`);
+        if (!btn) return;
+        btn.click();
+        if (m !== 'cash' && checkoutBtn && !checkoutBtn.disabled) checkoutBtn.click();
+    });
+})();
+
 const parkedCard     = document.getElementById('parkedCard');
 const parkedList     = document.getElementById('parkedList');
 
@@ -1531,6 +1572,9 @@ let qrBreakdownExtra = [];
 // yoqmasin (aks holда ikkinchi bosish yangi kalit bilan ikkinchi chek yasardi).
 let cartIdemKey = null;
 let checkoutInFlight = false;
+// Patch 4: miqdor ko'paytirgich — "3 *" bosib, keyin skanerlansa 3 dona qo'shadi.
+// Bir martalik: har qo'shishдан keyin 1 ga qaytadi (keyingi mijozга yopishmasin).
+let pendingQty = 1;
 
 function newIdemKey() {
     return (self.crypto && crypto.randomUUID)
@@ -1710,10 +1754,20 @@ function priceForVariant(variant) {
 }
 
 function addToCart(product, variant) {
+    // Patch 2: idempotentlik kaliti SAVAT bilan yashaydi — birinchi tovar
+    // qo'shilganда yaratiladi va sotuv tugagунча o'zgarmaydi.
+    if (!cartIdemKey) cartIdemKey = newIdemKey();
     const key = variant.stock_id;
+    // Patch 4: ko'paytirgichni qo'llaymiz va DARHOL 1 ga qaytaramiz (bir martalik).
+    const want = pendingQty;
+    pendingQty = 1;
     if (cart[key]) {
-        if (cart[key].qty < variant.stock_count) cart[key].qty += 1;
-        else { setStatus(`Omborda faqat ${variant.stock_count} ta bor.`, 'error'); return; }
+        const room = variant.stock_count - cart[key].qty;
+        if (room <= 0) {
+            setStatus(`Omborda faqat ${variant.stock_count} ta bor.`, 'error');
+            return;
+        }
+        cart[key].qty += Math.min(want, room);
     } else {
         cart[key] = {
             stock_id: variant.stock_id,
@@ -1721,7 +1775,7 @@ function addToCart(product, variant) {
             product_name: product.name,
             size: variant.size,
             color: variant.color,
-            qty: 1,
+            qty: Math.min(want, variant.stock_count),
             sale_price: priceForVariant(variant),
             max: variant.stock_count,
         };
@@ -1833,6 +1887,35 @@ function renderCart() {
     if (typeof updateChange === 'function') updateChange();
     if (typeof renderCashSuggestions === 'function') renderCashSuggestions();
     saveCart();
+}
+
+// Patch 1c: sotuvдан keyin "Bugungi sotuvlar" ro'yxatiga qatorни MIJOZ tomonида
+// qo'shamiz — sahifани qayta yuklamаймиz. Django shabloni qatori bilan bir xil,
+// va SEC-11 sababi bilan kassir nomi/to'lov yorlig'i esc() dan o'tadi.
+function prependRecentSale(data, method) {
+    const body = document.getElementById('recentBody');
+    if (!body) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const receipt = (data.receipt_url || '').split('?')[0];  // ?autoprint=1 ni olib tashlaymiz
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+        `<td><small>${hh}:${mm}</small></td>` +
+        `<td><small>${esc(CURRENT_USER)}</small></td>` +
+        `<td>${Number(data.item_count) || 0}</td>` +
+        `<td><strong>${fmt(data.total)}</strong></td>` +
+        `<td><small>${esc(PAY_LABELS[method] || method)}</small></td>` +
+        `<td><div class="btn-group btn-group-sm">` +
+        `<a href="${esc(receipt)}" target="_blank" class="btn btn-outline-secondary"` +
+        ` title="Chekni ko'rish"><i class="bi bi-receipt"></i></a>` +
+        `<button type="button" class="btn btn-outline-warning refund-btn"` +
+        ` data-txn-id="${esc(String(data.txn_id))}" title="Qaytarish">` +
+        `<i class="bi bi-arrow-counterclockwise"></i></button>` +
+        `</div></td>`;
+    body.prepend(tr);
+    const badge = document.getElementById('recentCount');
+    if (badge) badge.textContent = body.children.length;
 }
 
 // Qaytim / qolgan hisoblagich — jismoniy kalkulyator o'rniga.
@@ -1992,7 +2075,8 @@ orderDiscountInput.addEventListener('input', () => { discountPct = 0; renderCart
 
 clearCartBtn.addEventListener('click', () => {
     if (confirm('Savatni tozalashni tasdiqlaysizmi?')) {
-        cart = {}; discountPct = 0; clearMixedInputs(); renderCart(); refocus();
+        cart = {}; discountPct = 0; pendingQty = 1; cartIdemKey = null;
+        clearMixedInputs(); renderCart(); refocus();
     }
 });
 
@@ -2327,6 +2411,18 @@ function doSearch() {
     search(q);
 }
 scanInput.addEventListener('keydown', (e) => {
+    // Patch 4: "3 *" — avval sonni terib, * bosilса, keyingi skanerlanган tovar
+    // shu miqdorда qo'shiladi. Har qanday dedikatsiya POS'да shu odat bor.
+    if (e.key === '*') {
+        e.preventDefault();
+        const n = parseInt(scanInput.value.trim(), 10);
+        if (n > 0 && n <= 999) {
+            pendingQty = n;
+            scanInput.value = '';
+            setStatus(`× ${n} — endi tovarni skanerlang`, 'success');
+        }
+        return;
+    }
     if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
 });
 searchBtn.addEventListener('click', doSearch);
@@ -2338,6 +2434,9 @@ scanInput.addEventListener('input', () => {
     clearTimeout(typeTimer);
     const q = scanInput.value.trim();
     if (!q) { hideExtras(); setStatus('', ''); return; }
+    // Patch 5: bitta belgiга qidiruv yubormaymiz (deyarli hammasi mos keladi,
+    // behuda lookup). Shtrix-kodlar Enter bilan keladi, ular baribir ishlaydi.
+    if (q.length < 2) return;
     typeTimer = setTimeout(() => {
         if (scanInput.value.trim() === q) doSearch();
     }, 350);
@@ -2586,6 +2685,7 @@ checkoutBtn.addEventListener('click', async () => {
             // kalit olsin, tugmalar qayta yoqilsin.
             checkoutInFlight = false;
             cartIdemKey = null;
+            pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
             cart = {};
             qrBreakdownExtra = [];
             renderCart();
@@ -2650,6 +2750,7 @@ checkoutBtn.addEventListener('click', async () => {
         // kalit oladi va tugmalar qayta yoqiladi.
         checkoutInFlight = false;
         cartIdemKey = null;
+        pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
         cart = {};
         qrBreakdownExtra = [];
         renderCart();
@@ -2670,10 +2771,12 @@ checkoutBtn.addEventListener('click', async () => {
                 ✓ Sotuv #${data.txn_id} saqlandi</span>
                 <a href="${data.receipt_url}" target="_blank"
                    class="btn btn-sm btn-primary ms-2">🧾 Chekni chop etish</a>`;
-        } else {
-            // Reload after short delay to refresh recent_txns list
-            setTimeout(() => location.reload(), 1500);
         }
+        // Patch 1d: RELOAD OLIB TASHLANDI. Yangi qatorни ro'yxatga mijoz tomonида
+        // qo'shamiz — 164 KB sahifa + 103 KB JS qayta yuklanmaydi, kassir darhol
+        // keyingi sotuvga tayyor. Yuqoridagi holat tozalash (FE-7) allaqачон
+        // bajarilган, shu bois reloadни olib tashlash xavfsiz.
+        prependRecentSale(data, paymentMethod);
     } catch (e) {
         // Network error — queue instead of failing the cashier
         await queueOffline('tarmoq xatosi');
@@ -3049,8 +3152,12 @@ document.addEventListener('click', (e) => {
     let exItems  = [];      // [{stock_id, name, size, color, price, qty, max, open}]
     let exMethod = null;    // 'cash'|'card'|'transfer' — faqat farq>0 bo'lganda
 
-    document.querySelectorAll('.refund-btn').forEach(btn => {
-        btn.addEventListener('click', () => openRefund(btn.dataset.txnId));
+    // Patch 1a: DELEGATED tinglovchi — sahifa yuklanгандан keyin qo'shilган
+    // (jonli prepend qilinган) qatorlar tugmasi ham ishlaydi. Ilgari
+    // querySelectorAll faqat mavjud tugmalarга bog'lanardi.
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.refund-btn');
+        if (btn) openRefund(btn.dataset.txnId);
     });
 
     async function openRefund(txnId) {
@@ -3642,6 +3749,27 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         const helpModal = document.getElementById('helpModal');
         if (helpModal) new bootstrap.Modal(helpModal).show();
+    } else if (e.key === 'F3') {
+        // Patch 6: chegirма maydoniга o'tish (sichqonchасиз)
+        e.preventDefault();
+        orderDiscountInput.focus(); orderDiscountInput.select();
+    } else if (e.key === 'F6') {
+        // Patch 6: savatдаgi ENG YUQORI (oxirgi qo'shilган) qatorни olib tashlash
+        e.preventDefault();
+        const first = Object.keys(cart)
+            .sort((a, b) => (cart[b]._seq || 0) - (cart[a]._seq || 0))[0];
+        if (first) { delete cart[first]; renderCart(); refocus(); }
+    } else if (e.key === 'F7') {
+        // Patch 6: oxirgi chekni qayta chop etish
+        e.preventDefault();
+        const a = document.querySelector('#recentBody a[href*="/transaction/"]');
+        if (a) window.open(a.href + '?autoprint=1', '_blank');
+    } else if (e.key === 'F8') {
+        // Patch 6: savatни tozalash (tasdiq bilan)
+        e.preventDefault();
+        if (Object.keys(cart).length && confirm('Savatni tozalash?')) {
+            clearCartBtn.click();
+        }
     }
 });
 
