@@ -46,6 +46,11 @@ def weighted_cost(old_qty, old_cost, add_qty, add_cost):
     aq = max(0, int(add_qty or 0))
     oc = _dec(old_cost or 0)
     ac = _dec(add_cost or 0)
+    # STK-10: yangi tannarx 0 yoki noaniq bo'lsa (faktura o'qilmadi) — ESKI
+    # tannarxни SAQLAYMIZ, 0 ga tushirmaymiz. Aks holda POS cost_at_sale=0
+    # oladi va har sotuv 100% marja/nol tannarx bilan yozilardi.
+    if ac <= 0:
+        return oc
     denom = oq + aq
     # Yangi qabul yo'q (aq=0 — narx tuzatish) yoki eski qoldiq yo'q → yangi tannarx
     if denom <= 0 or oq <= 0 or aq <= 0:
@@ -468,7 +473,13 @@ class Intake(models.Model):
         null=True, blank=True, related_name='intakes',
         help_text="Yetkazib beruvchi (model). Eski yozuvlarda supplier matn'da."
     )
-    variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, related_name='intakes')
+    # STK-12: qabul (xarid) tarixi CASCADE bilan o'chib ketmasin. Ilgari
+    # sotuvsiz mahsulot o'chirilса, uning variantlari → BranchStock → Intake
+    # zanjiri jimgina yo'q bo'lardi (tovar javonда, tizimда yo'q). PROTECT
+    # tarixli variantni o'chirishni bloklaydi (product_delete/variant_delete
+    # allaqachon ProtectedError'ni ushlab, tushunarli xabar beradi). Merge
+    # Intake'ni avval targetга ko'chirgani uchun buzilmaydi.
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='intakes')
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='intakes')
     quantity = models.IntegerField(
         help_text="Manfiy bo'lishi mumkin — yetkazib beruvchiga qaytarish"

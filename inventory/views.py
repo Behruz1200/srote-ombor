@@ -814,43 +814,52 @@ def product_bulk_update(request):
         messages.error(request, "Noto'g'ri qiymat.")
         return redirect('product_list')
 
+    # STK-19: narx amallari uchun qiymat 0 bo'lса — RAD etamiz. Ilgari bo'sh
+    # qiymat 0 ga tushib, `multiply_price` butun katalog narxini NOLGA
+    # aylantirar (yoki `set_price` hammani 0 qilar) edi.
+    if op in ('set_price', 'set_markup', 'multiply_price') and value <= 0:
+        messages.error(request, "Qiymat 0 dan katta bo'lishi kerak.")
+        return redirect('product_list')
+
     products = Product.objects.filter(id__in=[int(i) for i in ids if str(i).isdigit()])
     n = 0
     affected_codes = []
-    for p in products:
-        affected_codes.append(p.code)
-        if op == 'set_price':
-            p.default_sale_price = value
-            p.save(update_fields=['default_sale_price'])
-            n += 1
-        elif op == 'set_markup':
-            p.markup_percent = value
-            p.save(update_fields=['markup_percent'])
-            n += 1
-        elif op == 'multiply_price':
-            new_price = (p.default_sale_price * (value / 100)).quantize(Decimal('1'))
-            p.default_sale_price = new_price
-            p.save(update_fields=['default_sale_price'])
-            n += 1
-        elif op == 'change_category':
-            try:
-                cat_id = int(value)
-                cat = Category.objects.filter(pk=cat_id).first()
-                if cat:
-                    p.category = cat
-                    p.save(update_fields=['category'])
-                    n += 1
-            except (ValueError, TypeError):
-                cat = None
-        elif op == 'delete':
-            from django.db.models import ProtectedError
-            try:
-                p.delete()
+    from django.db.models import ProtectedError
+    # STK-19: butun amal BITTA tranzaksiyada — yarim qo'llanib qolmasin.
+    with transaction.atomic():
+        for p in products:
+            affected_codes.append(p.code)
+            if op == 'set_price':
+                p.default_sale_price = value
+                p.save(update_fields=['default_sale_price'])
                 n += 1
-            except ProtectedError:
-                messages.warning(
-                    request,
-                    f"'{p.name}' ({p.code}) o'chirilmadi — sotuv tarixi bor.")
+            elif op == 'set_markup':
+                p.markup_percent = value
+                p.save(update_fields=['markup_percent'])
+                n += 1
+            elif op == 'multiply_price':
+                new_price = (p.default_sale_price * (value / 100)).quantize(Decimal('1'))
+                p.default_sale_price = new_price
+                p.save(update_fields=['default_sale_price'])
+                n += 1
+            elif op == 'change_category':
+                try:
+                    cat_id = int(value)
+                    cat = Category.objects.filter(pk=cat_id).first()
+                    if cat:
+                        p.category = cat
+                        p.save(update_fields=['category'])
+                        n += 1
+                except (ValueError, TypeError):
+                    cat = None
+            elif op == 'delete':
+                try:
+                    p.delete()
+                    n += 1
+                except ProtectedError:
+                    messages.warning(
+                        request,
+                        f"'{p.name}' ({p.code}) o'chirilmadi — sotuv tarixi bor.")
 
     # M9: audit the bulk operation as a single summary row
     if n > 0:
@@ -2091,6 +2100,12 @@ def intake_for_product(request, code):
                 sale_price = Decimal(sale_price_raw)
             else:
                 sale_price = (cost * (1 + markup / 100)).quantize(Decimal('1'))
+            # STK-11: tannarx 0 (bonus/tekin tovar yoki o'qilmagan faktura)
+            # bo'lsa, sotuv narxi 0 chiqadi va tovar KASSADA TEKIN o'tardi.
+            # 0 bo'lsa katalog narxiga qaytamiz; u ham 0 bo'lsa — pastda
+            # stock.sale_price umuman o'zgartirilmaydi (0 yozilmaydi).
+            if sale_price <= 0:
+                sale_price = product.default_sale_price or Decimal('0')
             wholesale_price = Decimal(request.POST.get('wholesale_price') or '0')
 
             supplier = (request.POST.get('supplier') or '').strip()
@@ -2132,7 +2147,8 @@ def intake_for_product(request, code):
                         stock.stock_count if isinstance(stock.stock_count, int) else 0,
                         stock.cost_price, qty, cost)
                     stock.stock_count = F('stock_count') + qty
-                    stock.sale_price = sale_price
+                    if sale_price > 0:      # STK-11: 0 narx yozib qo'ymaymiz
+                        stock.sale_price = sale_price
                     if wholesale_price > 0:
                         stock.wholesale_price = wholesale_price
                     stock.save()
@@ -5860,6 +5876,22 @@ def pos_checkout(request):
             return JsonResponse({'ok': False,
                 'error': "Narx juda katta. Iltimos, to'g'ri narx kiriting."}, status=400)
         parsed_lines.append({'sid': sid, 'qty': qty, 'price': price, 'ld': line_discount})
+
+    # STK-16: bir xil stock_id li qatorlarni BIRLASHTIRAMIZ. Aks holda ikki
+    # qator to'liq qoldiqqa alohida tekshiriladi (ikkalasi ham o'tadi), keyin
+    # F() ikki marta ayiradi — do'stona "omborda faqat N ta" xabari o'rniga
+    # ombor manfiyга tushib, IntegrityError (500) chiqardi.
+    if len({l['sid'] for l in parsed_lines}) != len(parsed_lines):
+        _merged = {}
+        for _l in parsed_lines:
+            m = _merged.get(_l['sid'])
+            if m is None:
+                _merged[_l['sid']] = dict(_l)
+            else:
+                m['qty'] += _l['qty']
+                m['ld'] += _l['ld']
+                m['price'] = _l['price']  # oxirgi narx
+        parsed_lines = list(_merged.values())
 
     # MON-18: chegirma savat summasidan OSHMASLIGI kerak. Ilgari chegirma faqat
     # MAX_MONEY ga tekshirilardi — 1 000 000 chegirma 1 000 so'mlik sotuvга
