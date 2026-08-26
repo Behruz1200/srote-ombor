@@ -905,7 +905,14 @@ class Shift(models.Model):
         return self.sales_by_method_split()['cash']
 
     def sales_by_method(self):
-        """Smen davomida to'lov turi bo'yicha savdo: {'cash':.., 'card':.., ...}."""
+        """Smen davomida to'lov turi bo'yicha savdo: {'cash':.., 'card':.., ...}.
+
+        DIQQAT (ARCH-8): bu funksiya `sales_by_method_split()` DAN FARQ qiladi!
+        Bu 'mixed' ni ALOHIDA ustunда qoldiradi (bo'lmaydi); split esa mixedни
+        naqd/karta/o'tkazmaga bo'ladi. Kassa hisobiga DOIM split ishlatiladi.
+        Bu faqat `total_sales()` uchun (yig'indi ikkalasида ham bir xil).
+        Yangi joyда kerak bo'lsa — split'ni tanlang.
+        """
         rev_expr = models.ExpressionWrapper(
             models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
             output_field=models.DecimalField(max_digits=14, decimal_places=2))
