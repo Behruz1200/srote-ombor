@@ -1,4 +1,6 @@
 """Maxsus template filterlar — yurit uchun."""
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
 from django import template
 
 register = template.Library()
@@ -14,12 +16,16 @@ def som(value):
     """
     if value is None or value == '':
         return ''
+    # MON-24: PUL yaxlitlashi — YARMI YUQORIGA, `round()` ning bank
+    # yaxlitlashi EMAS. round(2.5) → 2 (juftga), kassir esa 3 kutadi; shu
+    # tufayli Z-hisobotda qatorlar chop etilgan JAMIga qo'shilmasdi.
     try:
-        n = round(float(value))
-    except (ValueError, TypeError):
+        d = value if isinstance(value, Decimal) else Decimal(str(value))
+        n = int(abs(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    except (ValueError, TypeError, InvalidOperation, ArithmeticError):
         return value
-    sign = '-' if n < 0 else ''
-    return sign + f'{abs(n):,}'.replace(',', '\u00a0')
+    sign = '-' if (d < 0 and n != 0) else ''   # "-0" chiqmasin
+    return sign + f'{n:,}'.replace(',', '\u00a0')
 
 
 @register.filter

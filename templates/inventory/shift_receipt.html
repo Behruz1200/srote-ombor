@@ -143,7 +143,13 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
         </div>
         {% endfor %}
         {% if other_money %}
-        <div class="rcpt-row"><span>Boshqa</span><span class="v">{{ other_money|som }}</span></div>
+        <div class="rcpt-row"><span>Boshqa <span class="rcpt-cnt">{{ other_count }}</span></span><span class="v">{{ other_money|som }}</span></div>
+        {% endif %}
+        {% if mixed_count %}
+        <div class="rcpt-row rcpt-row--muted" style="font-size:9px;">
+            <span>Shundan aralash: {{ mixed_count }} ta chek — summasi tegishli
+                  usullar ichida (brutto).</span>
+        </div>
         {% endif %}
         <div class="rcpt-total">
             <span class="lbl">JAMI SAVDO</span>
@@ -180,6 +186,16 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
         {% endif %}
         {% if refund_total %}
         <div class="rcpt-row rcpt-neg"><span>− Qaytarilgan (naqd)</span><span class="v">{{ refund_total|som }}</span></div>
+        {% endif %}
+        {% if post_close_delta %}
+        <div class="rcpt-row rcpt-row--muted">
+            <span>Yopilgandan keyingi o'zgarish</span>
+            <span class="v">{% if post_close_delta > 0 %}+{% endif %}{{ post_close_delta|som }}</span></div>
+        {% endif %}
+        {% if rounding_delta %}
+        <div class="rcpt-row rcpt-row--muted">
+            <span>Yaxlitlash</span>
+            <span class="v">{% if rounding_delta > 0 %}+{% endif %}{{ rounding_delta|som }}</span></div>
         {% endif %}
         <div class="rcpt-total">
             <span class="lbl">= HOZIRGI QOLDIQ</span>

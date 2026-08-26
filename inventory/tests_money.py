@@ -851,3 +851,321 @@ class BugPay1UnauthenticatedWebhook(MoneyTestBase):
         )
         intent.refresh_from_db()
         self.assertEqual(intent.status, PaymentIntent.Status.PENDING)
+
+
+class SalesPageRefundMatchesZReport(MoneyTestBase):
+    """Sotuvlar sahifasidagi "Qaytarilgan" == Z-hisobotdagi qaytarilgan pul.
+
+    Ilgari sales_list refund formulasini SQL'da QAYTA yozgan edi va u
+    order_discount taqsimotini hisobga olmasdi (REF-2 aynan shu edi):
+    chegirmali chek qaytarilganda sahifa 300 000, Z-hisobot 240 000
+    ko'rsatardi. Endi ikkalasi ham Return.effective_cash_refund'ni
+    ishlatadi — bu test o'sha yagona manbani qulflaydi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.shift = self.open_shift()
+        self.admin = User.objects.create_user(
+            username='admin_sales', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+
+    def _discounted_sale_fully_returned(self):
+        # 3 x 100 000 = 300 000, chek chegirmasi 60 000 -> mijoz 240 000 to'lagan
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal('60000'))
+        sale = Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=3, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        Return.objects.create(sale=sale, shift=self.shift, quantity=3,
+                              refunded_by=self.cashier)
+        return sale
+
+    def test_page_and_zreport_report_the_same_refund(self):
+        self._discounted_sale_fully_returned()
+        c = Client()
+        c.force_login(self.admin)
+        page = c.get('/sales/')
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(Decimal(str(page.context['returned_total'])),
+                         self.shift.refunds_total(),
+                         "sotuvlar sahifasi va Z-hisobot bir xil bo'lishi SHART")
+
+    def test_sales_page_loads_with_rows(self):
+        """Sale.returned_qty — setter'siz @property; unga yozish 500 berardi."""
+        self._discounted_sale_fully_returned()
+        c = Client()
+        c.force_login(self.admin)
+        self.assertEqual(c.get('/sales/').status_code, 200)
+
+
+class ShiftReceiptKassaReconciles(MoneyTestBase):
+    """MON-24: Z-hisobot chop etilgan KASSA qatorlari YIG'INDISI = chop etilgan
+    JAMI (kassir qo'lда qayta hisoblasa aynan chiqadi). Ilgari refund float'да,
+    expected_cash() Decimal'да edi — REF-2 fraksiyali refund kiritgach 1 so'mга
+    farq qilib, chek yopilmay qolardi. Va aralash chek ikki to'lov bucket'ini
+    oshirib, badge'lar Cheklar'дan oshardi. Ikkalasi ham shu yerда qulflanadi."""
+
+    def _som(self, v):
+        return int(round(float(v or 0)))   # `som` filtri bilan bir xil
+
+    def _mk_sale(self, txn, qty=1, price='100000'):
+        return Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=qty, sale_price=Decimal(price),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+
+    def setUp(self):
+        super().setUp()
+        self.shift = self.open_shift(opening_cash='500000')
+        # 1) oddiy naqd chek
+        t1 = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash')
+        self._mk_sale(t1)
+        # 2) aralash chek — BITTA chek, naqd 10k + karta 90k
+        t2 = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='mixed',
+            payment_breakdown=[{'method': 'cash', 'amount': 10000},
+                               {'method': 'card', 'amount': 90000}])
+        self._mk_sale(t2)
+        # 3) chegirmali chek + QISMAN qaytarish → FRAKSIYALI refund (REF-2):
+        #    (300 000 − 10 000)/3 = 96 666.67 → fraksiya bor.
+        t3 = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal('10000'))
+        s3 = self._mk_sale(t3, qty=3)
+        Return.objects.create(sale=s3, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier)
+        # 4) kassadan olingan
+        CashPayout.objects.create(
+            shift=self.shift, branch=self.branch, amount=Decimal('216000'),
+            category='other', created_by=self.cashier)
+
+    def _ctx(self):
+        r = self.client.get(reverse('shift_receipt', args=[self.shift.pk]))
+        self.assertEqual(r.status_code, 200)
+        return r.context
+
+    def test_refund_total_is_fractional(self):
+        """Test bug yo'lini haqiqatan bosib o'tishini kafolatlaydi."""
+        rt = Decimal(str(self._ctx()['refund_total']))
+        self.assertNotEqual(rt, rt.to_integral_value(),
+                            "refund fraksiyali bo'lishi kerak — aks holda test bug'ni yashiradi")
+
+    def test_kassa_lines_sum_to_printed_total(self):
+        c = self._ctx()
+        recon = (self._som(c['shift'].opening_cash) + self._som(c['cash_sales'])
+                 + self._som(c['debt_payments']) + self._som(c['cash_ins_total'])
+                 - self._som(c['payouts_total']) - self._som(c['refund_total']))
+        self.assertEqual(recon, c['expected'],
+                         "chop etilgan KASSA qatorlari JAMI (= HOZIRGI QOLDIQ) bilan yopilmadi")
+
+    def test_payment_counts_reconcile_with_receipts(self):
+        c = self._ctx()
+        counted = (sum(row['count'] for row in c['pay_rows'])
+                   + c['mixed_count'] + c['other_count'])
+        self.assertEqual(counted, c['txn_count'],
+                         "to'lov badge'lari + aralash + boshqa == Cheklar SHART")
+
+
+def _printed(value):
+    """`|som` filtri chop etadigan sonni int sifatida qaytaradi.
+
+    Test AYNAN chekда ko'ringan raqam bilan ishlashi uchun — kontekstдagi
+    xom Decimal bilan emas."""
+    from inventory.templatetags.yurit_extras import som
+    txt = som(value).replace(' ', '').replace(' ', '')
+    return int(txt) if txt else 0
+
+
+class Mon24ZReportReconciles(MoneyTestBase):
+    """MON-24/MON-25 — Z-hisobotда CHOP ETILGAN qatorlar CHOP ETILGAN JAMIga
+    aynan qo'shilishi SHART.
+
+    Ishlab chiqarishда (Smena #46) chekда shunday chiqdi:
+
+        93 000 + 19 151 500 − 748 000 − 273 383 = 18 223 117
+        chop etilgan "HOZIRGI QOLDIQ"          = 18 223 116   ← 1 so'm kam
+
+    Sabablari:
+      1. `refund_total` view'да FLOAT yig'indi edi, `expected_cash()` ichида
+         esa Decimal — ikkisi teskari tomonga yaxlitlandi.
+      2. Yaxlitlashning O'ZI ikki xil edi: `som` filtri `round()` (bank
+         yaxlitlashi) ishlatardi, chop qatorlari esa boshqa yo'ldan kelardi.
+
+    Bu testlar chekни BUTUN sifatida qulflaydi. Har biri fix'siz YIQILADI.
+    """
+
+    def _mixed_txn(self):
+        """Aralash chek: 60 000 naqd + 40 000 karta."""
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='mixed',
+            payment_breakdown=[{'method': 'cash', 'amount': 60000},
+                               {'method': 'card', 'amount': 40000}])
+        Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        return txn
+
+    def _fractional_refund_sale(self):
+        """Chek chegirmasi 3 donaga BO'LINMAYDI → qaytarish KASR chiqadi.
+
+        3×100 000, chek chegirmasi 1 000 → net 299 000; 1 dona = 99 666.67 —
+        ya'ni REF-2 dan keyin kassa hisobiga kasr kiradi. Aynan shu kasr
+        ishlab chiqarishда 1 so'mlik farqni ochgan edi.
+        """
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal('1000'))
+        sale = Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=3, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        Return.objects.create(sale=sale, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier)
+        return sale
+
+    def setUp(self):
+        super().setUp()
+        self.shift = self.open_shift(opening_cash='93000')
+        self._mixed_txn()
+        self.disc_sale = self._fractional_refund_sale()
+        CashPayout.objects.create(
+            shift=self.shift, branch=self.branch, amount=Decimal('7000'),
+            category='lunch', note='tushlik', created_by=self.cashier)
+
+    def _resp(self):
+        r = self.client.get(reverse('shift_receipt', args=[self.shift.pk]))
+        self.assertEqual(r.status_code, 200)
+        return r
+
+    def _kassa_rows(self, c):
+        """Chekдagi KASSA qatorlari — chop etilgan ko'rinishда."""
+        return (_printed(c['opening_cash'] if 'opening_cash' in c
+                         else c['shift'].opening_cash)
+                + _printed(c['cash_sales'])
+                + _printed(c['debt_payments'])
+                + _printed(c['cash_ins_total'])
+                - _printed(c['payouts_total'])
+                - _printed(c['refund_total'])
+                + _printed(c['post_close_delta'])
+                + _printed(c['rounding_delta']))
+
+    # ---- 1. KASSA bloki yig'iladi ---------------------------------------
+    def test_kassa_lines_sum_to_printed_total(self):
+        c = self._resp().context
+        self.assertEqual(
+            self._kassa_rows(c), _printed(c['expected']),
+            "chop etilgan KASSA qatorlari chop etilgan JAMIga qo'shilmadi")
+
+    def test_setup_really_produces_a_fractional_refund(self):
+        """Sinov shartи: kasr bo'lmasa bu testlar hech nimani isbotlamaydi."""
+        self.assertNotEqual(self.shift.refunds_total() % 1, Decimal('0'),
+                            'test ma\'lumoti kasr qaytarish bermadi')
+
+    def test_variance_matches_the_printed_total(self):
+        self.shift.counted_cash = Decimal('18000000')
+        self.shift.save(update_fields=['counted_cash'])
+        c = self._resp().context
+        self.assertEqual(
+            _printed(c['variance_value']),
+            _printed(self.shift.counted_cash) - _printed(c['expected']),
+            'FARQ chop etilgan QOLDIQ bilan yopilishi kerak')
+
+    # ---- 2. SOTUV bloki yig'iladi ---------------------------------------
+    def test_payment_rows_sum_to_printed_gross(self):
+        c = self._resp().context
+        rows = sum(_printed(r['amount']) for r in c['pay_rows'])
+        self.assertEqual(rows + _printed(c['other_money']),
+                         _printed(c['total_rev']))
+
+    def test_net_sales_is_printed_gross_minus_printed_refund(self):
+        c = self._resp().context
+        self.assertEqual(_printed(c['net_sales']),
+                         _printed(c['total_rev']) - _printed(c['refund_total']))
+
+    # ---- 3. MON-25: aralash chek sanoqni buzmasin -----------------------
+    def test_counts_never_exceed_receipt_count(self):
+        c = self._resp().context
+        counts = sum(r['count'] for r in c['pay_rows']) + c['other_count']
+        self.assertEqual(counts + c['mixed_count'], c['txn_count'],
+                         'badge sonlari Cheklar soniga teng bo\'lishi kerak')
+
+    def test_mixed_receipt_is_disclosed(self):
+        c = self._resp().context
+        self.assertEqual(c['mixed_count'], 1)
+        self.assertContains(self._resp(), 'aralash')
+
+    # ---- 4. MON-22: yopilgan smen JAMIsi qotib qolsin -------------------
+    def test_closed_shift_total_is_frozen_and_still_reconciles(self):
+        self.shift.closing_expected_cash = self.shift.compute_expected_cash()
+        self.shift.counted_cash = self.shift.closing_expected_cash
+        self.shift.status = Shift.Status.CLOSED
+        self.shift.closed_at = timezone.now()
+        self.shift.save()
+        frozen = _printed(self.shift.closing_expected_cash)
+        before = _printed(self._resp().context['expected'])
+        self.assertEqual(before, frozen)
+
+        # Smen YOPILGANDAN KEYIN yana bir dona qaytarildi.
+        Return.objects.create(sale=self.disc_sale, shift=self.shift,
+                              quantity=1, refunded_by=self.cashier)
+        c = self._resp().context
+        self.assertEqual(
+            _printed(c['expected']), frozen,
+            "yopilgan smenning JAMIsi keyingi qaytarishдan o'zgarmasligi kerak")
+        self.assertNotEqual(
+            _printed(c['post_close_delta']), 0,
+            "yopilgandan keyingi o'zgarish alohida qatorда ko'rinishi kerak")
+        self.assertEqual(
+            self._kassa_rows(c), _printed(c['expected']),
+            'snapshot ajralganда ham qatorlar JAMIga qo\'shilishi kerak')
+
+    def test_closed_shift_variance_is_frozen_on_the_receipt(self):
+        self.shift.closing_expected_cash = self.shift.compute_expected_cash()
+        self.shift.counted_cash = self.shift.closing_expected_cash
+        self.shift.status = Shift.Status.CLOSED
+        self.shift.closed_at = timezone.now()
+        self.shift.save()
+        before = _printed(self._resp().context['variance_value'])
+        Return.objects.create(sale=self.disc_sale, shift=self.shift,
+                              quantity=1, refunded_by=self.cashier)
+        self.assertEqual(_printed(self._resp().context['variance_value']), before,
+                         'kassirning FARQi keyinchalik qayta yozilmasin')
+
+
+class Mon24SomFilterRoundsHalfUp(TestCase):
+    """MON-24 — pul yaxlitlashi YARMI YUQORIGA, bank yaxlitlashi EMAS.
+
+    `round(2.5)` → 2 (juftga). Kassir 3 kutadi; Z-hisobotда aynan shu 1 so'm
+    qatorlarни JAMIдan ajratib yuborardi.
+    """
+
+    NBSP = ' '
+
+    def test_half_rounds_up_not_to_even(self):
+        from inventory.templatetags.yurit_extras import som
+        self.assertEqual(som(Decimal('0.5')), '1')
+        self.assertEqual(som(Decimal('1.5')), '2')
+        self.assertEqual(som(Decimal('2.5')), '3')      # round() bunda 2 berardi
+        self.assertEqual(som(Decimal('273382.5')), f'273{self.NBSP}383')
+
+    def test_float_and_decimal_agree(self):
+        from inventory.templatetags.yurit_extras import som
+        for v in ('273382.5', '99666.67', '18223116.5', '100000', '2.5'):
+            self.assertEqual(som(Decimal(v)), som(float(v)), f'{v} mos kelmadi')
+
+    def test_negative_and_edge_values(self):
+        from inventory.templatetags.yurit_extras import som
+        self.assertEqual(som(Decimal('-1234.5')), f'-1{self.NBSP}235')
+        self.assertEqual(som(Decimal('-0.4')), '0')     # "-0" chiqmasin
+        self.assertEqual(som(0), '0')
+        self.assertEqual(som(None), '')
+        self.assertEqual(som(''), '')
+        self.assertEqual(som('salom'), 'salom')

@@ -9,7 +9,7 @@ from django.db.models import (Sum, F, Q, DecimalField, ExpressionWrapper, Count,
 from django.db.models.functions import (
     Coalesce, TruncDate, TruncWeek, TruncMonth, ExtractWeekDay,
 )
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from django.db import transaction, IntegrityError
 from django.http import HttpResponseForbidden, HttpResponse, JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
@@ -45,6 +45,7 @@ from .models import (
     InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
     EmployeeDebtItem,
     split_breakdown, _norm_pay_method,  # ARCH-6: yagona to'lov-split manbai
+    _dec,  # MON-24: pul hisobi FAQAT Decimal'da
     weighted_cost,  # STK-8: o'rtacha-tortilgan tannarx
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
@@ -5304,7 +5305,17 @@ def shift_receipt(request, pk):
         return HttpResponseForbidden()
 
     txns = list(shift.transactions.select_related('sold_by').prefetch_related('lines'))
-    total_rev = 0.0
+
+    # MON-24: bu view'дagi HAMMA pul Decimal. Float yig'indi (0.1+0.2) `som`
+    # yaxlitlashida boshqa tomonga ketib, chop etilgan qatorlarни JAMIдan
+    # ajratib yuborardi.
+    def _amt(x):
+        try:
+            return _dec(x or 0)
+        except (TypeError, ValueError, InvalidOperation):
+            return Decimal('0')
+
+    total_rev = Decimal('0')
     item_qty = 0
     # DIQQAT (ARCH-6): bu Z-hisobot ATAYLAB split_breakdown()'dan farq qiladi.
     # Bu yerda maqsad — karta terminal hisoboti bilan solishtirish uchun har
@@ -5314,22 +5325,27 @@ def shift_receipt(request, pk):
     # orqali normallashtiriladi (payme/click → transfer), jimgina cash'ga emas.
     PM = SaleTransaction.PaymentMethod
     labels = dict(PM.choices)
-    money = {PM.CASH: 0.0, PM.CARD: 0.0, PM.TRANSFER: 0.0}
+    money = {PM.CASH: Decimal('0'), PM.CARD: Decimal('0'), PM.TRANSFER: Decimal('0')}
+    # DIQQAT: count = SHU usul YAKKA to'lov bo'lgan cheklar soni. Aralash chek
+    # bittagina — u ikki bucket'ni oshirmasin (aks holda badge'lar yig'indisi
+    # Cheklar'dan oshib, to'g'ri hisobot buzuq ko'rinardi). Pul (money) esa
+    # BRUTTO qoladi: aralash chekning karta ulushi Karta summasiga kiradi
+    # (terminal hisoboti bilan solishtirish uchun — ARCH-6).
     counts = {PM.CASH: 0, PM.CARD: 0, PM.TRANSFER: 0}
-    other_money = 0.0
+    other_money = Decimal('0')
+    other_count = 0
+    mixed_count = 0
+    mixed_money = Decimal('0')
     for t in txns:
-        total_rev += float(t.total)
+        total_rev += _dec(t.total)
         for ln in t.lines.all():
             item_qty += ln.quantity
         if t.payment_method == PM.MIXED:
             used = set()
-            covered = 0.0
+            covered = Decimal('0')
             for part in (t.payment_breakdown or []):
                 m = _norm_pay_method(part.get('method'))
-                try:
-                    amt = float(part.get('amount') or 0)
-                except (TypeError, ValueError):
-                    amt = 0.0
+                amt = _amt(part.get('amount'))
                 if amt <= 0:
                     continue
                 covered += amt
@@ -5340,16 +5356,18 @@ def shift_receipt(request, pk):
                     other_money += amt
             # Breakdown to'liq bo'lmasa (eski/chala yozuvlar) — qolgan summa
             # "Boshqa"ga tushadi, shunda qismlar yig'indisi JAMI bilan teng bo'ladi.
-            rem = float(t.total) - covered
-            if abs(rem) > 0.005:
+            rem = _dec(t.total) - covered
+            if abs(rem) > Decimal('0.005'):
                 other_money += rem
-            for m in used:
-                counts[m] += 1
+            # Chekni FAQAT bir marta — aralash sifatida — sanaymiz.
+            mixed_count += 1
+            mixed_money += _dec(t.total)
         elif t.payment_method in money:
-            money[t.payment_method] += float(t.total)
+            money[t.payment_method] += _dec(t.total)
             counts[t.payment_method] += 1
         else:
-            other_money += float(t.total)
+            other_money += _dec(t.total)
+            other_count += 1
     # BRUTTO — karta terminal hisoboti bilan solishtirish uchun. Qaytarish
     # alohida (QAYTARISHLAR bo'limida, bitta naqd chiqim sifatida).
     pay_rows = [{'label': labels.get(k, k), 'amount': money[k], 'count': counts[k]}
@@ -5364,8 +5382,49 @@ def shift_receipt(request, pk):
     refunds = list(Return.objects.filter(shift=shift)
                    .select_related('sale__variant__product', 'refunded_by')
                    .order_by('refunded_at'))
-    refund_total = sum(float(r.effective_cash_refund) for r in refunds)
+    # MON-24: qaytarilgan naqdни DECIMAL'да yig'amiz (float EMAS). Ilgari bu
+    # float yig'indi edi, expected_cash() esa Decimal yo'lда ayirar edi — REF-2
+    # fraksiyali refundни kiritgach ikki yo'l 1 so'mга farq qilib, chek qatorlari
+    # JAMI bilan yopilmay qolardi. Endi bitta Decimal manba.
+    refund_total = sum((r.effective_cash_refund for r in refunds), Decimal('0'))
     refund_qty = sum(r.quantity for r in refunds)
+
+    # ---- KASSA bloki: chop etilgan qatorlar YIG'INDISI = chop etilgan JAMI.
+    # Har money qatori `|som` bilan butun so'mга yaxlitlanadi; JAMIni (= HOZIRGI
+    # QOLDIQ) AYNI shu yaxlitlangan qiymatlardан chiqaramiz — kassir qo'lда
+    # qayta hisoblaganда aynan bir xil son chiqsin (§4.4). expected_cash()/
+    # variance() modelда audit uchun o'zgarmasдан qoladi; bu faqat CHOP uchun.
+    def _somi(v):
+        # `som` filtri bilan AYNAN bir xil: butun so'm, YARMI YUQORIGA.
+        # (`round()` bank yaxlitlashi qiladi — round(2.5)=2 — kassir esa 3
+        # kutadi; ikki joyда ikki xil yaxlitlash aynan 1 so'm farqni tug'dirardi.)
+        return int(_amt(v).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    _opening_i = _somi(shift.opening_cash)
+    _cash_i = _somi(shift.cash_sales())
+    _debt_i = _somi(shift.debt_payments_total())
+    _cashins_i = _somi(cash_ins_total)
+    _payouts_i = _somi(shift.payouts_total())
+    _refund_i = _somi(refund_total)
+    _live_i = (_opening_i + _cash_i + _debt_i + _cashins_i
+               - _payouts_i - _refund_i)
+
+    # MON-22 (chop yo'lida ham): YOPILGAN smen uchun JAMI — yopilishда
+    # QOTIRILGAN qiymat. Komponentlar esa HOZIR qayta hisoblanadi, shuning
+    # uchun smen yopilgandan keyin qaytarish/o'chirish bo'lса ikkisi ajraladi.
+    # Farqni JAMIга singdirib yubormaymiz (aks holda oylar oldingi smenning
+    # FARQi jimgina qayta yozilib, aybni o'sha kassirга ag'darardi) — alohida
+    # qatorда ko'rsatamiz, shunda qatorlar yig'indisi baribir JAMIga teng.
+    expected_display = _somi(shift.expected_cash())
+    _post_close_delta = _somi(_dec(shift.expected_cash())
+                              - _dec(shift.compute_expected_cash()))
+    # Qolgani — sof yaxlitlash: har qator ALOHIDA butun so'mга keltirilgani
+    # uchun yig'indi 1-2 so'mга siljishi mumkin. Uni ham ochiq ko'rsatamiz,
+    # chunki chekда "yig'ilmayotgan" raqamdan yomoni yo'q.
+    _rounding_delta = expected_display - _live_i - _post_close_delta
+    if shift.counted_cash is not None:
+        variance_display = _somi(shift.counted_cash) - expected_display
+    else:
+        variance_display = shift.variance()
 
     return render(request, 'inventory/shift_receipt.html', {
         'shift': shift,
@@ -5374,18 +5433,24 @@ def shift_receipt(request, pk):
         'total_rev': total_rev,
         'pay_rows': pay_rows,
         'other_money': other_money,
+        'other_count': other_count,
+        'mixed_count': mixed_count,
+        'mixed_money': mixed_money,
         'cash_sales': shift.cash_sales(),
         'debt_payments': shift.debt_payments_total(),
         'payouts': payouts,
         'payouts_total': shift.payouts_total(),
         'cash_ins': cash_ins,
         'cash_ins_total': cash_ins_total,
-        'expected': shift.expected_cash(),
-        'variance_value': shift.variance(),
+        'expected': expected_display,
+        'post_close_delta': _post_close_delta,
+        'rounding_delta': _rounding_delta,
+        'variance_value': variance_display,
         'refunds': refunds,
         'refund_total': refund_total,
         'refund_qty': refund_qty,
-        'net_sales': total_rev - refund_total,
+        # SOF SAVDO = JAMI − Qaytarilgan, chop etilgan qiymatlardan (yopiladi).
+        'net_sales': _somi(total_rev) - _refund_i,
         'printed_at': timezone.now(),
     })
 
