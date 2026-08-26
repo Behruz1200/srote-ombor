@@ -205,7 +205,14 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'inventory.middleware.AuditMiddleware',
+    'inventory.middleware.ContentSecurityPolicyMiddleware',   # SEC-3
+    'inventory.middleware.RequireAdminTwoFactorMiddleware',   # SEC-1 (gated)
 ]
+
+# SEC-3: muammo chiqsa CSP_REPORT_ONLY=1 — bloklamay faqat konsolда hisobot.
+CSP_REPORT_ONLY = _bool('CSP_REPORT_ONLY', default=False)
+# SEC-1: adminlar uchun 2FA majburiy (standart o'chiq — lockout bo'lmasin).
+REQUIRE_ADMIN_2FA = _bool('REQUIRE_ADMIN_2FA', default=False)
 
 ROOT_URLCONF = 'store_management.urls'
 
