@@ -8103,6 +8103,11 @@ def sales_list(request):
     payment_method = request.GET.get('payment_method') or ''
     returned = request.GET.get('returned') or ''   # '', 'yes', 'no'
     export = request.GET.get('export') == 'csv'
+    # Ko'rinish: 'checks' — bir qator = butun chek (standart); 'items' — bir
+    # qator = bitta mahsulot (mahsulotni qidirish uchun qulay).
+    view_mode = (request.GET.get('view') or 'checks').strip()
+    if view_mode not in ('checks', 'items'):
+        view_mode = 'checks'
 
     # Standart: oxirgi 1 oy (sana filtri berilmagan bo'lsa). Foydalanuvchi
     # kengaytirmoqchi bo'lsa — "Sanadan" ni o'zgartiradi.
@@ -8279,7 +8284,64 @@ def sales_list(request):
             'net': _rtotal - _rmoney,
         })
 
+    # ---- CHEK KO'RINISHI: bir qator = butun chek. Filtrlangan qs'даgi
+    # tranzaksiyalarни guruhlab, har biriга chek jamisi (t.total = to'langan),
+    # dona soni, va (agar bo'lsa) qaytarilган summani biriktiramiz. Eng so'nggi
+    # 300 chek ko'rsatiladi. (Chek'siz eski sotuvlar faqat 'items' ko'rinishда.)
+    checks = []
+    if view_mode == 'checks':
+        _txn_order = list(qs.filter(transaction_id__isnull=False)
+                          .values('transaction_id')
+                          .annotate(_last=Max('sold_at'))
+                          .order_by('-_last')[:300])
+        _ids = [r['transaction_id'] for r in _txn_order]
+        _tmap = {t.pk: t for t in SaleTransaction.objects
+                 .filter(pk__in=_ids)
+                 .select_related('branch', 'sold_by')
+                 .prefetch_related('lines__variant__product')}
+        for r in _txn_order:
+            t = _tmap.get(r['transaction_id'])
+            if t is None:
+                continue
+            _lines = list(t.lines.all())
+            _rm = Decimal('0')
+            _rq = 0
+            for ln in _lines:
+                _e = _ret_by_sale.get(ln.id)
+                if _e:
+                    _rm += _e['money']
+                    _rq += _e['qty']
+            _first = _lines[0].variant.product.name if _lines else ''
+            _paid = t.total
+            checks.append({
+                'id': t.pk,
+                'public_id': t.public_id,
+                'sold_at': r['_last'],
+                'branch': t.branch,
+                'sold_by': t.sold_by,
+                'payment': t.get_payment_method_display(),
+                'n_items': t.item_count,
+                'n_lines': len(_lines),
+                'first_product': _first,
+                'customer': t.customer_name,
+                'total': _paid,
+                'returned_money': _rm,
+                'returned_qty': _rq,
+                'net_total': _paid - _rm,
+            })
+
+    # Ko'rinish tugmalari uchun: joriy filtrlar (view/export'siz) querystring.
+    _gc = request.GET.copy()
+    _gc.pop('view', None)
+    _gc.pop('export', None)
+    qs_base = _gc.urlencode()
+
     return render(request, 'inventory/sales_list.html', {
+        'view_mode': view_mode,
+        'qs_base': qs_base,
+        'checks': checks,
+        'check_count': txn_count,
+        'checks_capped': txn_count > 300,
         'sales': sales,
         'total': total,
         'qty_total': qty_total,

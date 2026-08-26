@@ -14,6 +14,16 @@
                 <p class="dash-hero__sub">Cheklar tarixi, qaytarishlar va eksport.</p>
             </div>
             <div class="dash-hero__actions">
+                <div class="btn-group btn-group-sm me-2" role="group" aria-label="Ko'rinish">
+                    <a href="?{{ qs_base }}&view=checks"
+                       class="btn {% if view_mode == 'checks' %}btn-primary{% else %}btn-outline-light text-dark border{% endif %}">
+                        <i class="bi bi-receipt-cutoff"></i> Cheklar
+                    </a>
+                    <a href="?{{ qs_base }}&view=items"
+                       class="btn {% if view_mode == 'items' %}btn-primary{% else %}btn-outline-light text-dark border{% endif %}">
+                        <i class="bi bi-box-seam"></i> Mahsulotlar
+                    </a>
+                </div>
                 <a href="?{{ request.GET.urlencode }}&export=csv" class="dash-btn dash-btn--ghost">
                     <i class="bi bi-file-earmark-spreadsheet"></i> <span>CSV eksport</span>
                 </a>
@@ -142,9 +152,15 @@
     <div class="row g-3 mb-3">
         <div class="col-md-4">
             <div class="card p-3">
+                {% if view_mode == 'checks' %}
+                <div class="small text-muted">Topilgan cheklar</div>
+                <div class="h3 mb-0">{{ check_count }}{% if checks_capped %}
+                    <span class="small text-muted">(300 ko'rsatildi)</span>{% endif %}</div>
+                {% else %}
                 <div class="small text-muted">Topilgan qatorlar</div>
                 <div class="h3 mb-0">{{ line_count }}{% if shown_capped %}
                     <span class="small text-muted">(300 ko'rsatildi)</span>{% endif %}</div>
+                {% endif %}
             </div>
         </div>
         <div class="col-md-4">
@@ -178,7 +194,80 @@
     </div>
     {% endif %}
 
-    <!-- Jadval -->
+    <!-- Jadval: CHEK ko'rinishi (bir qator = butun chek) -->
+    {% if view_mode == 'checks' %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Sana / Vaqt</th>
+                        <th>Filial</th>
+                        <th>Chek</th>
+                        <th class="text-end">Dona</th>
+                        <th class="text-end">Jami</th>
+                        <th>To'lov</th>
+                        <th>Mijoz</th>
+                        <th>Sotuvchi</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for c in checks %}
+                    <tr {% if c.returned_qty and c.returned_qty >= c.n_items %}class="text-muted"{% endif %}>
+                        <td><small>{{ c.sold_at|date:"d.m H:i" }}</small></td>
+                        <td><small>{{ c.branch.name }}</small></td>
+                        <td>
+                            <strong>#{{ c.id }}</strong>
+                            <div class="small text-muted">
+                                {{ c.first_product|truncatechars:24 }}{% if c.n_lines > 1 %}
+                                <span class="text-secondary">+{{ c.n_lines|add:"-1" }} boshqa</span>{% endif %}
+                            </div>
+                        </td>
+                        <td class="text-end">{{ c.n_items }}</td>
+                        <td class="text-end">
+                            <strong>{{ c.total|som }}</strong>
+                            {% if c.returned_qty %}
+                                <div class="small text-danger">
+                                    −{{ c.returned_money|som }} · {{ c.returned_qty }} dona qaytdi
+                                </div>
+                                <div class="small text-muted">sof: {{ c.net_total|som }}</div>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-light text-dark">{{ c.payment }}</span></td>
+                        <td><small>{{ c.customer|default:""|truncatechars:18 }}</small></td>
+                        <td><small>{{ c.sold_by.username }}</small></td>
+                        <td class="text-nowrap">
+                            <a href="{% url 'transaction_detail' c.public_id %}"
+                               class="btn btn-sm btn-outline-secondary" title="Chek">
+                                <i class="bi bi-receipt"></i>
+                            </a>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-warning refund-btn"
+                                    data-txn-id="{{ c.id }}"
+                                    title="Qaytarish / Almashtirish">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">
+                        Chek topilmadi yoki filterga mos kelmadi.
+                    </td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if checks_capped %}
+    <div class="alert alert-info small mt-2">
+        <i class="bi bi-info-circle"></i> Eng so'nggi 300 ta chek ko'rsatildi.
+        To'liq ma'lumot uchun filterni toraytiring yoki CSV export'dan foydalaning.
+    </div>
+    {% endif %}
+    {% else %}
+
+    <!-- Jadval: MAHSULOT ko'rinishi (bir qator = bitta mahsulot) -->
     <div class="card">
         <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
@@ -266,6 +355,7 @@
         To'liq ma'lumot uchun filterni toraytiring yoki CSV export'dan foydalaning.
     </div>
     {% endif %}
+    {% endif %}{# /view_mode #}
 </div>
 
 {% include 'inventory/_refund_exchange_modal.html' %}
