@@ -7953,6 +7953,7 @@ def sales_list(request):
     branch_id = request.GET.get('branch') or ''
     seller_id = request.GET.get('seller') or ''
     payment_method = request.GET.get('payment_method') or ''
+    returned = request.GET.get('returned') or ''   # '', 'yes', 'no'
     export = request.GET.get('export') == 'csv'
 
     # Standart: oxirgi 1 oy (sana filtri berilmagan bo'lsa). Foydalanuvchi
@@ -7988,6 +7989,11 @@ def sales_list(request):
             seller_id = ''
     if payment_method:
         qs = qs.filter(transaction__payment_method=payment_method)
+    # Qaytarilgan holati bo'yicha filtr (annotatsiya _returned ustidan).
+    if returned == 'yes':
+        qs = qs.filter(_returned__gt=0)     # qisman yoki to'liq qaytarilgan
+    elif returned == 'no':
+        qs = qs.filter(_returned=0)         # umuman qaytarilmagan
     if q:
         cond = (
             Q(variant__product__name__icontains=q)
@@ -8066,6 +8072,7 @@ def sales_list(request):
         'branch_id': branch_id,
         'seller_id': seller_id,
         'payment_method': payment_method,
+        'returned': returned,
         # Choices
         'branches': Branch.objects.filter(is_active=True).order_by('name'),
         'sellers': User.objects.filter(is_active=True).order_by('username'),

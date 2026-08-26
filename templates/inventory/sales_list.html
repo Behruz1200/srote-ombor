@@ -96,7 +96,15 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-8">
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Qaytarilgan</label>
+                <select name="returned" class="form-select form-select-sm">
+                    <option value="">— hammasi —</option>
+                    <option value="yes" {% if returned == 'yes' %}selected{% endif %}>Ha (qaytarilgan)</option>
+                    <option value="no" {% if returned == 'no' %}selected{% endif %}>Yo'q</option>
+                </select>
+            </div>
+            <div class="col-md-6">
                 <label class="form-label small text-muted mb-1">Qidirish</label>
                 <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
                        placeholder="Chek raqami (174), mahsulot, mijoz, shtrix-kod...">
