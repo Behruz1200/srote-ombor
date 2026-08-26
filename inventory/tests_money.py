@@ -437,6 +437,39 @@ class BugOff2NoIdempotency(MoneyTestBase):
                          'qoldiq faqat bir marta kamayishi kerak')
 
 
+class Off7ClientTimestamp(MoneyTestBase):
+    """OFF-7 — offline sotuv ASL vaqti bilan yoziladi va o'z (tarixiy) smenига
+    tushadi, sinxron vaqti/hozirgi smenга emas."""
+
+    def test_offline_replay_lands_in_historical_shift_and_time(self):
+        now = timezone.now()
+        past = self.open_shift()
+        past.opened_at = now - timezone.timedelta(hours=5)
+        past.save(update_fields=['opened_at'])
+        past.status = Shift.Status.CLOSED
+        past.closed_at = now - timezone.timedelta(hours=1)
+        past.save(update_fields=['status', 'closed_at'])
+        # hozir ochiq yangi smen
+        Shift.objects.create(branch=self.branch, opened_by=self.cashier,
+                             opening_cash=Decimal('0'))
+        ts = (now - timezone.timedelta(hours=3)).isoformat()
+        resp = self.checkout(is_offline_replay=True, client_ts=ts)
+        self.assertEqual(resp.status_code, 200)
+        txn = SaleTransaction.objects.latest('id')
+        self.assertEqual(txn.shift_id, past.pk,
+                         'sotuv tarixiy (o\'z) smenига tushishi kerak')
+        self.assertLess(abs((txn.sold_at - (now - timezone.timedelta(hours=3)))
+                            .total_seconds()), 5,
+                        'sold_at client vaqti bo\'lishi kerak')
+
+    def test_online_sale_uses_now_and_current_shift(self):
+        shift = self.open_shift()
+        resp = self.checkout(client_ts=timezone.now().isoformat())
+        self.assertEqual(resp.status_code, 200)
+        txn = SaleTransaction.objects.latest('id')
+        self.assertEqual(txn.shift_id, shift.pk)
+
+
 class BugArch5ShiftAttribution(MoneyTestBase):
     """ARCH-5 — savdo vaqt oynasi bo'yicha, qolgani FK bo'yicha topiladi."""
 

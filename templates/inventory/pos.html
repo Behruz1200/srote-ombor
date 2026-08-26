@@ -1241,6 +1241,10 @@
   let cat = 'lunch';
 
   function csrf() {
+    // SW-4: keshlangan sahifadagi ESKI token emas — JONLI sessiya cookie'sini
+    // o'qiymiz. Umumiy kassada B kassir A ning tokeni bilan 403 olmasin.
+    const m = document.cookie.match(/(?:^|;)\s*csrftoken\s*=\s*([^;]+)/);
+    if (m) return decodeURIComponent(m[1]);
     const el = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]');
     return el ? el.value : '';
   }
@@ -1387,7 +1391,13 @@
 
 <form id="posCsrfForm" style="display:none">{% csrf_token %}</form>
 <script>
-const CSRF = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]').value;
+// SW-4: JONLI sessiya cookie'sidan (keshlangan sahifadagi eski token emas).
+const CSRF = (function () {
+    const m = document.cookie.match(/(?:^|;)\s*csrftoken\s*=\s*([^;]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    const el = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+})();
 // Safe localStorage — some mobile contexts (PWA standalone / Safari private
 // mode) THROW on access, which would abort the whole script and kill every
 // handler below (e.g. the collapse toggles). These wrappers never throw.
@@ -2484,6 +2494,10 @@ checkoutBtn.addEventListener('click', async () => {
         applied_promos: appliedPromos.map(p => ({id: p.id, name: p.name, discount: p.discount})),
         send_sms: document.getElementById('sendSmsCheckbox').checked,
         idempotency_key: idemKey,
+        // OFF-7: sotuv AYNAN shu payt sodir bo'ldi. Offline navbatga tushib
+        // keyin yuborilsa ham, chek vaqti va smeni shu vaqt bo'yicha aniqlanadi
+        // (sinxron vaqti emas).
+        client_ts: new Date().toISOString(),
     };
     checkoutBtn.disabled = true;
     checkoutStatus.textContent = 'Saqlanmoqda...';

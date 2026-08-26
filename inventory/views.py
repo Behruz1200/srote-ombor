@@ -5634,10 +5634,37 @@ def pos_checkout(request):
                 customer.save(update_fields=['name'])
 
     open_shift = _open_shift_for(branch)
-    # MON-9: ochiq smensiz sotuv YO'Q (qaytarish/almashtirishдagidek). Aks holda
-    # shift=None bilan yozilib, hech qaysi Z-hisobotга tushmaydi — kassa "ortiq"
-    # chiqadi.
-    if not open_shift:
+
+    # OFF-7: sotuvning ASL vaqti (client_ts). Offline navbatдan kech kelsa ham
+    # chek shu vaqtни ko'rsatadi va smen shu vaqt bo'yicha aniqlanadi — sinxron
+    # vaqti bo'yicha emas (aks holda ertalabki savdo kechki smenга tushardi).
+    target_sold_at = None
+    target_shift = open_shift
+    _client_ts = (data.get('client_ts') or '').strip()
+    if _client_ts:
+        from django.utils.dateparse import parse_datetime
+        _dt = parse_datetime(_client_ts)
+        if _dt is not None:
+            if timezone.is_naive(_dt):
+                _dt = timezone.make_aware(_dt, timezone.get_current_timezone())
+            _now = timezone.now()
+            # kelajak yoki >7 kun eski vaqt — qurilma soati xato, e'tiborsiz
+            if _now - timedelta(days=7) <= _dt <= _now + timedelta(minutes=5):
+                target_sold_at = _dt
+                # Offline replay bo'lsa — o'sha payt ochiq bo'lgan smenni topamiz
+                # (hozir yopilgan bo'lsa ham). ARCH-5 tufayli FK bo'yicha o'sha
+                # smen hisobotiga to'g'ri tushadi.
+                if data.get('is_offline_replay'):
+                    _hist = (Shift.objects.filter(branch=branch, opened_at__lte=_dt)
+                             .filter(Q(closed_at__isnull=True) | Q(closed_at__gte=_dt))
+                             .order_by('-opened_at').first())
+                    if _hist:
+                        target_shift = _hist
+
+    # MON-9: smensiz sotuv YO'Q. Aks holda shift=None bilan yozilib, hech qaysi
+    # Z-hisobotга tushmaydi — kassa "ortiq" chiqadi. (Offline replay o'zining
+    # tarixiy smenига tushishi mumkin; oddiy sotuv hozirgi ochiq smenга.)
+    if not target_shift:
         return JsonResponse({'ok': False,
             'error': "Smen ochilmagan. Sotuv faqat ochiq smen davomida amalga oshiriladi."},
             status=400)
@@ -5772,6 +5799,16 @@ def pos_checkout(request):
                             logger.exception('offline-conflict alert failed')
                     raise _CheckoutAbort({'ok': False, 'error': err})
 
+            # MON-5: smen checkout davomida yopilib qolmasin (poyga —
+            # _open_shift_for atomic blokдан oldin chaqirilgan). Offline replay
+            # tarixiy yopiq smenга ATAYLAB tushadi, uni tekshirmaymiz.
+            if not data.get('is_offline_replay'):
+                _st = (Shift.objects.filter(pk=target_shift.pk)
+                       .values_list('status', flat=True).first())
+                if _st != Shift.Status.OPEN:
+                    raise _CheckoutAbort({'ok': False,
+                        'error': "Smen yopildi. Sotuvni qayta boshlang."})
+
             txn = SaleTransaction.objects.create(
                 branch=branch,
                 sold_by=request.user,
@@ -5783,7 +5820,8 @@ def pos_checkout(request):
                 note=note,
                 order_discount=order_discount,
                 discount_reason=discount_reason,
-                shift=open_shift,
+                shift=target_shift,                      # OFF-7 / ARCH-5
+                sold_at=target_sold_at or timezone.now(),  # OFF-7
                 idempotency_key=idem_key,
             )
             price_overrides = []  # MON-8: qo'lda kiritilgan narx auditи

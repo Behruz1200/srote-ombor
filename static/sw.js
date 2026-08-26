@@ -4,7 +4,7 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'yurit-v198';
+const CACHE_NAME = 'yurit-v199';
 const STATIC_ASSETS = [
   '/static/img/icon-192.png',
   '/static/img/icon-512.png',
@@ -76,28 +76,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // POS lookup: stale-while-revalidate — repeat searches work offline,
-  // online searches always refresh in background. Only the JSON GET endpoints.
+  // POS lookup: NETWORK-FIRST (SW-2). Online bo'lsa DOIM yangi narx/qoldiq
+  // olinadi — kesh faqat offline zaxira. Ilgari kesh birinchi kelib, narx
+  // o'zgargandan keyingi birinchi skan ESKI narxда sotardi.
   if (url.pathname === '/pos/lookup/') {
     event.respondWith(
-      caches.match(req).then((cached) => {
-        const network = fetch(req).then((resp) => {
-          // SW-1: FAQAT haqiqiy JSON javobni keshlaymiz. Sessiya tugab Django
-          // login sahifasiga (HTML) redirect qilsa — keshga tushmasin, aks
-          // holda barcode "JSON o'rniga HTML" qaytarib, skaner buzilardi.
-          const ct = (resp && resp.headers.get('content-type')) || '';
-          if (resp && resp.ok && resp.type === 'basic' && !resp.redirected &&
-              ct.indexOf('application/json') !== -1) {
-            const respClone = resp.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(req, respClone));
-          }
-          return resp;
-        }).catch(() => cached || new Response(
+      fetch(req).then((resp) => {
+        // SW-1: FAQAT haqiqiy JSON javobni keshlaymiz. Sessiya tugab login
+        // sahifasiga (HTML) redirect qilsa — keshga tushmasin.
+        const ct = (resp && resp.headers.get('content-type')) || '';
+        if (resp && resp.ok && resp.type === 'basic' && !resp.redirected &&
+            ct.indexOf('application/json') !== -1) {
+          const respClone = resp.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, respClone));
+        }
+        return resp;
+      }).catch(() =>
+        // tarmoq yo'q — keshdagi eski javob, u ham bo'lmasa JSON 503 (SW-3)
+        caches.match(req).then((cached) => cached || new Response(
           JSON.stringify({ found: false, offline: true }),
-          { status: 503, headers: { 'Content-Type': 'application/json' } }));
-        // SW-3: hech qachon undefined qaytarmaymiz
-        return cached || network;
-      })
+          { status: 503, headers: { 'Content-Type': 'application/json' } })))
     );
     return;
   }
