@@ -1914,6 +1914,10 @@ function prependRecentSale(data, method) {
         `<i class="bi bi-arrow-counterclockwise"></i></button>` +
         `</div></td>`;
     body.prepend(tr);
+    // FIX (review #2): ro'yxatni cheklaymiz — till kun bo'yi ochiq turса,
+    // prepend cheksiz DOM to'plardi (300 sotuvдан keyin 300+ qator). Faqat
+    // oxirgi 50 tasini saqlaymiz.
+    while (body.children.length > 50) body.lastElementChild.remove();
     const badge = document.getElementById('recentCount');
     if (badge) badge.textContent = body.children.length;
 }
@@ -2713,76 +2717,77 @@ checkoutBtn.addEventListener('click', async () => {
         return;
     }
 
+    // FIX (review #4): try FAQAT fetch + json'ni o'raydi. Ilgari butun sotuvдан
+    // keyingi UI (window.open, prependRecentSale) ham try ichida edi — ular xato
+    // bersа, catch queueOffline chaqirib, MUVAFFAQIYATLI sotuvni "offline" deб
+    // yolg'on aytar va navbatга arvoh yozuv qo'yardi. Endi tarmoq/parse xatosi
+    // aniq ajratilган.
+    let resp, data;
     try {
-        const resp = await fetch('/pos/checkout/', {
+        resp = await fetch('/pos/checkout/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
             body: JSON.stringify(payload),
         });
-        const data = await resp.json();
-        if (!data.ok) {
-            checkoutStatus.innerHTML = `<span class="text-danger">${data.error || 'Xatolik'}</span>`;
-            // Server rad etди — chek yaratilmadi. O'sha savat/kalit qoladi;
-            // tuzatib qayta urinса ayni kalit ketadi (takror yozilmaydi).
-            checkoutInFlight = false;
-            checkoutBtn.disabled = false;
-            return;
-        }
-        checkoutStatus.innerHTML = `<span class="text-success">
-            ✓ Sotuv #${data.txn_id} saqlandi (${fmt(data.total)} so'm)</span>`;
-        try { getPayModal().hide(); } catch (e) {}
+        data = await resp.json();
+    } catch (e) {
+        await queueOffline('tarmoq xatosi');
+        refocus();
+        return;
+    }
 
-        // Auto-open cash drawer if cash was used (any portion)
-        const usedCash = (paymentMethod === 'cash')
-            || (paymentMethod === 'mixed' && breakdown.some(b => b.method === 'cash' && b.amount > 0));
-        if (usedCash) {
-            openCashDrawerAuto();  // silent — does nothing if not configured
-        }
-
-        // Open receipt in new tab → auto-prints
-        // Reuse a single named window for the receipt — repeated sales/clicks
-        // don't pile up tabs (cashir so'roviga ko'ra).
-        const _rcptWin = window.open(data.receipt_url, 'yuritReceipt');
-        // FE-2: QR to'lovда checkout SUN'IY bosish bilan yakunlanadi (foydalanuvchi
-        // harakati yo'q), shuning uchun popup BLOKLANADI va chek chiqmaydi. Popup
-        // bloklansa — kassir bosadigan ko'rinadigan havola beramiz (u haqiqiy
-        // harakat, popup ochiladi) va avto-reload qilmaymiz (havola yo'qolmasin).
-        const _rcptBlocked = !_rcptWin;
-        // Reset for next customer — S1: sotuv yakunlandi, keyingi savat yangi
-        // kalit oladi va tugmalar qayta yoqiladi.
+    if (!data.ok) {
+        checkoutStatus.innerHTML = `<span class="text-danger">${data.error || 'Xatolik'}</span>`;
+        // Server rad etди — chek yaratilmadi. O'sha savat/kalit qoladi.
         checkoutInFlight = false;
-        cartIdemKey = null;
-        pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
-        cart = {};
-        qrBreakdownExtra = [];
-        renderCart();
-        document.getElementById('customerName').value = '';
-        document.getElementById('customerPhone').value = '';
-        // FE-7: chegirma va aralash-to'lov maydonlarini ham tozalaymiz. Popup
-        // bloklanган holда reload bo'lmaydi — aks holда eski chegirma % va
-        // aralash summalar KEYINGI sotuvга o'tib ketardi.
-        discountPct = 0;
-        clearMixedInputs();
-        orderDiscountInput.value = '';
-        discountReasonInput.value = '';
-        scanInput.value = '';
-        setStatus('', '');
-        hideExtras();
-        if (_rcptBlocked) {
+        checkoutBtn.disabled = false;
+        refocus();
+        return;
+    }
+
+    // --- Sotuv MUVAFFAQIYATLI (yoki takror). Bu nuqtadan keyin HECH QACHON
+    //     qayta navbatga olinmaydi. Avval holatni tozalab tugmani yoqamiz
+    //     (kosmetik amaldан oldин — window.open xato bersа ham till qotmaydi).
+    checkoutInFlight = false;
+    cartIdemKey = null;
+    pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
+    cart = {};
+    qrBreakdownExtra = [];
+    renderCart();
+    document.getElementById('customerName').value = '';
+    document.getElementById('customerPhone').value = '';
+    // FE-7: chegirma va aralash-to'lov maydonlarини ham tozalaymiz.
+    discountPct = 0;
+    clearMixedInputs();
+    orderDiscountInput.value = '';
+    discountReasonInput.value = '';
+    scanInput.value = '';
+    setStatus('', '');
+    hideExtras();
+    checkoutStatus.innerHTML = `<span class="text-success">
+        ✓ Sotuv #${data.txn_id} saqlandi (${fmt(data.total)} so'm)</span>`;
+    try { getPayModal().hide(); } catch (e) {}
+
+    // Naqd ishlatilса — kassa qutisini ochamiz (sozlanmaган bo'lsa jim)
+    const usedCash = (paymentMethod === 'cash')
+        || (paymentMethod === 'mixed' && breakdown.some(b => b.method === 'cash' && b.amount > 0));
+    if (usedCash) { openCashDrawerAuto(); }
+
+    // Kosmetik: chek oynasi + ro'yxatга qator. Bularни alohида himoyalaymiz —
+    // xato bo'lса ham sotuv holati buzilmaydi va refocus() baribir ishlaydi.
+    try {
+        const _rcptWin = window.open(data.receipt_url, 'yuritReceipt');
+        if (!_rcptWin) {
+            // Popup bloklandi (FE-2: QR'да sun'iy bosish) — ko'rinadigan havola.
             checkoutStatus.innerHTML = `<span class="text-success">
                 ✓ Sotuv #${data.txn_id} saqlandi</span>
                 <a href="${data.receipt_url}" target="yuritReceipt"
                    class="btn btn-sm btn-primary ms-2">🧾 Chekni chop etish</a>`;
         }
-        // Patch 1d: RELOAD OLIB TASHLANDI. Yangi qatorни ro'yxatga mijoz tomonида
-        // qo'shamiz — 164 KB sahifa + 103 KB JS qayta yuklanmaydi, kassir darhol
-        // keyingi sotuvga tayyor. Yuqoridagi holat tozalash (FE-7) allaqачон
-        // bajarilган, shu bois reloadни olib tashlash xavfsiz.
-        prependRecentSale(data, paymentMethod);
-    } catch (e) {
-        // Network error — queue instead of failing the cashier
-        await queueOffline('tarmoq xatosi');
-    }
+        // FIX (review #3): takroriy (idempotent replay) javob bo'lса ro'yxatга
+        // IKKINCHI qator qo'shmaymiz (badge ham oshib ketmasin).
+        if (!data.duplicate) prependRecentSale(data, paymentMethod);
+    } catch (e) { /* kosmetik — jim */ }
     refocus();
 });
 
@@ -3767,11 +3772,10 @@ document.addEventListener('keydown', (e) => {
         const a = document.querySelector('#recentBody a[href*="/transaction/"]');
         if (a) window.open(a.href + '?autoprint=1', 'yuritReceipt');
     } else if (e.key === 'F8') {
-        // Patch 6: savatни tozalash (tasdiq bilan)
+        // Patch 6: savatни tozalash. FIX (review #1): clearCartBtn O'ZI tasdiq
+        // so'raydi — bu yerда qo'shimcha confirm QO'YMAYMIZ (ikki marta so'ramasin).
         e.preventDefault();
-        if (Object.keys(cart).length && confirm('Savatni tozalash?')) {
-            clearCartBtn.click();
-        }
+        if (Object.keys(cart).length) clearCartBtn.click();
     }
 });
 
