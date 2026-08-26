@@ -4,7 +4,7 @@ from .models import (
     User, Branch, Category, Product, ProductVariant,
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
-    Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
+    Supplier, IntakeSession, ProductRequest, CashPayout, CashIn, InvoiceDraft,
     InvoiceImage, QuickSellItem, StockWriteOff,
 )
 
@@ -53,6 +53,15 @@ class ProductRequestAdmin(admin.ModelAdmin):
 
 @admin.register(CashPayout)
 class CashPayoutAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'amount', 'category', 'branch',
+                    'shift', 'created_by', 'note')
+    list_filter = ('category', 'branch')
+    search_fields = ('note',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(CashIn)
+class CashInAdmin(admin.ModelAdmin):
     list_display = ('created_at', 'amount', 'category', 'branch',
                     'shift', 'created_by', 'note')
     list_filter = ('category', 'branch')

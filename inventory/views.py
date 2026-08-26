@@ -40,7 +40,7 @@ from .models import (
     Category, Group, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
     Transfer, TransferLine, StockWriteOff, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
-    Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
+    Supplier, IntakeSession, ProductRequest, CashPayout, CashIn, InvoiceDraft,
     InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
     EmployeeDebtItem,
     split_breakdown, _norm_pay_method,  # ARCH-6: yagona to'lov-split manbai
@@ -4931,6 +4931,9 @@ def shift_detail(request, pk):
     # Cash taken out of the till during the shift (payouts)
     payouts = list(shift.payouts.select_related('created_by').order_by('-created_at'))
     payouts_total = shift.payouts_total()
+    # Cash added to the till (MON-4)
+    cash_ins = list(shift.cash_ins.select_related('created_by').order_by('-created_at'))
+    cash_ins_total = shift.cash_ins_total()
 
     return render(request, 'inventory/shift_detail.html', {
         'shift': shift,
@@ -4939,6 +4942,8 @@ def shift_detail(request, pk):
         'expected': shift.expected_cash(),
         'payouts': payouts,
         'payouts_total': payouts_total,
+        'cash_ins': cash_ins,
+        'cash_ins_total': cash_ins_total,
         'pm_list': pm_list,
         'hour_labels': [f'{h:02d}:00' for h, _, _ in active_hours],
         'hour_qty': [q for _, q, _ in active_hours],
@@ -5109,6 +5114,72 @@ def cash_payout(request):
     messages.success(
         request,
         f"Kassadan olindi: {amount:,.0f} so'm — {payout.get_category_display()}."
+    )
+    return redirect('shift_detail', pk=shift.pk)
+
+
+@login_required
+def cash_in(request):
+    """Kassaga naqd qo'shishни qayd etish (MON-4) — cash_payout'ning aksi.
+    POS (JSON) yoki smen sahifasi (form) dan chaqiriladi."""
+    if request.method != 'POST':
+        return redirect('pos_terminal')
+
+    ctype = request.content_type or ''
+    wants_json = 'application/json' in ctype or \
+        request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    if 'application/json' in ctype:
+        try:
+            data = _json.loads(request.body.decode('utf-8'))
+        except ValueError:
+            return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    else:
+        data = request.POST
+
+    def _fail(msg, status=400):
+        if wants_json:
+            return JsonResponse({'ok': False, 'error': msg}, status=status)
+        messages.warning(request, msg)
+        back = request.POST.get('next')
+        return redirect(back if back and back.startswith('/') else 'pos_terminal')
+
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return _fail("Filial biriktirilmagan.", 403)
+
+    shift = _open_shift_for(branch)
+    if not shift:
+        return _fail("Ochiq smen yo'q — avval smen oching.", 400)
+
+    try:
+        amount = round(float(data.get('amount') or 0))
+    except (ValueError, TypeError):
+        amount = 0
+    if amount <= 0:
+        return _fail("Summa 0 dan katta bo'lishi kerak.", 400)
+
+    category = (data.get('category') or 'other').strip()
+    if category not in CashIn.VALID_CATEGORIES:
+        category = 'other'
+    note = (data.get('note') or '').strip()[:200]
+
+    ci = CashIn.objects.create(
+        shift=shift, branch=branch, amount=amount,
+        category=category, note=note, created_by=request.user,
+    )
+
+    if wants_json:
+        return JsonResponse({
+            'ok': True,
+            'id': ci.id,
+            'amount': amount,
+            'category': ci.get_category_display(),
+            'cash_ins_total': float(shift.cash_ins_total()),
+            'expected': float(shift.expected_cash()),
+        })
+    messages.success(
+        request,
+        f"Kassaga qo'shildi: {amount:,.0f} so'm — {ci.get_category_display()}."
     )
     return redirect('shift_detail', pk=shift.pk)
 

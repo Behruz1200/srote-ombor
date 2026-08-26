@@ -437,6 +437,28 @@ class BugOff2NoIdempotency(MoneyTestBase):
                          'qoldiq faqat bir marta kamayishi kerak')
 
 
+class Mon4CashIn(MoneyTestBase):
+    """MON-4 — kassaga naqd qo'shish kutilgan naqdни OSHIRadi (payout aksi)."""
+
+    def test_cash_in_increases_expected_cash(self):
+        shift = self.open_shift(opening_cash='100000')
+        before = shift.expected_cash()
+        resp = self.client.post(
+            '/shift/cash-in/',
+            data=json.dumps({'amount': 50000, 'category': 'float'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(shift.expected_cash(), before + Decimal('50000'))
+        self.assertEqual(shift.cash_ins_total(), Decimal('50000'))
+
+    def test_cash_in_rejected_without_open_shift(self):
+        resp = self.client.post(
+            '/shift/cash-in/',
+            data=json.dumps({'amount': 50000}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+
+
 class Stk1WriteOff(MoneyTestBase):
     """STK-1 — hisobdan chiqarish zaxirani kamaytiradi va yozib qoladi."""
 

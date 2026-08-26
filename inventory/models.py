@@ -996,6 +996,11 @@ class Shift(models.Model):
         """Smen davomida kassadan olingan naqd (tushlik, xarajat va h.k.)."""
         return self.payouts.aggregate(s=models.Sum('amount'))['s'] or Decimal('0')
 
+    def cash_ins_total(self):
+        """Smen davomida kassaga qo'shilgan naqd (MON-4) — payoutning aksi.
+        Maydalik (float), egasi qo'ygan pul va h.k. Kutilgan naqdga QO'SHILADI."""
+        return self.cash_ins.aggregate(s=models.Sum('amount'))['s'] or Decimal('0')
+
     def debt_payments_total(self):
         """Smen davomida to'langan xodim qarzlari — kassaga NAQD TUSHADI.
 
@@ -1020,9 +1025,9 @@ class Shift(models.Model):
 
     def expected_cash(self):
         """Kutilgan naqd = ochilish + naqd sotuvlar + qarz to'lovlari
-        − kassadan olingan pul − mijozga qaytarilgan pul."""
+        + kassaga qo'shilgan naqd − kassadan olingan pul − qaytarilgan pul."""
         return (_dec(self.opening_cash) + _dec(self.cash_sales())
-                + _dec(self.debt_payments_total())
+                + _dec(self.debt_payments_total()) + _dec(self.cash_ins_total())
                 - _dec(self.payouts_total()) - _dec(self.refunds_total()))
 
     def variance(self):
@@ -1533,6 +1538,50 @@ class CashPayout(models.Model):
 
     def __str__(self):
         return f"{self.amount} so'm — {self.get_category_display()}"
+
+
+class CashIn(models.Model):
+    """Kassaga qo'shilgan naqd pul (kirim) — MON-4.
+
+    Kassadan olish (CashPayout) bor edi, lekin qo'shishнинг yo'li yo'q edi:
+    ertalabki maydalik (float), egasi qo'ygan pul, boshqa manbadan tushum —
+    hech qayerга yozilmasdi va kassa "ortiq" ko'rinardi. Bu yozuv kutilgan
+    naqdga QO'SHILADI (payoutning aksi)."""
+    class Category(models.TextChoices):
+        FLOAT = 'float', 'Maydalik (float)'
+        OWNER = 'owner', 'Egasi qo\'ydi'
+        CORRECTION = 'correction', 'Tuzatish'
+        OTHER = 'other', 'Boshqa'
+
+    shift = models.ForeignKey('Shift', on_delete=models.PROTECT,
+                              related_name='cash_ins')
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT,
+                               related_name='cash_ins')
+    amount = models.DecimalField(max_digits=12, decimal_places=2,
+                                 help_text="Kassaga qo'shilgan summa (so'm)")
+    category = models.CharField(max_length=12, choices=Category.choices,
+                                default=Category.OTHER)
+    note = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name='cash_ins')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    VALID_CATEGORIES = {c[0] for c in Category.choices}
+
+    class Meta:
+        verbose_name = 'Kassa kirimi'
+        verbose_name_plural = 'Kassa kirimlari'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['branch', '-created_at'], name='cashin_branch_dt'),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0),
+                                   name='cashin_amount_positive'),
+        ]
+
+    def __str__(self):
+        return f"+{self.amount} so'm — {self.get_category_display()}"
 
 
 class InvoiceDraft(models.Model):
