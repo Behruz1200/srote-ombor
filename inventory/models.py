@@ -780,6 +780,54 @@ class TransferLine(models.Model):
         verbose_name = 'Ko\'chirish qatori'
         verbose_name_plural = "Ko'chirish qatorlari"
 
+
+class StockWriteOff(models.Model):
+    """Tovarni hisobdan chiqarish (STK-1) — shikast, yo'qolish, buzilish,
+    o'g'irlik, yetkazuvchiga qaytarish. MAJBURIY sabab kodi, faqat admin.
+
+    Zaxira shu miqdorда kamayadi va bu yozuv ombor tenglamasiga kiradi. Aks
+    holda haqiqiy yo'qotishlar 'nol narxli sotuv' yoki inventarizatsiya orqali
+    yashirinib, o'g'irlik signalini yo'q qilardi.
+    """
+    class Reason(models.TextChoices):
+        DAMAGE = 'damage', 'Shikastlangan'
+        LOSS = 'loss', "Yo'qolgan"
+        SPOILAGE = 'spoilage', "Buzilgan / muddati o'tgan"
+        THEFT = 'theft', "O'g'irlangan"
+        SUPPLIER_RETURN = 'supplier_return', 'Yetkazuvchiga qaytarildi'
+        CORRECTION = 'correction', 'Tuzatish (inventarizatsiya)'
+        OTHER = 'other', 'Boshqa'
+
+    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT,
+                                related_name='writeoffs')
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT,
+                               related_name='writeoffs')
+    quantity = models.PositiveIntegerField()
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    note = models.CharField(max_length=200, blank=True)
+    cost_at_writeoff = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Yozuv paytidagi tannarx (yo'qotish qiymatini hisoblash uchun)")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name='writeoffs')
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = 'Hisobdan chiqarish'
+        verbose_name_plural = 'Hisobdan chiqarishlar'
+        ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0),
+                                   name='writeoff_qty_positive'),
+        ]
+
+    def __str__(self):
+        return f'WriteOff #{self.pk}: {self.variant_id} × {self.quantity} ({self.reason})'
+
+    @property
+    def loss_value(self):
+        return self.quantity * (self.cost_at_writeoff or 0)
+
     def __str__(self):
         return f'{self.variant} × {self.quantity}'
 

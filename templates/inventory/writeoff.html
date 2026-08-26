@@ -1,0 +1,109 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+
+{% block title %}Hisobdan chiqarish — yurit{% endblock %}
+
+{% block content %}
+<div class="container dash-page">
+    <header class="dash-hero">
+        <div class="dash-hero__glow"></div>
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Ombor</span>
+                <h1 class="dash-hero__title"><i class="bi bi-trash3"></i> Tovarni hisobdan chiqarish</h1>
+                <p class="dash-hero__sub">Shikast, yo'qolish, buzilish yoki yetkazuvchiga qaytarilgan tovarni qoldiqdan chiqaring — bu yozuv ombor tenglamasiga kiradi.</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="row justify-content-center align-items-start g-3">
+        <div class="col-lg-5">
+            <article class="dash-card">
+                <div class="dash-card__body dash-card__body--padded">
+                    <h5 class="mb-3">Yangi yozuv</h5>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-2">
+                            <label class="form-label small text-muted">Filial</label>
+                            <select name="branch" class="form-select" required>
+                                {% for b in branches %}
+                                    <option value="{{ b.pk }}">{{ b.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted">Shtrix-kod (tovardagi kodni skanerlang)</label>
+                            <input type="text" name="code" class="form-control" autofocus
+                                   autocomplete="off" placeholder="Skaner yoki qo'lda kod" required>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-5">
+                                <label class="form-label small text-muted">Miqdor</label>
+                                <input type="number" name="quantity" class="form-control"
+                                       min="1" value="1" required>
+                            </div>
+                            <div class="col-7">
+                                <label class="form-label small text-muted">Sabab</label>
+                                <select name="reason" class="form-select" required>
+                                    {% for val, label in reasons %}
+                                        <option value="{{ val }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Izoh (ixtiyoriy)</label>
+                            <input type="text" name="note" class="form-control" maxlength="200"
+                                   placeholder="Masalan: suv toshib ketdi">
+                        </div>
+                        <button type="submit" class="dash-btn dash-btn--primary w-100"
+                                style="padding: 0.8rem 1rem;">
+                            <i class="bi bi-trash3"></i> <span>Hisobdan chiqarish</span>
+                        </button>
+                    </form>
+                </div>
+            </article>
+        </div>
+
+        <div class="col-lg-7">
+            <article class="dash-card">
+                <div class="dash-card__body dash-card__body--padded">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">So'nggi yozuvlar</h5>
+                        <span class="badge bg-danger-subtle text-danger">
+                            30 kunlik yo'qotish: {{ loss_30d|floatformat:0 }} so'm
+                        </span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Sana</th><th>Tovar</th><th>Sabab</th>
+                                    <th class="text-end">Dona</th><th>Kim</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for w in recent %}
+                                <tr>
+                                    <td class="small text-nowrap">{{ w.created_at|date:"d.m H:i" }}</td>
+                                    <td class="small">
+                                        <code>{{ w.variant.product.code }}</code>
+                                        {{ w.variant.product.name|truncatechars:22 }}
+                                        <span class="text-muted">{{ w.variant.size }}/{{ w.variant.color }}</span>
+                                    </td>
+                                    <td class="small">{{ w.get_reason_display }}{% if w.note %} <span class="text-muted">· {{ w.note|truncatechars:24 }}</span>{% endif %}</td>
+                                    <td class="text-end">{{ w.quantity }}</td>
+                                    <td class="small text-muted">{{ w.created_by.username }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="5" class="text-center text-muted py-3">Hozircha yozuv yo'q.</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </div>
+</div>
+{% endblock %}

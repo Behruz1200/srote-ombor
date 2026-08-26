@@ -5,8 +5,19 @@ from .models import (
     BranchStock, Intake, Sale, AuditLog, SaleTransaction, Return, Customer,
     ParkedSale, Promotion, PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
-    InvoiceImage, QuickSellItem,
+    InvoiceImage, QuickSellItem, StockWriteOff,
 )
+
+
+@admin.register(StockWriteOff)
+class StockWriteOffAdmin(admin.ModelAdmin):
+    list_display = ('created_at', 'variant', 'branch', 'quantity', 'reason',
+                    'loss_value', 'created_by')
+    list_filter = ('reason', 'branch', 'created_at')
+    search_fields = ('variant__product__code', 'variant__product__name',
+                     'variant__barcode', 'note')
+    date_hierarchy = 'created_at'
+    readonly_fields = ('created_at',)
 
 
 @admin.register(QuickSellItem)

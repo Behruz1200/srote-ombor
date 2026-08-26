@@ -477,8 +477,8 @@
         <h6 class="text-muted text-uppercase small mb-2">
             <i class="bi bi-arrow-left-right"></i> Harakatlar tarixi — tur bo'yicha (kirim / sotuv / qoldiq)</h6>
         <div class="text-muted small mb-2">
-            Har tur uchun: jami qabul − sotilgan + qaytarilgan = qoldiq. "Nomos" belgisi
-            bo'lsa — qoldiq harakatlarga to'g'ri kelmayapti (qarzga olingan yoki qo'lda
+            Har tur uchun: kirim − sotuv + qaytarish − hisobdan chiqarish − qarz − yo'ldagi = qoldiq.
+            "Nomos" belgisi bo'lsa — qoldiq harakatlarga to'g'ri kelmayapti (qo'lda
             tuzatilgan bo'lishi mumkin), tekshiring.
         </div>
         <div class="table-responsive">
@@ -486,7 +486,10 @@
                 <thead class="table-light"><tr>
                     <th>Tur (o'lcham / rang)</th><th>Shtrix-kod</th>
                     <th class="text-end">Kirim</th><th class="text-end">Sotuv</th>
-                    <th class="text-end">Qaytarish</th><th class="text-end">Qoldiq</th><th></th>
+                    <th class="text-end">Qaytar.</th>
+                    <th class="text-end">Chiqim</th><th class="text-end">Qarz</th>
+                    <th class="text-end">Yo'lda</th>
+                    <th class="text-end">Qoldiq</th><th></th>
                 </tr></thead>
                 <tbody>
                 {% for m in movement_rows %}
@@ -496,6 +499,9 @@
                     <td class="text-end">{{ m.intake }}</td>
                     <td class="text-end">{{ m.sold }}</td>
                     <td class="text-end">{{ m.returned }}</td>
+                    <td class="text-end">{% if m.writeoff %}<span class="text-danger">{{ m.writeoff }}</span>{% else %}0{% endif %}</td>
+                    <td class="text-end">{{ m.debt }}</td>
+                    <td class="text-end">{{ m.in_transit }}</td>
                     <td class="text-end fw-bold">{{ m.current }}</td>
                     <td>{% if not m.balanced %}<span class="badge bg-warning text-dark" title="Qoldiq harakatlarga mos emas">Nomos</span>{% else %}<i class="bi bi-check2 text-success"></i>{% endif %}</td>
                 </tr>

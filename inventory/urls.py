@@ -44,6 +44,9 @@ urlpatterns = [
     path('transfers/<int:pk>/', views.transfer_detail, name='transfer_detail'),
     path('transfers/<int:pk>/receive/', views.transfer_receive, name='transfer_receive'),
 
+    # Stock write-off (damage / loss / spoilage) — admin only (STK-1)
+    path('writeoff/', views.writeoff_list, name='writeoff_list'),
+
     # Shifts (open/close, cash reconciliation)
     path('shift/open/', views.shift_open, name='shift_open'),
     path('shift/close/', views.shift_close, name='shift_close'),

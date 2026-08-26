@@ -437,6 +437,51 @@ class BugOff2NoIdempotency(MoneyTestBase):
                          'qoldiq faqat bir marta kamayishi kerak')
 
 
+class Stk1WriteOff(MoneyTestBase):
+    """STK-1 — hisobdan chiqarish zaxirani kamaytiradi va yozib qoladi."""
+
+    def _admin(self):
+        return User.objects.create_user(
+            username='boss', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+
+    def test_writeoff_decrements_stock_and_records(self):
+        from inventory.models import StockWriteOff
+        admin = self._admin()
+        c = Client()
+        c.force_login(admin)
+        resp = c.post('/writeoff/', {
+            'branch': self.branch.pk, 'code': self.variant.barcode,
+            'quantity': 3, 'reason': 'damage', 'note': 'suv toshdi',
+        })
+        self.assertEqual(resp.status_code, 302)  # redirect back
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.stock_count, 7, 'zaxira 3 taга kamayishi kerak')
+        wo = StockWriteOff.objects.get()
+        self.assertEqual(wo.quantity, 3)
+        self.assertEqual(wo.reason, 'damage')
+        self.assertEqual(wo.cost_at_writeoff, Decimal('60000'))
+
+    def test_writeoff_over_stock_is_rejected(self):
+        from inventory.models import StockWriteOff
+        admin = self._admin()
+        c = Client()
+        c.force_login(admin)
+        c.post('/writeoff/', {
+            'branch': self.branch.pk, 'code': self.variant.barcode,
+            'quantity': 999, 'reason': 'loss',
+        })
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.stock_count, 10, 'zaxira o\'zgarmasligi kerak')
+        self.assertEqual(StockWriteOff.objects.count(), 0)
+
+    def test_non_admin_forbidden(self):
+        resp = self.client.post('/writeoff/', {  # self.client = kassir (sotuvchi)
+            'branch': self.branch.pk, 'code': self.variant.barcode,
+            'quantity': 1, 'reason': 'loss'})
+        self.assertEqual(resp.status_code, 403)
+
+
 class Off7ClientTimestamp(MoneyTestBase):
     """OFF-7 — offline sotuv ASL vaqti bilan yoziladi va o'z (tarixiy) smenига
     tushadi, sinxron vaqti/hozirgi smenга emas."""

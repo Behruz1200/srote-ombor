@@ -38,7 +38,7 @@ from reportlab.platypus import (
 from .models import (
     User, Branch, Product, ProductVariant, BranchStock,
     Category, Group, Intake, Sale, AuditLog, SaleTransaction, Return, Customer, Shift,
-    Transfer, TransferLine, Stocktake, StocktakeCount, ParkedSale, Promotion,
+    Transfer, TransferLine, StockWriteOff, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, InvoiceDraft,
     InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
@@ -1968,6 +1968,18 @@ def product_detail(request, code):
         sale__variant_id__in=_vids).values('sale__variant').annotate(s=Sum('quantity'))}
     _cur = {r['variant']: r['s'] for r in BranchStock.objects.filter(
         variant_id__in=_vids).values('variant').annotate(s=Sum('stock_count'))}
+    # STK-1: ombor tenglamasiga hisobdan chiqarish, ishchi qarzi va YO'LDAGI
+    # ko'chirishlarни ham qo'shamiz. Aks holda ko'chirilgan/yo'qotilgan tovar
+    # "farq" bo'lib ko'rinardi. (Ledger kompaniya bo'yicha — qabul qilingan
+    # ko'chirish manba−/manzil+ o'zaro yo'qoladi; faqat YO'LDAGISI kamaytiradi.)
+    _wo = {r['variant']: r['s'] for r in StockWriteOff.objects.filter(
+        variant_id__in=_vids).values('variant').annotate(s=Sum('quantity'))}
+    _dbt = {r['variant']: r['s'] for r in EmployeeDebtItem.objects.filter(
+        variant_id__in=_vids).values('variant').annotate(s=Sum('quantity'))}
+    _tin = {r['variant']: r['s'] for r in TransferLine.objects.filter(
+        variant_id__in=_vids, transfer__status=Transfer.Status.IN_TRANSIT
+        ).values('variant').annotate(s=Sum('quantity'))}
+    _is_open = product.is_open_price
     movement_rows = []
     for row in variant_rows:
         v = row.get('variant') if isinstance(row, dict) else getattr(row, 'variant', None)
@@ -1977,11 +1989,16 @@ def product_detail(request, code):
         so = _sold.get(v.pk, 0) or 0
         rq = _retn.get(v.pk, 0) or 0
         cu = _cur.get(v.pk, 0) or 0
-        if not (ki or so or cu or rq):
+        wo = _wo.get(v.pk, 0) or 0
+        # ochiq narxli tovar sotuv/qarzда zaxira KAMAYTIRMAYDI — bu hadlarni 0
+        db = 0 if _is_open else (_dbt.get(v.pk, 0) or 0)
+        tin = _tin.get(v.pk, 0) or 0
+        if not (ki or so or cu or rq or wo or db or tin):
             continue
         movement_rows.append({
             'variant': v, 'intake': ki, 'sold': so, 'returned': rq, 'current': cu,
-            'balanced': (ki - so + rq) == cu,
+            'writeoff': wo, 'debt': db, 'in_transit': tin,
+            'balanced': (ki - so + rq - wo - db - tin) == cu,
         })
     movement_rows.sort(key=lambda r: (not r['balanced'], -(r['current'] or 0)))
 
@@ -4664,6 +4681,97 @@ def transfer_receive(request, pk):
         return redirect('transfer_detail', pk=t.pk)
 
     return render(request, 'inventory/transfer_receive.html', {'transfer': t})
+
+
+# ---------- STOCK WRITE-OFF (STK-1) ----------
+
+@admin_required
+def writeoff_list(request):
+    """Tovarni hisobdan chiqarish (shikast/yo'qolish/...) — faqat admin.
+
+    GET: forma (filial, shtrix-kod, miqdor, sabab, izoh) + so'nggi yozuvlar.
+    POST: variantni shtrix-kod bo'yicha topadi, zaxirani atomik kamaytiradi,
+    StockWriteOff + AuditLog yozadi. Bu yozuv ombor tenglamasiga kiradi.
+    """
+    branches = Branch.objects.filter(is_active=True).order_by('name')
+
+    if request.method == 'POST':
+        raw = (request.POST.get('code') or '').strip()
+        try:
+            branch_id = int(request.POST.get('branch') or 0)
+        except ValueError:
+            branch_id = 0
+        try:
+            qty = int(request.POST.get('quantity') or 0)
+        except ValueError:
+            qty = 0
+        reason = (request.POST.get('reason') or '').strip()
+        note = (request.POST.get('note') or '').strip()[:200]
+
+        valid_reasons = {r for r, _ in StockWriteOff.Reason.choices}
+        branch = Branch.objects.filter(pk=branch_id).first()
+        # Variantni shtrix-kod bo'yicha aniqlaymiz (jismoniy tovardagi kod)
+        variant = (ProductVariant.objects.filter(barcode=raw)
+                   .select_related('product').first())
+        if not variant:
+            variant = (ProductVariant.objects.filter(product__external_barcode=raw)
+                       .select_related('product').first())
+
+        if not branch:
+            messages.error(request, "Filialni tanlang.")
+        elif not variant:
+            messages.error(request, f"Shtrix-kod topilmadi: {raw}. Tovar kodini skanerlang.")
+        elif reason not in valid_reasons:
+            messages.error(request, "Sababni tanlang.")
+        elif qty <= 0:
+            messages.error(request, "Miqdor 0 dan katta bo'lsin.")
+        else:
+            with transaction.atomic():
+                stock = (BranchStock.objects.select_for_update()
+                         .filter(variant=variant, branch=branch).first())
+                have = stock.stock_count if stock else 0
+                if qty > have:
+                    messages.error(request,
+                        f"Omborда faqat {have} ta bor, so'rov {qty}.")
+                    return redirect('writeoff_list')
+                stock.stock_count = F('stock_count') - qty
+                stock.save(update_fields=['stock_count'])
+                wo = StockWriteOff.objects.create(
+                    variant=variant, branch=branch, quantity=qty,
+                    reason=reason, note=note,
+                    cost_at_writeoff=stock.cost_price or 0,
+                    created_by=request.user,
+                )
+                AuditLog.objects.create(
+                    user=request.user,
+                    username_snapshot=request.user.username,
+                    action=AuditLog.Action.DELETE,
+                    model_name='StockWriteOff',
+                    object_id=str(wo.pk),
+                    object_repr=(f"{variant.product.code} "
+                                 f"{variant.size or ''}/{variant.color or ''} × {qty} "
+                                 f"— {dict(StockWriteOff.Reason.choices).get(reason, reason)}")[:300],
+                    changes={'branch': branch.name, 'qty': qty, 'reason': reason,
+                             'note': note, 'loss_value': float(wo.loss_value)},
+                )
+            messages.success(request,
+                f"Hisobdan chiqarildi: {variant.product.code} × {qty} "
+                f"({dict(StockWriteOff.Reason.choices).get(reason, reason)}).")
+            return redirect('writeoff_list')
+
+    recent = (StockWriteOff.objects
+              .select_related('variant__product', 'branch', 'created_by')
+              .order_by('-created_at')[:100])
+    # 30 kunlik jami yo'qotish qiymati
+    since = timezone.now() - timedelta(days=30)
+    loss_30d = sum((w.loss_value for w in StockWriteOff.objects
+                    .filter(created_at__gte=since)), 0)
+    return render(request, 'inventory/writeoff.html', {
+        'branches': branches,
+        'reasons': StockWriteOff.Reason.choices,
+        'recent': recent,
+        'loss_30d': loss_30d,
+    })
 
 
 # ---------- SHIFTS ----------
