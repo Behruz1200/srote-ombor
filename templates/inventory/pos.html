@@ -838,7 +838,7 @@
                     <td><small>{{ t.get_payment_method_display }}</small></td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <a href="{% url 'transaction_detail' t.public_id %}" target="_blank"
+                            <a href="{% url 'transaction_detail' t.public_id %}" target="yuritReceipt"
                                class="btn btn-outline-secondary" title="Chekni ko'rish">
                                 <i class="bi bi-receipt"></i>
                             </a>
@@ -1907,7 +1907,7 @@ function prependRecentSale(data, method) {
         `<td><strong>${fmt(data.total)}</strong></td>` +
         `<td><small>${esc(PAY_LABELS[method] || method)}</small></td>` +
         `<td><div class="btn-group btn-group-sm">` +
-        `<a href="${esc(receipt)}" target="_blank" class="btn btn-outline-secondary"` +
+        `<a href="${esc(receipt)}" target="yuritReceipt" class="btn btn-outline-secondary"` +
         ` title="Chekni ko'rish"><i class="bi bi-receipt"></i></a>` +
         `<button type="button" class="btn btn-outline-warning refund-btn"` +
         ` data-txn-id="${esc(String(data.txn_id))}" title="Qaytarish">` +
@@ -2740,7 +2740,9 @@ checkoutBtn.addEventListener('click', async () => {
         }
 
         // Open receipt in new tab → auto-prints
-        const _rcptWin = window.open(data.receipt_url, '_blank');
+        // Reuse a single named window for the receipt — repeated sales/clicks
+        // don't pile up tabs (cashir so'roviga ko'ra).
+        const _rcptWin = window.open(data.receipt_url, 'yuritReceipt');
         // FE-2: QR to'lovда checkout SUN'IY bosish bilan yakunlanadi (foydalanuvchi
         // harakati yo'q), shuning uchun popup BLOKLANADI va chek chiqmaydi. Popup
         // bloklansa — kassir bosadigan ko'rinadigan havola beramiz (u haqiqiy
@@ -2769,7 +2771,7 @@ checkoutBtn.addEventListener('click', async () => {
         if (_rcptBlocked) {
             checkoutStatus.innerHTML = `<span class="text-success">
                 ✓ Sotuv #${data.txn_id} saqlandi</span>
-                <a href="${data.receipt_url}" target="_blank"
+                <a href="${data.receipt_url}" target="yuritReceipt"
                    class="btn btn-sm btn-primary ms-2">🧾 Chekni chop etish</a>`;
         }
         // Patch 1d: RELOAD OLIB TASHLANDI. Yangi qatorни ro'yxatga mijoz tomonида
@@ -3763,7 +3765,7 @@ document.addEventListener('keydown', (e) => {
         // Patch 6: oxirgi chekni qayta chop etish
         e.preventDefault();
         const a = document.querySelector('#recentBody a[href*="/transaction/"]');
-        if (a) window.open(a.href + '?autoprint=1', '_blank');
+        if (a) window.open(a.href + '?autoprint=1', 'yuritReceipt');
     } else if (e.key === 'F8') {
         // Patch 6: savatни tozalash (tasdiq bilan)
         e.preventDefault();
