@@ -111,20 +111,10 @@ def post_save_handler(sender, instance, created, **kwargs):
         if changes:
             _write_log(AuditLog.Action.UPDATE, instance=instance, changes=changes)
 
-    # Low-stock Telegram alert when a BranchStock drops to/below threshold
-    if sender is BranchStock:
-        try:
-            from .notifications import maybe_low_stock_alert
-            _before = getattr(instance, "_audit_before", None) or {}
-            maybe_low_stock_alert(
-                instance,
-                previous_count=_before.get("stock_count"),
-                created=created,
-            )
-        except Exception as e:
-            # Never let a notification failure break the request
-            import logging
-            logging.getLogger(__name__).warning('Low-stock alert failed: %s', e)
+    # NOTE: har sotuvда "tovar tugab bormoqda" Telegram xabari YUBORILMAYDI —
+    # do'kon egasi so'roviga ko'ra (2026), kam qolgan tovarlar RO'YXATI endi
+    # faqat kunlik 22:00 xulosadan keyin ALOHIDA bitta xabar bo'lib keladi
+    # (inventory/notifications.py: low_stock_report_text). Har sotuvда spam yo'q.
 
     # Invalidate HQ dashboard cache on any sale-shaped activity so the next
     # admin hit recomputes immediately instead of waiting up to 60s.

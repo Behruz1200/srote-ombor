@@ -13,7 +13,9 @@ from datetime import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from inventory.notifications import daily_summary_text, send_telegram, _enabled
+from inventory.notifications import (
+    daily_summary_text, low_stock_report_text, send_telegram, _enabled,
+)
 
 
 class Command(BaseCommand):
@@ -31,8 +33,14 @@ class Command(BaseCommand):
             d = timezone.localdate()
 
         msg = daily_summary_text(d)
+        # Kam qolgan / tugagan tovarlar — ALOHIDA xabar (do'kon egasi so'roviga
+        # ko'ra endi har sotuvда emas, faqat shu kunlik xulosa bilan birga).
+        low_msg = low_stock_report_text()
+
         if opts['dry_run']:
             self.stdout.write(msg)
+            self.stdout.write('\n--- (alohida xabar) ---\n')
+            self.stdout.write(low_msg or '(kam qolgan tovar yo\'q — xabar yuborilmaydi)')
             return
 
         if not _enabled():
@@ -46,3 +54,10 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f'Daily summary for {d} sent.'))
         else:
             self.stderr.write(self.style.ERROR(f'Send failed for {d}.'))
+
+        # Ikkinchi (alohida) xabar — faqat ro'yxat bo'sh bo'lmasa
+        if low_msg:
+            if send_telegram(low_msg):
+                self.stdout.write(self.style.SUCCESS('Low-stock report sent.'))
+            else:
+                self.stderr.write(self.style.ERROR('Low-stock report send failed.'))

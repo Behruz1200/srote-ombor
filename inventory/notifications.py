@@ -269,6 +269,64 @@ def daily_summary_text(d=None):
     return '\n'.join(lines)
 
 
+def low_stock_report_text(threshold=None, limit_per_section=40):
+    """Kam qolgan / tugagan tovarlar RO'YXATI (kunlik 22:00 xulosaga qo'shimcha,
+    ALOHIDA xabar). Har sotuvда emas, kuniga bir marta keladi.
+
+    Ikki bo'lim: ⛔ tugagan (0 dona) va ⚠️ kam qolgan (1..threshold). Ochiq
+    narxli (is_open_price) tovarlar qoldiq yuritmaydi — ro'yxatga kirmaydi.
+    Hech narsa bo'lmasa None qaytaradi (xabar yuborilmaydi).
+    """
+    from django.utils import timezone
+    from .models import BranchStock
+
+    thr = LOW_STOCK_THRESHOLD if threshold is None else int(threshold)
+    today = timezone.localdate()
+
+    qs = (BranchStock.objects
+          .filter(stock_count__lte=thr)
+          .exclude(variant__product__is_open_price=True)
+          .select_related('variant__product', 'branch')
+          .order_by('stock_count', 'variant__product__name'))
+
+    out_rows, low_rows = [], []
+    for bs in qs:
+        (out_rows if bs.stock_count <= 0 else low_rows).append(bs)
+
+    if not out_rows and not low_rows:
+        return None
+
+    multi_branch = len({bs.branch_id for bs in out_rows + low_rows}) > 1
+
+    def _line(bs, show_qty):
+        p = bs.variant.product
+        brand = f"{p.brand} · " if getattr(p, 'brand', '') else ''
+        br = f" · {bs.branch.name}" if multi_branch else ''
+        base = (f"• {brand}{p.name} — <code>{p.code}</code> · "
+                f"{_variant_descr(bs.variant)}{br}")
+        if show_qty:
+            base += f" — <b>{bs.stock_count}</b> dona"
+        return base
+
+    lines = [f"📦 <b>Kam qolgan / tugagan tovarlar — {today:%d.%m.%Y}</b>"]
+
+    if out_rows:
+        lines.append(f"\n⛔ <b>Tugagan (0 dona): {len(out_rows)} ta</b>")
+        for bs in out_rows[:limit_per_section]:
+            lines.append(_line(bs, show_qty=False))
+        if len(out_rows) > limit_per_section:
+            lines.append(f"… yana {len(out_rows) - limit_per_section} ta")
+
+    if low_rows:
+        lines.append(f"\n⚠️ <b>Kam qolgan (≤{thr} dona): {len(low_rows)} ta</b>")
+        for bs in low_rows[:limit_per_section]:
+            lines.append(_line(bs, show_qty=True))
+        if len(low_rows) > limit_per_section:
+            lines.append(f"… yana {len(low_rows) - limit_per_section} ta")
+
+    return '\n'.join(lines)
+
+
 # ---------- /stock CODE ----------
 
 def stock_text(code):
