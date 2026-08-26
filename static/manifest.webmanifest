@@ -2,7 +2,7 @@
   "name": "yurit",
   "short_name": "yurit",
   "description": "Savdo va ombor boshqaruv tizimi",
-  "start_url": "/lookup/",
+  "start_url": "/pos/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
