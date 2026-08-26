@@ -239,8 +239,15 @@ def daily_summary_text(d=None):
     top_seller = qs.values('sold_by__username').annotate(r=Sum(rev_expr)) \
         .order_by('-r').first()
 
-    low = BranchStock.objects.filter(stock_count__lte=LOW_STOCK_THRESHOLD).count()
-    out = BranchStock.objects.filter(stock_count=0).count()
+    # MAHSULOT darajasida (variant emas) — 22:00 alohida ro'yxat bilan mos
+    # kelishi uchun. Do'kon 1 o'lcham=1 dona bo'lgani uchun variant soni
+    # chalg'itardi (butun katalog "kam" ko'rinardi).
+    from django.db.models import Sum as _Sum
+    _ptot = (BranchStock.objects.exclude(variant__product__is_open_price=True)
+             .values('variant__product_id').annotate(t=_Sum('stock_count')))
+    out = sum(1 for r in _ptot if (r['t'] or 0) <= 0)
+    low = sum(1 for r in _ptot if 0 < (r['t'] or 0) <= PRODUCT_LOW_TOTAL)
+    low = low + out  # quyida `low - out` kam qolganlar sonini beradi
 
     if n == 0:
         return (
@@ -261,9 +268,9 @@ def daily_summary_text(d=None):
     if top_seller:
         lines.append(f"🥇 Top sotuvchi: <b>{top_seller['sold_by__username']}</b> ({_som(top_seller['r'])} so'm)")
     if out:
-        lines.append(f"\n⛔ {out} ta variant tugagan")
+        lines.append(f"\n⛔ {out} ta mahsulot butunlay tugagan")
     if low > out:
-        lines.append(f"⚠️ {low - out} ta variant kam qoldi (≤{LOW_STOCK_THRESHOLD} dona)")
+        lines.append(f"⚠️ {low - out} ta mahsulot kam qoldi (≤{PRODUCT_LOW_TOTAL} dona)")
     if not low and not out:
         lines.append("\n✅ Hech narsa kritik holatda emas")
     return '\n'.join(lines)
