@@ -271,6 +271,12 @@ POS terminal devices (Android):
     /* hide screen UI */
     body * { visibility: hidden; }
     #receipt, #receipt * { visibility: visible; }
+    /* FE-8: visibility:hidden ink'ni yashiradi, lekin LAYOUT qutisini
+       qoldiradi — har chek uchun app-shell balandligicha BO'SH qog'oz
+       chiqardi (metrlab). display:none bilan shell butunlay olib tashlanadi
+       (bu elementlarда #receipt yo'q, shuning uchun xavfsiz). */
+    nav.navbar, .yurit-nav, footer { display: none !important; }
+    .container.dash-page > *:not(#receipt) { display: none !important; }
 
     /* thermal printer page setup — 80mm roll */
     @page { size: 80mm auto; margin: 0; }

@@ -1483,9 +1483,15 @@ if (_displayChannel) {
     };
 }
 function broadcastCart() {
+    // FE-9: chegirmani ham yuboramiz — mijoz ekrani JAMIni to'g'ri (to'lanadigan)
+    // ko'rsatsin, aks holда qatorlar yig'indisi (chegirmasiz) chiqib, mijoz
+    // haqiqatда to'laydigandan KATTA raqam ko'rinardi.
+    const _sub = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
     broadcastDisplay({
         action: 'cart',
         items: Object.values(cart),
+        discount: Math.max(0, _sub - currentTotalAmount()),
+        total: currentTotalAmount(),
     });
 }
 
@@ -1512,6 +1518,9 @@ function saveCart() {
 }
 let cart = loadCart();
 let promoDiscount = 0;
+// FE-6: foizli chegirma HAR renderCart'да qayta hisoblansin (savat o'zgarса ham
+// "−10%" 10% bo'lib qolsin, eskirgan qat'iy so'mга aylanib qolmasin).
+let discountPct = 0;
 let appliedPromos = [];
 // QR amounts paid as part of a mixed-payment cheque. Combined with the
 // cash/card inputs at checkout into the final payment_breakdown.
@@ -1932,6 +1941,10 @@ async function evaluatePromos() {
 // Re-render only totals + applied promos panel, without re-rendering whole cart
 function refreshTotalsFromPromo() {
     const subtotal = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
+    // FE-6: foizli chegirma tanlangan bo'lsa — joriy savatдан qayta hisoblaymiz.
+    if (discountPct > 0) {
+        orderDiscountInput.value = Math.round(subtotal * discountPct / 100);
+    }
     const manualDisc = Math.max(0, parseFloat(orderDiscountInput.value || '0'));
     const disc = manualDisc + promoDiscount;
     const total = Math.max(0, subtotal - disc);
@@ -1946,21 +1959,22 @@ function refreshTotalsFromPromo() {
 // Discount controls
 document.querySelectorAll('.disc-pct').forEach(b => {
     b.addEventListener('click', () => {
-        const sub = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
-        orderDiscountInput.value = Math.round(sub * parseFloat(b.dataset.pct) / 100);
-        renderCart();
+        discountPct = parseFloat(b.dataset.pct) || 0;   // FE-6: foizni saqlaymiz
+        renderCart();                                    // renderCart qayta hisoblaydi
     });
 });
 document.getElementById('discClear').addEventListener('click', () => {
+    discountPct = 0;
     orderDiscountInput.value = '';
     discountReasonInput.value = '';
     renderCart();
 });
-orderDiscountInput.addEventListener('input', renderCart);
+// FE-6: qo'lda summa terilса — foizli rejimдан chiqamiz (aniq summa hukmron).
+orderDiscountInput.addEventListener('input', () => { discountPct = 0; renderCart(); });
 
 clearCartBtn.addEventListener('click', () => {
     if (confirm('Savatni tozalashni tasdiqlaysizmi?')) {
-        cart = {}; qrBreakdownExtra = []; renderCart(); refocus();
+        cart = {}; discountPct = 0; clearMixedInputs(); renderCart(); refocus();
     }
 });
 
@@ -1985,10 +1999,13 @@ const mixedTotalEl = document.getElementById('mixedTotal');
 const mixedHintEl  = document.getElementById('mixedHint');
 
 function currentTotalAmount() {
-    // Mirrors what renderCart() shows
+    // FE-1: AKSIYA chegirmasini (promoDiscount) ham ayirishimiz SHART. Ilgari
+    // faqat qo'lda chegirma ayirilib, o'zgartirish/QR/aralash-bo'linish uchun
+    // JAMI savatда ko'rsatilgandan KATTA chiqardi — mijoz ko'proq to'lardi,
+    // serverда esa kamroq yozilardi. renderCart() bilan bir xil bo'lishi kerak.
     const sub = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
-    const disc = Math.max(0, parseFloat(orderDiscountInput.value || '0'));
-    return Math.max(0, sub - disc);
+    const manualDisc = Math.max(0, parseFloat(orderDiscountInput.value || '0'));
+    return Math.max(0, sub - manualDisc - promoDiscount);
 }
 
 function getMixedBreakdown() {
@@ -1998,6 +2015,15 @@ function getMixedBreakdown() {
         if (a > 0) out.push({method: inp.dataset.method, amount: a});
     });
     return out;
+}
+
+// FE-7: aralash to'lov maydonlari sotuvlar orasida TOZALANMAsdi — keyingi
+// "Aralash" sotuv oldingi mijozning bo'linishini yuklab, soxta naqd/karta
+// yozib qo'yishi mumkin edi. Har savat tozalanganда bularni ham tozalaymiz.
+function clearMixedInputs() {
+    document.querySelectorAll('.mixed-input').forEach(inp => { inp.value = ''; });
+    qrBreakdownExtra = [];
+    if (typeof renderMixedSplit === 'function') renderMixedSplit();
 }
 
 function renderMixedSplit() {
@@ -2523,6 +2549,8 @@ checkoutBtn.addEventListener('click', async () => {
             renderCart();
             document.getElementById('customerName').value = '';
             document.getElementById('customerPhone').value = '';
+            discountPct = 0;   // FE-6
+            clearMixedInputs();   // FE-7
             orderDiscountInput.value = '';
             discountReasonInput.value = '';
             scanInput.value = '';

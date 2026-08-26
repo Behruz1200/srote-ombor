@@ -343,7 +343,7 @@ function showScreen(name) {
     });
 }
 
-function renderCart(items) {
+function renderCart(items, finalTotal, discount) {
     cartItemsEl.innerHTML = '';
     let total = 0, qty = 0;
     items.forEach(it => {
@@ -364,7 +364,16 @@ function renderCart(items) {
         `;
         cartItemsEl.appendChild(row);
     });
-    cartTotalEl.textContent = fmt(total);
+    // FE-9: chegirmali JAMI (POS yuborsa) — mijoz haqiqiy to'lovni ko'rsin.
+    const shown = (typeof finalTotal === 'number' && finalTotal >= 0) ? finalTotal : total;
+    if (discount && discount > 0) {
+        const d = document.createElement('div');
+        d.className = 'item';
+        d.innerHTML = `<div><div class="item-name">Chegirma</div></div>`
+                    + `<div class="item-total">− ${fmt(discount)}</div>`;
+        cartItemsEl.appendChild(d);
+    }
+    cartTotalEl.textContent = fmt(shown);
     cartCountEl.textContent = qty;
 }
 
@@ -380,7 +389,7 @@ if (bc) {
         if (!msg || !msg.action) return;
         if (msg.action === 'cart') {
             if (msg.items && msg.items.length > 0) {
-                renderCart(msg.items);
+                renderCart(msg.items, msg.total, msg.discount);   // FE-9
                 showScreen('cart');
             } else {
                 showScreen('idle');
