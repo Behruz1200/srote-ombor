@@ -3768,9 +3768,16 @@
         hydrateCountUps(root) {
             root = root || document;
             root.querySelectorAll('[data-countup]').forEach(el => {
-                // '5,922,000.0' / '5 922 000' kabi lokalizatsiya qilingan
-                // qiymatlar ham to'g'ri o'qilsin (parseFloat vergulda to'xtaydi)
-                const final = parseFloat(String(el.dataset.countup).replace(/[^0-9eE.+-]/g, ''));
+                // Lokalizatsiya qilingan raqamlarni to'g'ri o'qiymiz. O'zbek
+                // formati: BO'SHLIQ = minglik, VERGUL = o'nlik ("133000,00").
+                // Ilgari vergul ham olib tashlanib, "133000,00" → 13300000 (100×)
+                // bo'lib ketardi. Endi: bo'shliqlarni olib tashlaymiz, vergulni
+                // NUQTAGA aylantiramiz, so'ng parseFloat.
+                const final = parseFloat(
+                    String(el.dataset.countup)
+                        .replace(/[\s  ]/g, '')  // minglik bo'shliqlari
+                        .replace(',', '.')                 // o'nlik vergul → nuqta
+                        .replace(/[^0-9eE.+-]/g, ''));      // qolgan begona belgilar
                 if (Number.isFinite(final)) {
                     el.classList.add('yrt-count');
                     this.countUp(el, final);

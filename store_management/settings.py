@@ -325,6 +325,11 @@ LANGUAGE_CODE = 'uz'
 TIME_ZONE = 'Asia/Tashkent'
 USE_I18N = True
 USE_TZ = True
+# FIX: L10N yoqilganda uz lokali VERGUL-o'nlik beradi va settings'dagi
+# DECIMAL_SEPARATOR e'tiborsiz qoladi ("133000,00"). Bu count-up JS'ni va
+# type="number" inputlarni buzardi (100× xato). FORMAT_MODULE_PATH eng yuqori
+# ustunlikка ega — uz uchun NUQTA-o'nlik majburlaymiz (xabarlar uzbekcha qoladi).
+FORMAT_MODULE_PATH = 'store_management.formats'
 USE_THOUSAND_SEPARATOR = False  # IDs/PKs must render raw (int); money uses the `som` filter (spaces)
 THOUSAND_SEPARATOR = ' '
 NUMBER_GROUPING = 3
