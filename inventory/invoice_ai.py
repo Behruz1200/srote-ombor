@@ -261,10 +261,15 @@ def _units(qty, cost, line_sum):
     if cost > 0 and line_sum > 0:
         n = line_sum / cost
         r = round(n)
-        # butun songa yaqin bo'lsa — ishonamiz
+        # butun songa yaqin bo'lsa — hisoblaymiz
         if r >= 1 and abs(n - r) <= max(0.02, n * 0.005):
             per_box = (r / qty) if qty > 0 else 0
-            return float(r), (per_box if per_box > 1.001 else 0), True
+            # STK-13: hisoblangan dona (r) qog'ozdagi qty bilan MOS kelsagina
+            # "ishonchli". Farq qilsa (masalan Сумма xato o'qilib 5 -> 50, yoki
+            # quti holati qty=1/r=72) — TRUSTED emas, xodim tekshirsin. Ilgari
+            # doim True qaytarib, xato son "ishonchli" ko'rinardi.
+            trusted = (qty > 0 and int(r) == int(qty))
+            return float(r), (per_box if per_box > 1.001 else 0), trusted
         return qty, 0, False          # bo'linmadi — foydalanuvchi tekshirsin
     # narx yoki summa yo'q (masalan bonus tovar) — qty o'zi
     return qty, 0, True

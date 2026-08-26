@@ -3494,15 +3494,24 @@ def csv_import(request):
                                         f"barcode {ext_barcode} boshqa mahsulotda mavjud"
                                     )
                             if code:
+                                # STK-17: FAQAT CSV'да haqiqatan berilgan
+                                # ustunlarni yangilaymiz. Ilgari to'liq defaults
+                                # bloki tufayli, ikki ustunli (code+qty) eksport
+                                # mavjud mahsulotning nomi/kategoriya/narxini
+                                # bo'shatib, narxни 0 ga tushirardi.
+                                _defaults = {'name': name}
+                                if category is not None:
+                                    _defaults['category'] = category
+                                if ext_barcode:
+                                    _defaults['external_barcode'] = ext_barcode
+                                if (row.get('default_sale_price') or '').strip():
+                                    _defaults['default_sale_price'] = price
+                                if (row.get('markup_percent') or '').strip():
+                                    _defaults['markup_percent'] = markup
+                                if (row.get('description') or '').strip():
+                                    _defaults['description'] = desc
                                 p, was_created = Product.objects.update_or_create(
-                                    code=code,
-                                    defaults={
-                                        'name': name, 'category': category,
-                                        'external_barcode': ext_barcode,
-                                        'default_sale_price': price,
-                                        'markup_percent': markup,
-                                        'description': desc,
-                                    }
+                                    code=code, defaults=_defaults,
                                 )
                             else:
                                 p = Product.objects.create(
@@ -4196,6 +4205,19 @@ def intake_photo_save(request):
     if not branch:
         return JsonResponse({'ok': False, 'error': 'Filial tanlang.'}, status=400)
 
+    # STK-15: takroriy saqlash (telefonда ikki marta bosish yoki sekin AI
+    # javobida qayta yuborish) ombor sonini IKKI marta oshirardi. Bir xil
+    # payload'ni 5 daqiqa ichiga bir marta qabul qilamiz (atomik cache.add).
+    import hashlib as _hl
+    from django.core.cache import cache as _cache
+    _idem = (payload.get('idempotency_key') or '').strip()[:64]
+    if not _idem:
+        _idem = _hl.sha256((request.POST.get('payload') or '').encode('utf-8')).hexdigest()[:32]
+    _idem_key = f'intake_save:{_idem}'
+    if not _cache.add(_idem_key, True, 300):
+        return JsonResponse({'ok': True, 'duplicate': True, 'saved': 0,
+                             'error': 'Bu qabul allaqachon saqlangan (takror bosildi).'})
+
     # Har qatorning o'z kategoriyasi bo'lishi mumkin — bitta yetkazib beruvchi
     # turli toifadagi mahsulot keltiradi. Ro'yxatda yo'q nom yozilsa, yangi
     # kategoriya yaratiladi (prefiks avtomatik chiqadi).
@@ -4230,6 +4252,8 @@ def intake_photo_save(request):
         except (TypeError, ValueError):
             qty = 0
         if qty <= 0:
+            # STK-14: jimgina tashlamaymiz — xodim qatorни ko'rib chiqsin.
+            errors.append(f"{idx}-qator: {name} — soni 0/noto'g'ri, o'tkazilmadi.")
             continue
         try:
             cost = Decimal(str(r.get('cost') or 0)).quantize(Decimal('0.01'))
@@ -4240,6 +4264,7 @@ def intake_photo_save(request):
         except (InvalidOperation, TypeError, ValueError):
             sale = Decimal('0')
         if cost < 0 or sale < 0:
+            errors.append(f"{idx}-qator: {name} — manfiy narx/tannarx, o'tkazilmadi.")
             continue
         barcode = (r.get('barcode') or '').strip()[:64]
         if barcode:
@@ -4253,6 +4278,7 @@ def intake_photo_save(request):
                       'category': (r.get('category') or '').strip()[:120]})
 
     if not clean and not errors:
+        _cache.delete(_idem_key)   # STK-15: xato — qayta urinishga ruxsat
         return JsonResponse({'ok': False,
                              'error': "Saqlash uchun qator yo'q (miqdor > 0 bo'lsin)."},
                             status=400)
@@ -4277,6 +4303,7 @@ def intake_photo_save(request):
                           f"'{p_clash.name}' mahsulotiga biriktirilgan.")
 
     if errors:
+        _cache.delete(_idem_key)   # STK-15: xato — qayta urinishga ruxsat
         return JsonResponse({'ok': False, 'error': ' '.join(errors[:5])}, status=400)
 
     supplier_text = (payload.get('supplier') or '').strip()[:200]
