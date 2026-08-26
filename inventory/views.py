@@ -5389,6 +5389,64 @@ def shift_receipt(request, pk):
     })
 
 
+@login_required
+def shift_returns(request, pk):
+    """Smen davomidagi QAYTARISHLAR tafsiloti — har qator: chek #, sotilган
+    narx, chegirma (va %), qaytarilган summa. Jami qaytarilган = Z-hisobotдаgi
+    'Qaytarilgan (naqd)' bilan bir xil. 'Fraksiya qayerdan?' savoliga aniq javob.
+    """
+    from decimal import Decimal
+    shift = get_object_or_404(Shift.objects.select_related('branch'), pk=pk)
+    if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
+        return HttpResponseForbidden()
+
+    rows = []
+    total_sticker = Decimal('0')
+    total_discount = Decimal('0')
+    total_refund = Decimal('0')
+    returns = (Return.objects.filter(shift=shift)
+               .select_related('sale__variant__product', 'sale__transaction',
+                               'refunded_by')
+               .order_by('refunded_at'))
+    for r in returns:
+        sale = r.sale
+        # sale_price / refund_amount / effective_cash_refund allaqачон Decimal.
+        sticker = Decimal(r.quantity) * sale.sale_price   # yorliq narx × dona
+        refund = r.refund_amount            # chegirma hisobga olingan (REF-2)
+        cash = r.effective_cash_refund      # kassaдан HAQIQIY chiqqan
+        disc = sticker - refund
+        pct = (disc / sticker * 100) if sticker > 0 else Decimal('0')
+        rows.append({
+            'refunded_at': r.refunded_at,
+            'check_id': sale.transaction_id,
+            'public_id': sale.transaction.public_id if sale.transaction else None,
+            'sold_at': sale.sold_at,
+            'product': sale.variant.product.name,
+            'code': sale.variant.product.code,
+            'qty': r.quantity,
+            'unit_price': sale.sale_price,
+            'sticker': sticker,
+            'discount': disc,
+            'pct': pct,
+            'refund': refund,
+            'cash': cash,
+            'is_exchange': r.is_exchange,
+        })
+        total_sticker += sticker
+        total_discount += disc
+        total_refund += cash
+
+    return render(request, 'inventory/shift_returns.html', {
+        'shift': shift,
+        'rows': rows,
+        'count': len(rows),
+        'qty_total': sum(x['qty'] for x in rows),
+        'total_sticker': total_sticker,
+        'total_discount': total_discount,
+        'total_refund': total_refund,
+    })
+
+
 # MON-17: bitta kassa harakati uchun aqlли yuqori chegara (1 milliard so'm).
 # Bundan katta summa — deyarli har doim kiritishда xato yoki suiiste'mol.
 _MAX_CASH_MOVE = 1_000_000_000

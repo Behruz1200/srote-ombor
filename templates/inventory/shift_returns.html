@@ -1,0 +1,96 @@
+{% extends 'inventory/base.html' %}
+{% load yurit_extras %}
+{% block title %}Smen #{{ shift.pk }} qaytarishlari — yurit{% endblock %}
+{% block content %}
+<div class="container dash-page">
+    <a href="{% url 'shift_detail' shift.pk %}" class="btn btn-link p-0 mb-2">← Smen #{{ shift.pk }}</a>
+
+    <header class="dash-hero">
+        <div class="dash-hero__inner">
+            <div class="dash-hero__heading">
+                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Qaytarishlar</span>
+                <h1 class="dash-hero__title"><i class="bi bi-arrow-counterclockwise"></i>
+                    Smen #{{ shift.pk }} — qaytarishlar tafsiloti</h1>
+                <p class="dash-hero__sub">
+                    <span>{{ shift.branch.name }}</span> ·
+                    <span>{{ shift.opened_at|date:"d.m.Y H:i" }} — {% if shift.closed_at %}{{ shift.closed_at|date:"d.m.Y H:i" }}{% else %}ochiq{% endif %}</span>
+                </p>
+            </div>
+            <div class="dash-hero__actions">
+                <a href="{% url 'shift_receipt' shift.pk %}" target="yuritReceipt" class="dash-btn dash-btn--ghost">
+                    <i class="bi bi-receipt"></i> <span>Z-hisobot</span></a>
+            </div>
+        </div>
+    </header>
+
+    <div class="alert alert-info small">
+        <i class="bi bi-info-circle"></i>
+        Bu ro'yxat smen <b>ichida amalga oshirilган barcha qaytarishlar</b> (sotuv qaysi kunда bo'lганидан qat'i nazar).
+        <b>Chegirma</b> — chek bo'yicha berilган chegirmaning shu tovarга tushган ulushi; shuning uchun
+        <b>qaytarilган summa</b> = yorliq narx − chegirma (mijoz haqiqатda to'laган summa).
+    </div>
+
+    <div class="card p-0">
+        <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Vaqt</th>
+                    <th>Chek #</th>
+                    <th>Mahsulot</th>
+                    <th class="text-center">Dona</th>
+                    <th class="text-end">Yorliq narx</th>
+                    <th class="text-end">Chegirma</th>
+                    <th class="text-end">%</th>
+                    <th class="text-end">Qaytarilган</th>
+                    <th class="text-end">Naqd chiqdi</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in rows %}
+                <tr>
+                    <td><small>{{ r.refunded_at|date:"d.m H:i" }}</small></td>
+                    <td>{% if r.public_id %}<a href="{% url 'transaction_detail' r.public_id %}"
+                           target="yuritReceipt" class="text-decoration-none">#{{ r.check_id }}</a>
+                        {% else %}#{{ r.check_id }}{% endif %}</td>
+                    <td>
+                        <div>{{ r.product }}{% if r.is_exchange %} <span class="badge bg-info-subtle text-info">almashtirish</span>{% endif %}</div>
+                        <div class="small text-muted"><code>{{ r.code }}</code></div>
+                    </td>
+                    <td class="text-center">{{ r.qty }}</td>
+                    <td class="text-end">{{ r.sticker|som }}</td>
+                    <td class="text-end {% if r.discount > 0 %}text-danger{% endif %}">
+                        {% if r.discount > 0 %}−{{ r.discount|som }}{% else %}0{% endif %}</td>
+                    <td class="text-end small text-muted">{{ r.pct|floatformat:2 }}%</td>
+                    <td class="text-end fw-semibold">{{ r.refund|som }}</td>
+                    <td class="text-end">{{ r.cash|som }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">Bu smenда qaytarish yo'q.</td></tr>
+            {% endfor %}
+            </tbody>
+            {% if rows %}
+            <tfoot class="table-light fw-bold">
+                <tr>
+                    <td colspan="3">JAMI ({{ count }} chek qatori · {{ qty_total }} dona)</td>
+                    <td class="text-center">{{ qty_total }}</td>
+                    <td class="text-end">{{ total_sticker|som }}</td>
+                    <td class="text-end text-danger">−{{ total_discount|som }}</td>
+                    <td></td>
+                    <td class="text-end">{{ total_refund|som }}</td>
+                    <td class="text-end text-danger">{{ total_refund|som }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+        </div>
+    </div>
+
+    {% if rows %}
+    <p class="small text-muted mt-2">
+        Pastdaги <b>Naqd chiqdi</b> yig'indisi ({{ total_refund|som }} so'm) — Z-hisobotдаgi
+        «Qaytarilgan (naqd)» bilan bir xil. Kasrли raqam — chegirma yorliq narxни butun songа bo'lmaganда paydo bo'ladi.
+    </p>
+    {% endif %}
+</div>
+{% endblock %}
