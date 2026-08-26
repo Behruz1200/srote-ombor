@@ -1,0 +1,12 @@
+[Unit]
+Description=yurit DB zaxirasini har kecha ishga tushirish (OPS-1)
+
+[Timer]
+# Har kuni 03:00 (kunlik xulosa 22:00 dan keyin, savdo tinch payt).
+OnCalendar=*-*-* 03:00:00
+# Server o'chiq bo'lsa — yoqilganда o'tkazib yuborilган zaxirani bajaradi.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

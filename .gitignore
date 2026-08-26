@@ -42,4 +42,8 @@ secrets.json
 
 # Telegram polling state
 .telegram_offset
+
+# OPS-1: mahalliy zaxira nusxalari (hech qachon commit qilinmaydi)
+backups/
+*.dump.gpg
 static/img/shop-hero.png

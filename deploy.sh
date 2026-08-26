@@ -16,7 +16,7 @@ echo "== Oldingi releaseни saqlash (rollback uchun) =="
 ssh root@45.138.159.120 'REL=/opt/yurit/releases; mkdir -p "$REL"; \
   TS=$(date +%Y%m%d-%H%M%S); \
   rsync -a --delete --exclude venv --exclude media --exclude __pycache__ \
-    --exclude "*.pyc" /opt/yurit/app/ "$REL/$TS/" 2>/dev/null && echo "snapshot $TS"; \
+    --exclude "*.pyc" --exclude backups /opt/yurit/app/ "$REL/$TS/" 2>/dev/null && echo "snapshot $TS"; \
   ls -1dt "$REL"/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf' || \
   echo "(snapshot o'tkazib yuborildi)"
 echo "== Kod sinxron (rsync) =="
@@ -25,6 +25,7 @@ rsync -az --delete --chmod=Da+rx,Fa+r \
   --exclude db.sqlite3 --exclude 'db.sqlite3-*' --exclude staticfiles --exclude .DS_Store \
   --exclude media --exclude .env \
   --exclude scripts --exclude seed.py \
+  --exclude backups \
   ./ root@45.138.159.120:/opt/yurit/app/
 echo "== Server deploy (migrate + collectstatic + restart) =="
 ssh root@45.138.159.120 '/usr/local/bin/yurit-deploy'

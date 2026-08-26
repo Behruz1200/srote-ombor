@@ -71,6 +71,18 @@ PAYMENTS_WEBHOOK_SECRET = os.environ.get('PAYMENTS_WEBHOOK_SECRET', '')
 # ---------- Telegram (optional) ----------
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 
+# ---------- OPS-1: kunlik shifrlangan baza zaxirasi (offsite) ----------
+# `backup_db` buyrug'i pg_dump | gzip | gpg qilib, natijani Telegram'ga
+# yuboradi va mahalliy nusxani BACKUP_RETAIN_DAYS kundan keyin o'chiradi.
+# BACKUP_GPG_PASSPHRASE bo'lmasa buyruq ISHLAMAYDI (bazada shaxsiy ma'lumot bor,
+# shifrlanmagan dump Telegram bulutida qolishi mumkin emas).
+BACKUP_DIR = os.environ.get('BACKUP_DIR', str(BASE_DIR / 'backups'))
+BACKUP_RETAIN_DAYS = int(os.environ.get('BACKUP_RETAIN_DAYS', '30'))
+BACKUP_GPG_PASSPHRASE = os.environ.get('BACKUP_GPG_PASSPHRASE', '')
+# Zaxira alohida (maxfiy) kanalga borishi mumkin; bo'sh bo'lsa — odatdagi
+# TELEGRAM_CHAT_IDS'ning birinchisiga yuboriladi.
+BACKUP_TELEGRAM_CHAT_ID = os.environ.get('BACKUP_TELEGRAM_CHAT_ID', '')
+
 # ---------- AI: faktura rasmidan qatorlarni o'qish ----------
 # Kalit bo'lmasa funksiya o'chiq turadi (sahifa ogohlantirish ko'rsatadi).
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')

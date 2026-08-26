@@ -106,6 +106,19 @@ class Sec20CsvSafe(TestCase):
         self.assertEqual(_csv_safe(1000), 1000)
 
 
+class Ops1BackupGuard(TestCase):
+    """OPS-1 — bazada shaxsiy ma'lumot bor; shifrsiz zaxira YARATILMAYDI.
+    Parol (BACKUP_GPG_PASSPHRASE) bo'lmasa buyruq baland ovozда yiqiladi."""
+
+    def test_refuses_without_passphrase(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        from django.test import override_settings
+        with override_settings(BACKUP_GPG_PASSPHRASE=''):
+            with self.assertRaises(CommandError):
+                call_command('backup_db', '--no-telegram')
+
+
 class Arch6SplitBreakdown(TestCase):
     """ARCH-6 — yagona split_breakdown() to'g'ri bo'lishi. Bu funksiya endi
     5 o'rniga 1 marta yozilgan; uning 10 xil holati bu yerda qulflanadi."""

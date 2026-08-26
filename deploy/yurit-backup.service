@@ -1,0 +1,15 @@
+[Unit]
+Description=yurit shifrlangan DB zaxirasi -> Telegram (OPS-1)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/yurit/app
+EnvironmentFile=/etc/yurit/env
+# venv yo'lini yurit.service dagi ExecStart bilan solishtiring va kerak bo'lsa
+# to'g'rilang (odatda /opt/yurit/venv yoki /opt/yurit/app/venv).
+ExecStart=/opt/yurit/venv/bin/python manage.py backup_db
+# Zaxira ~5 daqiqadan oshmasligi kerak; osilib qolса to'xtatamiz.
+TimeoutStartSec=600

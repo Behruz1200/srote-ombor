@@ -78,6 +78,56 @@ def send_telegram(text, chat_id=None, parse_mode='HTML'):
     return ok
 
 
+def send_document(file_path, caption='', chat_id=None):
+    """OPS-1: fayl (zaxira) yuborish — sendDocument (multipart/form-data).
+
+    chat_id bo'lmasa BACKUP_TELEGRAM_CHAT_ID, u ham bo'lmasa TELEGRAM_CHAT_IDS[0].
+    Muvaffaqiyat/xato bo'yicha True/False qaytaradi.
+    """
+    import os
+    import uuid
+    token = getattr(settings, 'TELEGRAM_BOT_TOKEN', None)
+    if not token:
+        return False
+    target = (chat_id
+              or getattr(settings, 'BACKUP_TELEGRAM_CHAT_ID', '')
+              or (_chat_ids()[0] if _chat_ids() else ''))
+    if not target:
+        return False
+    url = f'https://api.telegram.org/bot{token}/sendDocument'
+    boundary = uuid.uuid4().hex
+    fname = os.path.basename(file_path)
+    with open(file_path, 'rb') as fh:
+        payload = fh.read()
+
+    def _part(name, value):
+        return (f'--{boundary}\r\nContent-Disposition: form-data; '
+                f'name="{name}"\r\n\r\n{value}\r\n').encode('utf-8')
+
+    body = b''
+    body += _part('chat_id', str(target))
+    if caption:
+        body += _part('caption', caption)
+    body += (f'--{boundary}\r\nContent-Disposition: form-data; '
+             f'name="document"; filename="{fname}"\r\n'
+             f'Content-Type: application/octet-stream\r\n\r\n').encode('utf-8')
+    body += payload + b'\r\n'
+    body += f'--{boundary}--\r\n'.encode('utf-8')
+
+    req = urllib.request.Request(
+        url, data=body, method='POST',
+        headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            if resp.status >= 300:
+                logger.warning('Telegram sendDocument non-200: %s', resp.status)
+                return False
+    except urllib.error.URLError as e:
+        logger.warning('Telegram sendDocument failed: %s', e)
+        return False
+    return True
+
+
 def _som(value):
     """Space-grouped integer for Uzbek-style currency."""
     try:
