@@ -28,11 +28,15 @@ rsync -az --delete --chmod=Da+rx,Fa+r \
   --exclude backups \
   ./ root@45.138.159.120:/opt/yurit/app/
 echo "== Server deploy (migrate + collectstatic + restart) =="
-# OPS-11: static'ni HAR DOIM o'qishга ochamiz. rsync --chmod faqat KO'CHIRILGAN
-# fayllarга ta'sir qiladi; o'zgarmagan sw.js eski cheklangan huquqда qolib,
-# gunicorn uni o'qiy olmay /sw.js 500 berardi (PermissionError). chmod -R buni
-# har deploy'да tuzatadi.
-ssh root@45.138.159.120 'chmod -R a+rX /opt/yurit/app/static 2>/dev/null || true; /usr/local/bin/yurit-deploy'
+# OPS-11/OPS-12: BUTUN app'ni HAR DOIM o'qishга ochamiz. rsync --chmod faqat
+# KO'CHIRILGAN fayllarга ta'sir qiladi; o'zgarmagan fayl eski cheklangan
+# huquqда qolib, gunicorn uni o'qiy olmaydi. Ilgari bu /sw.js'да chiqdi
+# (500 PermissionError) va faqat static/ tuzatilgan edi — lekin muammo
+# TEMPLATE'larда ham bor edi: yillar davomida o'zgarmagan
+# templates/inventory/product_detail.html o'qilmay, /products/<kod>/ 500
+# berardi (get_template -> TemplateDoesNotExist). Sabab bitta bo'lgani uchun
+# tuzatish ham bitta: butun daraxt (static + templates + .py).
+ssh root@45.138.159.120 'chmod -R a+rX /opt/yurit/app 2>/dev/null || true; /usr/local/bin/yurit-deploy'
 echo "== Smoke test =="
 sleep 3
 # OPS-6: smoke test endi DEPLOYNI YIQITADI agar sayt 200 qaytarmasa (ilgari
