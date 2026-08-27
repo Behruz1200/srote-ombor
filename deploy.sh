@@ -28,7 +28,11 @@ rsync -az --delete --chmod=Da+rx,Fa+r \
   --exclude backups \
   ./ root@45.138.159.120:/opt/yurit/app/
 echo "== Server deploy (migrate + collectstatic + restart) =="
-ssh root@45.138.159.120 '/usr/local/bin/yurit-deploy'
+# OPS-11: static'ni HAR DOIM o'qishга ochamiz. rsync --chmod faqat KO'CHIRILGAN
+# fayllarга ta'sir qiladi; o'zgarmagan sw.js eski cheklangan huquqда qolib,
+# gunicorn uni o'qiy olmay /sw.js 500 berardi (PermissionError). chmod -R buni
+# har deploy'да tuzatadi.
+ssh root@45.138.159.120 'chmod -R a+rX /opt/yurit/app/static 2>/dev/null || true; /usr/local/bin/yurit-deploy'
 echo "== Smoke test =="
 sleep 3
 # OPS-6: smoke test endi DEPLOYNI YIQITADI agar sayt 200 qaytarmasa (ilgari

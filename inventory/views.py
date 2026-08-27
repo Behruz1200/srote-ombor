@@ -9431,8 +9431,13 @@ def _serve_static_file(rel_path, content_type):
     path = os.path.join(settings.BASE_DIR, 'static', rel_path)
     if not os.path.exists(path):
         return HttpResponse(status=404)
-    with open(path, 'rb') as f:
-        data = f.read()
+    # OPS-11: fayl huquqi buzuq bo'lsa (masalan deploy'дан keyin sw.js o'qilmasa)
+    # 500 emas, 404 qaytaramiz — brauzer eski SW'ни saqlaydi, sayt ochiq qoladi.
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+    except OSError:
+        return HttpResponse(status=404)
     response = HttpResponse(data, content_type=content_type)
     response['Cache-Control'] = 'public, max-age=3600'
     return response
