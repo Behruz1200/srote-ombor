@@ -47,3 +47,6 @@ secrets.json
 backups/
 *.dump.gpg
 static/img/shop-hero.png
+
+# Bridge mount artefaktlari (ochiq faylni ko'chirganda paydo bo'ladi)
+.fuse_hidden*

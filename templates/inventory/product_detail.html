@@ -143,12 +143,7 @@
             </div>
             <div class="dash-kpi__footer">
                 <span>{{ product_kpis.txns_30d }} chek · <strong>{{ product_kpis.rev_30d|som }}</strong></span>
-                {% if product_kpis.order_discount_30d %}
-                <span class="d-block small text-muted"
-                      title="Chek chegirmasi bu ro'yxatga taqsimlanmaydi — chegirma ayrim tovarga emas, butun chekka tegishli (do'kon qoidasi).">
-                    chekларида chek chegirmasi: −{{ product_kpis.order_discount_30d|som }}
-                </span>
-                {% endif %}
+                {% include "inventory/_discount_split.html" %}
             </div>
         </article>
 

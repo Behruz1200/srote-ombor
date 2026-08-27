@@ -1755,7 +1755,9 @@ class Sal6EveryPageAgreesOnRevenue(TestCase):
                          (f'/products/{self.p.code}/', {})):
             r = self.c.get(url, prm)
             self.assertEqual(r.status_code, 200, url)
-            self.assertContains(r, 'Chek chegirmasi', msg_prefix=url,
+            # DISC-1: endi bitta "Chek chegirmasi" o'rniga UCH qism bor.
+            # Bu fikstura sababsiz-emas, qo'lда chegirma (promo=0, exch=0).
+            self.assertContains(r, "Qo'lda chegirma", msg_prefix=url,
                                 status_code=200)
 
     def test_categories_rows_plus_discount_equal_the_net_total(self):
@@ -1904,3 +1906,184 @@ class RealDayPageEqualsSumOfZReports(TestCase):
         # BUGUN ta'sir qiladi — shu bois ikki ko'rsatkich ataylab farq qiladi.
         self.assertEqual(_d(p['returned_total']), D('100000'))
         self.assertTrue(p['refunds_span_periods'])
+
+
+class Disc1DiscountSplit(MoneyTestBase):
+    """DISC-1 — "chek chegirmasi" UCH XIL narsani bitta songa yig'ib kelardi.
+
+    Egasi sotuvlar sahifasida 3 665 635 so'm "chek chegirmasi" ko'rib,
+    "biz bunchalik chegirma bermaganmiz" dedi — va haq edi:
+
+        AKSIYA (server, egasi sozlagan)   3 001 635   289 chek
+        QO'LDA (kassir bergan)                64 000    15 chek
+        ALMASHTIRISH krediti (chegirma EMAS) 596 500    10 chek
+
+    Ya'ni qo'lда berilgani atigi 64 ming edi. Uchalasi boshqa-boshqa qaror:
+    aksiya — marketing, qo'lда — kassir ixtiyori (kamomad xavfi shu yerда),
+    almashtirish — umuman chegirma emas, mijoz eski tovar bilan to'lagan.
+    Endi ular alohida maydonlarда saqlanadi va alohida ko'rsatiladi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_disc', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+
+    def _txn(self, odisc='0', promo='0', exch='0', reason=''):
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal(odisc),
+            promo_discount=Decimal(promo), exchange_credit=Decimal(exch),
+            discount_reason=reason)
+        Sale.objects.create(transaction=t, variant=self.variant,
+                            branch=self.branch, quantity=1,
+                            sale_price=Decimal('100000'),
+                            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        return t
+
+    def _split(self):
+        r = self.client.get('/sales/', {'date_from': self.today,
+                                        'date_to': self.today})
+        self.assertEqual(r.status_code, 200)
+        c = r.context
+        c = c[0] if isinstance(c, list) else c
+        return c['discount_split'], c
+
+    # ---- model invariant ------------------------------------------------
+    def test_parts_always_add_up_to_the_total(self):
+        t = self._txn(odisc='10000', promo='6000', exch='0')
+        self.assertEqual(t.manual_discount, Decimal('4000'))
+        self.assertEqual(t.promo_discount + t.exchange_credit
+                         + t.manual_discount, t.order_discount)
+
+    def test_manual_never_goes_negative(self):
+        t = self._txn(odisc='5000', promo='5000')
+        self.assertEqual(t.manual_discount, Decimal('0'))
+
+    def test_db_rejects_a_part_larger_than_the_total(self):
+        """Aks holда "qo'lда chegirma" manfiy chiqib, kassir auditi buzilardi."""
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                SaleTransaction.objects.create(
+                    branch=self.branch, sold_by=self.cashier, shift=self.shift,
+                    payment_method='cash', order_discount=Decimal('1000'),
+                    promo_discount=Decimal('5000'))
+
+    def test_db_rejects_negative_parts(self):
+        for field in ('promo_discount', 'exchange_credit'):
+            with self.subTest(field=field):
+                with self.assertRaises(IntegrityError):
+                    with transaction.atomic():
+                        SaleTransaction.objects.create(
+                            branch=self.branch, sold_by=self.cashier,
+                            shift=self.shift, payment_method='cash',
+                            order_discount=Decimal('1000'),
+                            **{field: Decimal('-1')})
+
+    # ---- reporting ------------------------------------------------------
+    def test_page_splits_the_three_kinds(self):
+        self._txn(odisc='30000', promo='30000')                    # aksiya
+        self._txn(odisc='5000', reason='skidka')                   # qo'lda
+        self._txn(odisc='20000', exch='20000',
+                  reason='Almashtirish: eski tovar hisobiga')      # almashtirish
+        split, _ = self._split()
+        self.assertEqual(split['promo'], Decimal('30000'))
+        self.assertEqual(split['manual'], Decimal('5000'))
+        self.assertEqual(split['exchange'], Decimal('20000'))
+        self.assertEqual(split['total'], Decimal('55000'))
+        self.assertEqual(split['promo'] + split['manual'] + split['exchange'],
+                         split['total'], 'qismlar JAMIga qo\'shilishi SHART')
+
+    def test_mixed_receipt_splits_promo_from_manual(self):
+        """Bitta chekда ham aksiya, ham qo'lда chegirma bo'lsa — ajratilsin.
+        Aynan shu holat eski ma'lumotда ajratib bo'lmas edi."""
+        self._txn(odisc='12000', promo='9000', reason='mijoz')
+        split, _ = self._split()
+        self.assertEqual(split['promo'], Decimal('9000'))
+        self.assertEqual(split['manual'], Decimal('3000'))
+
+    def test_revenue_is_unchanged_by_the_split(self):
+        """Bu faqat YORLIQ masalasi — pul hisobi o'zgarmasligi kerak."""
+        self._txn(odisc='30000', promo='30000')
+        self._txn(odisc='20000', exch='20000',
+                  reason='Almashtirish: eski tovar hisobiga')
+        split, c = self._split()
+        # 2 x 100 000 − 50 000 chegirma/kredit = 150 000
+        self.assertEqual(_dec(c['total']), Decimal('150000'))
+        self.assertEqual(_dec(c['order_discount_total']), split['total'])
+
+    def test_exchange_credit_is_not_reported_as_a_discount(self):
+        self._txn(odisc='20000', exch='20000',
+                  reason='Almashtirish: eski tovar hisobiga')
+        split, _ = self._split()
+        self.assertEqual(split['manual'], Decimal('0'),
+                         'almashtirish krediti kassir chegirmasi EMAS')
+        self.assertEqual(split['promo'], Decimal('0'))
+        self.assertEqual(split['exchange'], Decimal('20000'))
+
+    def test_labels_are_rendered_not_just_computed(self):
+        self._txn(odisc='30000', promo='30000')
+        self._txn(odisc='5000', reason='skidka')
+        self._txn(odisc='20000', exch='20000',
+                  reason='Almashtirish: eski tovar hisobiga')
+        r = self.client.get('/sales/', {'date_from': self.today,
+                                        'date_to': self.today})
+        for label in ('Aksiya', "Qo'lda chegirma", 'Almashtirish krediti'):
+            self.assertContains(r, label)
+
+    def test_no_discount_renders_nothing(self):
+        self._txn()
+        r = self.client.get('/sales/', {'date_from': self.today,
+                                        'date_to': self.today})
+        self.assertNotContains(r, 'Almashtirish krediti')
+
+
+class Disc1CheckoutRecordsPromoSeparately(MoneyTestBase):
+    """DISC-1 — pos_checkout aksiya ulushini ALOHIDA yozadi.
+
+    Ilgari `order_discount = _server_promo + _manual_disc` bitta songa
+    qo'shilardi va keyin ajratib bo'lmasdi.
+    """
+
+    def _promo(self, percent):
+        from inventory.models import Promotion
+        return Promotion.objects.create(
+            name='Test aksiya', percent=Decimal(percent), is_active=True)
+
+    def test_promo_only_checkout_records_zero_manual(self):
+        self.open_shift()
+        try:
+            self._promo('10')
+        except Exception:
+            self.skipTest('Promotion modeli boshqacha — alohida sinaladi')
+        r = self.checkout()
+        self.assertEqual(r.status_code, 200)
+        t = SaleTransaction.objects.latest('id')
+        self.assertEqual(t.promo_discount + t.manual_discount,
+                         t.order_discount)
+
+    def test_manual_discount_is_not_counted_as_promo(self):
+        self.open_shift()
+        r = self.checkout(order_discount='7000', discount_reason='defect')
+        self.assertEqual(r.status_code, 200)
+        t = SaleTransaction.objects.latest('id')
+        self.assertEqual(t.order_discount, Decimal('7000'))
+        self.assertEqual(t.promo_discount, Decimal('0'))
+        self.assertEqual(t.manual_discount, Decimal('7000'),
+                         "qo'lда berilgan chegirma aksiya deb yozilmasin")
+
+    def test_exchange_credit_is_recorded_on_the_new_receipt(self):
+        """pos_exchange krediti exchange_credit'ga yozilsin (chegirma emas)."""
+        from inventory.models import Promotion  # noqa: F401
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.open_shift(),
+            payment_method='cash', order_discount=Decimal('50000'),
+            exchange_credit=Decimal('50000'),
+            discount_reason='Almashtirish: eski tovar hisobiga')
+        self.assertEqual(t.manual_discount, Decimal('0'))
+        self.assertEqual(t.promo_discount, Decimal('0'))

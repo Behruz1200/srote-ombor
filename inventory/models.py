@@ -656,6 +656,25 @@ class SaleTransaction(models.Model):
         max_length=200, blank=True,
         help_text="Chegirma sababi (audit uchun)"
     )
+    # DISC-1: `order_discount` UCH XIL narsani bitta songa yig'ib kelardi va
+    # hisobotlarда hammasi "chek chegirmasi" deb ko'rinardi:
+    #   1) AKSIYA — server hisoblagan (egasi sozlagan, avtomatik);
+    #   2) QO'LDA — kassir o'zi bergan (sabab TALAB qilinadi, audit uchun);
+    #   3) ALMASHTIRISH krediti — chegirma EMAS: mijoz eski tovar bilan to'lagan.
+    # Egasi "biz bunchalik chegirma bermaganmiz" deganда aynan shu edi: 3.6 mln
+    # ning 3.0 mln'i aksiya, 0.6 mln'i almashtirish, qo'lда atigi 64 ming.
+    # Ular BOSHQA-BOSHQA qarorlar (marketing / kassir ixtiyori / ayirboshlash),
+    # shuning uchun alohida saqlanadi. Invariant (DISC-2 testi):
+    #   promo_discount + exchange_credit + qo'lda = order_discount
+    promo_discount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="order_discount ichидagi AKSIYA ulushi (server hisoblaydi)"
+    )
+    exchange_credit = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="order_discount ichидagi ALMASHTIRISH krediti — eski tovar "
+                  "qiymati. Chegirma emas: mijoz shu qismni tovar bilan to'lagan."
+    )
     # ----- Soliq / fiscal -----
     fiscal_receipt_number = models.CharField(
         max_length=80, blank=True,
@@ -688,6 +707,18 @@ class SaleTransaction(models.Model):
         ]
         constraints = [
             models.CheckConstraint(condition=models.Q(order_discount__gte=0), name='saletxn_orderdisc_nonneg'),
+            # DISC-1: qismlar manfiy bo'lmasin va JAMIdan oshmasin — aks holda
+            # "qo'lда chegirma" manfiy chiqib, kassir auditi buzilardi.
+            models.CheckConstraint(condition=models.Q(promo_discount__gte=0),
+                                   name='saletxn_promodisc_nonneg'),
+            models.CheckConstraint(condition=models.Q(exchange_credit__gte=0),
+                                   name='saletxn_exchcredit_nonneg'),
+            models.CheckConstraint(
+                condition=models.Q(promo_discount__lte=models.F('order_discount')),
+                name='saletxn_promodisc_lte_total'),
+            models.CheckConstraint(
+                condition=models.Q(exchange_credit__lte=models.F('order_discount')),
+                name='saletxn_exchcredit_lte_total'),
             # PAY-2: DB darajasida noto'g'ri to'lov turi (masalan 'payme') hech
             # qachon saqlanmasin — TextChoices o'zi DB constraint qo'ymaydi.
             models.CheckConstraint(
@@ -697,6 +728,18 @@ class SaleTransaction(models.Model):
 
     def __str__(self):
         return f'#{self.pk} — {self.branch.name} ({self.sold_at:%d.%m.%Y %H:%M})'
+
+    @property
+    def manual_discount(self):
+        """Kassir O'Z ixtiyori bilan bergan chegirma (DISC-1).
+
+        Aksiya va almashtirish krediti ayirilganдан keyin qolgani. Aynan shu
+        son kassir bo'yicha kuzatilishi kerak — aksiya egasining qarori,
+        almashtirish esa umuman chegirma emas.
+        """
+        v = (_dec(self.order_discount) - _dec(self.promo_discount)
+             - _dec(self.exchange_credit))
+        return v if v > 0 else Decimal('0')
 
     @property
     def gross(self):

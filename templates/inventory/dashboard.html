@@ -362,11 +362,9 @@
                             </li>
                             {% endwith %}
                         {% endfor %}
-                        {% if order_discount_today %}
-                        <div class="small text-muted mt-2" title="Chek chegirmasi bu ro'yxatga taqsimlanmaydi — chegirma butun chekka tegishli (do'kon qoidasi).">
-                            Chek chegirmasi: −{{ order_discount_today|som }}
-                        </div>
-                        {% endif %}
+                        {% with discount_split=discount_split_today %}
+                        {% include "inventory/_discount_split.html" %}
+                        {% endwith %}
                         </ol>
                         {% endwith %}
                     {% else %}

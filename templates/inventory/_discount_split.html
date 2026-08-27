@@ -1,0 +1,29 @@
+{% load yurit_extras %}{% comment %}
+DISC-1: "chek chegirmasi" UCH XIL narsani bitta songa yig'ib kelardi:
+  AKSIYA        — egasi sozlagan, server avtomatik qo'llaydi;
+  QO'LDA        — kassir o'z ixtiyori bilan bergan (sabab talab qilinadi);
+  ALMASHTIRISH  — chegirma EMAS, mijoz eski tovar bilan to'lagan.
+Egasi "biz bunchalik chegirma bermaganmiz" deganда aynan shu chalkashlik edi.
+Faqat nol bo'lmagan qismlar ko'rsatiladi.
+{% endcomment %}{% if discount_split.total %}
+<div class="small text-muted mt-2 pt-2 border-top">
+    {% if discount_split.promo %}
+    <div class="d-flex justify-content-between">
+        <span title="Egasi sozlagan aksiya — server avtomatik qo'llagan.">Aksiya</span>
+        <span class="yrt-num">−{{ discount_split.promo|som }}</span>
+    </div>
+    {% endif %}
+    {% if discount_split.manual %}
+    <div class="d-flex justify-content-between">
+        <span title="Kassir o'z ixtiyori bilan bergan chegirma — sabab yozilgan.">Qo'lda chegirma</span>
+        <span class="yrt-num text-warning">−{{ discount_split.manual|som }}</span>
+    </div>
+    {% endif %}
+    {% if discount_split.exchange %}
+    <div class="d-flex justify-content-between">
+        <span title="Chegirma EMAS: mijoz shu qismni eski tovar bilan to'lagan.">Almashtirish krediti</span>
+        <span class="yrt-num">−{{ discount_split.exchange|som }}</span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}

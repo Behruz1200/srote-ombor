@@ -50,7 +50,10 @@
             <div class="dash-kpi__value">
                 <span data-countup="{{ total|default:0 }}">{{ total|som }}</span>
             </div>
-            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · qaytishsiz{% if order_discount_total %} · chek chegirmasi −{{ order_discount_total|som }} ayirilgan{% endif %}</span></div>
+            <div class="dash-kpi__footer">
+                <span class="dash-kpi__unit">so'm · qaytishsiz</span>
+                {% include "inventory/_discount_split.html" %}
+            </div>
         </article>
         <article class="dash-kpi" data-tone="danger">
             <div class="dash-kpi__head">
