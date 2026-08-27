@@ -1775,3 +1775,132 @@ class Sal6EveryPageAgreesOnRevenue(TestCase):
         self.assertEqual(Decimal(str(c['order_discount_total'])), Decimal('0'))
         self.assertEqual(Decimal(str(c['net_rev_total'])), SAL6_GROSS)
         self.assertNotContains(self.c.get('/categories/'), 'Chek chegirmasi')
+
+
+
+D = Decimal
+
+
+class RealDayPageEqualsSumOfZReports(TestCase):
+    """SYNC — bitta REAL kun, sahifa == smenlarning Z-hisobotlari yig'indisi.
+
+    Alohida-alohida tekshirilgan holatlar birga kelganда ham yopilishi kerak:
+      - chek chegirmali sotuv (SAL-1)
+      - ARALASH to'lov, payment_breakdown bo'yicha bo'linadi (ARCH-6)
+      - qisman qaytarish, REF-3 siyosati bo'yicha dona narxida
+      - KECHA sotilib BUGUN qaytarilgan tovar (SAL-2 — ikki xil ta'rif)
+      - ALMASHTIRISH: dona qaytadi, lekin kassadan naqd CHIQMAYDI
+      - kassadan chiqim (payout)
+      - kun ichida IKKI smen
+
+    Tekshiriladi: JAMI SAVDO, davr qaytarishi va chek soni ikkala tomonда bir
+    xil; har bir Z-hisobotning KASSA qatorlari o'z JAMIsiga qo'shiladi; va
+    almashtirishда kassadan pul chiqmaydi (aks holda kassir kamomadga tushardi).
+    """
+
+    def setUp(self):
+        self.b = Branch.objects.create(name='B')
+        self.u = User.objects.create_user(username='k', password='x',
+                                          role=User.Role.ADMIN, is_staff=True,
+                                          branch=self.b)
+        p = Product.objects.create(name='P', code='P-0001',
+                                   default_sale_price=D('100000'))
+        self.v = ProductVariant.objects.create(product=p, size='M', color='Q',
+                                               barcode='2000000000017')
+        BranchStock.objects.create(variant=self.v, branch=self.b,
+                                   stock_count=200, cost_price=D('60000'),
+                                   sale_price=D('100000'))
+        self.c = Client(); self.c.force_login(self.u)
+
+    def _shift(self):
+        return Shift.objects.create(branch=self.b, opened_by=self.u,
+                                    opening_cash=D('100000'))
+
+    def _close(self, sh, when=None):
+        sh.closing_expected_cash = sh.compute_expected_cash()
+        sh.counted_cash = sh.closing_expected_cash
+        sh.status = Shift.Status.CLOSED
+        sh.closed_at = when or timezone.now()
+        sh.save()
+
+    def _sale(self, sh, qty, odisc='0', pm='cash', bd=None):
+        t = SaleTransaction.objects.create(
+            branch=self.b, sold_by=self.u, shift=sh, payment_method=pm,
+            order_discount=D(odisc), payment_breakdown=(bd or []))
+        return Sale.objects.create(transaction=t, variant=self.v, branch=self.b,
+                                   quantity=qty, sale_price=D('100000'),
+                                   cost_at_sale=D('60000'), sold_by=self.u)
+
+    def _page(self, d_from, d_to):
+        r = self.c.get('/sales/', {'date_from': d_from, 'date_to': d_to})
+        assert r.status_code == 200, r.status_code
+        c = r.context
+        return c[0] if isinstance(c, list) else c
+
+    def _z(self, sh):
+        r = self.c.get(reverse('shift_receipt', args=[sh.pk]))
+        assert r.status_code == 200
+        c = r.context
+        return c[0] if isinstance(c, list) else c
+
+    def test_real_day(self):
+        yest = timezone.now() - timezone.timedelta(days=1)
+
+        # ---- KECHA: bitta sotuv, smen yopiladi
+        s0 = self._shift()
+        Shift.objects.filter(pk=s0.pk).update(opened_at=yest)
+        old = self._sale(s0, 1)
+        SaleTransaction.objects.filter(pk=old.transaction_id).update(sold_at=yest)
+        Sale.objects.filter(pk=old.pk).update(sold_at=yest)
+        s0.refresh_from_db(); self._close(s0, yest)
+        Shift.objects.filter(pk=s0.pk).update(closed_at=yest)
+
+        # ---- BUGUN, 1-smen
+        s1 = self._shift()
+        a = self._sale(s1, 3, odisc='60000')                 # 240 000 naqd
+        b = self._sale(s1, 2, pm='mixed',                    # 200 000 aralash
+                       bd=[{'method': 'cash', 'amount': 120000},
+                           {'method': 'card', 'amount': 80000}])
+        Return.objects.create(sale=a, shift=s1, quantity=1,   # qisman qaytarish
+                              refunded_by=self.u, refund_cash=D('100000'))
+        Return.objects.create(sale=old, shift=s1, quantity=1, # KECHAGI tovar
+                              refunded_by=self.u, refund_cash=D('100000'))
+        CashPayout.objects.create(shift=s1, branch=self.b, amount=D('50000'),
+                                  category='lunch', created_by=self.u)
+        self._close(s1)
+
+        # ---- BUGUN, 2-smen: ALMASHTIRISH (naqd chiqmaydi)
+        s2 = self._shift()
+        c_ = self._sale(s2, 1)                                # 100 000
+        Return.objects.create(sale=c_, shift=s2, quantity=1, is_exchange=True,
+                              cash_refunded=D('0'), refunded_by=self.u)
+        self._sale(s2, 1)                                     # almashtirilgan yangi tovar
+
+        td = timezone.localdate().strftime('%Y-%m-%d')
+        p = self._page(td, td)
+        z1, z2 = self._z(s1), self._z(s2)
+
+        def dz(k): return _d(z1[k]) + _d(z2[k])
+        def _d(x): return D(str(x))
+
+        rows = [
+            ('JAMI SAVDO', _d(p['total']), dz('total_rev')),
+            ('Qaytarilgan (davr)', _d(p['period_returned_total']),
+             dz('refund_total')),
+            ('Cheklar', D(p['txn_count']), D(z1['txn_count'] + z2['txn_count'])),
+        ]
+        for lbl, a_, b_ in rows:
+            self.assertEqual(a_, b_, f"{lbl}: sahifa {a_} != Z1+Z2 {b_}")
+        for name, z in (('Z1', z1), ('Z2', z2)):
+            lines = (_d(z['shift'].opening_cash) + _d(z['cash_sales'])
+                     + _d(z['debt_payments']) + _d(z['cash_ins_total'])
+                     - _d(z['payouts_total']) - _d(z['refund_total'])
+                     + _d(z['post_close_delta']) + _d(z['rounding_delta']))
+            self.assertEqual(lines, _d(z['expected']), f'{name} kassa yopilmadi')
+        self.assertEqual(_d(z2['refund_total']), D('0'),
+                         'almashtirishда kassadan naqd chiqmasligi kerak')
+
+        # SAL-2: kechagi tovar SOTUV kuniga yoziladi (100 000), lekin kassaga
+        # BUGUN ta'sir qiladi — shu bois ikki ko'rsatkich ataylab farq qiladi.
+        self.assertEqual(_d(p['returned_total']), D('100000'))
+        self.assertTrue(p['refunds_span_periods'])
