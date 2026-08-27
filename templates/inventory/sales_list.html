@@ -4,6 +4,19 @@
 {% block title %}Sotuvlar — yurit{% endblock %}
 
 {% block content %}
+<style>
+    /* Sotuvlar KPI kartalari: katta pul raqamlari IKKI QATORGA bo'linmasin va
+       kartalar teng balandlikда tekis tursin. Raqam kenglikка qarab kichrayadi
+       (clamp) — shu bois nowrap bilan ham sig'adi, kesilmaydi. */
+    .dash-page .dash-kpi__value { white-space: nowrap; }
+    .dash-page .dash-kpis--five { align-items: stretch; }
+    .dash-page .dash-kpis--five .dash-kpi__value {
+        font-size: clamp(1rem, 1.2vw, 1.5rem);
+    }
+    .dash-page .dash-kpis--five .dash-kpi--lead .dash-kpi__value {
+        font-size: clamp(1.15rem, 1.45vw, 1.8rem);
+    }
+</style>
 <div class="container-fluid px-3 dash-page">
     <header class="dash-hero">
         <div class="dash-hero__glow"></div>
