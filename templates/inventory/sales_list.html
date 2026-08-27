@@ -259,7 +259,7 @@
         <div class="d-flex flex-wrap gap-1 mb-2 sl-fchip" id="slActive"></div>
 
         <!-- 3-qator: qo'shimcha filtrlar (yoqilgani bo'lsa o'zi ochiladi) -->
-        <div class="collapse{% if branch_id or seller_id or payment_method or returned %} show{% endif %}"
+        <div class="collapse{% if branch_id or seller_id or payment_method or returned or discount %} show{% endif %}"
              id="slMore">
             <div class="row g-2 pt-1">
                 <div class="col-6 col-md-3">
@@ -299,6 +299,19 @@
                         <option value="">— hammasi —</option>
                         <option value="yes" {% if returned == 'yes' %}selected{% endif %}>Ha</option>
                         <option value="no" {% if returned == 'no' %}selected{% endif %}>Yo'q</option>
+                    </select>
+                </div>
+                <!-- DISC-3: chegirma berilganmi? "Qo'lda" — kassir o'z
+                     ixtiyori bilan bergani, kuzatishga arziydigan yagona tur. -->
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted mb-1">Chegirma</label>
+                    <select name="discount" class="form-select form-select-sm">
+                        <option value="">— hammasi —</option>
+                        <option value="any" {% if discount == 'any' %}selected{% endif %}>Chegirma berilgan</option>
+                        <option value="none" {% if discount == 'none' %}selected{% endif %}>Chegirmasiz</option>
+                        <option value="manual" {% if discount == 'manual' %}selected{% endif %}>— faqat qo'lda berilgan</option>
+                        <option value="promo" {% if discount == 'promo' %}selected{% endif %}>— faqat aksiya</option>
+                        <option value="exchange" {% if discount == 'exchange' %}selected{% endif %}>— faqat almashtirish krediti</option>
                     </select>
                 </div>
             </div>
@@ -373,7 +386,8 @@
 
         // --- UX-7: yoqilgan filtrlar yorliq bo'lib chiqadi ----------------
         var LABELS = { branch: 'Filial', seller: 'Sotuvchi',
-                       payment_method: "To'lov", returned: 'Qaytarilgan', q: 'Qidiruv' };
+                       payment_method: "To'lov", returned: 'Qaytarilgan',
+                       discount: 'Chegirma', q: 'Qidiruv' };
         var wrap = document.getElementById('slActive');
         var badge = document.getElementById('slMoreCount');
         var n = 0;
@@ -382,6 +396,9 @@
             if (!el || !el.value) return;
             var shown = el.tagName === 'SELECT'
                 ? el.options[el.selectedIndex].text.trim() : el.value;
+            // Ro'yxatда ichki bandlar "— " bilan chekinтirilgan; yorliqда bu
+            // chiziqcha keraksiz.
+            shown = shown.replace(/^[—-]\s*/, '');
             if (name !== 'q') n++;
             if (!wrap) return;
             var chip = document.createElement('span');

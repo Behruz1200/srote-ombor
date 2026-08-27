@@ -8291,6 +8291,12 @@ def sales_list(request):
     seller_id = request.GET.get('seller') or ''
     payment_method = request.GET.get('payment_method') or ''
     returned = request.GET.get('returned') or ''   # '', 'yes', 'no'
+    # DISC-3: chegirma bo'yicha filtr. Egasi "kim qancha chegirma berdi?"
+    # savolini bermoqда — javob berish uchun chegirmali cheklarni ajratib
+    # ko'ra olish kerak. Qiymatlar: '' | any | none | manual | promo | exchange
+    discount = (request.GET.get('discount') or '').strip()
+    if discount not in ('', 'any', 'none', 'manual', 'promo', 'exchange'):
+        discount = ''
     export = request.GET.get('export') == 'csv'
     # Ko'rinish: 'checks' — bir qator = butun chek (standart); 'items' — bir
     # qator = bitta mahsulot (mahsulotni qidirish uchun qulay).
@@ -8344,6 +8350,25 @@ def sales_list(request):
         qs = qs.filter(Exists(_has_ret))    # qisman yoki to'liq qaytarilgan
     elif returned == 'no':
         qs = qs.filter(~Exists(_has_ret))   # umuman qaytarilmagan
+    # DISC-3: chegirma filtri. DIQQAT — annotatsiya QO'YMAYMIZ: `transaction`
+    # oldinga qarab FK (1:1 join), lekin bazaviy qs'ga annotate qo'shilsa
+    # pastдagi values().annotate() (kunlik jami) o'ralmay qolib fanout xavfi
+    # tug'ilardi (yuqoridagi izohga qarang). Shu bois F() to'g'ridan-to'g'ri
+    # filtr ichида ishlatiladi:
+    #   qo'lda = order_discount − promo_discount − exchange_credit
+    if discount == 'any':
+        qs = qs.filter(Q(transaction__order_discount__gt=0) | Q(line_discount__gt=0))
+    elif discount == 'none':
+        # Chek'siz eski sotuvlar ham "chegirmasiz" hisoblanadi.
+        qs = qs.filter(line_discount=0).filter(
+            Q(transaction__isnull=True) | Q(transaction__order_discount=0))
+    elif discount == 'manual':
+        qs = qs.filter(transaction__order_discount__gt=(
+            F('transaction__promo_discount') + F('transaction__exchange_credit')))
+    elif discount == 'promo':
+        qs = qs.filter(transaction__promo_discount__gt=0)
+    elif discount == 'exchange':
+        qs = qs.filter(transaction__exchange_credit__gt=0)
     if q:
         cond = (
             Q(variant__product__name__icontains=q)
@@ -8462,7 +8487,7 @@ def sales_list(request):
     # bo'lmaydi (qaytarishni BOSHQA kassir rasmiylashtirgan bo'lishi mumkin).
     # Shu bois tor filtrда umuman ko'rsatmaymiz — noto'g'ri taqqoslashдan
     # ko'ra yo'qligi yaxshi.
-    _comparable = not (seller_id or payment_method or q or returned)
+    _comparable = not (seller_id or payment_method or q or returned or discount)
     period_ret_qs = (Return.objects
                      .select_related('sale__transaction')
                      .prefetch_related('sale__transaction__lines')) if _comparable else Return.objects.none()
@@ -8604,6 +8629,7 @@ def sales_list(request):
         'seller_id': seller_id,
         'payment_method': payment_method,
         'returned': returned,
+        'discount': discount,
         # Choices
         'branches': Branch.objects.filter(is_active=True).order_by('name'),
         'sellers': User.objects.filter(is_active=True).order_by('username'),

@@ -2215,3 +2215,135 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
         self.assertEqual(sp['manual'], Decimal('30000'))
         self.assertEqual(_dec(ctx['total']), Decimal('70000'),
                          'tushum o\'zgarmasligi kerak')
+
+
+class Disc3DiscountFilter(MoneyTestBase):
+    """DISC-3 — "chegirma berilganmi?" filtri.
+
+    Egasi qo'lда berilgan chegirmani kuzatmoqchi. Buning uchun chegirmali
+    cheklarni ajratib ko'ra olish kerak — ayniqsa QO'LDA berilganini
+    (aksiya egasining o'z qarori, almashtirish krediti esa umuman chegirma
+    emas).
+
+    Filtr JAMIga ham ta'sir qilishi SHART: filtrlangan qatorlar bo'yicha
+    tushum va chegirma qayta hisoblanadi, aks holда "faqat qo'lда" tanlaб
+    jami butun davrniki bo'lib qolardi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_df', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+
+        def mk(odisc='0', promo='0', exch='0', reason='', ldisc='0'):
+            t = SaleTransaction.objects.create(
+                branch=self.branch, sold_by=self.cashier, shift=self.shift,
+                payment_method='cash', order_discount=Decimal(odisc),
+                promo_discount=Decimal(promo), exchange_credit=Decimal(exch),
+                discount_reason=reason)
+            return Sale.objects.create(
+                transaction=t, variant=self.variant, branch=self.branch,
+                quantity=1, sale_price=Decimal('100000'),
+                line_discount=Decimal(ldisc),
+                cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+
+        self.plain = mk()                                     # chegirmasiz
+        self.manual = mk(odisc='5000', reason='skidka')       # qo'lda
+        self.promo = mk(odisc='9000', promo='9000')           # aksiya
+        self.exch = mk(odisc='20000', exch='20000',
+                       reason='Almashtirish: eski tovar hisobiga')
+        self.mixed = mk(odisc='12000', promo='9000', reason='mijoz')  # ikkalasi
+        self.line_only = mk(ldisc='3000')                     # faqat qator chegirmasi
+        # Eski, chek'siz sotuv — "chegirmasiz" ga tushishi kerak
+        self.legacy = Sale.objects.create(
+            transaction=None, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+
+    def _ids(self, **params):
+        p = {'date_from': self.today, 'date_to': self.today, 'view': 'items'}
+        p.update(params)
+        r = self.client.get('/sales/', p)
+        self.assertEqual(r.status_code, 200)
+        c = r.context
+        c = c[0] if isinstance(c, list) else c
+        return {s.pk for s in c['sales']}, c
+
+    def test_no_filter_shows_everything(self):
+        ids, _ = self._ids()
+        self.assertEqual(len(ids), 7)
+
+    def test_any_discount(self):
+        ids, _ = self._ids(discount='any')
+        self.assertEqual(ids, {self.manual.pk, self.promo.pk, self.exch.pk,
+                               self.mixed.pk, self.line_only.pk},
+                         'qator chegirmasi ham "chegirma berilgan" hisoblanadi')
+
+    def test_no_discount_includes_legacy_rows(self):
+        ids, _ = self._ids(discount='none')
+        self.assertEqual(ids, {self.plain.pk, self.legacy.pk},
+                         'chek\'siz eski sotuv ham chegirmasiz hisoblansin')
+
+    def test_manual_only(self):
+        """Aksiya va almashtirish chiqib ketsin, aralash chek QOLSIN."""
+        ids, _ = self._ids(discount='manual')
+        self.assertEqual(ids, {self.manual.pk, self.mixed.pk})
+
+    def test_promo_only(self):
+        ids, _ = self._ids(discount='promo')
+        self.assertEqual(ids, {self.promo.pk, self.mixed.pk})
+
+    def test_exchange_only(self):
+        ids, _ = self._ids(discount='exchange')
+        self.assertEqual(ids, {self.exch.pk})
+
+    # ---- filtr JAMIga ham ta'sir qilsin -------------------------------
+    def test_totals_follow_the_filter(self):
+        _, c = self._ids(discount='manual')
+        # 2 chek × 100 000 − (5 000 qo'lda + 12 000 aralash) = 183 000
+        self.assertEqual(_dec(c['total']), Decimal('183000'))
+        self.assertEqual(_dec(c['order_discount_total']), Decimal('17000'))
+        self.assertEqual(c['txn_count'], 2)
+
+    def test_split_follows_the_filter(self):
+        _, c = self._ids(discount='manual')
+        sp = c['discount_split']
+        self.assertEqual(sp['manual'], Decimal('8000'))   # 5 000 + 3 000
+        self.assertEqual(sp['promo'], Decimal('9000'))    # aralash chekning aksiyasi
+        self.assertEqual(sp['exchange'], Decimal('0'))
+
+    def test_exchange_filter_shows_only_the_credit(self):
+        _, c = self._ids(discount='exchange')
+        sp = c['discount_split']
+        self.assertEqual(sp['exchange'], Decimal('20000'))
+        self.assertEqual(sp['manual'], Decimal('0'))
+
+    # ---- xavfsizlik / mustahkamlik ------------------------------------
+    def test_unknown_value_is_ignored_not_500(self):
+        _, c = self._ids(discount='; drop table')
+        self.assertEqual(c['discount'], '')
+        self.assertEqual(c['txn_count'], 6)
+
+    def test_filter_suppresses_the_zreport_comparison(self):
+        """SAL-5: tor filtrда taqqoslash soni ko'rsatilmasin."""
+        _, c = self._ids(discount='manual')
+        self.assertFalse(c['refunds_span_periods'])
+
+    def test_filter_is_rendered_and_selected(self):
+        r = self.client.get('/sales/', {'date_from': self.today,
+                                        'date_to': self.today,
+                                        'discount': 'manual'})
+        self.assertContains(r, 'faqat qo\'lda berilgan')
+        self.assertContains(r, 'value="manual" selected')
+
+    def test_daily_totals_do_not_double_count(self):
+        """Filtr forward-FK bo'yicha — kunlik jamiда fanout bo'lmasin."""
+        _, c = self._ids(discount='any')
+        day = c['daily_list'][0]
+        # 5 chek × 100 000 − (5k + 9k + 20k + 12k qator-chegirmasiz) − 3k qator
+        self.assertEqual(_dec(str(day['total'])), Decimal('451000'))
