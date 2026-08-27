@@ -16,14 +16,16 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db import connection
 from django.test import TestCase, Client
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
 from inventory.models import (
     Branch, Product, ProductVariant, BranchStock, Shift,
     SaleTransaction, Sale, CashPayout, PaymentIntent, Return,
-    split_breakdown,
+    split_breakdown, _dec,
 )
 
 User = get_user_model()
@@ -1196,3 +1198,375 @@ class Ref3RefundCap(MoneyTestBase):
         r = self._refund([{'sale_id': s.pk, 'qty': 2, 'reason': 'x'}])
         self.assertEqual(r.json()['refunded_total'], 20000.0,
                          'chegirмasiz chek — dona narxi (o\'zgarishsiz)')
+
+
+class SalesPageVsZReport(MoneyTestBase):
+    """SAL-1/SAL-2 — Sotuvlar sahifasi, CHEK ko'rinishi va Z-hisobot BIR XIL
+    ma'lumotdan BIR XIL raqam chiqarishi kerak.
+
+    Topilgani: KPI "Jami tushum" faqat `line_discount`ni ayirardi, CHEK
+    chegirmasini emas — ya'ni AYNI SAHIFA o'zi bilan ziddiyatда edi:
+
+        3×100 000, chek chegirmasi 60 000 (mijoz 240 000 to'lagan)
+          KPI "Jami tushum"        300 000   ← xato
+          CHEK ko'rinishi qatori   240 000
+          Z-hisobot JAMI SAVDO     240 000
+
+    Bu qatorlarni QAYTA baholash emas — egasining qoidasi (chegirma qatorga
+    taqsimlanmaydi, qaytarish tovarni O'Z narxida baholaydi) o'z kuchida
+    qoladi; faqat JAMI chek to'loviga keltiriladi.
+
+    SAL-2 — buzuqlik emas, TA'RIF farqi: sahifa qaytarishni tovar QACHON
+    SOTILGANIGA qarab, Z-hisobot esa pul QACHON CHIQQANIGA qarab sanaydi.
+    Endi sahifa ikkalasini ham ko'rsatadi.
+    """
+
+    def _sale(self, shift, qty=1, odisc='0', price='100000'):
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=shift,
+            payment_method='cash', order_discount=Decimal(odisc))
+        return Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=qty, sale_price=Decimal(price),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+
+    def _refund(self, sale, shift, qty, cash):
+        """REF-3: `refund_cash` — qaytarish paytida qotirilgan haqiqiy naqd."""
+        return Return.objects.create(sale=sale, shift=shift, quantity=qty,
+                                     refunded_by=self.cashier,
+                                     refund_cash=Decimal(cash))
+
+    def _close(self, shift):
+        shift.closing_expected_cash = shift.compute_expected_cash()
+        shift.status = Shift.Status.CLOSED
+        shift.closed_at = timezone.now()
+        shift.save()
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_sync', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+
+    def _page(self, **params):
+        p = {'date_from': self.today, 'date_to': self.today}
+        p.update(params)
+        r = self.client.get('/sales/', p)
+        self.assertEqual(r.status_code, 200)
+        return r.context
+
+    def _z(self, shift):
+        r = self.client.get(reverse('shift_receipt', args=[shift.pk]))
+        self.assertEqual(r.status_code, 200)
+        return r.context
+
+    # ---- SAL-1: uch joy ham bir xil JAMI ------------------------------
+    def test_kpi_matches_check_view_and_zreport(self):
+        shift = self.open_shift()
+        self._sale(shift, qty=3, odisc='60000')
+        p, z = self._page(), self._z(shift)
+        self.assertEqual(_dec(p['total']), Decimal('240000'),
+                         "KPI mijoz TO'LAGANINI ko'rsatsin")
+        self.assertEqual(_dec(p['total']), _dec(p['checks'][0]['total']),
+                         'KPI va CHEK qatori bir xil bo\'lsin (bir sahifada!)')
+        self.assertEqual(_dec(p['total']), _dec(z['total_rev']),
+                         'KPI va Z-hisobot bir xil bo\'lsin')
+
+    def test_kpi_equals_sum_of_all_check_rows(self):
+        """Bir nechta chek — KPI aynan qatorlar yig'indisi bo'lsin."""
+        shift = self.open_shift()
+        self._sale(shift, qty=3, odisc='60000')     # 240 000
+        self._sale(shift, qty=1)                    # 100 000
+        self._sale(shift, qty=2, odisc='15000')     # 185 000
+        p = self._page()
+        self.assertEqual(_dec(p['total']),
+                         sum((_dec(c['total']) for c in p['checks']), Decimal('0')))
+        self.assertEqual(_dec(p['total']), Decimal('525000'))
+
+    def test_daily_badge_is_net_of_order_discount(self):
+        shift = self.open_shift()
+        self._sale(shift, qty=3, odisc='60000')
+        self.assertEqual(_dec(str(self._page()['daily_list'][0]['total'])),
+                         Decimal('240000'))
+
+    def test_filtering_one_line_takes_only_its_share_of_the_discount(self):
+        """Chek 2 qator (100k + 300k), chegirma 40 000. Faqat 1-qator
+        filtrlansa — unga chegirmaning 1/4 (10 000) tegsin: hammasi ham,
+        nol ham emas."""
+        shift = self.open_shift()
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=shift,
+            payment_method='cash', order_discount=Decimal('40000'))
+        p2 = Product.objects.create(name='Ikkinchi',
+                                    default_sale_price=Decimal('300000'))
+        v2 = ProductVariant.objects.create(product=p2, size='L', color='Oq',
+                                           barcode='2000000000024')
+        Sale.objects.create(transaction=txn, variant=self.variant,
+                            branch=self.branch, quantity=1,
+                            sale_price=Decimal('100000'),
+                            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        Sale.objects.create(transaction=txn, variant=v2, branch=self.branch,
+                            quantity=1, sale_price=Decimal('300000'),
+                            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        self.assertEqual(_dec(self._page()['total']), Decimal('360000'))
+        self.assertEqual(_dec(self._page(q='Test koylak', view='items')['total']),
+                         Decimal('90000'))
+
+    def test_no_order_discount_leaves_totals_untouched(self):
+        shift = self.open_shift()
+        self._sale(shift, qty=2)
+        p, z = self._page(), self._z(shift)
+        self.assertEqual(_dec(p['total']), Decimal('200000'))
+        self.assertEqual(_dec(p['total']), _dec(z['total_rev']))
+        self.assertEqual(_dec(p['order_discount_total']), Decimal('0'))
+
+    # ---- REF-3 siyosati ikkala hisobotда bir xil ishlasin -------------
+    def test_full_return_of_discounted_receipt_nets_to_zero_everywhere(self):
+        """REF-3: to'liq qaytarish chek to'loviga cheklanadi → SOF 0."""
+        shift = self.open_shift()
+        sale = self._sale(shift, qty=3, odisc='60000')
+        self._refund(sale, shift, 3, '240000')
+        p, z = self._page(), self._z(shift)
+        self.assertEqual(_dec(p['returned_total']), _dec(z['refund_total']))
+        self.assertEqual(_dec(p['net_total']), _dec(z['net_sales']))
+        self.assertEqual(_dec(p['net_total']), Decimal('0'))
+        self.assertEqual(_dec(p['checks'][0]['net_total']), Decimal('0'))
+
+    def test_partial_return_uses_item_price_on_both_reports(self):
+        """REF-3: bir dona qaytганда — to'liq dona narxi (100 000),
+        proporsional 80 000 EMAS. Sahifa ham, Z-hisobot ham shu sonni bersin."""
+        shift = self.open_shift()
+        sale = self._sale(shift, qty=3, odisc='60000')
+        self._refund(sale, shift, 1, '100000')
+        p, z = self._page(), self._z(shift)
+        self.assertEqual(_dec(p['returned_total']), Decimal('100000'))
+        self.assertEqual(_dec(p['returned_total']), _dec(z['refund_total']))
+        self.assertEqual(_dec(p['net_total']), Decimal('140000'))
+        self.assertEqual(_dec(p['net_total']), _dec(z['net_sales']))
+
+    # ---- kun = smenlar yig'indisi -------------------------------------
+    def test_one_day_two_shifts_page_equals_sum_of_zreports(self):
+        s1 = self.open_shift()
+        sale1 = self._sale(s1, qty=1)
+        self._refund(sale1, s1, 1, '100000')
+        self._close(s1)
+        s2 = self.open_shift()
+        self._sale(s2, qty=2)
+        p, z1, z2 = self._page(), self._z(s1), self._z(s2)
+        self.assertEqual(_dec(p['total']),
+                         _dec(z1['total_rev']) + _dec(z2['total_rev']))
+        self.assertEqual(_dec(p['returned_total']),
+                         _dec(z1['refund_total']) + _dec(z2['refund_total']))
+        self.assertEqual(_dec(p['net_total']),
+                         _dec(z1['net_sales']) + _dec(z2['net_sales']))
+        self.assertEqual(p['txn_count'], z1['txn_count'] + z2['txn_count'])
+
+    # ---- SAL-2: ikki xil ta'rif, ikkalasi ham ko'rinsin ---------------
+    def _cross_day_setup(self):
+        """Kecha sotildi, BUGUN (boshqa smenда) qaytarildi."""
+        yest = timezone.now() - timezone.timedelta(days=1)
+        s_yest = self.open_shift()
+        Shift.objects.filter(pk=s_yest.pk).update(opened_at=yest)
+        sale = self._sale(s_yest, qty=1)
+        SaleTransaction.objects.filter(pk=sale.transaction_id).update(sold_at=yest)
+        Sale.objects.filter(pk=sale.pk).update(sold_at=yest)
+        s_yest.refresh_from_db()
+        self._close(s_yest)
+        Shift.objects.filter(pk=s_yest.pk).update(closed_at=yest)
+        s_today = self.open_shift()
+        self._refund(sale, s_today, 1, '100000')
+        return s_yest, s_today
+
+    def test_returned_total_follows_the_sale_date(self):
+        s_yest, _ = self._cross_day_setup()
+        yd = (timezone.localdate() - timezone.timedelta(days=1)).strftime('%Y-%m-%d')
+        self.assertEqual(
+            _dec(self._page(date_from=yd, date_to=yd)['returned_total']),
+            Decimal('100000'))
+        self.assertEqual(_dec(self._page()['returned_total']), Decimal('0'))
+
+    def test_period_returned_total_matches_the_zreport(self):
+        """SAL-2 — yangi ko'rsatkich Z-hisobot bilan AYNAN mos kelsin."""
+        s_yest, s_today = self._cross_day_setup()
+        yd = (timezone.localdate() - timezone.timedelta(days=1)).strftime('%Y-%m-%d')
+        self.assertEqual(
+            _dec(self._page(date_from=yd, date_to=yd)['period_returned_total']),
+            _dec(self._z(s_yest)['refund_total']),
+            'KECHA: davr qaytarishi Z-hisobot bilan mos emas')
+        p_today = self._page()
+        self.assertEqual(_dec(p_today['period_returned_total']),
+                         _dec(self._z(s_today)['refund_total']),
+                         'BUGUN: davr qaytarishi Z-hisobot bilan mos emas')
+        self.assertTrue(p_today['refunds_span_periods'],
+                        'ikki ta\'rif farq qilganда sahifa izoh ko\'rsatsin')
+
+    def test_same_day_return_needs_no_explanation(self):
+        shift = self.open_shift()
+        sale = self._sale(shift, qty=1)
+        self._refund(sale, shift, 1, '100000')
+        p = self._page()
+        self.assertEqual(_dec(p['returned_total']),
+                         _dec(p['period_returned_total']))
+        self.assertFalse(p['refunds_span_periods'])
+
+
+class SalesPageEdgeRows(MoneyTestBase):
+    """SAL-4 — sahifa buzilmasin: cheksiz (eski) sotuvlar, to'liq chegirmali
+    chek, kunlik "qaytgan" belgisi.
+
+    Eski sotuvlarда `transaction` NULL bo'lishi mumkin — aynan shunday qatorlar
+    `sales_list`ni ilgari 500 qilgan edi, shuning uchun har bir yangi mantiq
+    ular bilan sinaladi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_edge', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+
+    def _page(self, **kw):
+        p = {'date_from': self.today, 'date_to': self.today}
+        p.update(kw)
+        r = self.client.get('/sales/', p)
+        self.assertEqual(r.status_code, 200)
+        return r.context
+
+    def test_sale_without_transaction_does_not_break_the_page(self):
+        Sale.objects.create(
+            transaction=None, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        self.assertEqual(_dec(self._page()['total']), Decimal('100000'))
+        self.assertEqual(_dec(self._page(view='items')['total']),
+                         Decimal('100000'))
+
+    def test_legacy_row_mixed_with_discounted_receipt(self):
+        Sale.objects.create(
+            transaction=None, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal('60000'))
+        Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=3, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        # 100 000 (chek'siz eski) + 240 000 (chegirmali chek) = 340 000
+        self.assertEqual(_dec(self._page()['total']), Decimal('340000'))
+
+    def test_daily_badge_shows_the_return_on_the_sale_day(self):
+        """Kunlik belgi Python tomonда (localtime), kunlik jami esa DB tomonда
+        (sold_at__date) guruhlanadi — ikkalasi BIR XIL kunga tushishi kerak,
+        aks holда "qaytgan" belgisi jimgina yo'qolardi."""
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash')
+        sale = Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=2, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        Return.objects.create(sale=sale, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier,
+                              refund_cash=Decimal('100000'))
+        day = self._page()['daily_list'][0]
+        self.assertEqual(_dec(str(day['total'])), Decimal('200000'))
+        self.assertEqual(_dec(str(day['returned'])), Decimal('100000'),
+                         'kunlik "qaytgan" belgisi yo\'qolib qoldi')
+        self.assertEqual(_dec(str(day['net'])), Decimal('100000'))
+
+    def test_receipt_fully_discounted_to_zero(self):
+        """Chegirma chek summasiga TENG → bo'linishда nol maxraj bo'lmasin."""
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal('100000'))
+        Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        self.assertEqual(_dec(self._page()['total']), Decimal('0'))
+
+
+class SalesPageQueryBudget(MoneyTestBase):
+    """SAL-3 — chek chegirmasi mantig'i N+1 ga aylanmasin."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_q', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+
+    def _bulk(self, n, odisc='0'):
+        for _ in range(n):
+            txn = SaleTransaction.objects.create(
+                branch=self.branch, sold_by=self.cashier, shift=self.shift,
+                payment_method='cash', order_discount=Decimal(odisc))
+            for _ln in range(3):
+                Sale.objects.create(
+                    transaction=txn, variant=self.variant, branch=self.branch,
+                    quantity=1, sale_price=Decimal('100000'),
+                    cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+
+    def _load(self):
+        today = timezone.localdate().strftime('%Y-%m-%d')
+        r = self.client.get('/sales/', {'date_from': today, 'date_to': today})
+        self.assertEqual(r.status_code, 200)
+        return r
+
+    def test_query_count_does_not_grow_with_rows(self):
+        self._bulk(5, odisc='30000')
+        with CaptureQueriesContext(connection) as c1:
+            self._load()
+        self._bulk(35, odisc='30000')      # 40 chek / 120 qator
+        with CaptureQueriesContext(connection) as c2:
+            self._load()
+        self.assertLessEqual(
+            len(c2.captured_queries), len(c1.captured_queries) + 2,
+            f'so\'rovlar soni qatorlar bilan o\'sdi: '
+            f'{len(c1.captured_queries)} → {len(c2.captured_queries)} (N+1)')
+
+
+class AdminPageSmoke(MoneyTestBase):
+    """Admin sahifalari KAMIDA 200 qaytarishi kerak — render paytидagi xato
+    (KeyError, AttributeError) foydalanuvchiga 500 berib chiqmasin. Ikki marta
+    aynan shu tur nuqson deploy'ga o'tib ketdi (sales_list _returned; variants
+    edit 'variant' vs 'v_id'), chunki hech bir test bu sahifalarni OCHMASdi."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_smoke', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+
+    def test_variants_edit_renders(self):
+        """Turlarni tahrirlash sahifasi (GET) — 'v_id' vs 'variant' KeyError'i
+        qaytmasin (bu aynan yiqilgan sahifa edi)."""
+        r = self.client.get(reverse('product_variants_edit',
+                                     args=[self.product.code]))
+        self.assertEqual(r.status_code, 200)
+
+    def test_sales_list_both_views_render(self):
+        r1 = self.client.get('/sales/')                      # checks (standart)
+        r2 = self.client.get('/sales/', {'view': 'items'})   # mahsulotlar
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+
+    def test_page_without_discounts_pays_almost_nothing_extra(self):
+        self._bulk(20)
+        with CaptureQueriesContext(connection) as c:
+            self._load()
+        self.assertLess(len(c.captured_queries), 30,
+                        'chegirmasiz sahifa uchun so\'rovlar juda ko\'p')

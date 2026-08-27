@@ -50,7 +50,7 @@
             <div class="dash-kpi__value">
                 <span data-countup="{{ total|default:0 }}">{{ total|som }}</span>
             </div>
-            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · qaytishsiz</span></div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · qaytishsiz{% if order_discount_total %} · chek chegirmasi −{{ order_discount_total|som }} ayirilgan{% endif %}</span></div>
         </article>
         <article class="dash-kpi" data-tone="danger">
             <div class="dash-kpi__head">
@@ -59,7 +59,15 @@
             <div class="dash-kpi__value">
                 <span class="text-danger" data-countup="{{ returned_total|default:0 }}">{{ returned_total|som }}</span>
             </div>
-            <div class="dash-kpi__footer"><span>{{ returned_count }} ta · {{ returned_qty }} dona</span></div>
+            <div class="dash-kpi__footer">
+                <span>{{ returned_count }} ta · {{ returned_qty }} dona</span>
+                {% if refunds_span_periods %}
+                <span class="d-block small text-muted mt-1" title="Z-hisobot qaytarish QACHON amalga oshganiga qarab sanaydi; bu karta esa tovar QACHON sotilganiga qarab. Boshqa kunda sotilib shu davrda qaytarilgan tovarlar bor.">
+                    shu davrda qaytarilgani (Z-hisobot bilan bir xil):
+                    <strong>{{ period_returned_total|som }}</strong> · {{ period_returned_count }} ta
+                </span>
+                {% endif %}
+            </div>
         </article>
         <article class="dash-kpi" data-tone="amber">
             <div class="dash-kpi__head">

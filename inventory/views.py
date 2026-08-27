@@ -2549,7 +2549,9 @@ def product_variants_edit(request, code):
     return render(request, 'inventory/product_variants_edit.html', {
         'product': product, 'branch': branch, 'branches': branches,
         'rows': rows,
-        'variant_ids': ','.join(str(r['variant'].pk) for r in rows),
+        # Qatorlar 'v_id' kalitini ishlatadi ('variant' EMAS). Yangi (saqlanmagan)
+        # qatorlarда v_id bo'sh — ularни o'tkazib yuboramiz.
+        'variant_ids': ','.join(str(r['v_id']) for r in rows if r['v_id']),
     })
 
 
@@ -8091,6 +8093,60 @@ def category_list(request):
 
 # ---------- SALES LIST ----------
 
+def _order_discount_share(sale_qs, extra_group=None):
+    """Filtrlangan sotuv qatorlariga to'g'ri keladigan CHEK chegirmasi ulushi.
+
+    SAL-1. Sahifadagi Sum ifodasi faqat `line_discount`ni ayiradi — CHEK
+    bo'yicha umumiy chegirma (`order_discount`) hisobga OLINMAYDI. Natijada
+    AYNI SAHIFANING o'zi ikki xil raqam ko'rsatardi:
+
+        3×100 000, chek chegirmasi 60 000 (mijoz 240 000 to'lagan)
+          KPI "Jami tushum"       300 000
+          CHEK ko'rinishi qatori  240 000   (t.total — to'g'risi)
+          Z-hisobot JAMI SAVDO    240 000
+
+    DIQQAT — bu qatorlarни QAYTA baholash EMAS. Egasining qoidasi bo'yicha
+    (net_line_total'ga qarang) chegirma qatorlarga taqsimlanmaydi va qaytarish
+    tovarни O'Z narxida baholaydi; bu funksiya faqat JAMI'ни chek to'loviga
+    keltiradi, ya'ni "hammasi qo'shilganda kassaga qancha tushdi".
+
+    Filtr chekning bir qismini tanlasa — faqat o'sha qismning ulushi ayiriladi
+    (aks holда bitta mahsulot bo'yicha filtr butun chek chegirmasini yeb
+    qo'yardi). Faqat `order_discount > 0` bo'lgan cheklar so'raladi — odatdagi
+    chegirmasiz sahifada qo'shimcha yuk amalda yo'q.
+
+    Qaytaradi: (jami_ulush, {guruh_kaliti: ulush}) — `extra_group` berilsa
+    (masalan 'sold_at__date') ikkinchi qiymat shu bo'yicha guruhlanadi.
+    """
+    rev = F('quantity') * F('sale_price') - F('line_discount')
+    disc = dict(SaleTransaction.objects
+                .filter(id__in=sale_qs.order_by().values('transaction_id'),
+                        order_discount__gt=0)
+                .values_list('id', 'order_discount'))
+    if not disc:
+        return Decimal('0'), {}
+    ids = list(disc)
+    # Chekning TO'LIQ summasi (filtrdan qat'i nazar) — maxraj.
+    whole = {r['transaction_id']: _dec(r['s'] or 0)
+             for r in (Sale.objects.filter(transaction_id__in=ids)
+                       .order_by().values('transaction_id').annotate(s=Sum(rev)))}
+    group_fields = ['transaction_id'] + ([extra_group] if extra_group else [])
+    picked = (sale_qs.filter(transaction_id__in=ids)
+              .order_by().values(*group_fields).annotate(s=Sum(rev)))
+    total = Decimal('0')
+    by_group = {}
+    for r in picked:
+        w = whole.get(r['transaction_id']) or Decimal('0')
+        if w <= 0:
+            continue
+        share = _dec(disc[r['transaction_id']]) * _dec(r['s'] or 0) / w
+        total += share
+        if extra_group:
+            key = r[extra_group]
+            by_group[key] = by_group.get(key, Decimal('0')) + share
+    return total, by_group
+
+
 @admin_required
 def sales_list(request):
     """Sotuvlar ro'yxati: filterlar + kunlik jami + CSV export."""
@@ -8218,7 +8274,12 @@ def sales_list(request):
         qty=Sum('quantity'),
         txns=Count('transaction_id', distinct=True),
     )
-    total = agg['total'] or 0
+    # SAL-1: chek chegirmasi ulushi ayiriladi — JAMI mijoz TO'LAGANI bo'lsin,
+    # ya'ni CHEK ko'rinishidagi qatorlar yig'indisi va Z-hisobot bilan bir xil.
+    _odisc_total, _odisc_by_day = _order_discount_share(qs, 'sold_at__date')
+    gross_total = _dec(agg['total'] or 0)          # chegirmagacha
+    order_discount_total = _odisc_total
+    total = gross_total - _odisc_total
     qty_total = agg['qty'] or 0
     txn_count = agg['txns'] or 0
     line_count = qs.count()   # "Topilgan qatorlar" — jami satr (300 cheklovsiz)
@@ -8253,6 +8314,37 @@ def sales_list(request):
         _dd['money'] += _m
     net_total = total - returned_total
 
+    # ---- SAL-2: Z-hisobot bilan SOLISHTIRISH uchun ikkinchi ko'rsatkich.
+    # Yuqoridagi `returned_total` — SHU DAVRDA SOTILGAN tovarlardan qaytgani
+    # (qaytarish qachon bo'lganidan qat'i nazar). Z-hisobot esa — SHU SMENDA
+    # KASSADAN CHIQQAN pul. Kecha sotilib bugun qaytarilgan tovar birinchisiga
+    # KECHA, ikkinchisiga BUGUN tushadi. Ikkalasi ham to'g'ri, lekin ikkalasi
+    # "Qaytarilgan" deb nomlangani uchun sahifa Z-hisobotga zid ko'rinardi.
+    # Endi davr ichida AMALGA OSHIRILGAN qaytarishlar ham chiqadi: bu son
+    # o'sha davr smenlarining Z-hisobotlari yig'indisiga TENG.
+    period_ret_qs = (Return.objects
+                     .select_related('sale__transaction')
+                     .prefetch_related('sale__transaction__lines'))
+    if date_from_raw:
+        period_ret_qs = period_ret_qs.filter(refunded_at__gte=timezone.make_aware(
+            datetime.combine(datetime.strptime(date_from_raw, '%Y-%m-%d').date(),
+                             datetime.min.time()), tz))
+    if date_to_raw:
+        period_ret_qs = period_ret_qs.filter(refunded_at__lt=timezone.make_aware(
+            datetime.combine(datetime.strptime(date_to_raw, '%Y-%m-%d').date()
+                             + timedelta(days=1), datetime.min.time()), tz))
+    if branch_id:
+        period_ret_qs = period_ret_qs.filter(sale__branch_id=int(branch_id))
+    period_returned_total = Decimal('0')
+    period_returned_qty = 0
+    period_returned_count = 0
+    for _r in period_ret_qs:
+        period_returned_total += _r.effective_cash_refund or Decimal('0')
+        period_returned_qty += _r.quantity
+        period_returned_count += 1
+    # Farq bo'lsa — sahifada izoh chiqadi (buzuqlik emas, ta'rif farqi).
+    refunds_span_periods = period_returned_total != returned_total
+
     # Ro'yxat — FAQAT ko'rsatish uchun 300 qator. Qaytarishlarни alohida so'rovда
     # olib har satrга biriktiramiz (dead _returned annotatsiyasi olib tashlandi).
     sales = list(qs[:300])
@@ -8274,7 +8366,8 @@ def sales_list(request):
                   .order_by('-sold_at__date')[:60]):
         _d = row['sold_at__date']
         _rmoney = float((ret_by_day.get(_d) or {}).get('money') or 0)
-        _rtotal = float(row['total'] or 0)
+        # SAL-1: kunlik jami ham chek chegirmasidan tozalanadi.
+        _rtotal = float(_dec(row['total'] or 0) - (_odisc_by_day.get(_d) or Decimal('0')))
         daily_list.append({
             'date': _d,
             'total': _rtotal,
@@ -8352,6 +8445,12 @@ def sales_list(request):
         'returned_qty': returned_qty,
         'returned_count': returned_count,
         'net_total': net_total,
+        'gross_total': gross_total,
+        'order_discount_total': order_discount_total,
+        'period_returned_total': period_returned_total,
+        'period_returned_qty': period_returned_qty,
+        'period_returned_count': period_returned_count,
+        'refunds_span_periods': refunds_span_periods,
         'net_qty': (qty_total or 0) - (returned_qty or 0),
         'daily_list': daily_list,
         # Filter state
