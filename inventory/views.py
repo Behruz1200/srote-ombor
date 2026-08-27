@@ -8322,9 +8322,16 @@ def sales_list(request):
     # "Qaytarilgan" deb nomlangani uchun sahifa Z-hisobotga zid ko'rinardi.
     # Endi davr ichida AMALGA OSHIRILGAN qaytarishlar ham chiqadi: bu son
     # o'sha davr smenlarining Z-hisobotlari yig'indisiga TENG.
+    # DIQQAT: bu son FAQAT sana+filial oynasi uchun ma'noli. Sotuvchi/to'lov
+    # turi/qidiruv filtri yoqilganда yuqoridagi `returned_total` filtrga
+    # bo'ysunadi, kassadan chiqqan pulni esa sotuvchi bo'yicha bo'lib
+    # bo'lmaydi (qaytarishni BOSHQA kassir rasmiylashtirgan bo'lishi mumkin).
+    # Shu bois tor filtrда umuman ko'rsatmaymiz — noto'g'ri taqqoslashдan
+    # ko'ra yo'qligi yaxshi.
+    _comparable = not (seller_id or payment_method or q or returned)
     period_ret_qs = (Return.objects
                      .select_related('sale__transaction')
-                     .prefetch_related('sale__transaction__lines'))
+                     .prefetch_related('sale__transaction__lines')) if _comparable else Return.objects.none()
     if date_from_raw:
         period_ret_qs = period_ret_qs.filter(refunded_at__gte=timezone.make_aware(
             datetime.combine(datetime.strptime(date_from_raw, '%Y-%m-%d').date(),
@@ -8343,7 +8350,8 @@ def sales_list(request):
         period_returned_qty += _r.quantity
         period_returned_count += 1
     # Farq bo'lsa — sahifada izoh chiqadi (buzuqlik emas, ta'rif farqi).
-    refunds_span_periods = period_returned_total != returned_total
+    refunds_span_periods = (_comparable
+                            and period_returned_total != returned_total)
 
     # Ro'yxat — FAQAT ko'rsatish uchun 300 qator. Qaytarishlarни alohida so'rovда
     # olib har satrга biriktiramiz (dead _returned annotatsiyasi olib tashlandi).

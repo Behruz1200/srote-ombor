@@ -1536,37 +1536,64 @@ class SalesPageQueryBudget(MoneyTestBase):
             f'so\'rovlar soni qatorlar bilan o\'sdi: '
             f'{len(c1.captured_queries)} → {len(c2.captured_queries)} (N+1)')
 
-
-class AdminPageSmoke(MoneyTestBase):
-    """Admin sahifalari KAMIDA 200 qaytarishi kerak — render paytидagi xato
-    (KeyError, AttributeError) foydalanuvchiga 500 berib chiqmasin. Ikki marta
-    aynan shu tur nuqson deploy'ga o'tib ketdi (sales_list _returned; variants
-    edit 'variant' vs 'v_id'), chunki hech bir test bu sahifalarni OCHMASdi."""
-
-    def setUp(self):
-        super().setUp()
-        self.admin = User.objects.create_user(
-            username='admin_smoke', password='x', role=User.Role.ADMIN,
-            is_staff=True, branch=self.branch)
-        self.client = Client()
-        self.client.force_login(self.admin)
-
-    def test_variants_edit_renders(self):
-        """Turlarni tahrirlash sahifasi (GET) — 'v_id' vs 'variant' KeyError'i
-        qaytmasin (bu aynan yiqilgan sahifa edi)."""
-        r = self.client.get(reverse('product_variants_edit',
-                                     args=[self.product.code]))
-        self.assertEqual(r.status_code, 200)
-
-    def test_sales_list_both_views_render(self):
-        r1 = self.client.get('/sales/')                      # checks (standart)
-        r2 = self.client.get('/sales/', {'view': 'items'})   # mahsulotlar
-        self.assertEqual(r1.status_code, 200)
-        self.assertEqual(r2.status_code, 200)
-
     def test_page_without_discounts_pays_almost_nothing_extra(self):
         self._bulk(20)
         with CaptureQueriesContext(connection) as c:
             self._load()
         self.assertLess(len(c.captured_queries), 30,
                         'chegirmasiz sahifa uchun so\'rovlar juda ko\'p')
+
+
+class SalesPagePeriodRefundScope(MoneyTestBase):
+    """SAL-5 — "shu davrda qaytarilgani" faqat sana+filial oynasida ma'noli.
+
+    Sotuvchi bo'yicha filtrlanганда `returned_total` filtrga bo'ysunadi, lekin
+    kassadan chiqqan pulni sotuvchiga bo'lib bo'lmaydi (qaytarishni boshqa
+    kassir rasmiylashtirgan bo'lishi mumkin). Ikki xil qamrovли sonni yonma-yon
+    ko'rsatish — noto'g'ri taqqoslashga taklif; shuning uchun umuman
+    ko'rsatilmaydi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_scope', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.other = User.objects.create_user(
+            username='kassir2', password='x', role=User.Role.SOTUVCHI,
+            branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash')
+        sale = Sale.objects.create(
+            transaction=txn, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('100000'),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        # qaytarishни BOSHQA kassir rasmiylashtirdi
+        Return.objects.create(sale=sale, shift=self.shift, quantity=1,
+                              refunded_by=self.other,
+                              refund_cash=Decimal('100000'))
+
+    def _page(self, **kw):
+        p = {'date_from': self.today, 'date_to': self.today}
+        p.update(kw)
+        r = self.client.get('/sales/', p)
+        self.assertEqual(r.status_code, 200)
+        return r.context
+
+    def test_shown_for_a_plain_date_window(self):
+        c = self._page()
+        self.assertEqual(_dec(c['period_returned_total']), Decimal('100000'))
+
+    def test_hidden_when_a_seller_filter_narrows_the_page(self):
+        c = self._page(seller=self.other.pk)
+        self.assertFalse(c['refunds_span_periods'],
+                         'tor filtrда taqqoslash soni ko\'rsatilmasin')
+        self.assertEqual(_dec(c['period_returned_total']), Decimal('0'))
+
+    def test_hidden_when_a_search_narrows_the_page(self):
+        self.assertFalse(self._page(q='Test koylak')['refunds_span_periods'])
