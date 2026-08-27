@@ -2087,3 +2087,131 @@ class Disc1CheckoutRecordsPromoSeparately(MoneyTestBase):
             discount_reason='Almashtirish: eski tovar hisobiga')
         self.assertEqual(t.manual_discount, Decimal('0'))
         self.assertEqual(t.promo_discount, Decimal('0'))
+
+
+class Disc2PromoBackfillCorrection(MoneyTestBase):
+    """DISC-2 — sababsiz chegirma AKSIYA emas, QO'LDA berilgan chegirma.
+
+    0060 backfill'i "sababsiz => aksiya" deb hisoblagan edi, chunki
+    pos_checkout qo'lда chegirma uchun sababni majburiy qiladi. Lekin o'sha
+    talab 2026-08-26 da qo'shilган (a2d1286), `order_discount` esa
+    2026-06-03 dan beri bor — oradagi uch oyда kassir sababsiz chegirma
+    bera olardi.
+
+    Ishlab chiqarish buni tasdiqladi: Promotion jami = 0, ya'ni
+    _evaluate_promotions() hech qachon noldan boshqa son qaytara olmagan.
+    3 001 635 so'm (289 chek) — kassir bergan chegirma, aksiya emas.
+
+    Xato yo'nalishi muhim: kassir bergan pulni "egasining aksiyasi" qilib
+    ko'rsatish kuzatilishi kerak bo'lgan signalni YASHIRADI. Aniqlab
+    bo'lmaganда MUAMMONI KO'RSATADIGAN tomonga og'ish kerak.
+    """
+
+    def _fix(self):
+        """0061 migratsiyasining o'zini chaqiramiz (mantiq qulflansin)."""
+        import importlib
+        from django.apps import apps as registry
+        mod = importlib.import_module(
+            'inventory.migrations.0061_fix_promo_backfill')
+        mod.fix_promo_backfill(registry, None)
+
+    def _txn(self, odisc, promo, reason='', when=None):
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal(odisc),
+            promo_discount=Decimal(promo), discount_reason=reason)
+        if when:
+            SaleTransaction.objects.filter(pk=t.pk).update(sold_at=when)
+            t.refresh_from_db()
+        return t
+
+    def setUp(self):
+        super().setUp()
+        self.shift = self.open_shift()
+
+    def test_reasonless_discount_becomes_manual_not_promo(self):
+        """0060 izi: sabab bo'sh + promo == order_discount."""
+        t = self._txn('10000', '10000')
+        self.assertEqual(t.manual_discount, Decimal('0'))   # xato holat
+        self._fix()
+        t.refresh_from_db()
+        self.assertEqual(t.promo_discount, Decimal('0'))
+        self.assertEqual(t.manual_discount, Decimal('10000'),
+                         'kassir bergan chegirma qo\'lда deb ko\'rinsin')
+
+    def test_money_is_untouched(self):
+        """Faqat yorliq ustuni o'zgaradi — pul emas."""
+        t = self._txn('10000', '10000')
+        before = t.order_discount
+        self._fix()
+        t.refresh_from_db()
+        self.assertEqual(t.order_discount, before)
+
+    def test_exchange_credit_is_left_alone(self):
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal('50000'),
+            exchange_credit=Decimal('50000'),
+            discount_reason='Almashtirish: eski tovar hisobiga')
+        self._fix()
+        t.refresh_from_db()
+        self.assertEqual(t.exchange_credit, Decimal('50000'))
+        self.assertEqual(t.manual_discount, Decimal('0'),
+                         'almashtirish krediti qo\'lда chegirmaga aylanmasin')
+
+    def test_receipt_with_a_reason_is_left_alone(self):
+        t = self._txn('7000', '0', reason='defect')
+        self._fix()
+        t.refresh_from_db()
+        self.assertEqual(t.manual_discount, Decimal('7000'))
+
+    def test_partial_promo_write_is_not_touched(self):
+        """pos_checkout yozgan HAQIQIY promo (promo < order_discount) —
+        0060 izi emas, tegilmasin."""
+        t = self._txn('10000', '6000', reason='mijoz')
+        self._fix()
+        t.refresh_from_db()
+        self.assertEqual(t.promo_discount, Decimal('6000'))
+        self.assertEqual(t.manual_discount, Decimal('4000'))
+
+    def test_receipts_after_a_real_promotion_are_preserved(self):
+        """Aksiya yaratilgach undan KEYINGI cheklar haqiqatan aksiya bo'lishi
+        mumkin — himoya sifatida ular tegilmaydi."""
+        from inventory.models import Promotion
+        start = timezone.now() - timezone.timedelta(days=5)
+        try:
+            Promotion.objects.create(name='A', percent=Decimal('10'),
+                                     is_active=True, valid_from=start)
+        except Exception:
+            self.skipTest('Promotion maydonlari boshqacha')
+        old = self._txn('10000', '10000',
+                        when=timezone.now() - timezone.timedelta(days=20))
+        new = self._txn('8000', '8000',
+                        when=timezone.now() - timezone.timedelta(days=1))
+        self._fix()
+        old.refresh_from_db(); new.refresh_from_db()
+        self.assertEqual(old.promo_discount, Decimal('0'),
+                         'aksiyaдан OLDINGI chek tuzatilsin')
+        self.assertEqual(new.promo_discount, Decimal('8000'),
+                         'aksiyaдан KEYINGI chek tegilmasin')
+
+    def test_reported_split_after_the_fix(self):
+        """Sahifa endi buni QO'LDA chegirma sifatida ko'rsatsin."""
+        admin = User.objects.create_user(
+            username='admin_d2', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        c = Client(); c.force_login(admin)
+        t = self._txn('30000', '30000')
+        Sale.objects.create(transaction=t, variant=self.variant,
+                            branch=self.branch, quantity=1,
+                            sale_price=Decimal('100000'),
+                            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        self._fix()
+        today = timezone.localdate().strftime('%Y-%m-%d')
+        ctx = c.get('/sales/', {'date_from': today, 'date_to': today}).context
+        ctx = ctx[0] if isinstance(ctx, list) else ctx
+        sp = ctx['discount_split']
+        self.assertEqual(sp['promo'], Decimal('0'))
+        self.assertEqual(sp['manual'], Decimal('30000'))
+        self.assertEqual(_dec(ctx['total']), Decimal('70000'),
+                         'tushum o\'zgarmasligi kerak')
