@@ -33,15 +33,15 @@
 
     <!-- Filtrlangan davr xulosasi -->
     {% if sales %}
-    <section class="dash-kpis dash-kpis--five yrt-stagger" aria-label="Filtrlangan davr xulosasi">
+    <section class="dash-kpis dash-kpis--five yrt-stagger" aria-label="Davr xulosasi">
         <article class="dash-kpi dash-kpi--lead">
             <div class="dash-kpi__head">
-                <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Sof tushum</span>
+                <span class="dash-kpi__label"><i class="bi bi-cash-stack"></i> Sof tushum</span>
             </div>
             <div class="dash-kpi__value">
                 <span data-countup="{{ net_total|default:0 }}">{{ net_total|som }}</span>
             </div>
-            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm · qaytgani ayirilgan</span></div>
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm — qaytarilganlar chiqarilgan</span></div>
         </article>
         <article class="dash-kpi" data-tone="indigo">
             <div class="dash-kpi__head">
@@ -51,35 +51,35 @@
                 <span data-countup="{{ total|default:0 }}">{{ total|som }}</span>
             </div>
             <div class="dash-kpi__footer">
-                <span class="dash-kpi__unit">so'm · qaytishsiz</span>
+                <span class="dash-kpi__unit">so'm — qaytarishlarsiz</span>
                 {% include "inventory/_discount_split.html" %}
             </div>
         </article>
         <article class="dash-kpi" data-tone="danger">
             <div class="dash-kpi__head">
-                <span class="dash-kpi__label"><i class="bi bi-arrow-counterclockwise"></i> Shu davr sotuvlaridan qaytgan</span>
+                <span class="dash-kpi__label"><i class="bi bi-arrow-counterclockwise"></i> Qaytarilgan</span>
             </div>
             <div class="dash-kpi__value">
                 <span class="text-danger" data-countup="{{ returned_total|default:0 }}">{{ returned_total|som }}</span>
             </div>
             <div class="dash-kpi__footer">
-                <span>{{ returned_count }} ta · {{ returned_qty }} dona</span>
+                <span>{{ returned_count }} chek · {{ returned_qty }} dona</span>
                 {% if refunds_span_periods %}
-                <span class="d-block small text-muted mt-1" title="Z-hisobot qaytarish QACHON amalga oshganiga qarab sanaydi; bu karta esa tovar QACHON sotilganiga qarab. Boshqa kunda sotilib shu davrda qaytarilgan tovarlar bor.">
-                    shu davrda qaytarilgani (Z-hisobot bilan bir xil):
-                    <strong>{{ period_returned_total|som }}</strong> · {{ period_returned_count }} ta
+                <span class="d-block small text-muted mt-1">
+                    <i class="bi bi-info-circle" title="Bu karta tovar QACHON SOTILGANiga qaraydi. Z-hisobot esa pul QACHON QAYTGANiga. Boshqa kunda sotilib, shu davrda qaytarilgani ham bor."></i>
+                    Shu davrda qaytgani: <strong>{{ period_returned_total|som }}</strong> ({{ period_returned_count }} ta)
                 </span>
                 {% endif %}
             </div>
         </article>
         <article class="dash-kpi" data-tone="amber">
             <div class="dash-kpi__head">
-                <span class="dash-kpi__label"><i class="bi bi-receipt"></i> Tranzaksiyalar</span>
+                <span class="dash-kpi__label"><i class="bi bi-receipt"></i> Cheklar</span>
             </div>
             <div class="dash-kpi__value">
                 <span data-countup="{{ txn_count }}">{{ txn_count }}</span>
             </div>
-            <div class="dash-kpi__footer"><span>cheklar</span></div>
+            <div class="dash-kpi__footer"><span>topilgan cheklar soni</span></div>
         </article>
         <article class="dash-kpi">
             <div class="dash-kpi__head">
@@ -94,17 +94,45 @@
     {% endif %}
 
     <!-- Filterlar -->
-    <form method="get" class="card p-3 mb-3">
+    <form method="get" class="card p-3 mb-3" id="salesFilter">
+        <!-- Tez sana tanlash -->
+        <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
+            <span class="small text-muted me-1"><i class="bi bi-calendar-event"></i> Tez:</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="0">Bugun</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="yesterday">Kecha</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="6">7 kun</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="29">30 kun</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="all">Hammasi</button>
+        </div>
+        <!-- Qidirish + tugmalar -->
+        <div class="row g-2 mb-2">
+            <div class="col-md-9">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" name="q" value="{{ q }}" class="form-control"
+                           placeholder="Chek raqami, mahsulot, mijoz yoki shtrix-kod bo'yicha qidirish...">
+                </div>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-primary flex-fill" type="submit">
+                    <i class="bi bi-funnel"></i> Filterlash
+                </button>
+                <a href="{% url 'sales_list' %}" class="btn btn-outline-secondary" title="Barcha filtrlarni tozalash">
+                    <i class="bi bi-x-lg"></i> Tozalash
+                </a>
+            </div>
+        </div>
+        <!-- Filtrlar (bitta qatorда) -->
         <div class="row g-2">
-            <div class="col-md-3">
+            <div class="col-6 col-md-2">
                 <label class="form-label small text-muted mb-1">Sana (dan)</label>
                 <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md-2">
                 <label class="form-label small text-muted mb-1">Sana (gacha)</label>
                 <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-2">
+            <div class="col-6 col-md-2">
                 <label class="form-label small text-muted mb-1">Filial</label>
                 <select name="branch" class="form-select form-select-sm">
                     <option value="">— hammasi —</option>
@@ -115,7 +143,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-6 col-md-2">
                 <label class="form-label small text-muted mb-1">Sotuvchi</label>
                 <select name="seller" class="form-select form-select-sm">
                     <option value="">— hammasi —</option>
@@ -126,7 +154,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-6 col-md-2">
                 <label class="form-label small text-muted mb-1">To'lov</label>
                 <select name="payment_method" class="form-select form-select-sm">
                     <option value="">— hammasi —</option>
@@ -135,57 +163,71 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-6 col-md-2">
                 <label class="form-label small text-muted mb-1">Qaytarilgan</label>
                 <select name="returned" class="form-select form-select-sm">
                     <option value="">— hammasi —</option>
-                    <option value="yes" {% if returned == 'yes' %}selected{% endif %}>Ha (qaytarilgan)</option>
+                    <option value="yes" {% if returned == 'yes' %}selected{% endif %}>Ha</option>
                     <option value="no" {% if returned == 'no' %}selected{% endif %}>Yo'q</option>
                 </select>
             </div>
-            <div class="col-md-6">
-                <label class="form-label small text-muted mb-1">Qidirish</label>
-                <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
-                       placeholder="Chek raqami (174), mahsulot, mijoz, shtrix-kod...">
-            </div>
-            <div class="col-md-4 d-flex align-items-end gap-2">
-                <button class="btn btn-primary btn-sm flex-fill" type="submit">
-                    <i class="bi bi-funnel"></i> Filterlash
-                </button>
-                <a href="{% url 'sales_list' %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-x"></i>
-                </a>
-            </div>
         </div>
     </form>
+    <script>
+    // Tez sana tugmalari: sana maydonlarini to'ldirib, filtrni yuboradi.
+    (function () {
+        var form = document.getElementById('salesFilter');
+        if (!form) return;
+        function fmt(d) {
+            var m = ('0' + (d.getMonth() + 1)).slice(-2);
+            var day = ('0' + d.getDate()).slice(-2);
+            return d.getFullYear() + '-' + m + '-' + day;
+        }
+        form.querySelectorAll('[data-range]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var from = form.querySelector('[name=date_from]');
+                var to = form.querySelector('[name=date_to]');
+                var r = btn.getAttribute('data-range');
+                var today = new Date();
+                if (r === 'all') {
+                    from.value = '';
+                    to.value = '';
+                } else if (r === 'yesterday') {
+                    var y = new Date();
+                    y.setDate(y.getDate() - 1);
+                    from.value = fmt(y);
+                    to.value = fmt(y);
+                } else {
+                    var n = parseInt(r, 10) || 0;
+                    var s = new Date();
+                    s.setDate(s.getDate() - n);
+                    from.value = fmt(s);
+                    to.value = fmt(today);
+                }
+                form.submit();
+            });
+        });
+    })();
+    </script>
 
-    <!-- Jami pannel -->
-    <div class="row g-3 mb-3">
-        <div class="col-md-4">
-            <div class="card p-3">
-                {% if view_mode == 'checks' %}
-                <div class="small text-muted">Topilgan cheklar</div>
-                <div class="h3 mb-0">{{ check_count }}{% if checks_capped %}
-                    <span class="small text-muted">(300 ko'rsatildi)</span>{% endif %}</div>
-                {% else %}
-                <div class="small text-muted">Topilgan qatorlar</div>
-                <div class="h3 mb-0">{{ line_count }}{% if shown_capped %}
-                    <span class="small text-muted">(300 ko'rsatildi)</span>{% endif %}</div>
-                {% endif %}
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Jami dona</div>
-                <div class="h3 mb-0">{{ qty_total }}</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card p-3">
-                <div class="small text-muted">Jami tushum</div>
-                <div class="h3 mb-0 text-success">{{ total|som }} so'm</div>
-            </div>
-        </div>
+    <!-- Natija satri (yuqoridagi kartalar takrorlanmaydi) -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
+            <i class="bi bi-list-check"></i>
+            {% if view_mode == 'checks' %}
+                <strong>{{ check_count }}</strong> chek topildi
+            {% else %}
+                <strong>{{ line_count }}</strong> qator topildi
+            {% endif %}
+        </span>
+        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
+            <i class="bi bi-box-seam"></i> <strong>{{ qty_total }}</strong> dona
+        </span>
+        {% if checks_capped or shown_capped %}
+        <span class="badge rounded-pill bg-light border border-warning px-3 py-2 text-dark">
+            <i class="bi bi-info-circle text-warning"></i> eng so'nggi 300 ko'rsatildi — to'liq ma'lumot uchun CSV eksport
+        </span>
+        {% endif %}
     </div>
 
     <!-- Kunlik jami (filter natijasidan) -->
