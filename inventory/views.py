@@ -534,7 +534,10 @@ def _dashboard_aggregates():
             qty=Sum('quantity'),
             txns=Count('transaction', distinct=True),
         )
-        rev = float(a['revenue'] or 0)
+        # SAL-6: KUN — chek darajasidagi o'lchov, chegirma aniq tushadi.
+        # Ayirmasak tushum ham, FOYDA ham chegirma miqdorida shishardi.
+        _od, _ = _order_discount_share(qs)
+        rev = _net_rev(a['revenue'], _od)
         cost = float(a['cost'] or 0)
         return {
             'revenue': rev,
@@ -555,12 +558,15 @@ def _dashboard_aggregates():
     # yaxlitlash tufayli jami buzilmaydi).
     def _by_method(qs):
         out = {'cash': 0.0, 'card': 0.0, 'transfer': 0.0, 'other': 0.0}
+        # SAL-6: pul oqimi KASSAGA TUSHGAN pul bo'lishi kerak — chek chegirmasi
+        # ayirilgan (chek bir to'lov turiga tegishli, ulush aniq tushadi).
+        _, _od_by_txn = _order_discount_share(qs, 'transaction_id')
         rows = (qs.values('transaction_id', 'transaction__payment_method')
                   .annotate(rev=Sum(revenue_expr)))
         mixed_rev = {}
         for r in rows:
             m = r['transaction__payment_method']
-            rev = float(r['rev'] or 0)
+            rev = _net_rev(r['rev'], _od_by_txn.get(r['transaction_id']))
             if m == 'mixed':
                 mixed_rev[r['transaction_id']] = mixed_rev.get(r['transaction_id'], 0.0) + rev
             elif m in out:
@@ -614,12 +620,15 @@ def _dashboard_aggregates():
         .annotate(rev=Sum(revenue_expr), q=Sum('quantity'))
     )
     day_map = {r['day']: r for r in trend_qs}
+    _, _od_by_day = _order_discount_share(
+        Sale.objects.filter(sold_at__gte=week_start, sold_at__lt=today_end),
+        'sold_at__date')
     trend_labels, trend_revenue, trend_qty = [], [], []
     for i in range(6, -1, -1):
         d = today - timedelta(days=i)
         r = day_map.get(d) or {}
         trend_labels.append(d.strftime('%a %d'))
-        trend_revenue.append(float(r.get('rev') or 0))
+        trend_revenue.append(_net_rev(r.get('rev'), _od_by_day.get(d)))
         trend_qty.append(r.get('q') or 0)
 
     # Inventory snapshot — one aggregate covers stock count + value
@@ -647,10 +656,15 @@ def _dashboard_aggregates():
         for r in BranchStock.objects.values('branch_id').annotate(stock_count__sum=Sum('stock_count'))
     }
 
+    _, _od_by_branch = _order_discount_share(
+        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end),
+        'branch_id')
     branch_today_raw = [
         {
             'branch_id': bid,
-            'revenue': float((rev_by_branch.get(bid) or {}).get('revenue') or 0),
+            # FILIAL — chek darajasidagi o'lchov (SAL-6)
+            'revenue': _net_rev((rev_by_branch.get(bid) or {}).get('revenue'),
+                                _od_by_branch.get(bid)),
             'qty': (rev_by_branch.get(bid) or {}).get('qty') or 0,
             'txns': (rev_by_branch.get(bid) or {}).get('txns') or 0,
             'stock': stock_by_branch.get(bid, 0),
@@ -666,9 +680,15 @@ def _dashboard_aggregates():
     )
     for r in top_today:
         r['revenue'] = float(r['revenue'] or 0)
+    # MAHSULOT — qator darajasidagi o'lchov: chegirma alohida tovarga tegishli
+    # emas (egasining qoidasi), shuning uchun qatorlar O'Z narxida qoladi va
+    # chegirma alohida ko'rsatiladi (SAL-6).
+    _od_today, _ = _order_discount_share(
+        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
 
     return {
         'today_iso': today.isoformat(),
+        'order_discount_today': float(_od_today),
         'yesterday_iso': yesterday.isoformat(),
         'today_stats': today_stats,
         'yesterday_stats': yesterday_stats,
@@ -799,6 +819,7 @@ def dashboard(request):
         })
 
     return render(request, 'inventory/dashboard.html', {
+        'order_discount_today': agg.get('order_discount_today', 0),
         'today': today, 'yesterday': yesterday,
         'today_stats': today_stats,
         'yesterday_stats': yesterday_stats,
@@ -1881,7 +1902,13 @@ def product_detail(request, code):
         txns=Count('transaction', distinct=True),
     )
     sold_30d = agg['qty'] or 0
+    # SAL-6: MAHSULOT — qator darajasidagi o'lchov, chek chegirmasi bu tovarga
+    # tegishli emas (egasining qoidasi), shuning uchun rev_30d O'Z narxida
+    # qoladi. Chegirma alohida ko'rsatiladi — shunda sahifa "bu mahsulot
+    # 300 000 keltirdi" deganда, chekларида 60 000 chegirma borligi ham ko'rinadi.
     rev_30d = float(agg['rev'] or 0)
+    _odisc_30d, _ = _order_discount_share(sales_30d)
+    order_discount_30d = float(_odisc_30d)
     txns_30d = agg['txns'] or 0
     daily_avg = sold_30d / 30 if sold_30d else 0
     # Single aggregate covers both total stock + total inventory value (was 2 separate queries)
@@ -1954,6 +1981,7 @@ def product_detail(request, code):
         'total_value': total_value,
         'sold_30d': sold_30d,
         'rev_30d': rev_30d,
+        'order_discount_30d': order_discount_30d,
         'txns_30d': txns_30d,
         'days_left': days_left,
         'top_branch_name': top_branch_name,
@@ -3808,7 +3836,13 @@ def cashier_stats(request, user_id):
         qty=Sum('quantity'),
         txns=Count('transaction', distinct=True),
     )
-    revenue = float(agg['revenue'] or 0)
+    # SAL-6: chek chegirmasi sotuvchiga ANIQ tegishli (bitta chek — bitta
+    # sotuvchi), shuning uchun tushumdan ayiriladi. Bu yerda ayirmaslik ikki
+    # marta yanglishtirardi: FOYDA chegirma miqdorida oshib ko'rinardi
+    # (300 000 − 180 000 = 120 000, aslida 240 000 − 180 000 = 60 000) va
+    # KOMISSIYA kassir chegirma qilib bergan puldan ham hisoblanardi.
+    _odisc_seller, _ = _order_discount_share(sales_30d)
+    revenue = _net_rev(agg['revenue'], _odisc_seller)
     cost = float(agg['cost'] or 0)
     qty = agg['qty'] or 0
     txns = agg['txns'] or 0
@@ -3830,11 +3864,13 @@ def cashier_stats(request, user_id):
     for i in range(29, -1, -1):
         d = today - timedelta(days=i)
         daily[d.isoformat()] = 0
+    _, _odisc_by_day = _order_discount_share(sales_30d, 'sold_at__date')
     for row in (sales_30d.annotate(d=F('sold_at__date')).values('d')
                 .annotate(r=Sum(rev_expr))):
         key = row['d'].isoformat() if row['d'] else None
         if key and key in daily:
-            daily[key] = float(row['r'] or 0)
+            # kun ham CHEK darajasidagi o'lchov — ulush aniq tushadi
+            daily[key] = _net_rev(row['r'], _odisc_by_day.get(row['d']))
     daily_labels = [k[5:] for k in daily.keys()]
     daily_values = list(daily.values())
 
@@ -3845,22 +3881,29 @@ def cashier_stats(request, user_id):
         hour_qty[h] += 1
     hour_labels = [f'{h:02d}' for h in range(24)]
 
-    # Top products
+    # Top products — MAHSULOT qator darajasidagi o'lchov: egasining qoidasi
+    # bo'yicha chek chegirmasi alohida tovarga tegishli emas, shuning uchun
+    # qatorlar O'Z narxida qoladi va chegirma alohida ko'rsatiladi (SAL-6).
     top_products = list(sales_30d.values('variant__product__code', 'variant__product__name')
                         .annotate(qty=Sum('quantity'), revenue=Sum(rev_expr))
                         .order_by('-revenue')[:5])
+    order_discount_total = float(_odisc_seller)
 
     # Sales per active day
     active_days = sales_30d.values('sold_at__date').distinct().count() or 1
     sales_per_day = txns / active_days
 
     # D3: Anomaly detection — compare this seller to peer average
-    peer_stats = (Sale.objects.filter(sold_at__gte=since_30d)
-                  .exclude(sold_by=seller)
+    _peer_qs = Sale.objects.filter(sold_at__gte=since_30d).exclude(sold_by=seller)
+    # D3 taqqoslash bir xil asosда bo'lsin — aks holда bu kassir sof, peer'lar
+    # brutto bo'lib, chegirма ko'p qilgan kassir "yomon" ko'rinardi.
+    _, _odisc_peer = _order_discount_share(_peer_qs, 'sold_by_id')
+    peer_stats = (_peer_qs
                   .values('sold_by_id')
                   .annotate(rev=Sum(rev_expr), qty=Sum('quantity'),
                             txns=Count('transaction', distinct=True)))
-    peers = list(peer_stats)
+    peers = [dict(p, rev=_net_rev(p['rev'], _odisc_peer.get(p['sold_by_id'])))
+             for p in peer_stats]
     peer_count = len(peers)
     anomalies = []
     if peer_count >= 2:  # need enough peers for comparison
@@ -3917,6 +3960,7 @@ def cashier_stats(request, user_id):
                 })
 
     return render(request, 'inventory/cashier_stats.html', {
+        'order_discount_total': order_discount_total,
         'seller': seller,
         'revenue': revenue, 'cost': cost, 'profit': profit,
         'qty': qty, 'txns': txns,
@@ -7414,8 +7458,14 @@ def pos_refund(request):
             for p in parsed:
                 # REF-1: qatorni QULFLAB qayta tekshiramiz — bir vaqtда ikki
                 # refund bir xil qatorga o'tmasin (pos_exchange kabi).
+                # DIQQAT: 'transaction' NULLABLE FK — uni select_related qilsak
+                # LEFT OUTER JOIN bo'ladi va Postgres select_for_update (FOR UPDATE)
+                # ни nullable outer join'ga qo'llay olmaydi (SQLite bunga e'tibor
+                # bermaydi — shu bois test'да chiqmagan, prod'да 500 bergan).
+                # variant/branch — NOT NULL (inner join), FOR UPDATE ular bilan
+                # ishlaydi. transaction'ni keyin kerak bo'lganда lazy o'qiymiz.
                 sale = (Sale.objects.select_for_update()
-                        .select_related('variant', 'branch', 'transaction')
+                        .select_related('variant', 'branch')
                         .filter(pk=p['sid'], branch=branch).first())
                 if not sale:
                     raise _RefundAbort({'ok': False, 'error': f"sale {p['sid']} topilmadi"})
@@ -7762,8 +7812,13 @@ def branch_list(request):
     ).order_by('-is_active', 'name'))
 
     # 30-day stats per branch
+    _sales_30d = Sale.objects.filter(sold_at__gte=since_30d)
+    # SAL-6: chek chegirmasi filialga ANIQ tushadi (bitta chek — bitta filial),
+    # shuning uchun to'g'ridan-to'g'ri ayiriladi. Aks holda filial tushumi ham,
+    # P&L (gross/net) ham chegirma miqdorida oshib ko'rinardi.
+    _, _odisc_by_branch = _order_discount_share(_sales_30d, 'branch_id')
     stats_map = {}
-    for row in (Sale.objects.filter(sold_at__gte=since_30d)
+    for row in (_sales_30d
                 .values('branch_id')
                 .annotate(rev=Sum(rev_expr), cost=Sum(cost_expr),
                           txns=Count('transaction', distinct=True),
@@ -7772,7 +7827,7 @@ def branch_list(request):
 
     for br in branches:
         s = stats_map.get(br.id, {})
-        rev = float(s.get('rev') or 0)
+        rev = _net_rev(s.get('rev'), _odisc_by_branch.get(br.id))
         cost = float(s.get('cost') or 0)
         period_fraction = 30 / 30.0  # whole 30-day window
         fixed = float((br.monthly_rent or 0) + (br.monthly_other_costs or 0)) * period_fraction
@@ -7858,7 +7913,12 @@ def user_list(request):
         F('quantity') * F('sale_price') - F('line_discount'),
         output_field=DecimalField(max_digits=14, decimal_places=2)
     )
-    stats = (Sale.objects.filter(sold_at__gte=since)
+    _sales_30d = Sale.objects.filter(sold_at__gte=since)
+    # SAL-6: chek chegirmasi sotuvchiga ANIQ tushadi (bitta chek — bitta
+    # sotuvchi). Bu muhim: s_commission aynan shu summadan hisoblanadi, ya'ni
+    # ilgari kassir chegirma qilib bergan puldan ham foiz olardi.
+    _, _odisc_by_seller = _order_discount_share(_sales_30d, 'sold_by_id')
+    stats = (_sales_30d
              .values('sold_by_id')
              .annotate(
                  revenue=Sum(rev_expr),
@@ -7868,7 +7928,7 @@ def user_list(request):
     stat_map = {s['sold_by_id']: s for s in stats}
     for u in users:
         s = stat_map.get(u.id, {})
-        u.s_revenue = float(s.get('revenue') or 0)
+        u.s_revenue = _net_rev(s.get('revenue'), _odisc_by_seller.get(u.id))
         u.s_qty = s.get('qty') or 0
         u.s_txns = s.get('n') or 0
         pct = float(u.commission_percent or 0)
@@ -8038,8 +8098,14 @@ def category_list(request):
         output_field=DecimalField(max_digits=14, decimal_places=2)
     )
 
+    # SAL-6: KATEGORIYA — qator darajasidagi o'lchov. Bitta chek bir nechta
+    # kategoriyani qamraydi va egasining qoidasi bo'yicha chek chegirmasi
+    # ayrim tovarga tegishli emas, shuning uchun kategoriyalar O'Z narxida
+    # qoladi va chegirma ALOHIDA ko'rsatiladi: kategoriyalar + chegirma = JAMI.
+    _sales_30d = Sale.objects.filter(sold_at__gte=since_30d)
+    _odisc_total, _ = _order_discount_share(_sales_30d)
     cat_stats = {}
-    for row in (Sale.objects.filter(sold_at__gte=since_30d)
+    for row in (_sales_30d
                 .values('variant__product__category_id')
                 .annotate(rev=Sum(rev_expr), cost=Sum(cost_expr),
                           qty=Sum('quantity'))):
@@ -8078,9 +8144,15 @@ def category_list(request):
     total_categories = len(categories)
     no_category_count = Product.objects.filter(category__isnull=True).count()
     top_cat = max(categories, key=lambda c: c.s_rev, default=None)
+    cats_rev_total = sum(c.s_rev for c in categories)
+    order_discount_total = float(_odisc_total)
+    net_rev_total = cats_rev_total - order_discount_total
 
     return render(request, 'inventory/category_list.html', {
         'categories': categories, 'form': form,
+        'cats_rev_total': cats_rev_total,
+        'order_discount_total': order_discount_total,
+        'net_rev_total': net_rev_total,
         'q': q,
         'groups': groups,
         'group_slug': group_slug,
@@ -8093,30 +8165,38 @@ def category_list(request):
 
 # ---------- SALES LIST ----------
 
-def _order_discount_share(sale_qs, extra_group=None):
+def _order_discount_share(sale_qs, *group_fields):
     """Filtrlangan sotuv qatorlariga to'g'ri keladigan CHEK chegirmasi ulushi.
 
-    SAL-1. Sahifadagi Sum ifodasi faqat `line_discount`ni ayiradi — CHEK
-    bo'yicha umumiy chegirma (`order_discount`) hisobga OLINMAYDI. Natijada
-    AYNI SAHIFANING o'zi ikki xil raqam ko'rsatardi:
+    SAL-1. Sale qatorlarida faqat `line_discount` bor. CHEK bo'yicha umumiy
+    chegirma (`order_discount`) SaleTransaction'da turadi, shuning uchun
+    qatorlar ustidan Sum() olgan HAR BIR sahifa mijoz TO'LAGANIDAN ko'p
+    ko'rsatardi:
 
         3×100 000, chek chegirmasi 60 000 (mijoz 240 000 to'lagan)
-          KPI "Jami tushum"       300 000
-          CHEK ko'rinishi qatori  240 000   (t.total — to'g'risi)
-          Z-hisobot JAMI SAVDO    240 000
+          qatorlar Sum'i         300 000
+          chek jamisi (t.total)  240 000   ← to'g'risi
 
-    DIQQAT — bu qatorlarни QAYTA baholash EMAS. Egasining qoidasi bo'yicha
-    (net_line_total'ga qarang) chegirma qatorlarga taqsimlanmaydi va qaytarish
-    tovarни O'Z narxida baholaydi; bu funksiya faqat JAMI'ни chek to'loviga
-    keltiradi, ya'ni "hammasi qo'shilganda kassaga qancha tushdi".
+    QAYSI o'lchov bo'yicha ayirish mumkin — muhim farq bor:
 
-    Filtr chekning bir qismini tanlasa — faqat o'sha qismning ulushi ayiriladi
-    (aks holда bitta mahsulot bo'yicha filtr butun chek chegirmasini yeb
-    qo'yardi). Faqat `order_discount > 0` bo'lgan cheklar so'raladi — odatdagi
-    chegirmasiz sahifada qo'shimcha yuk amalda yo'q.
+      CHEK darajasidagi o'lchovlar (filial, sotuvchi, mijoz, kun): bitta chek
+      AYNAN bitta filialga/sotuvchiga/kunga tegishli, shuning uchun chegirma
+      shu guruhga to'liq va aniq tushadi — to'g'ridan-to'g'ri ayiriladi.
 
-    Qaytaradi: (jami_ulush, {guruh_kaliti: ulush}) — `extra_group` berilsa
-    (masalan 'sold_at__date') ikkinchi qiymat shu bo'yicha guruhlanadi.
+      QATOR darajasidagi o'lchovlar (mahsulot, kategoriya, guruh): bitta chek
+      bir nechta mahsulotni qamraydi va egasining qoidasi bo'yicha (REF-3,
+      net_line_total'ga qarang) chek chegirmasi ALOHIDA tovarga tegishli
+      EMAS. Shuning uchun bunday ro'yxatlarda qatorlar O'Z narxida qoladi va
+      chegirma ALOHIDA qator sifatida ko'rsatiladi:
+          mahsulotlar 300 000 + "Chek chegirmasi −60 000" = JAMI 240 000
+
+    Filtr chekning bir qismini tanlasa — faqat o'sha qismning ulushi olinadi
+    (bitta mahsulot bo'yicha filtr butun chek chegirmasini yeb qo'ymasin).
+    Faqat `order_discount > 0` bo'lgan cheklar so'raladi — chegirmasiz
+    sahifada qo'shimcha yuk amalda yo'q.
+
+    Qaytaradi: (jami_ulush, {kalit: ulush}). `group_fields` bitta bo'lsa kalit
+    — skalyar, bir nechta bo'lsa — tuple, umuman berilmasa — bo'sh dict.
     """
     rev = F('quantity') * F('sale_price') - F('line_discount')
     disc = dict(SaleTransaction.objects
@@ -8130,9 +8210,9 @@ def _order_discount_share(sale_qs, extra_group=None):
     whole = {r['transaction_id']: _dec(r['s'] or 0)
              for r in (Sale.objects.filter(transaction_id__in=ids)
                        .order_by().values('transaction_id').annotate(s=Sum(rev)))}
-    group_fields = ['transaction_id'] + ([extra_group] if extra_group else [])
+    fields = ['transaction_id'] + list(group_fields)
     picked = (sale_qs.filter(transaction_id__in=ids)
-              .order_by().values(*group_fields).annotate(s=Sum(rev)))
+              .order_by().values(*fields).annotate(s=Sum(rev)))
     total = Decimal('0')
     by_group = {}
     for r in picked:
@@ -8141,10 +8221,16 @@ def _order_discount_share(sale_qs, extra_group=None):
             continue
         share = _dec(disc[r['transaction_id']]) * _dec(r['s'] or 0) / w
         total += share
-        if extra_group:
-            key = r[extra_group]
+        if group_fields:
+            key = (r[group_fields[0]] if len(group_fields) == 1
+                   else tuple(r[g] for g in group_fields))
             by_group[key] = by_group.get(key, Decimal('0')) + share
     return total, by_group
+
+
+def _net_rev(gross, share):
+    """Brutto qator summasidan chek chegirmasi ulushini ayiradi (float)."""
+    return float(_dec(gross or 0) - _dec(share or 0))
 
 
 @admin_required
@@ -8737,8 +8823,14 @@ def reports(request):
                 ])
                 total_qty += s.quantity
                 total_rev += s.total
+            # SAL-6: qatorlar O'Z narxida qoladi (chek chegirmasi ayrim
+            # tovarga tegishli emas — egasining qoidasi), lekin XULOSA
+            # yopilishi SHART: qatorlar − chek chegirmasi = sof daromad.
+            _odisc_rep, _ = _order_discount_share(qs)
             summary = {'Jami sotilgan dona': total_qty,
-                       "Jami daromad (so'm)": total_rev,
+                       "Qatorlar bo'yicha (so'm)": total_rev,
+                       "Chek chegirmasi (so'm)": -_dec(_odisc_rep),
+                       "Jami daromad (so'm)": _dec(total_rev) - _dec(_odisc_rep),
                        'Sotuvlar soni': qs.count()}
 
         elif rtype == 'intakes':
@@ -8799,8 +8891,9 @@ def reports(request):
                 'variant__product__code', 'variant__product__name'
             ).annotate(
                 qty=Sum('quantity'),
+                # SAL-6: line_discount umuman ayirilmasdi — bu shubhasiz xato.
                 revenue=Sum(ExpressionWrapper(
-                    F('quantity') * F('sale_price'),
+                    F('quantity') * F('sale_price') - F('line_discount'),
                     output_field=DecimalField(max_digits=14, decimal_places=2))),
                 count=Count('id'),
             ).order_by('-revenue')
@@ -8814,8 +8907,11 @@ def reports(request):
                 ])
                 total_qty += a['qty'] or 0
                 total_rev += a['revenue'] or 0
+            _odisc_rep, _ = _order_discount_share(sale_qs)
             summary = {'Jami sotilgan dona': total_qty,
-                       "Jami daromad (so'm)": total_rev,
+                       "Mahsulotlar bo'yicha (so'm)": total_rev,
+                       "Chek chegirmasi (so'm)": -_dec(_odisc_rep),
+                       "Jami daromad (so'm)": _dec(total_rev) - _dec(_odisc_rep),
                        'Mahsulotlar soni': len(agg)}
 
         elif rtype == 'pivot':
@@ -8856,6 +8952,10 @@ def reports(request):
                 for it in pivot['items']:
                     rows.append(list(it['keys']) + [it['value'], f"{it['pct']:.1f}%"])
                 summary = {f"Jami {metric_label.lower()}": pivot['total']}
+                if metric in ('revenue', 'profit'):
+                    _odisc_rep, _ = _order_discount_share(sale_qs)
+                    summary["Chek chegirmasi (so'm)"] = -_dec(_odisc_rep)
+                    summary["Sof (so'm)"] = _dec(pivot['total']) - _dec(_odisc_rep)
             else:
                 headers = row_labels + list(pivot['col_keys']) + ['Jami']
                 rows = []
@@ -8864,6 +8964,11 @@ def reports(request):
                 rows.append(['Ustun jami'] + [''] * (len(row_labels) - 1)
                             + list(pivot['col_totals']) + [pivot['grand_total']])
                 summary = {f"Jami {metric_label.lower()}": pivot['grand_total']}
+                if metric in ('revenue', 'profit'):
+                    _odisc_rep, _ = _order_discount_share(sale_qs)
+                    summary["Chek chegirmasi (so'm)"] = -_dec(_odisc_rep)
+                    summary["Sof (so'm)"] = (_dec(pivot['grand_total'])
+                                             - _dec(_odisc_rep))
 
         elif rtype == 'deadstock':
             title = "O'lik zaxira — davrda sotilmagan tovarlar"
@@ -8955,8 +9060,15 @@ def reports(request):
                 rows.append([a['variant__product__category__name'] or '—',
                              a['qty'] or 0, rev, cost, profit, round(margin, 1)])
                 t_rev += rev; t_cost += cost; t_qty += a['qty'] or 0
-            summary = {"Jami daromad (so'm)": t_rev, "Jami foyda (so'm)": t_rev - t_cost,
-                       'Umumiy marja %': round((t_rev - t_cost) / t_rev * 100, 1) if t_rev else 0}
+            _odisc_rep, _ = _order_discount_share(sale_qs)
+            _net_rep = _dec(t_rev) - _dec(_odisc_rep)
+            summary = {"Kategoriyalar bo'yicha (so'm)": t_rev,
+                       "Chek chegirmasi (so'm)": -_dec(_odisc_rep),
+                       "Jami daromad (so'm)": _net_rep,
+                       "Jami foyda (so'm)": _net_rep - _dec(t_cost),
+                       'Umumiy marja %': (round(float((_net_rep - _dec(t_cost))
+                                                      / _net_rep * 100), 1)
+                                          if _net_rep else 0)}
 
         elif rtype == 'payouts':
             title = "Kassa chiqimlari (naqd)"
@@ -9434,7 +9546,7 @@ def customer_detail(request, pk):
             .prefetch_related('lines__variant__product')
             .order_by('-sold_at')[:50])
     revenue_expr = ExpressionWrapper(
-        F('lines__quantity') * F('lines__sale_price'),
+        F('lines__quantity') * F('lines__sale_price') - F('lines__line_discount'),
         output_field=DecimalField(max_digits=14, decimal_places=2),
     )
     stats = customer.transactions.aggregate(
@@ -9443,8 +9555,15 @@ def customer_detail(request, pk):
                        output_field=DecimalField(max_digits=14, decimal_places=2)),
         first_visit=Min('sold_at'),
         last_visit=Max('sold_at'),
+        odisc=Coalesce(Sum('order_discount'), 0,
+                       output_field=DecimalField(max_digits=14, decimal_places=2)),
     )
-    total = float(stats['total'] or 0)
+    # SAL-6: mijoz HAQIQATDA to'lagani. Ilgari na qator chegirmasi, na chek
+    # chegirmasi ayirilardi — "VIP / Doimiy / Yangi" segmenti ham shu shishgan
+    # summaga qarab qo'yilardi. Mijoz — CHEK darajasidagi o'lchov, shuning
+    # uchun order_discount to'g'ridan-to'g'ri ayiriladi.
+    total = float(_dec(stats['total'] or 0) - _dec(stats['odisc'] or 0))
+    order_discount_total = float(stats['odisc'] or 0)
     n_txns = stats['n'] or 0
     avg_ticket = total / n_txns if n_txns else 0
 
@@ -9462,8 +9581,11 @@ def customer_detail(request, pk):
               .values('variant__product_id',
                       'variant__product__code',
                       'variant__product__name')
-              .annotate(qty=Sum('quantity'), revenue=Sum(F('quantity') * F('sale_price'),
-                                                        output_field=DecimalField(max_digits=14, decimal_places=2)))
+              .annotate(qty=Sum('quantity'),
+                        revenue=Sum(F('quantity') * F('sale_price')
+                                    - F('line_discount'),
+                                    output_field=DecimalField(max_digits=14,
+                                                              decimal_places=2)))
               .order_by('-qty')[:5])
     favorites = list(fav_qs)
     # Attach product image URL where available
@@ -9500,6 +9622,7 @@ def customer_detail(request, pk):
     chart_data = list(chart.values())
 
     return render(request, 'inventory/customer_detail.html', {
+        'order_discount_total': order_discount_total,
         'customer': customer, 'txns': txns,
         'stats': stats,
         'total_spent': total,
@@ -9764,6 +9887,16 @@ def _insights_context(request):
         txn_qs = txn_qs.filter(branch=selected_branch)
     order_disc = txn_qs.aggregate(s=Sum('order_discount'))['s'] or 0
 
+    # SAL-6: sarlavhadagi raqam allaqachon sof edi, lekin PASTDAGI barcha
+    # bo'linmalar brutto qolgan edi — sahifa o'zi bilan ziddiyatda:
+    # "Tushum 240 000", ostida "Filial B — 300 000".
+    # CHEK darajasidagi o'lchovlar (filial, sotuvchi) uchun ulush aniq
+    # tushadi — ayiramiz. QATOR darajasidagilar (mahsulot, kategoriya,
+    # guruh) O'Z narxida qoladi va chegirma alohida ko'rsatiladi (egasining
+    # qoidasi: chek chegirmasi ayrim tovarga tegishli emas).
+    _, _od_by_branch = _order_discount_share(sales, 'branch_id')
+    _, _od_by_seller = _order_discount_share(sales, 'sold_by_id')
+
     revenue = (totals['revenue'] or 0) - order_disc
     qty = totals['qty'] or 0
     sales_count = totals['sales_count'] or 0
@@ -9810,7 +9943,10 @@ def _insights_context(request):
     # O'rtacha sotuv summasi va eng katta sotuv
     avg_sale_value = (revenue / sales_count) if sales_count else 0
     largest_sale = sales.annotate(
-        line=ExpressionWrapper(F('quantity') * F('sale_price'),
+        # SAL-6: line_discount ayirilmasdi — chegirmali qator "eng katta
+        # sotuv" bo'lib chiqib qolishi mumkin edi.
+        line=ExpressionWrapper(F('quantity') * F('sale_price')
+                               - F('line_discount'),
                                output_field=DecimalField(max_digits=14, decimal_places=2))
     ).order_by('-line').first()
 
@@ -9843,7 +9979,7 @@ def _insights_context(request):
             rev=Sum(revenue_expr), cost=Sum(cost_expr),
             qty=Sum('quantity'), n=Count('id'),
         )
-        b_rev = float(b_agg['rev'] or 0)
+        b_rev = _net_rev(b_agg['rev'], _od_by_branch.get(br.id))
         b_cost = float(b_agg['cost'] or 0)
         b_profit = b_rev - b_cost
         b_n = b_agg['n'] or 0
@@ -9918,7 +10054,11 @@ def _insights_context(request):
     ).order_by('-revenue')[:10])
     for s in top_sellers:
         pct = float(s.get('sold_by__commission_percent') or 0)
-        rev = float(s.get('revenue') or 0)
+        # SOTUVCHI — chek darajasidagi o'lchov. Komissiya ham shu sof
+        # summadan hisoblanadi (aks holda kassir chegirma qilib bergan
+        # puldan ham foiz olardi).
+        rev = _net_rev(s.get('revenue'), _od_by_seller.get(s.get('sold_by__id')))
+        s['revenue'] = rev
         s['commission_percent'] = pct
         s['commission'] = rev * pct / 100 if pct else 0
 
@@ -9930,6 +10070,9 @@ def _insights_context(request):
         qty=Sum('quantity'),
         n_sales=Count('id'),
     ).order_by('-revenue'))
+    for _b in by_branch:      # FILIAL — chek darajasidagi o'lchov
+        _b['revenue'] = _net_rev(_b['revenue'], _od_by_branch.get(_b['branch__id']))
+    by_branch.sort(key=lambda r: -r['revenue'])
 
     # Kategoriya bo'yicha
     by_category = list(sales.values(
@@ -10070,6 +10213,10 @@ def _insights_context(request):
         'd_end': end_date,
         'days': days,
         'discount_total': discount_total,
+        # SAL-6: MAHSULOT/KATEGORIYA/GURUH ro'yxatlari O'Z narxida — bu son
+        # ular ostiga "Chek chegirmasi −X" qatori bo'lib tushadi, shunda
+        # ro'yxat + chegirma = sarlavhadagi "Tushum".
+        'order_discount_total': float(order_disc),
         'selected_branch': selected_branch,
         'branches_all': branches_all,
         'revenue': revenue,
@@ -12020,11 +12167,19 @@ def warehouse(request):
     sales_q = Sale.objects.filter(sold_at__gte=d90)
     if branch:
         sales_q = sales_q.filter(branch=branch)
+    # SAL-6: bu yerда na qator chegirmasi, na chek chegirmasi ayirilardi —
+    # 90 kunlik "sotilgan qiymat" ikki karra shishgan bo'lishi mumkin edi.
+    # line_discount endi ayiriladi (bu shubhasiz xato edi); chek chegirmasi
+    # esa MAHSULOT — qator darajasidagi o'lchov bo'lgani uchun alohida
+    # ko'rsatiladi, qatorlarga taqsimlanmaydi.
     sold_map = {r['variant__product_id']: r for r in (
         sales_q.values('variant__product_id')
         .annotate(qty=Sum('quantity'),
-                  revenue=Sum(money(F('quantity') * F('sale_price'))),
+                  revenue=Sum(money(F('quantity') * F('sale_price')
+                                    - F('line_discount'))),
                   last=Max('sold_at')))}
+    _odisc_90d, _ = _order_discount_share(sales_q)
+    order_discount_90d = float(_odisc_90d)
 
     # ---------- Kategoriya matritsasi ----------
     cat_rows = list(stock.values(
@@ -12217,6 +12372,7 @@ def warehouse(request):
                 for c in ('A', 'B', 'C')]
 
     return render(request, 'inventory/warehouse.html', {
+        'order_discount_90d': order_discount_90d,
         'branches': branches,
         'sel_branch': branch,
         'kpi': {

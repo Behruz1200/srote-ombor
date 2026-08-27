@@ -162,6 +162,12 @@
                             </li>
                             {% endfor %}
                         </ol>
+                        {% if order_discount_total %}
+                        <div class="small text-muted mt-2 pt-2 border-top"
+                             title="Chek chegirmasi bu ro'yxatga taqsimlanmaydi — chegirma ayrim tovarga emas, butun chekka tegishli (do'kon qoidasi).">
+                            Chek chegirmasi: <span class="yrt-num">−{{ order_discount_total|som }}</span> so'm
+                        </div>
+                        {% endif %}
                     {% else %}
                         <div class="yrt-empty" style="border:none;">
                             <i class="bi bi-inbox yrt-empty-icon"></i>

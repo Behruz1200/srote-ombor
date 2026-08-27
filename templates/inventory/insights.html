@@ -298,6 +298,15 @@
                                 <tr><td colspan="5" class="text-muted text-center py-3">Sotuvlar yo'q</td></tr>
                             {% endfor %}
                             </tbody>
+                            {% if order_discount_total %}
+                            <tfoot>
+                                <tr class="text-muted small">
+                                    <td colspan="4" title="Chek chegirmasi bu ro'yxatga taqsimlanmaydi — chegirma ayrim tovarga emas, butun chekka tegishli (do'kon qoidasi).">
+                                        Chek chegirmasi</td>
+                                    <td class="num">−{{ order_discount_total|som }}</td>
+                                </tr>
+                            </tfoot>
+                            {% endif %}
                         </table>
                     </div>
                 </div>

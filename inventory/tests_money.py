@@ -25,7 +25,7 @@ from django.utils import timezone
 from inventory.models import (
     Branch, Product, ProductVariant, BranchStock, Shift,
     SaleTransaction, Sale, CashPayout, PaymentIntent, Return,
-    split_breakdown, _dec,
+    split_breakdown, _dec, Customer, Category,
 )
 
 User = get_user_model()
@@ -1597,3 +1597,181 @@ class SalesPagePeriodRefundScope(MoneyTestBase):
 
     def test_hidden_when_a_search_narrows_the_page(self):
         self.assertFalse(self._page(q='Test koylak')['refunds_span_periods'])
+
+
+
+SAL6_PAID, SAL6_GROSS, SAL6_DISC = (Decimal('240000'), Decimal('300000'),
+                                    Decimal('60000'))
+
+
+class Sal6EveryPageAgreesOnRevenue(TestCase):
+    """SAL-6 — BITTA chek, HAMMA sahifa: hech biri mijoz to'laganidan
+    boshqa raqam ko'rsatmasin.
+
+    Sale qatorlarida faqat `line_discount` bor; CHEK chegirmasi
+    (`order_discount`) SaleTransaction'da turadi. Shu bois qatorlar ustidan
+    Sum() olgan har bir sahifa brutto ko'rsatardi:
+
+        3×100 000, chek chegirmasi 60 000 (mijoz 240 000 to'lagan)
+        /dashboard/ /reports/ /insights/ (bo'linmalari) /branches/ /users/
+        /categories/ /cashier/ /customers/ /products/ /warehouse/ → 300 000
+
+    Eng yomoni FOYDA edi: `revenue − cost` da revenue shishgan bo'lgani uchun
+    foyda ham chegirma miqdorida oshib ko'rinardi (120 000, aslida 60 000) —
+    kassir va kategoriya baholari shunga qarab qo'yilardi. Komissiya ham
+    chegirma qilib berilgan puldan hisoblanardi.
+
+    QOIDA (egasining REF-3 siyosatiga mos):
+      CHEK darajasidagi o'lchov (filial/sotuvchi/mijoz/kun) — bitta chek
+        aynan bittasiga tegishli → chegirma to'g'ridan-to'g'ri ayiriladi;
+      QATOR darajasidagi o'lchov (mahsulot/kategoriya/guruh) — chegirma
+        ayrim tovarga tegishli EMAS → qatorlar O'Z narxida qoladi va
+        chegirma ALOHIDA qator bo'lib chiqadi (qatorlar + chegirma = jami).
+    """
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='B')
+        self.u = User.objects.create_user(username='k', password='x',
+                                          role=User.Role.ADMIN, is_staff=True,
+                                          branch=self.branch, commission_percent=10)
+        cat = Category.objects.create(name='Kiyim')
+        p = Product.objects.create(name='P', code='P-0001', category=cat,
+                                   default_sale_price=Decimal('100000'))
+        self.p = p
+        self.v = ProductVariant.objects.create(product=p, size='M', color='Q',
+                                               barcode='2000000000017')
+        BranchStock.objects.create(variant=self.v, branch=self.branch,
+                                   stock_count=100, cost_price=Decimal('60000'),
+                                   sale_price=Decimal('100000'))
+        self.sh = Shift.objects.create(branch=self.branch, opened_by=self.u,
+                                       opening_cash=Decimal('0'))
+        self.cust = Customer.objects.create(name='Mijoz', phone='998900000000')
+        self.c = Client(); self.c.force_login(self.u)
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.u, shift=self.sh,
+            payment_method='cash', order_discount=SAL6_DISC, customer=self.cust)
+        Sale.objects.create(transaction=txn, variant=self.v, branch=self.branch,
+                            quantity=3, sale_price=Decimal('100000'),
+                            cost_at_sale=Decimal('60000'), sold_by=self.u)
+
+    def test_sweep(self):
+        rows = []
+
+        def get(url, params=None):
+            r = self.c.get(url, params or {})
+            assert r.status_code == 200, f'{url} -> {r.status_code}'
+            c = r.context
+            return c[0] if isinstance(c, list) else c
+
+        def add(label, val, want):
+            try:
+                d = Decimal(str(val))
+                mark = 'OK' if d == want else 'XATO'
+            except Exception:
+                d, mark = val, '?'
+            rows.append((label, str(val), str(want), mark))
+
+        day = {'date_from': self.today, 'date_to': self.today}
+
+        c = get('/sales/', day)
+        add('/sales/  KPI Jami tushum', c['total'], SAL6_PAID)
+        add('/shift/../receipt/  JAMI SAVDO',
+            get(reverse('shift_receipt', args=[self.sh.pk]))['total_rev'], SAL6_PAID)
+
+        c = get('/dashboard/')
+        add('/dashboard/  bugungi tushum', c['today_stats']['revenue'], SAL6_PAID)
+        add('/dashboard/  bugungi foyda', c['today_stats']['profit'], SAL6_PAID - 180000)
+        add('/dashboard/  pul oqimi (naqd)', c['today_by_method']['cash'], SAL6_PAID)
+        add('/dashboard/  filial bo\'yicha', c['branch_today'][0]['revenue'], SAL6_PAID)
+        add('/dashboard/  top mahsulot (qator narxi)',
+            c['top_today'][0]['revenue'], SAL6_GROSS)
+        add('/dashboard/  + chek chegirmasi', c['order_discount_today'], SAL6_DISC)
+
+        c = get('/reports/', {'period': 'month', 'report_type': 'sales'})
+        add('/reports/ sales  Jami daromad', c['summary']["Jami daromad (so'm)"], SAL6_PAID)
+        c = get('/reports/', {'period': 'month', 'report_type': 'by_product'})
+        add('/reports/ by_product  Jami daromad',
+            c['summary']["Jami daromad (so'm)"], SAL6_PAID)
+        c = get('/reports/', {'period': 'month', 'report_type': 'margin'})
+        add('/reports/ margin  Jami daromad',
+            c['summary']["Jami daromad (so'm)"], SAL6_PAID)
+        add('/reports/ margin  Jami foyda',
+            c['summary']["Jami foyda (so'm)"], SAL6_PAID - 180000)
+        c = get('/reports/', {'period': 'month', 'report_type': 'pivot'})
+        add('/reports/ pivot  Sof', c['summary']["Sof (so'm)"], SAL6_PAID)
+
+        c = get('/insights/', day)
+        add('/insights/  Tushum (sarlavha)', c['revenue'], SAL6_PAID)
+        add('/insights/  Foyda', c['profit'], SAL6_PAID - 180000)
+        add('/insights/  filial bo\'yicha', c['by_branch'][0]['revenue'], SAL6_PAID)
+        add('/insights/  branch_compare', c['branch_compare'][0]['revenue'], SAL6_PAID)
+        add('/insights/  top sotuvchi', c['top_sellers'][0]['revenue'], SAL6_PAID)
+        add('/insights/  komissiya 10%', c['top_sellers'][0]['commission'], SAL6_PAID / 10)
+        add('/insights/  top mahsulot (qator narxi)',
+            c['top_products'][0]['revenue'], SAL6_GROSS)
+        add('/insights/  + chek chegirmasi', c['order_discount_total'], SAL6_DISC)
+
+        c = get('/branches/')
+        add('/branches/  total_revenue', c['total_revenue'], SAL6_PAID)
+        add('/branches/  m_gross (foyda)', c['branches'][0].m_gross, SAL6_PAID - 180000)
+        c = get('/users/')
+        add('/users/  s_revenue', c['users'][0].s_revenue, SAL6_PAID)
+        add('/users/  s_commission 10%', c['users'][0].s_commission, SAL6_PAID / 10)
+        c = get('/categories/')
+        add('/categories/  kategoriya (qator narxi)', c['categories'][0].s_rev, SAL6_GROSS)
+        add('/categories/  + chek chegirmasi', c['order_discount_total'], SAL6_DISC)
+        add('/categories/  = sof jami', c['net_rev_total'], SAL6_PAID)
+        c = get(f'/cashier/{self.u.pk}/')
+        add('/cashier/  revenue', c['revenue'], SAL6_PAID)
+        add('/cashier/  profit', c['profit'], SAL6_PAID - 180000)
+        add('/cashier/  commission 10%', c['commission'], SAL6_PAID / 10)
+        c = get(f'/customers/{self.cust.pk}/')
+        add('/customers/  total_spent', c['total_spent'], SAL6_PAID)
+        c = get(f'/products/{self.p.code}/')
+        add('/products/  rev_30d (qator narxi)', c['product_kpis']['rev_30d'], SAL6_GROSS)
+        add('/products/  + chek chegirmasi', c['product_kpis']['order_discount_30d'], SAL6_DISC)
+        c = get('/warehouse/')
+        add('/warehouse/  chek chegirmasi', c['order_discount_90d'], SAL6_DISC)
+
+        w = max(len(r[0]) for r in rows)
+        bad = [r for r in rows if r[3] == 'XATO']
+        print('\n' + '='*(w+34))
+        print(f"  3 x 100 000, chek chegirmasi 60 000  ->  MIJOZ TO'LAGAN 240 000")
+        print('='*(w+34))
+        for lbl, val, want, mark in rows:
+            print(f"  {lbl:<{w}} {val:>12} (kutilgan {want:>9})  {mark}")
+        print('='*(w+34))
+        print(f"  XATO: {len(bad)} / {len(rows)}")
+        print('='*(w+34))
+        self.assertEqual(bad, [], f'{len(bad)} ta ko\'rsatkich mos kelmadi')
+
+    def test_discount_row_is_actually_rendered(self):
+        """Qator darajasidagi ro'yxatlar ostida chegirma qatori KO'RINSIN —
+        aks holda foydalanuvchi 300 000 ni ko'rib, uni jami deb o'ylaydi."""
+        day = {'date_from': self.today, 'date_to': self.today}
+        for url, prm in (('/insights/', day), ('/categories/', {}),
+                         (f'/cashier/{self.u.pk}/', {}), ('/dashboard/', {}),
+                         (f'/products/{self.p.code}/', {})):
+            r = self.c.get(url, prm)
+            self.assertEqual(r.status_code, 200, url)
+            self.assertContains(r, 'Chek chegirmasi', msg_prefix=url,
+                                status_code=200)
+
+    def test_categories_rows_plus_discount_equal_the_net_total(self):
+        """Qatorlar + chegirma = sof jami (aynan, yaxlitlashsiz)."""
+        c = self.c.get('/categories/').context
+        c = c[0] if isinstance(c, list) else c
+        rows = sum(Decimal(str(x.s_rev)) for x in c['categories'])
+        self.assertEqual(rows - Decimal(str(c['order_discount_total'])),
+                         Decimal(str(c['net_rev_total'])))
+        self.assertEqual(Decimal(str(c['net_rev_total'])), SAL6_PAID)
+
+    def test_no_discount_means_no_extra_row_and_same_numbers(self):
+        """Chegirmasiz chekда yangi mantiq hech nimani o'zgartirmasin."""
+        SaleTransaction.objects.all().update(order_discount=Decimal('0'))
+        c = self.c.get('/categories/').context
+        c = c[0] if isinstance(c, list) else c
+        self.assertEqual(Decimal(str(c['order_discount_total'])), Decimal('0'))
+        self.assertEqual(Decimal(str(c['net_rev_total'])), SAL6_GROSS)
+        self.assertNotContains(self.c.get('/categories/'), 'Chek chegirmasi')

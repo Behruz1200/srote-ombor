@@ -362,6 +362,11 @@
                             </li>
                             {% endwith %}
                         {% endfor %}
+                        {% if order_discount_today %}
+                        <div class="small text-muted mt-2" title="Chek chegirmasi bu ro'yxatga taqsimlanmaydi — chegirma butun chekka tegishli (do'kon qoidasi).">
+                            Chek chegirmasi: −{{ order_discount_today|som }}
+                        </div>
+                        {% endif %}
                         </ol>
                         {% endwith %}
                     {% else %}

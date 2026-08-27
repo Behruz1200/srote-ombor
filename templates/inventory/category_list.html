@@ -234,6 +234,21 @@
                         </td></tr>
                     {% endfor %}
                     </tbody>
+                    {% if order_discount_total %}
+                    <tfoot class="small">
+                        <tr class="text-muted">
+                            <td colspan="5" class="text-end" title="Chek chegirmasi bitta kategoriyaga taqsimlanmaydi — chegirma ayrim tovarga emas, butun chekka tegishli (do'kon qoidasi). Kategoriyalar + chegirma = sof daromad.">
+                                Chek chegirmasi</td>
+                            <td class="num">−{{ order_discount_total|som }}</td>
+                            <td colspan="3"></td>
+                        </tr>
+                        <tr>
+                            <td colspan="5" class="text-end"><strong>Sof daromad</strong></td>
+                            <td class="num"><strong class="text-success">{{ net_rev_total|som }}</strong></td>
+                            <td colspan="3"></td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
                 </table>
             </div>
         </div>
