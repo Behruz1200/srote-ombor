@@ -5,17 +5,42 @@
 
 {% block content %}
 <style>
-    /* Sotuvlar KPI kartalari: katta pul raqamlari IKKI QATORGA bo'linmasin va
-       kartalar teng balandlikда tekis tursin. Raqam kenglikка qarab kichrayadi
-       (clamp) — shu bois nowrap bilan ham sig'adi, kesilmaydi. */
-    .dash-page .dash-kpi__value { white-space: nowrap; }
-    .dash-page .dash-kpis--five { align-items: stretch; }
-    .dash-page .dash-kpis--five .dash-kpi__value {
-        font-size: clamp(1rem, 1.2vw, 1.5rem);
+    /* UX-1: ilgari 5 ta karta bir qatorда turardi va 9-10 xonali pul raqamlari
+       sig'masdi — shuning uchun clamp(1rem, 1.2vw, ...) bilan matn kattaligiga
+       tushirib yuborilgan edi. Endi 3 + 3: har kartaga ikki barobar joy, raqam
+       to'liq o'lchamда qoladi. */
+    .sl-kpis { margin-bottom: 0.75rem; }
+    .sl-kpis .dash-kpi__value { white-space: nowrap; font-size: 1.55rem; }
+    .sl-kpis .dash-kpi--lead .dash-kpi__value { font-size: 1.9rem; }
+    @media (max-width: 1200px) {
+        .sl-kpis .dash-kpi__value { font-size: 1.3rem; }
+        .sl-kpis .dash-kpi--lead .dash-kpi__value { font-size: 1.5rem; }
     }
-    .dash-page .dash-kpis--five .dash-kpi--lead .dash-kpi__value {
-        font-size: clamp(1.15rem, 1.45vw, 1.8rem);
-    }
+
+    /* UX-2: chegirma tafsiloti KPI FOOTER'ida edi — footer flex/space-between
+       bo'lgani uchun uzun yorliqlar so'z o'rtasidan ikki qatorga bo'linib
+       ketardi. Endi alohida kartaда, raqamlar o'ng chekkaда tekis ustun
+       bo'lib turadi. */
+    .sl-break { display: grid; grid-template-columns: 1fr auto; gap: 0.3rem 0.75rem;
+                font-size: 0.82rem; margin-top: 0.15rem; }
+    .sl-break dt { font-weight: 400; color: var(--yrt-fg-muted); min-width: 0; }
+    .sl-break dd { margin: 0; text-align: right; font-family: var(--yrt-font-mono);
+                   font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .sl-break .sl-watch dt, .sl-break .sl-watch dd { color: #b45309; font-weight: 600; }
+    .sl-break__row { display: contents; }
+
+    /* Hisob zanjiri: Yalpi − chegirma = Jami − qaytarilgan = Sof */
+    .sl-chain { font-size: 0.78rem; color: var(--yrt-fg-muted); }
+    .sl-chain b { font-family: var(--yrt-font-mono); font-variant-numeric: tabular-nums;
+                  color: var(--yrt-fg); font-weight: 600; }
+
+    /* UX-5: tez sana tugmalarida AKTIV holat yo'q edi — qaysi davr ochiqligi
+       ko'rinmasdi. */
+    .sl-chip.is-active { background: var(--bs-primary, #5b5bd6); border-color: transparent;
+                         color: #fff; }
+    .sl-range { font-size: 0.82rem; }
+    .sl-fchip { font-size: 0.75rem; }
+    .sl-fchip a { text-decoration: none; }
 </style>
 <div class="container-fluid px-3 dash-page">
     <header class="dash-hero">
@@ -44,9 +69,17 @@
         </div>
     </header>
 
-    <!-- Filtrlangan davr xulosasi -->
+    <!-- ===== Davr xulosasi =========================================
+         UX-3: kartalar endi HISOB ZANJIRIni ko'rsatadi, chunki ular
+         bir-biriga bog'liq:
+             Yalpi savdo − chegirma      = JAMI TUSHUM
+             Jami tushum − qaytarilgan   = SOF TUSHUM
+         Ilgari 5 ta teng vaznli karta turardi va bu bog'liqlik hech
+         qayerda ko'rinmasdi — foydalanuvchi o'zi bilishi kerak edi.
+         ============================================================== -->
     {% if sales %}
-    <section class="dash-kpis dash-kpis--five yrt-stagger" aria-label="Davr xulosasi">
+    <section class="dash-kpis dash-kpis--three sl-kpis yrt-stagger" aria-label="Davr xulosasi">
+
         <article class="dash-kpi dash-kpi--lead">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cash-stack"></i> Sof tushum</span>
@@ -54,8 +87,11 @@
             <div class="dash-kpi__value">
                 <span data-countup="{{ net_total|default:0 }}">{{ net_total|som }}</span>
             </div>
-            <div class="dash-kpi__footer"><span class="dash-kpi__unit">so'm — qaytarilganlar chiqarilgan</span></div>
+            <div class="dash-kpi__footer">
+                <span class="dash-kpi__unit">so'm — do'kondа qolgan</span>
+            </div>
         </article>
+
         <article class="dash-kpi" data-tone="indigo">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-cash-coin"></i> Jami tushum</span>
@@ -64,162 +100,305 @@
                 <span data-countup="{{ total|default:0 }}">{{ total|som }}</span>
             </div>
             <div class="dash-kpi__footer">
-                <span class="dash-kpi__unit">so'm — qaytarishlarsiz</span>
-                {% include "inventory/_discount_split.html" %}
+                <span class="sl-chain">
+                    Yalpi <b>{{ gross_total|som }}</b>
+                    {% if order_discount_total %}− chegirma <b>{{ order_discount_total|som }}</b>{% endif %}
+                </span>
             </div>
         </article>
+
+        <!-- UX-2: CHEGIRMA endi o'z kartasida (ilgari "Jami tushum" footerida
+             siqilib, so'z o'rtasidan ikki qatorga bo'linib ketardi). -->
+        <article class="dash-kpi" data-tone="amber">
+            <div class="dash-kpi__head">
+                <span class="dash-kpi__label"><i class="bi bi-tags"></i> Chegirma</span>
+            </div>
+            <div class="dash-kpi__value">
+                <span data-countup="{{ order_discount_total|default:0 }}">{{ order_discount_total|som }}</span>
+            </div>
+            {% if discount_split.total %}
+            <dl class="sl-break mb-0">
+                {% if discount_split.promo %}
+                <div class="sl-break__row">
+                    <dt title="Egasi sozlagan aksiya — server avtomatik qo'llagan.">Aksiya</dt>
+                    <dd>−{{ discount_split.promo|som }}</dd>
+                </div>
+                {% endif %}
+                {% if discount_split.manual %}
+                <div class="sl-break__row sl-watch">
+                    <dt title="Kassir o'z ixtiyori bilan bergan chegirma. Sabab yozilishi shart.">Qo'lda chegirma</dt>
+                    <dd>−{{ discount_split.manual|som }}</dd>
+                </div>
+                {% endif %}
+                {% if discount_split.exchange %}
+                <div class="sl-break__row">
+                    <dt title="Chegirma EMAS: mijoz shu qismni eski tovar bilan to'lagan.">Almashtirish krediti</dt>
+                    <dd>−{{ discount_split.exchange|som }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+            {% else %}
+            <div class="dash-kpi__footer"><span class="dash-kpi__unit">chegirma berilmagan</span></div>
+            {% endif %}
+        </article>
+    </section>
+
+    <section class="dash-kpis dash-kpis--three sl-kpis yrt-stagger" aria-label="Qaytarish va hajm">
         <article class="dash-kpi" data-tone="danger">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-arrow-counterclockwise"></i> Qaytarilgan</span>
+                <span class="text-muted sl-fchip">{{ returned_count }} chek · {{ returned_qty }} dona</span>
             </div>
             <div class="dash-kpi__value">
                 <span class="text-danger" data-countup="{{ returned_total|default:0 }}">{{ returned_total|som }}</span>
             </div>
             <div class="dash-kpi__footer">
-                <span>{{ returned_count }} chek · {{ returned_qty }} dona</span>
                 {% if refunds_span_periods %}
-                <span class="d-block small text-muted mt-1">
-                    <i class="bi bi-info-circle" title="Bu karta tovar QACHON SOTILGANiga qaraydi. Z-hisobot esa pul QACHON QAYTGANiga. Boshqa kunda sotilib, shu davrda qaytarilgani ham bor."></i>
-                    Shu davrda qaytgani: <strong>{{ period_returned_total|som }}</strong> ({{ period_returned_count }} ta)
+                <span class="sl-chain">
+                    <i class="bi bi-info-circle"
+                       title="Bu karta tovar QACHON SOTILGANiga qaraydi. Z-hisobot esa pul QACHON QAYTGANiga. Boshqa kunda sotilib, shu davrda qaytarilgani ham bor."></i>
+                    Shu davrda kassadan chiqqani: <b>{{ period_returned_total|som }}</b>
+                    ({{ period_returned_count }} ta)
                 </span>
+                {% else %}
+                <span class="dash-kpi__unit">so'm — shu davr sotuvlaridan</span>
                 {% endif %}
             </div>
         </article>
-        <article class="dash-kpi" data-tone="amber">
+
+        <article class="dash-kpi" data-tone="slate">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-receipt"></i> Cheklar</span>
             </div>
             <div class="dash-kpi__value">
                 <span data-countup="{{ txn_count }}">{{ txn_count }}</span>
             </div>
-            <div class="dash-kpi__footer"><span>topilgan cheklar soni</span></div>
+            <div class="dash-kpi__footer">
+                <span class="sl-chain">
+                    {% if txn_count %}o'rtacha chek <b>{{ total|div:txn_count|som }}</b> so'm{% endif %}
+                </span>
+            </div>
         </article>
-        <article class="dash-kpi">
+
+        <article class="dash-kpi" data-tone="info">
             <div class="dash-kpi__head">
                 <span class="dash-kpi__label"><i class="bi bi-box-seam"></i> Dona (sof)</span>
             </div>
             <div class="dash-kpi__value">
                 <span data-countup="{{ net_qty|default:0 }}">{{ net_qty }}</span>
             </div>
-            <div class="dash-kpi__footer"><span>sotilgan − qaytgan</span></div>
+            <div class="dash-kpi__footer">
+                <span class="sl-chain">{{ qty_total }} sotilgan − {{ returned_qty }} qaytgan</span>
+            </div>
         </article>
     </section>
     {% endif %}
 
-    <!-- Filterlar -->
+    <!-- ===== Filtrlar ==============================================
+         UX-5/6/7: uchta muammo tuzatildi —
+           1) tez sana tugmalarida AKTIV holat yo'q edi (qaysi davr
+              ochiqligini bilib bo'lmasdi);
+           2) tanlangan davr hech qayerda SO'Z bilan yozilmagan edi, va
+              "Sana (gacha)" bo'sh bo'lsa u "bugungacha" degani — buni
+              foydalanuvchi bilishi kerak edi;
+           3) oltita "— hammasi —" ochiladigan ro'yxat bir qatorда turardi;
+              qaysi biri yoqilganini ko'rish uchun hammasini o'qib chiqish
+              kerak edi. Endi ular yig'iladigan bo'limда, va yoqilganlari
+              tepaда olib tashlanadigan yorliq bo'lib chiqadi.
+         ============================================================== -->
     <form method="get" class="card p-3 mb-3" id="salesFilter">
-        <!-- Tez sana tanlash -->
-        <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
-            <span class="small text-muted me-1"><i class="bi bi-calendar-event"></i> Tez:</span>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="0">Bugun</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="yesterday">Kecha</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="6">7 kun</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="29">30 kun</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-range="all">Hammasi</button>
+
+        <!-- 1-qator: davr -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <span class="small text-muted"><i class="bi bi-calendar-event"></i> Davr:</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Tez sana tanlash">
+                <button type="button" class="btn btn-outline-secondary sl-chip" data-range="0">Bugun</button>
+                <button type="button" class="btn btn-outline-secondary sl-chip" data-range="yesterday">Kecha</button>
+                <button type="button" class="btn btn-outline-secondary sl-chip" data-range="6">7 kun</button>
+                <button type="button" class="btn btn-outline-secondary sl-chip" data-range="29">30 kun</button>
+                <button type="button" class="btn btn-outline-secondary sl-chip" data-range="all">Hammasi</button>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+                <input type="date" name="date_from" value="{{ date_from }}"
+                       class="form-control form-control-sm" style="width:9.5rem"
+                       aria-label="Sana (dan)">
+                <span class="text-muted small">—</span>
+                <input type="date" name="date_to" value="{{ date_to }}"
+                       class="form-control form-control-sm" style="width:9.5rem"
+                       aria-label="Sana (gacha)">
+            </div>
+            <!-- UX-6: davr HAR DOIM so'z bilan ham yozilsin -->
+            <span class="text-muted sl-range" id="slRangeText"></span>
         </div>
-        <!-- Qidirish + tugmalar -->
+
+        <!-- 2-qator: qidiruv + amallar -->
         <div class="row g-2 mb-2">
-            <div class="col-md-9">
-                <div class="input-group">
+            <div class="col-12 col-md-8">
+                <div class="input-group input-group-sm">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
                     <input type="text" name="q" value="{{ q }}" class="form-control"
-                           placeholder="Chek raqami, mahsulot, mijoz yoki shtrix-kod bo'yicha qidirish...">
+                           placeholder="Chek raqami, mahsulot, mijoz yoki shtrix-kod…">
                 </div>
             </div>
-            <div class="col-md-3 d-flex gap-2">
-                <button class="btn btn-primary flex-fill" type="submit">
+            <div class="col-12 col-md-4 d-flex gap-2">
+                <button class="btn btn-sm btn-primary flex-fill" type="submit">
                     <i class="bi bi-funnel"></i> Filterlash
                 </button>
-                <a href="{% url 'sales_list' %}" class="btn btn-outline-secondary" title="Barcha filtrlarni tozalash">
-                    <i class="bi bi-x-lg"></i> Tozalash
-                </a>
+                <button class="btn btn-sm btn-outline-secondary" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#slMore"
+                        aria-expanded="false" aria-controls="slMore">
+                    <i class="bi bi-sliders"></i> Ko'proq
+                    <span class="badge rounded-pill text-bg-primary d-none" id="slMoreCount">0</span>
+                </button>
+                <a href="{% url 'sales_list' %}" class="btn btn-sm btn-outline-secondary"
+                   title="Barcha filtrlarni tozalash"><i class="bi bi-x-lg"></i></a>
             </div>
         </div>
-        <!-- Filtrlar (bitta qatorда) -->
-        <div class="row g-2">
-            <div class="col-6 col-md-2">
-                <label class="form-label small text-muted mb-1">Sana (dan)</label>
-                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label small text-muted mb-1">Sana (gacha)</label>
-                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label small text-muted mb-1">Filial</label>
-                <select name="branch" class="form-select form-select-sm">
-                    <option value="">— hammasi —</option>
-                    {% for b in branches %}
-                        <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>
-                            {{ b.name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label small text-muted mb-1">Sotuvchi</label>
-                <select name="seller" class="form-select form-select-sm">
-                    <option value="">— hammasi —</option>
-                    {% for u in sellers %}
-                        <option value="{{ u.id }}" {% if seller_id == u.id|stringformat:"s" %}selected{% endif %}>
-                            {{ u.username }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label small text-muted mb-1">To'lov</label>
-                <select name="payment_method" class="form-select form-select-sm">
-                    <option value="">— hammasi —</option>
-                    {% for v, l in payment_methods %}
-                        <option value="{{ v }}" {% if payment_method == v %}selected{% endif %}>{{ l }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label small text-muted mb-1">Qaytarilgan</label>
-                <select name="returned" class="form-select form-select-sm">
-                    <option value="">— hammasi —</option>
-                    <option value="yes" {% if returned == 'yes' %}selected{% endif %}>Ha</option>
-                    <option value="no" {% if returned == 'no' %}selected{% endif %}>Yo'q</option>
-                </select>
+
+        <!-- Yoqilgan filtrlar — bosib olib tashlash mumkin -->
+        <div class="d-flex flex-wrap gap-1 mb-2 sl-fchip" id="slActive"></div>
+
+        <!-- 3-qator: qo'shimcha filtrlar (yoqilgani bo'lsa o'zi ochiladi) -->
+        <div class="collapse{% if branch_id or seller_id or payment_method or returned %} show{% endif %}"
+             id="slMore">
+            <div class="row g-2 pt-1">
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted mb-1">Filial</label>
+                    <select name="branch" class="form-select form-select-sm">
+                        <option value="">— hammasi —</option>
+                        {% for b in branches %}
+                            <option value="{{ b.id }}" {% if branch_id == b.id|stringformat:"s" %}selected{% endif %}>
+                                {{ b.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted mb-1">Sotuvchi</label>
+                    <select name="seller" class="form-select form-select-sm">
+                        <option value="">— hammasi —</option>
+                        {% for u in sellers %}
+                            <option value="{{ u.id }}" {% if seller_id == u.id|stringformat:"s" %}selected{% endif %}>
+                                {{ u.username }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted mb-1">To'lov turi</label>
+                    <select name="payment_method" class="form-select form-select-sm">
+                        <option value="">— hammasi —</option>
+                        {% for v, l in payment_methods %}
+                            <option value="{{ v }}" {% if payment_method == v %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted mb-1">Qaytarilgan</label>
+                    <select name="returned" class="form-select form-select-sm">
+                        <option value="">— hammasi —</option>
+                        <option value="yes" {% if returned == 'yes' %}selected{% endif %}>Ha</option>
+                        <option value="no" {% if returned == 'no' %}selected{% endif %}>Yo'q</option>
+                    </select>
+                </div>
             </div>
         </div>
     </form>
+
     <script>
-    // Tez sana tugmalari: sana maydonlarini to'ldirib, filtrni yuboradi.
+    // Sotuvlar filtri — UX yordamchilari (UX-5/6/7).
     (function () {
         var form = document.getElementById('salesFilter');
         if (!form) return;
+        var fromEl = form.querySelector('[name=date_from]');
+        var toEl   = form.querySelector('[name=date_to]');
+
         function fmt(d) {
             var m = ('0' + (d.getMonth() + 1)).slice(-2);
             var day = ('0' + d.getDate()).slice(-2);
             return d.getFullYear() + '-' + m + '-' + day;
         }
+        function shift(n) { var d = new Date(); d.setDate(d.getDate() - n); return fmt(d); }
+        function human(iso) {
+            if (!iso) return '';
+            var p = iso.split('-');
+            return p[2] + '.' + p[1] + '.' + p[0];
+        }
+
+        // --- Tez tugmalar: sanani to'ldirib yuboradi -----------------------
         form.querySelectorAll('[data-range]').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                var from = form.querySelector('[name=date_from]');
-                var to = form.querySelector('[name=date_to]');
                 var r = btn.getAttribute('data-range');
-                var today = new Date();
-                if (r === 'all') {
-                    from.value = '';
-                    to.value = '';
-                } else if (r === 'yesterday') {
-                    var y = new Date();
-                    y.setDate(y.getDate() - 1);
-                    from.value = fmt(y);
-                    to.value = fmt(y);
-                } else {
-                    var n = parseInt(r, 10) || 0;
-                    var s = new Date();
-                    s.setDate(s.getDate() - n);
-                    from.value = fmt(s);
-                    to.value = fmt(today);
-                }
+                if (r === 'all') { fromEl.value = ''; toEl.value = ''; }
+                else if (r === 'yesterday') { fromEl.value = toEl.value = shift(1); }
+                else { fromEl.value = shift(parseInt(r, 10) || 0); toEl.value = fmt(new Date()); }
                 form.submit();
             });
         });
+
+        // --- UX-5: qaysi davr ochiqligini BELGILAB qo'yamiz ---------------
+        var today = fmt(new Date());
+        function activeRange() {
+            var f = fromEl.value, t = toEl.value;
+            if (!f && !t) return 'all';
+            if (f === today && (t === today || !t)) return '0';
+            if (f === shift(1) && t === shift(1)) return 'yesterday';
+            if (t === today || !t) {
+                // Sahifa standarti −30 kun, tugma esa −29 (bugun ham kiradi).
+                // Ikkalasi ham "30 kun" deb qabul qilinadi, aks holda standart
+                // holatда hech qaysi tugma yonmasdi.
+                if (f === shift(6) || f === shift(7)) return '6';
+                if (f === shift(29) || f === shift(30)) return '29';
+            }
+            return null;
+        }
+        var act = activeRange();
+        if (act) {
+            var el = form.querySelector('[data-range="' + act + '"]');
+            if (el) el.classList.add('is-active');
+        }
+
+        // --- UX-6: davrni SO'Z bilan ham yozamiz --------------------------
+        var rangeText = document.getElementById('slRangeText');
+        if (rangeText) {
+            var f = fromEl.value, t = toEl.value;
+            var txt;
+            if (!f && !t) txt = 'butun tarix';
+            else if (f && !t) txt = human(f) + ' — bugungacha';
+            else if (!f && t) txt = 'boshidan ' + human(t) + ' gacha';
+            else if (f === t) txt = human(f);
+            else txt = human(f) + ' — ' + human(t);
+            rangeText.textContent = '(' + txt + ')';
+        }
+
+        // --- UX-7: yoqilgan filtrlar yorliq bo'lib chiqadi ----------------
+        var LABELS = { branch: 'Filial', seller: 'Sotuvchi',
+                       payment_method: "To'lov", returned: 'Qaytarilgan', q: 'Qidiruv' };
+        var wrap = document.getElementById('slActive');
+        var badge = document.getElementById('slMoreCount');
+        var n = 0;
+        Object.keys(LABELS).forEach(function (name) {
+            var el = form.querySelector('[name=' + name + ']');
+            if (!el || !el.value) return;
+            var shown = el.tagName === 'SELECT'
+                ? el.options[el.selectedIndex].text.trim() : el.value;
+            if (name !== 'q') n++;
+            if (!wrap) return;
+            var chip = document.createElement('span');
+            chip.className = 'badge rounded-pill text-bg-light border d-inline-flex align-items-center gap-1';
+            chip.innerHTML = '<span class="text-muted">' + LABELS[name] + ':</span> ' +
+                             '<strong></strong>';
+            chip.querySelector('strong').textContent = shown;
+            var x = document.createElement('button');
+            x.type = 'button';
+            x.className = 'btn-close btn-close-sm';
+            x.style.fontSize = '.55rem';
+            x.setAttribute('aria-label', LABELS[name] + ' filtrini olib tashlash');
+            x.addEventListener('click', function () { el.value = ''; form.submit(); });
+            chip.appendChild(x);
+            wrap.appendChild(chip);
+        });
+        if (badge && n) { badge.textContent = n; badge.classList.remove('d-none'); }
     })();
     </script>
 
