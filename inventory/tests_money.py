@@ -2671,3 +2671,116 @@ class Disc5ShiftReceiptShowsDiscount(MoneyTestBase):
                  - _printed(c['payouts_total']) - _printed(c['refund_total'])
                  + _printed(c['post_close_delta']) + _printed(c['rounding_delta']))
         self.assertEqual(lines, _printed(c['expected']))
+
+
+
+class Mon26ZReportEndToEnd(TestCase):
+    """MON-26 — Z-hisobotning QAYTARISH / CHEGIRMA / ALMASHTIRISH mantig'i,
+    hammasi BIR smenда birga.
+
+    Har biri alohida sinalgan edi; bu test ularning ARALASHMASINI qulflaydi,
+    chunki ular bir-biriga ta'sir qiladi:
+      - almashtirish YANGI chek yaratadi (Cheklar +1) lekin JAMIga 0 qo'shadi
+        (order_discount = kredit), ya'ni sotuv soni oshsa ham pul oshmaydi;
+      - TENG almashtirishда kassadan naqd CHIQMAYDI (cash_refunded = 0), lekin
+        dona QAYTGAN deb sanaladi;
+      - ARZONROQQA almashtirishда farq HAQIQATAN kassadan chiqadi va
+        kutilgan naqdni kamaytirishi SHART;
+      - qo'lda chegirma va almashtirish krediti bitta `order_discount`
+        maydonида yashaydi — ajratilmasa kassir baholanmaydi.
+
+    Yana ARCH-5/MON-26: SOTUV bloki va KASSA bloki AYNAN bir xil cheklar
+    to'plamini ko'rishi. Ilgari SOTUV `shift.transactions` (faqat FK), KASSA
+    esa `_txn_qs()` (FK'siz eski cheklarni ham vaqt oynasi bo'yicha) o'qirdi —
+    bitta chekда "Naqd 310 000" va "+ Naqd savdo 340 000" chiqardi.
+    """
+
+    def setUp(self):
+        self.b = Branch.objects.create(name='B')
+        self.u = User.objects.create_user(username='admin', password='x',
+                                       role=User.Role.ADMIN, is_staff=True, branch=self.b)
+        p = Product.objects.create(name='P', code='P-0001',
+                                   default_sale_price=Decimal('100000'))
+        self.v = ProductVariant.objects.create(product=p, size='M', color='A',
+                                               barcode='2000000000017')
+        BranchStock.objects.create(variant=self.v, branch=self.b, stock_count=500,
+                                   cost_price=Decimal('60000'), sale_price=Decimal('100000'))
+        # OLDINGI smen — almashtiriladigan tovarlar shu yerda sotilgan
+        self.prev = Shift.objects.create(branch=self.b, opened_by=self.u,
+                                         opening_cash=Decimal('0'))
+        self.old50 = self._sale(self.prev, '50000')
+        self.old80 = self._sale(self.prev, '80000')
+        self.prev.status = Shift.Status.CLOSED
+        self.prev.closed_at = timezone.now()
+        self.prev.closing_expected_cash = self.prev.compute_expected_cash()
+        self.prev.save()
+        self.sh = Shift.objects.create(branch=self.b, opened_by=self.u,
+                                       opening_cash=Decimal('0'))
+
+    def _sale(self, shift, price, odisc='0', exch='0', pm='cash', bd=None,
+              qty=1, no_shift=False):
+        t = SaleTransaction.objects.create(
+            branch=self.b, sold_by=self.u, shift=None if no_shift else shift,
+            payment_method=pm, payment_breakdown=bd or [],
+            order_discount=D(odisc), exchange_credit=D(exch))
+        return Sale.objects.create(transaction=t, variant=self.v, branch=self.b,
+                                   quantity=qty, sale_price=D(price),
+                                   cost_at_sale=Decimal('60000'), sold_by=self.u)
+
+    def _z(self):
+        r = self.client.get(reverse('shift_receipt', args=[self.sh.pk]))
+        assert r.status_code == 200
+        c = r.context
+        return c[0] if isinstance(c, list) else c
+
+    def test_logic(self):
+        self.client = Client(); self.client.force_login(self.u)
+        # 1 oddiy naqd 100 000 -> keyin TO'LIQ qaytariladi
+        s1 = self._sale(self.sh, '100000')
+        # 2 qo'lda chegirma 10 000 -> mijoz 90 000 to'ladi
+        self._sale(self.sh, '100000', odisc='10000')
+        # 3 aralash 200 000 = 120 000 naqd + 80 000 karta
+        self._sale(self.sh, '200000', pm='mixed',
+                   bd=[{'method': 'cash', 'amount': 120000},
+                       {'method': 'card', 'amount': 80000}])
+        # 4 oddiy qaytarish (1-chek)
+        Return.objects.create(sale=s1, shift=self.sh, quantity=1,
+                              refunded_by=self.u, refund_cash=Decimal('100000'))
+        # 5 TENG almashtirish: eski 50 000 -> yangi 50 000, naqd chiqmaydi
+        self._sale(self.sh, '50000', odisc='50000', exch='50000')
+        Return.objects.create(sale=self.old50, shift=self.sh, quantity=1,
+                              refunded_by=self.u, is_exchange=True,
+                              cash_refunded=Decimal('0'))
+        # 6 ARZONROQQA almashtirish: eski 80 000 -> yangi 60 000, 20 000 qaytdi
+        self._sale(self.sh, '60000', odisc='60000', exch='60000')
+        Return.objects.create(sale=self.old80, shift=self.sh, quantity=1,
+                              refunded_by=self.u, is_exchange=True,
+                              cash_refunded=Decimal('20000'))
+
+        # 7 ESKI, shift FK'siz chek (ARCH-5 fallback oynasiga tushadi)
+        self._sale(self.sh, '30000', no_shift=True)
+
+        c = self._z()
+        pay = {r['label']: r for r in c['pay_rows']}
+        d = c['shift_discount']
+        rows = [
+            ('Cheklar',            c['txn_count'],              6),
+            ('usul sonlari + aral', sum(r['count'] for r in c['pay_rows'])
+                                    + c['mixed_count'],         6),
+            ('Naqd (brutto)',      pay['Naqd']['amount'],       340000),
+            ('Karta',              pay['Karta']['amount'],      80000),
+            ('JAMI SAVDO',         c['total_rev'],              420000),
+            ('Qaytarilgan (naqd)', c['refund_total'],           120000),
+            ('Qaytarilgan (dona)', c['refund_qty'],             3),
+            ('SOF SAVDO',          c['net_sales'],              300000),
+            ('KASSA naqd savdo',   c['cash_sales'],             340000),
+            ('  ^ SOTUV Naqd bilan bir xilmi', pay['Naqd']['amount'],
+             c['cash_sales']),
+            ('= HOZIRGI QOLDIQ',   c['expected'],               220000),
+            ('chegirma: qo\'lda',  d['manual'],                 10000),
+            ('chegirma: almashtir', d['exchange'],              110000),
+            ('chegirma: aksiya',   d['promo'],                  0),
+            ('chegirma: JAMI',     d['total'],                  120000),
+        ]
+        for lbl, got, want in rows:
+            self.assertEqual(Decimal(str(got)), Decimal(str(want)), lbl)

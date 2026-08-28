@@ -5362,7 +5362,14 @@ def shift_receipt(request, pk):
     if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
         return HttpResponseForbidden()
 
-    txns = list(shift.transactions.select_related('sold_by').prefetch_related('lines'))
+    # ARCH-5/MON-26: SOTUV bloki ham KASSA bloki bilan AYNAN bir xil cheklar
+    # to'plamini ko'rishi SHART. Ilgari bu yerda `shift.transactions` (faqat FK)
+    # ishlatilardi, `cash_sales()`/`expected_cash()` esa `_txn_qs()` — u FK'siz
+    # eski cheklarni ham vaqt oynasi bo'yicha oladi. Natijada bitta chekda
+    # "Naqd 310 000" (SOTUV) va "+ Naqd savdo 340 000" (KASSA) — bir xil
+    # yorliq, ikki xil son. Kassir esa KASSA raqami bo'yicha javob beradi.
+    # Yagona manba: modelning o'z ta'rifi.
+    txns = list(shift._txn_qs().select_related('sold_by').prefetch_related('lines'))
 
     # MON-24: bu view'дagi HAMMA pul Decimal. Float yig'indi (0.1+0.2) `som`
     # yaxlitlashida boshqa tomonga ketib, chop etilgan qatorlarни JAMIдan
