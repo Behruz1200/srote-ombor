@@ -130,6 +130,12 @@
                     <dd>−{{ discount_split.manual|som }}</dd>
                 </div>
                 {% endif %}
+                {% if discount_split.rounding %}
+                <div class="sl-break__row">
+                    <dt title="Chekni butun songa tushirish uchun tashlangan mayda qoldiq (masalan 19 500 -> 19 000). Ulgurji chegirma emas.">Yaxlitlash</dt>
+                    <dd>−{{ discount_split.rounding|som }}</dd>
+                </div>
+                {% endif %}
                 {% if discount_split.exchange %}
                 <div class="sl-break__row">
                     <dt title="Chegirma EMAS: mijoz shu qismni eski tovar bilan to'lagan.">Almashtirish krediti</dt>
@@ -302,14 +308,18 @@
                     </select>
                 </div>
                 <!-- DISC-3: chegirma berilganmi? "Qo'lda" — kassir o'z
-                     ixtiyori bilan bergani, kuzatishga arziydigan yagona tur. -->
+                     ixtiyori bilan bergani, kuzatishga arziydigan yagona tur.
+                     DISC-6: filtr SQL'да ishlaydi va yaxlitlashni ajratmaydi
+                     (buning uchun chekning qator yig'indisi kerak). Shu bois
+                     yorliq ikkalasini ham nomlaydi — karta ajratadi, filtr
+                     yo'q. Yolg'on va'da bermaslik uchun ataylab shunday. -->
                 <div class="col-6 col-md-3">
                     <label class="form-label small text-muted mb-1">Chegirma</label>
                     <select name="discount" class="form-select form-select-sm">
                         <option value="">— hammasi —</option>
                         <option value="any" {% if discount == 'any' %}selected{% endif %}>Chegirma berilgan</option>
                         <option value="none" {% if discount == 'none' %}selected{% endif %}>Chegirmasiz</option>
-                        <option value="manual" {% if discount == 'manual' %}selected{% endif %}>— faqat qo'lda berilgan</option>
+                        <option value="manual" {% if discount == 'manual' %}selected{% endif %}>— faqat qo'lda (yaxlitlash ham)</option>
                         <option value="promo" {% if discount == 'promo' %}selected{% endif %}>— faqat aksiya</option>
                         <option value="exchange" {% if discount == 'exchange' %}selected{% endif %}>— faqat almashtirish krediti</option>
                     </select>

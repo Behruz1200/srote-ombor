@@ -2338,7 +2338,7 @@ class Disc3DiscountFilter(MoneyTestBase):
         r = self.client.get('/sales/', {'date_from': self.today,
                                         'date_to': self.today,
                                         'discount': 'manual'})
-        self.assertContains(r, 'faqat qo\'lda berilgan')
+        self.assertContains(r, 'faqat qo\'lda (yaxlitlash ham)')
         self.assertContains(r, 'value="manual" selected')
 
     def test_daily_totals_do_not_double_count(self):
@@ -2784,3 +2784,180 @@ class Mon26ZReportEndToEnd(TestCase):
         ]
         for lbl, got, want in rows:
             self.assertEqual(Decimal(str(got)), Decimal(str(want)), lbl)
+
+
+class Disc6RoundingIsNotADiscount(MoneyTestBase):
+    """DISC-6 — mayda yaxlitlash ulgurji chegirma bilan bir songa qo'shilmasin.
+
+    Auditda ko'rilgani (2026-08, 30 kun): "Qo'lda chegirma 3 068 035" bitta
+    songa 308 chekni yig'gan edi, lekin ular ikki BOSHQA hodisa:
+
+        44 chek   ~2 454 000   -10% tugmasi, 700 000 .. 1 705 000 lik cheklar
+       264 chek     ~614 000   medianasi 1 000 — chekni butun songa tushirish
+
+    O'rtacha 9 961 so'm ikkalasini ham yashiradi. Egasi "biz bunchalik
+    chegirma bermaganmiz" deganда haq edi: bitta ham katta chegirma yo'q,
+    308 ta mayda qaror bor. Karta endi ularni ajratadi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_d6', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+
+    def _txn(self, price, odisc, reason='', qty=1):
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal(odisc),
+            discount_reason=reason)
+        Sale.objects.create(transaction=t, variant=self.variant,
+                            branch=self.branch, quantity=qty,
+                            sale_price=Decimal(price),
+                            cost_at_sale=Decimal('10000'), sold_by=self.cashier)
+        return t
+
+    def _split(self):
+        r = self.client.get('/sales/', {'date_from': self.today,
+                                        'date_to': self.today})
+        self.assertEqual(r.status_code, 200)
+        c = r.context
+        c = c[0] if isinstance(c, list) else c
+        return c['discount_split'], c
+
+    # ---- taxmin qoidasi -------------------------------------------------
+    def test_small_amount_that_makes_the_total_round_is_rounding(self):
+        """19 500 -> 19 000. Aynan kassirning "qoldiqni tashla" harakati."""
+        self._txn('19500', '500')
+        split, _ = self._split()
+        self.assertEqual(split['rounding'], Decimal('500'))
+        self.assertEqual(split['manual'], Decimal('0'))
+
+    def test_small_amount_on_an_already_round_total_is_a_real_discount(self):
+        """100 000 lik chekда 3 000 — summa allaqachon butun edi.
+
+        Uchinchi shart (yalpi butun EMAS EDI) shu holat uchun. Usiz karta
+        ataylab berilgan chegirmani yaxlitlash deb YASHIRIB qo'yardi — bu
+        ko'p ko'rsatishdan battar xato.
+        """
+        self._txn('100000', '3000', reason='doimiy mijoz')
+        split, _ = self._split()
+        self.assertEqual(split['rounding'], Decimal('0'))
+        self.assertEqual(split['manual'], Decimal('3000'))
+
+    def test_a_large_discount_is_never_rounding(self):
+        """932 500 -> 746 000: to'langani butun, lekin bu -20% ulgurji."""
+        self._txn('932500', '186500')
+        split, _ = self._split()
+        self.assertEqual(split['rounding'], Decimal('0'))
+        self.assertEqual(split['manual'], Decimal('186500'))
+
+    # ---- e'lon qilingan sabab (DISC-7 dan keyin) ------------------------
+    def test_declared_rounding_beats_the_guess(self):
+        """Kassir "Yaxlitlash" desa — taxmin qilib o'tirmaymiz."""
+        self._txn('100000', '2000', reason='Yaxlitlash')
+        split, _ = self._split()
+        self.assertEqual(split['rounding'], Decimal('2000'))
+        self.assertEqual(split['manual'], Decimal('0'))
+
+    def test_declared_rounding_still_obeys_the_size_cap(self):
+        """"Yaxlitlash" yorlig'i ostida 50 000 yashira olmasin."""
+        self._txn('300000', '50000', reason='Yaxlitlash')
+        split, _ = self._split()
+        self.assertEqual(split['rounding'], Decimal('0'))
+        self.assertEqual(split['manual'], Decimal('50000'))
+
+    # ---- invariantlar ---------------------------------------------------
+    def test_parts_still_add_up_to_the_total(self):
+        self._txn('19500', '500')                       # yaxlitlash
+        self._txn('932500', '186500')                   # qo'lda
+        self._txn('100000', '20000', reason='Almashtirish: eski tovar')
+        SaleTransaction.objects.filter(order_discount=Decimal('20000')).update(
+            exchange_credit=Decimal('20000'))
+        split, _ = self._split()
+        self.assertEqual(
+            split['promo'] + split['rounding'] + split['manual']
+            + split['exchange'], split['total'],
+            "qismlar JAMIga qo'shilishi SHART")
+
+    def test_revenue_is_unchanged_by_the_split(self):
+        """Yaxlitlash ham tushumdan chiqadi — u faqat BOSHQA yorliq."""
+        self._txn('19500', '500')
+        _, c = self._split()
+        self.assertEqual(_dec(c['total']), Decimal('19000'))
+
+    def test_card_shows_the_rounding_row(self):
+        self._txn('19500', '500')
+        r = self.client.get('/sales/', {'date_from': self.today,
+                                        'date_to': self.today})
+        self.assertContains(r, 'Yaxlitlash')
+
+
+class Disc7DiscountReasonQuality(MoneyTestBase):
+    """DISC-7 — erkin matn sabab bermadi, ro'yxat beradi.
+
+    26.08 da sabab majburiy qilingandan keyin yig'ilgan 20 ta sabab:
+    "skidka" x5, "s" x4, "raz" x2, "c", "3000", "1500", "defect", "mijoz",
+    "farux ogaga", "kop tavar oldi". Ya'ni maydonni tezroq yopish uchun
+    bitta belgi teriladi. Server endi ma'nosizini rad etadi, POS esa
+    ro'yxat taklif qiladi.
+
+    Server ATAYLAB yumshoq: bu PWA, service worker keshidagi eski sahifa
+    erkin matn yuboradi. Qat'iy ro'yxat kassani ish o'rtasida to'xtatardi.
+    """
+
+    def test_single_letter_reason_rejected(self):
+        self.open_shift()
+        for junk in ('s', 'c', 'ra'):
+            with self.subTest(reason=junk):
+                r = self.checkout(order_discount='5000', discount_reason=junk)
+                self.assertEqual(r.status_code, 400)
+        self.assertFalse(SaleTransaction.objects.exists())
+
+    def test_digits_only_reason_rejected(self):
+        """"3000" — bu sabab emas, kassir summani qayta tergan."""
+        self.open_shift()
+        r = self.checkout(order_discount='5000', discount_reason='3000')
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(SaleTransaction.objects.exists())
+
+    def test_listed_reason_accepted(self):
+        self.open_shift()
+        r = self.checkout(order_discount='5000',
+                          discount_reason="Ko'p tovar oldi")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(SaleTransaction.objects.get().discount_reason,
+                         "Ko'p tovar oldi")
+
+    def test_other_with_text_accepted(self):
+        self.open_shift()
+        r = self.checkout(order_discount='5000',
+                          discount_reason='Boshqa: qo\'shni do\'kon narxi')
+        self.assertEqual(r.status_code, 200)
+
+    def test_other_without_text_rejected(self):
+        self.open_shift()
+        r = self.checkout(order_discount='5000', discount_reason='Boshqa:')
+        self.assertEqual(r.status_code, 400)
+
+    def test_legacy_free_text_still_accepted(self):
+        """Keshdagi eski POS kassani to'xtatib qo'ymasin."""
+        self.open_shift()
+        r = self.checkout(order_discount='5000', discount_reason='shikastlangan')
+        self.assertEqual(r.status_code, 200)
+
+    def test_no_discount_needs_no_reason(self):
+        self.open_shift()
+        self.assertEqual(self.checkout().status_code, 200)
+
+    def test_pos_page_offers_the_list(self):
+        self.open_shift()
+        r = self.client.get('/pos/')
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'tovar oldi')          # ro'yxat qatori
+        self.assertContains(r, 'value="__other__"')   # "Boshqa" tanlovi
+        self.assertContains(r, 'id="discountReasonOther"')

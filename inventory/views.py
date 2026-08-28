@@ -6223,6 +6223,7 @@ def pos_terminal(request):
         'payment_methods': SaleTransaction.PaymentMethod.choices,
         'payment_providers': payment_providers,
         'branches_list': branches_list,
+        'discount_reasons': DISCOUNT_REASONS,      # DISC-7
     })
 
 
@@ -6539,15 +6540,25 @@ def pos_checkout(request):
             'error': "Chegirma summasi mos emas — qayta urinib ko'ring."}, status=400)
     if _manual_disc < 0:
         _manual_disc = Decimal('0')
-    if _manual_disc > Decimal('0.5') and not discount_reason:
-        return JsonResponse({'ok': False,
-            'error': "Qo'lda chegirma uchun sabab kiriting."}, status=400)
+    if _manual_disc > Decimal('0.5'):
+        if not discount_reason:
+            return JsonResponse({'ok': False,
+                'error': "Qo'lda chegirma uchun sabab kiriting."}, status=400)
+        # DISC-7: sabab bor, lekin "s" yoki "3000" bo'lsa — audit uchun foydasiz.
+        if not _valid_discount_reason(discount_reason):
+            return JsonResponse({'ok': False,
+                'error': "Sababni ro'yxatdan tanlang yoki qisqacha yozing "
+                         "(kamida 3 harf)."}, status=400)
     # Klient sonига emas, SERVER hisoblаган aksiyaga + qo'lда qismga ishonamiz.
     order_discount = _server_promo + _manual_disc
     # DISC-1: aksiya ulushini ALOHIDA saqlaymiz. Ilgari ikkalasi bitta songa
     # qo'shilib ketardi va hisobotlarда kassir bergan chegirma bilan egasi
-    # sozlagan aksiya farqlanmasdi (289 chek "sababsiz chegirma" — aslida
-    # hammasi aksiya edi). Kassir ixtiyoridagi qism = order_discount − promo.
+    # sozlagan aksiya farqlanmasdi. Kassir ixtiyoridagi qism =
+    # order_discount − promo.
+    # DISC-2 tuzatishi: bu yerda ilgari "sababsiz 289 chek — aslida aksiya"
+    # deb yozilgan edi. NOTO'G'RI: Promotion jadvali bo'sh, sabab majburiyati
+    # esa 2026-08-26 da qo'shilgan. O'sha cheklar QO'LDA berilган chegirma —
+    # shunчaki sababi yozilmagan davrdan qolgan (0061 migratsiyasi tuzatdi).
     _promo_part = _server_promo
     if order_discount > _subtotal:
         order_discount = _subtotal
@@ -8237,6 +8248,78 @@ def category_list(request):
 
 # ---------- SALES LIST ----------
 
+# DISC-7: chegirma sababi endi RO'YXATDAN tanlanadi. Erkin matn amalда
+# ishlamadi — auditда yig'ilgani: "s", "c", "raz", "3000", "1500". Kassir
+# maydonni tezroq yopish uchun bitta belgi teradi va sabab ma'nosini
+# yo'qotadi. Ro'yxat guruhlanadigan ma'lumot beradi.
+DISCOUNT_REASONS = (
+    "Ko'p tovar oldi",
+    "Yaxlitlash",
+    "Nuqson / kamchilik",
+    "Doimiy mijoz",
+    "Rahbar ruxsati",
+)
+
+
+def _valid_discount_reason(reason):
+    """DISC-7. Ro'yxatdagi sabab yoki hech bo'lmasa mazmunli erkin matn.
+
+    Server ESKI mijozni ham qabul qiladi. Sabab: bu PWA — service worker
+    keshida qolgan eski sahifa erkin matn yuboradi, qat'iy ro'yxat esa
+    kassani ish o'rtasida to'xtatib qo'yardi. Shu bois faqat ma'nosizini
+    rad etamiz: bitta-ikkita belgi ("s", "c") va faqat raqam ("3000" — bu
+    sabab emas, kassir summani qayta terган).
+    """
+    head = (reason or '').split(';')[0].strip()
+    if head in DISCOUNT_REASONS:
+        return True
+    if head.lower().startswith('boshqa'):
+        head = head.split(':', 1)[-1].strip()
+    if len(head) < 3:
+        return False
+    if head.replace(' ', '').replace("'", '').isdigit():
+        return False
+    return True
+
+
+# DISC-6: "yaxlitlash" — kassir chekni butun songa tushirish uchun olib
+# tashlagan mayda qoldiq (2 000 so'mlik chekда 500 so'm). Bu chegirma emas,
+# maydalik: hisobotда uni ulgurji chegirma bilan bir songa qo'shish egani
+# chalg'itadi. Auditда ko'rilgani: 308 chekdan 264 tasi shu xil, medianasi
+# 1 000 so'm, hammasi birga jamining atigi 20%i.
+ROUNDING_MAX = Decimal('5000')     # bundan kattasi yaxlitlash emas
+ROUNDING_STEP = Decimal('1000')    # mijoz to'lagani shu songa karrali bo'lsa
+
+
+def _is_rounding(manual, gross, paid, reason=''):
+    """DISC-6. Mayda summa VA chegirma jamini BUTUN songa keltirgan bo'lsa.
+
+    Uch shart ham kerak:
+
+      mayda            — 1 705 000 -> 1 535 000 (170 000) yaxlitlash emas,
+                         bu ulgurji chegirma;
+      jami butun bo'ldi — 19 500 -> 19 000;
+      jami butun EMAS EDI — 100 000 lik chekда 3 000 chegirma ham "butun"
+                         qoldiradi (97 000), lekin u yaxlitlash emas: summa
+                         allaqachon butun edi, kassir ataylab chegirma bergan.
+                         Uchinchi shartsiz karta shu xil cheklarni yaxlitlash
+                         deb yashirib qo'yardi — chegirmani KAM ko'rsatish esa
+                         ko'p ko'rsatishdан battar.
+
+    DISC-7 dan keyin kassir sababni O'ZI "Yaxlitlash" deb belgilaydi va taxmin
+    kerak bo'lmaydi. Taxmin faqat eski cheklar uchun qoladi. Belgilangan sabab
+    ham mayda summa cheklovidan o'tadi: "Yaxlitlash" deb 50 000 yozilsa, u
+    kartada QO'LDA bo'lib ko'rinishi kerak.
+    """
+    if manual <= 0 or manual >= ROUNDING_MAX:
+        return False
+    if (reason or '').strip().lower().startswith('yaxlitlash'):
+        return True
+    if paid <= 0 or gross <= 0:
+        return False
+    return paid % ROUNDING_STEP == 0 and gross % ROUNDING_STEP != 0
+
+
 def _order_discount_share(sale_qs, *group_fields, split=False):
     """Filtrlangan sotuv qatorlariga to'g'ri keladigan CHEK chegirmasi ulushi.
 
@@ -8270,8 +8353,9 @@ def _order_discount_share(sale_qs, *group_fields, split=False):
     Qaytaradi: (jami_ulush, {kalit: ulush}). `group_fields` bitta bo'lsa kalit
     — skalyar, bir nechta bo'lsa — tuple, umuman berilmasa — bo'sh dict.
 
-    `split=True` bo'lsa uchinchi qiymat ham qaytadi (DISC-1):
-    {'promo', 'manual', 'exchange', 'total'} — chek chegirmasining uch qismi.
+    `split=True` bo'lsa uchinchi qiymat ham qaytadi (DISC-1/DISC-6):
+    {'promo', 'rounding', 'manual', 'exchange', 'total'} — chek chegirmasining
+    qismlari.
     Ular bitta songa yig'ilgan holда hisobotlar egasi sozlagan AKSIYAni kassir
     o'zi bergan chegirmadan ajrata olmasdi, almashtirish krediti esa umuman
     chegirma bo'lmasa ham "chegirma" bo'lib ko'rinardi.
@@ -8282,29 +8366,42 @@ def _order_discount_share(sale_qs, *group_fields, split=False):
                      .filter(id__in=sale_qs.order_by().values('transaction_id'),
                              order_discount__gt=0)
                      .values_list('id', 'order_discount',
-                                  'promo_discount', 'exchange_credit'))
+                                  'promo_discount', 'exchange_credit',
+                                  'discount_reason'))
     if not disc_rows:
-        empty = {'promo': Decimal('0'), 'manual': Decimal('0'),
-                 'exchange': Decimal('0'), 'total': Decimal('0')}
+        empty = {'promo': Decimal('0'), 'rounding': Decimal('0'),
+                 'manual': Decimal('0'), 'exchange': Decimal('0'),
+                 'total': Decimal('0')}
         return (Decimal('0'), {}, empty) if split else (Decimal('0'), {})
     disc = {r[0]: _dec(r[1]) for r in disc_rows}
-    parts = {}
-    for _id, _tot, _promo, _exch in disc_rows:
-        _tot, _promo, _exch = _dec(_tot), _dec(_promo or 0), _dec(_exch or 0)
-        _manual = _tot - _promo - _exch
-        parts[_id] = (_promo, _manual if _manual > 0 else Decimal('0'), _exch)
     ids = list(disc)
     # Chekning TO'LIQ summasi (filtrdan qat'i nazar) — maxraj.
     whole = {r['transaction_id']: _dec(r['s'] or 0)
              for r in (Sale.objects.filter(transaction_id__in=ids)
                        .order_by().values('transaction_id').annotate(s=Sum(rev)))}
+    parts = {}
+    for _id, _tot, _promo, _exch, _reason in disc_rows:
+        _tot, _promo, _exch = _dec(_tot), _dec(_promo or 0), _dec(_exch or 0)
+        _manual = _tot - _promo - _exch
+        if _manual < 0:
+            _manual = Decimal('0')
+        # DISC-6: mayda qoldiqni AJRATAMIZ. Bitta songa yig'ilganда karta
+        # 1 000 so'mlik yaxlitlash bilan 186 500 so'mlik ulgurji chegirmani
+        # o'rtachalab, egaga "biz bunchalik chegirma bermaganmiz" degan
+        # tuyg'u berardi. Ular boshqa-boshqa hodisa — alohida ko'rsatiladi.
+        _round = Decimal('0')
+        _gross = whole.get(_id) or Decimal('0')
+        if _is_rounding(_manual, _gross, _gross - _tot, _reason):
+            _round, _manual = _manual, Decimal('0')
+        parts[_id] = (_promo, _round, _manual, _exch)
     fields = ['transaction_id'] + list(group_fields)
     picked = (sale_qs.filter(transaction_id__in=ids)
               .order_by().values(*fields).annotate(s=Sum(rev)))
     total = Decimal('0')
     by_group = {}
-    acc = {'promo': Decimal('0'), 'manual': Decimal('0'),
-           'exchange': Decimal('0'), 'total': Decimal('0')}
+    acc = {'promo': Decimal('0'), 'rounding': Decimal('0'),
+           'manual': Decimal('0'), 'exchange': Decimal('0'),
+           'total': Decimal('0')}
     for r in picked:
         tid = r['transaction_id']
         w = whole.get(tid) or Decimal('0')
@@ -8314,8 +8411,9 @@ def _order_discount_share(sale_qs, *group_fields, split=False):
         share = _dec(disc[tid]) * frac
         total += share
         if split:
-            _p, _m, _e = parts[tid]
+            _p, _r, _m, _e = parts[tid]
             acc['promo'] += _p * frac
+            acc['rounding'] += _r * frac
             acc['manual'] += _m * frac
             acc['exchange'] += _e * frac
             acc['total'] += share

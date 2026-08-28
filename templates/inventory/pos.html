@@ -667,8 +667,21 @@
                                min="0" step="1000" placeholder="so'm">
                     </div>
                     <div class="col-6">
-                        <input type="text" id="discountReason" class="form-control form-control-sm"
-                               placeholder="Sabab">
+                        {% comment %}DISC-7: erkin matn "s"/"c"/"3000" berardi —
+                        ro'yxat guruhlanadigan ma'lumot beradi.{% endcomment %}
+                        <select id="discountReason" class="form-select form-select-sm">
+                            <option value="">Sabab…</option>
+                            {% for r in discount_reasons %}
+                            <option value="{{ r }}">{{ r }}</option>
+                            {% endfor %}
+                            <option value="__other__">Boshqa…</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-1 mt-0" id="discReasonOtherWrap" style="display:none;">
+                    <div class="col-12">
+                        <input type="text" id="discountReasonOther" class="form-control form-control-sm mt-1"
+                               maxlength="120" placeholder="Sababni qisqacha yozing">
                     </div>
                 </div>
             </div>
@@ -1441,6 +1454,38 @@ const cartDiscountEl = document.getElementById('cartDiscount');
 const discountRowEl  = document.getElementById('discountRow');
 const orderDiscountInput = document.getElementById('orderDiscount');
 const discountReasonInput = document.getElementById('discountReason');
+const discReasonOther = document.getElementById('discountReasonOther');
+const discReasonOtherWrap = document.getElementById('discReasonOtherWrap');
+
+// DISC-7: tanlangan sabab. "Boshqa…" bo'lsa erkin matn, aks holda ro'yxat qatori.
+function currentDiscountReason() {
+    const v = discountReasonInput.value;
+    if (v === '__other__') {
+        const t = (discReasonOther.value || '').trim();
+        return t ? `Boshqa: ${t}` : '';
+    }
+    return v;
+}
+
+function resetDiscountReason() {
+    discountReasonInput.selectedIndex = 0;
+    discReasonOther.value = '';
+    discReasonOtherWrap.style.display = 'none';
+}
+
+// Saqlangan savat qaytarilganда: matn ro'yxatda bo'lsa — tanlaymiz, bo'lmasa
+// (eski erkin matn) "Boshqa…" ga tushiramiz, shunda sabab yo'qolmaydi.
+function setDiscountReason(text) {
+    const t = (text || '').trim();
+    resetDiscountReason();
+    if (!t) return;
+    const known = Array.from(discountReasonInput.options)
+        .some(o => o.value === t);
+    if (known) { discountReasonInput.value = t; return; }
+    discountReasonInput.value = '__other__';
+    discReasonOther.value = t.replace(/^Boshqa:\s*/i, '').slice(0, 120);
+    discReasonOtherWrap.style.display = 'flex';
+}
 const cartCountEl    = document.getElementById('cartItemCount');
 const checkoutBtn    = document.getElementById('checkoutBtn');
 const checkoutStatus = document.getElementById('checkoutStatus');
@@ -2071,8 +2116,14 @@ document.querySelectorAll('.disc-pct').forEach(b => {
 document.getElementById('discClear').addEventListener('click', () => {
     discountPct = 0;
     orderDiscountInput.value = '';
-    discountReasonInput.value = '';
+    resetDiscountReason();
     renderCart();
+});
+// DISC-7: "Boshqa…" tanlansa — erkin matn maydoni ochiladi.
+discountReasonInput.addEventListener('change', () => {
+    const other = discountReasonInput.value === '__other__';
+    discReasonOtherWrap.style.display = other ? 'flex' : 'none';
+    if (other) discReasonOther.focus();
 });
 // FE-6: qo'lda summa terilса — foizli rejimдан chiqamiz (aniq summa hukmron).
 orderDiscountInput.addEventListener('input', () => { discountPct = 0; renderCart(); });
@@ -2648,7 +2699,15 @@ checkoutBtn.addEventListener('click', async () => {
     }
     const manualDisc = parseFloat(orderDiscountInput.value || '0');
     const totalDisc = manualDisc + promoDiscount;
-    let reason = discountReasonInput.value;
+    let reason = currentDiscountReason();
+    // DISC-7: server ham tekshiradi, lekin xatoni kassaга bormasдан aytamiz.
+    if (manualDisc > 0.5 && !reason) {
+        checkoutStatus.innerHTML = '<span class="text-danger">'
+            + 'Chegirma uchun sababni tanlang.</span>';
+        checkoutBtn.disabled = false;
+        discountReasonInput.focus();
+        return;
+    }
     if (promoDiscount > 0) {
         const promoLabels = appliedPromos.map(p => p.name).join(', ');
         reason = reason ? `${reason}; ${promoLabels}` : `Aksiya: ${promoLabels}`;
@@ -2698,7 +2757,7 @@ checkoutBtn.addEventListener('click', async () => {
             discountPct = 0;   // FE-6
             clearMixedInputs();   // FE-7
             orderDiscountInput.value = '';
-            discountReasonInput.value = '';
+            resetDiscountReason();
             scanInput.value = '';
             setStatus('', '');
             hideExtras();
@@ -2760,7 +2819,7 @@ checkoutBtn.addEventListener('click', async () => {
     discountPct = 0;
     clearMixedInputs();
     orderDiscountInput.value = '';
-    discountReasonInput.value = '';
+    resetDiscountReason();
     scanInput.value = '';
     setStatus('', '');
     hideExtras();
@@ -2822,7 +2881,7 @@ parkBtn.addEventListener('click', async () => {
                 customer_name: document.getElementById('customerName').value,
                 customer_phone: document.getElementById('customerPhone').value,
                 order_discount: parseFloat(orderDiscountInput.value || '0'),
-                discount_reason: discountReasonInput.value,
+                discount_reason: currentDiscountReason(),
             }),
         });
         const data = await resp.json();
@@ -2838,7 +2897,7 @@ parkBtn.addEventListener('click', async () => {
         document.getElementById('customerName').value = '';
         document.getElementById('customerPhone').value = '';
         orderDiscountInput.value = '';
-        discountReasonInput.value = '';
+        resetDiscountReason();
         setStatus(`✓ Saqlandi: ${trimmed}`, 'success');
     } catch (e) {
         setStatus('Tarmoq xatosi: ' + e.message, 'error');
@@ -2889,7 +2948,7 @@ function wireParkedChip(chip) {
             document.getElementById('customerName').value = data.customer_name || '';
             document.getElementById('customerPhone').value = data.customer_phone || '';
             orderDiscountInput.value = data.order_discount || '';
-            discountReasonInput.value = data.discount_reason || '';
+            setDiscountReason(data.discount_reason);
             renderCart();
             chip.remove();
             if (!parkedList.children.length) parkedCard.classList.add('d-none');

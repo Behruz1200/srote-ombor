@@ -2,6 +2,7 @@
 DISC-1: "chek chegirmasi" UCH XIL narsani bitta songa yig'ib kelardi:
   AKSIYA        — egasi sozlagan, server avtomatik qo'llaydi;
   QO'LDA        — kassir o'z ixtiyori bilan bergan (sabab talab qilinadi);
+  YAXLITLASH    — DISC-6: chekni butun songa tushirish uchun mayda qoldiq;
   ALMASHTIRISH  — chegirma EMAS, mijoz eski tovar bilan to'lagan.
 Egasi "biz bunchalik chegirma bermaganmiz" deganда aynan shu chalkashlik edi.
 Faqat nol bo'lmagan qismlar ko'rsatiladi.
@@ -17,6 +18,12 @@ Faqat nol bo'lmagan qismlar ko'rsatiladi.
     <div class="d-flex justify-content-between">
         <span title="Kassir o'z ixtiyori bilan bergan chegirma — sabab yozilgan.">Qo'lda chegirma</span>
         <span class="yrt-num text-warning">−{{ discount_split.manual|som }}</span>
+    </div>
+    {% endif %}
+    {% if discount_split.rounding %}
+    <div class="d-flex justify-content-between">
+        <span title="Chekni butun songa tushirish uchun tashlangan mayda qoldiq. Ulgurji chegirma emas.">Yaxlitlash</span>
+        <span class="yrt-num">−{{ discount_split.rounding|som }}</span>
     </div>
     {% endif %}
     {% if discount_split.exchange %}
