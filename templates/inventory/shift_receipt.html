@@ -165,6 +165,33 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
         </div>
         {% endif %}
 
+        {% comment %}
+        DISC-5: smen davomida berilgan CHEGIRMA. JAMI SAVDO allaqachon
+        chegirma ayirilgan summa — bu blok "qancha berilgani"ni ko'rsatadi.
+        Kassir aynan shu chek bo'yicha baholanadi, shu bois QO'LDA berilgan
+        qismi alohida ajratilgan (aksiya egasining qarori, almashtirish
+        krediti esa umuman chegirma emas — mijoz eski tovar bilan to'lagan).
+        {% endcomment %}
+        {% if shift_discount.total %}
+        <div class="rcpt-sec">Chegirma (JAMI SAVDOдан ayirilgan)</div>
+        {% if shift_discount.line %}
+        <div class="rcpt-row"><span>Qator chegirmasi</span>
+            <span class="v">−{{ shift_discount.line|som }}</span></div>
+        {% endif %}
+        {% if shift_discount.promo %}
+        <div class="rcpt-row"><span>Aksiya</span>
+            <span class="v">−{{ shift_discount.promo|som }}</span></div>
+        {% endif %}
+        {% if shift_discount.manual %}
+        <div class="rcpt-row"><span><strong>Qo'lda chegirma</strong></span>
+            <span class="v"><strong>−{{ shift_discount.manual|som }}</strong></span></div>
+        {% endif %}
+        {% if shift_discount.exchange %}
+        <div class="rcpt-row"><span>Almashtirish krediti</span>
+            <span class="v">−{{ shift_discount.exchange|som }}</span></div>
+        {% endif %}
+        {% endif %}
+
         <!-- KASSA HISOBI -->
         <div class="rcpt-sec">Kassa hisobi (naqd)</div>
         <div class="rcpt-row"><span>Boshlang'ich qoldiq</span><span class="v">{{ shift.opening_cash|som }}</span></div>

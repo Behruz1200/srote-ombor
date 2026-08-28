@@ -5394,10 +5394,24 @@ def shift_receipt(request, pk):
     other_count = 0
     mixed_count = 0
     mixed_money = Decimal('0')
+    # DISC-5: smen davomida BERILGAN CHEGIRMA. Z-hisobot smenning yagona
+    # rasmiy hujjati va kassir aynan shu bo'yicha baholanadi — lekin chegirma
+    # unда umuman ko'rinmasdi. JAMI SAVDO allaqachon chegirma AYIRILGAN
+    # summa, ya'ni kassir bir smenда million so'm qo'lда chegirma bersa ham
+    # chekда hech qanday iz qolmasdi. Taqsimlash kerak emas: chek butunlay
+    # shu smenga tegishli, shuning uchun to'g'ridan-to'g'ri yig'amiz.
+    disc_line = Decimal('0')
+    disc_promo = Decimal('0')
+    disc_exch = Decimal('0')
+    disc_order = Decimal('0')
     for t in txns:
         total_rev += _dec(t.total)
+        disc_order += _dec(t.order_discount)
+        disc_promo += _dec(t.promo_discount)
+        disc_exch += _dec(t.exchange_credit)
         for ln in t.lines.all():
             item_qty += ln.quantity
+            disc_line += _dec(ln.line_discount)
         if t.payment_method == PM.MIXED:
             used = set()
             covered = Decimal('0')
@@ -5430,6 +5444,20 @@ def shift_receipt(request, pk):
     # alohida (QAYTARISHLAR bo'limida, bitta naqd chiqim sifatida).
     pay_rows = [{'label': labels.get(k, k), 'amount': money[k], 'count': counts[k]}
                 for k in (PM.CASH, PM.CARD, PM.TRANSFER)]
+
+    # Qo'lда = chek chegirmasi − aksiya − almashtirish krediti (DISC-1).
+    _disc_manual = disc_order - disc_promo - disc_exch
+    if _disc_manual < 0:
+        _disc_manual = Decimal('0')
+    # Bu blok MA'LUMOT uchun — kassa balansiga kirmaydi, shu bois yaxlitlash
+    # `som` filtriga qoldiriladi (u yarmini YUQORIGA yaxlitlaydi — MON-24).
+    shift_discount = {
+        'line': disc_line,
+        'promo': disc_promo,
+        'manual': _disc_manual,
+        'exchange': disc_exch,
+        'total': disc_line + disc_order,
+    }
 
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
     # R7: kassaga qo'shilган naqd (cash_in) ham Z-hisobotда ko'rinsin — u
@@ -5487,6 +5515,7 @@ def shift_receipt(request, pk):
     return render(request, 'inventory/shift_receipt.html', {
         'shift': shift,
         'txn_count': len(txns),
+        'shift_discount': shift_discount,   # DISC-5
         'item_qty': item_qty,
         'total_rev': total_rev,
         'pay_rows': pay_rows,

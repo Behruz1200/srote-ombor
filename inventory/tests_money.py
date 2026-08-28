@@ -2577,3 +2577,97 @@ class Disc4ExchangeCreditOnTheReceipt(MoneyTestBase):
         r = self.client.get(reverse('transaction_detail', args=[t.public_id]))
         self.assertContains(r, 'Chegirma:')
         self.assertNotContains(r, 'Almashtirish krediti')
+
+
+class Disc5ShiftReceiptShowsDiscount(MoneyTestBase):
+    """DISC-5 — Z-hisobotда smen davomida berilgan CHEGIRMA ko'rinsin.
+
+    Z-hisobot smenning yagona rasmiy hujjati va kassir aynan shu bo'yicha
+    baholanadi, lekin chegirma unда UMUMAN ko'rinmasdi. JAMI SAVDO —
+    chegirma allaqachon ayirilgan summa, ya'ni kassir bir smenда million
+    so'm qo'lda chegirma bersa ham chekда hech qanday iz qolmasdi.
+
+    Uch tur alohida: aksiya (egasining qarori), QO'LDA (kassir ixtiyori —
+    kuzatiladigan son) va almashtirish krediti (chegirma emas).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_d5', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+
+    def _sale(self, odisc='0', promo='0', exch='0', ldisc='0', reason=''):
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal(odisc),
+            promo_discount=Decimal(promo), exchange_credit=Decimal(exch),
+            discount_reason=reason)
+        return Sale.objects.create(
+            transaction=t, variant=self.variant, branch=self.branch,
+            quantity=1, sale_price=Decimal('100000'),
+            line_discount=Decimal(ldisc),
+            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+
+    def _z(self):
+        r = self.client.get(reverse('shift_receipt', args=[self.shift.pk]))
+        self.assertEqual(r.status_code, 200)
+        c = r.context
+        return (c[0] if isinstance(c, list) else c), r
+
+    def test_three_kinds_are_separated(self):
+        self._sale(odisc='30000', promo='30000')                    # aksiya
+        self._sale(odisc='5000', reason='skidka')                   # qo'lda
+        self._sale(odisc='20000', exch='20000',
+                   reason='Almashtirish: eski tovar hisobiga')      # kredit
+        self._sale(ldisc='3000')                                    # qator
+        c, _ = self._z()
+        d = c['shift_discount']
+        self.assertEqual(d['promo'], Decimal('30000'))
+        self.assertEqual(d['manual'], Decimal('5000'))
+        self.assertEqual(d['exchange'], Decimal('20000'))
+        self.assertEqual(d['line'], Decimal('3000'))
+        self.assertEqual(d['total'], Decimal('58000'),
+                         'qator + chek chegirmasi = jami')
+
+    def test_mixed_receipt_splits_promo_from_manual(self):
+        self._sale(odisc='12000', promo='9000', reason='mijoz')
+        d, _ = self._z()
+        self.assertEqual(d[0]['promo'] if isinstance(d, tuple) else
+                         d['shift_discount']['promo'], Decimal('9000'))
+
+    def test_labels_are_rendered(self):
+        self._sale(odisc='5000', reason='skidka')
+        self._sale(odisc='20000', exch='20000',
+                   reason='Almashtirish: eski tovar hisobiga')
+        _, r = self._z()
+        self.assertContains(r, "Qo'lda chegirma")
+        self.assertContains(r, 'Almashtirish krediti')
+
+    def test_nothing_shown_when_no_discount(self):
+        self._sale()
+        c, r = self._z()
+        self.assertEqual(c['shift_discount']['total'], Decimal('0'))
+        self.assertNotContains(r, "Qo'lda chegirma")
+
+    def test_jami_savdo_is_already_net_of_the_discount(self):
+        """Blok faqat MA'LUMOT — JAMI SAVDOдан yana ayirilmaydi."""
+        self._sale(odisc='30000', promo='30000')
+        c, _ = self._z()
+        self.assertEqual(_dec(c['total_rev']), Decimal('70000'))
+        self.assertEqual(c['shift_discount']['total'], Decimal('30000'))
+
+    def test_kassa_block_still_reconciles(self):
+        """DISC-5 qo'shilgani MON-24 balansini buzmasin."""
+        self._sale(odisc='5000', reason='skidka')
+        self._sale(odisc='20000', exch='20000',
+                   reason='Almashtirish: eski tovar hisobiga')
+        c, _ = self._z()
+        lines = (_printed(c['shift'].opening_cash) + _printed(c['cash_sales'])
+                 + _printed(c['debt_payments']) + _printed(c['cash_ins_total'])
+                 - _printed(c['payouts_total']) - _printed(c['refund_total'])
+                 + _printed(c['post_close_delta']) + _printed(c['rounding_delta']))
+        self.assertEqual(lines, _printed(c['expected']))
