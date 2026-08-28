@@ -537,8 +537,10 @@ def _dashboard_aggregates():
         # SAL-6: KUN — chek darajasidagi o'lchov, chegirma aniq tushadi.
         # Ayirmasak tushum ham, FOYDA ham chegirma miqdorida shishardi.
         _od, _ = _order_discount_share(qs)
-        rev = _net_rev(a['revenue'], _od)
-        cost = float(a['cost'] or 0)
+        # RET-1: qaytarilgan tovar tushumdan ham, TANNARXdan ham chiqadi.
+        _rret, _cret, _ = _returns_adjustment(qs)
+        rev = _net_rev(a['revenue'], _od) - float(_rret)
+        cost = float(_dec(a['cost'] or 0) - _cret)
         return {
             'revenue': rev,
             'cost': cost,
@@ -3848,8 +3850,11 @@ def cashier_stats(request, user_id):
     # KOMISSIYA kassir chegirma qilib bergan puldan ham hisoblanardi.
     _odisc_seller, _ = _order_discount_share(sales_30d)
     _, _, _disc_split = _order_discount_share(sales_30d, split=True)
-    revenue = _net_rev(agg['revenue'], _odisc_seller)
-    cost = float(agg['cost'] or 0)
+    # RET-1: qaytarish tushumdan ham, tannarxdan ham chiqadi — aks holda
+    # kassirning foydasi ham, komissiyasi ham qaytgan tovardan hisoblanardi.
+    _ret_rev, _ret_cost, _ = _returns_adjustment(sales_30d)
+    revenue = _net_rev(agg['revenue'], _odisc_seller) - float(_ret_rev)
+    cost = float(_dec(agg['cost'] or 0) - _ret_cost)
     qty = agg['qty'] or 0
     txns = agg['txns'] or 0
     avg_ticket = revenue / txns if txns else 0
@@ -7836,6 +7841,8 @@ def branch_list(request):
     # shuning uchun to'g'ridan-to'g'ri ayiriladi. Aks holda filial tushumi ham,
     # P&L (gross/net) ham chegirma miqdorida oshib ko'rinardi.
     _, _odisc_by_branch = _order_discount_share(_sales_30d, 'branch_id')
+    # RET-1: qaytarish filialga aniq tegishli (Return -> Sale -> branch).
+    _, _, _ret_by_branch = _returns_adjustment(_sales_30d, 'branch_id')
     stats_map = {}
     for row in (_sales_30d
                 .values('branch_id')
@@ -7846,8 +7853,9 @@ def branch_list(request):
 
     for br in branches:
         s = stats_map.get(br.id, {})
-        rev = _net_rev(s.get('rev'), _odisc_by_branch.get(br.id))
-        cost = float(s.get('cost') or 0)
+        _rr, _cc = _ret_by_branch.get(br.id) or (Decimal('0'), Decimal('0'))
+        rev = _net_rev(s.get('rev'), _odisc_by_branch.get(br.id)) - float(_rr)
+        cost = float(_dec(s.get('cost') or 0) - _cc)
         period_fraction = 30 / 30.0  # whole 30-day window
         fixed = float((br.monthly_rent or 0) + (br.monthly_other_costs or 0)) * period_fraction
         gross = rev - cost
@@ -7937,6 +7945,8 @@ def user_list(request):
     # sotuvchi). Bu muhim: s_commission aynan shu summadan hisoblanadi, ya'ni
     # ilgari kassir chegirma qilib bergan puldan ham foiz olardi.
     _, _odisc_by_seller = _order_discount_share(_sales_30d, 'sold_by_id')
+    # RET-1: qaytarilgan tovardan komissiya to'lanmasin.
+    _, _, _ret_by_seller = _returns_adjustment(_sales_30d, 'sold_by_id')
     stats = (_sales_30d
              .values('sold_by_id')
              .annotate(
@@ -7947,7 +7957,8 @@ def user_list(request):
     stat_map = {s['sold_by_id']: s for s in stats}
     for u in users:
         s = stat_map.get(u.id, {})
-        u.s_revenue = _net_rev(s.get('revenue'), _odisc_by_seller.get(u.id))
+        _rr, _ = _ret_by_seller.get(u.id) or (Decimal('0'), Decimal('0'))
+        u.s_revenue = _net_rev(s.get('revenue'), _odisc_by_seller.get(u.id)) - float(_rr)
         u.s_qty = s.get('qty') or 0
         u.s_txns = s.get('n') or 0
         pct = float(u.commission_percent or 0)
@@ -8124,6 +8135,9 @@ def category_list(request):
     _sales_30d = Sale.objects.filter(sold_at__gte=since_30d)
     _odisc_total, _ = _order_discount_share(_sales_30d)
     _, _, _disc_split = _order_discount_share(_sales_30d, split=True)
+    # RET-1: qaytarish kategoriyaga ANIQ tegishli (Return -> Sale -> mahsulot).
+    _, _, _ret_by_cat = _returns_adjustment(
+        _sales_30d, 'variant__product__category_id')
     cat_stats = {}
     for row in (_sales_30d
                 .values('variant__product__category_id')
@@ -8152,8 +8166,9 @@ def category_list(request):
     for c in categories:
         s = cat_stats.get(c.id, {})
         st = stock_stats.get(c.id, {})
-        c.s_rev = s.get('rev', 0)
-        c.s_cost = s.get('cost', 0)
+        _rr, _cc = _ret_by_cat.get(c.id) or (Decimal('0'), Decimal('0'))
+        c.s_rev = float(_dec(s.get('rev', 0)) - _rr)
+        c.s_cost = float(_dec(s.get('cost', 0)) - _cc)
         c.s_qty = s.get('qty', 0)
         c.s_profit = c.s_rev - c.s_cost
         c.s_margin = (c.s_profit / c.s_rev * 100) if c.s_rev else 0
@@ -8273,6 +8288,82 @@ def _order_discount_share(sale_qs, *group_fields, split=False):
                    else tuple(r[g] for g in group_fields))
             by_group[key] = by_group.get(key, Decimal('0')) + share
     return (total, by_group, acc) if split else (total, by_group)
+
+
+def _returns_adjustment(sale_qs, *group_fields):
+    """Qaytarilgan tovarlar uchun TUSHUM va TANNARX tuzatmasi (RET-1).
+
+    Muammo: `/sales/` dan boshqa HECH BIR sahifa qaytarishni hisobga
+    olmasdi — na tushumда, na tannarxда. 3 dona sotilib 1 dona qaytsa,
+    hamma joyда 3 donaning tushumi ham, tannarxi ham turaverardi.
+
+    Ikki tuzatma kerak, va ular BOSHQA-BOSHQA:
+
+      TUSHUM  — kassaдан HAQIQATDA chiqqan pul (effective_cash_refund).
+        Almashtirishда naqd chiqmaydi (0), demak tushum kamaymaydi —
+        to'g'ri, chunki mijoz pulni oldingi chekда to'lagan va u
+        do'kondа qoladi.
+
+      TANNARX — tovar OMBORGA QAYTGAN bo'lsagina qaytariladi. Qaytgan
+        tovar endi sotilgan emas, u zaxira; tannarxi COGSда qolsa
+        ikki marta sanaladi. `pos_refund` ochiq narxli (is_open_price)
+        tovarni omborga TIKLAMAYDI — demak ularning tannarxi COGSда
+        qolishi KERAK (tovar ham ketdi, pul ham qaytdi: haqiqiy zarar).
+
+    Shu ikki qoida almashtirishni ham, oddiy qaytarishni ham bir xil
+    to'g'ri hisoblaydi:
+        almashtirish : tushum −0,      tannarx −45 000  -> foyda to'g'ri
+        oddiy qaytish: tushum −80 500, tannarx −45 000  -> foyda 0
+        ochiq narxli : tushum −80 500, tannarx −0       -> foyda −45 000
+
+    O'lchovlar bo'yicha guruhlash ANIQ: har Return bitta Sale qatoriga
+    tegishli, u qatorда esa bitta filial/sotuvchi/mahsulot/kategoriya bor.
+    Shu bois chek chegirmasidan farqli o'laroq bu yerда taqsimlash yo'q.
+
+    Qaytaradi: (tushum_krediti, tannarx_krediti, {kalit: (tushum, tannarx)})
+    """
+    rets = (Return.objects.filter(sale__in=sale_qs.order_by().values('pk'))
+            .select_related('sale__variant__product__category__group',
+                            'sale__transaction')
+            .prefetch_related('sale__transaction__lines'))
+    rev_credit = Decimal('0')
+    cost_credit = Decimal('0')
+    by_group = {}
+    for r in rets:
+        sale = r.sale
+        _rev = _dec(r.effective_cash_refund or 0)
+        # Omborga qaytmagan tovarning tannarxi COGSда qoladi.
+        _cost = (Decimal('0') if sale.variant.product.is_open_price
+                 else _dec(r.quantity) * _dec(sale.cost_at_sale))
+        rev_credit += _rev
+        cost_credit += _cost
+        if group_fields:
+            key = (_ret_group_value(sale, group_fields[0]) if len(group_fields) == 1
+                   else tuple(_ret_group_value(sale, g) for g in group_fields))
+            cur = by_group.get(key) or (Decimal('0'), Decimal('0'))
+            by_group[key] = (cur[0] + _rev, cur[1] + _cost)
+    return rev_credit, cost_credit, by_group
+
+
+def _ret_group_value(sale, field):
+    """`_returns_adjustment` uchun guruh kalitini Sale qatoridan oladi."""
+    if field == 'branch_id':
+        return sale.branch_id
+    if field == 'sold_by_id':
+        return sale.sold_by_id
+    if field == 'sold_at__date':
+        return timezone.localtime(sale.sold_at).date()
+    if field == 'variant__product_id':
+        return sale.variant.product_id
+    if field == 'variant__product__category_id':
+        return sale.variant.product.category_id
+    if field == 'variant__product__category__name':
+        cat = sale.variant.product.category
+        return cat.name if cat else None
+    if field == 'variant__product__category__group__name':
+        cat = sale.variant.product.category
+        return cat.group.name if (cat and cat.group_id) else None
+    raise ValueError(f'_returns_adjustment: qo\'llab-quvvatlanmagan o\'lchov {field}')
 
 
 def _net_rev(gross, share):
@@ -8902,10 +8993,13 @@ def reports(request):
             # tovarga tegishli emas — egasining qoidasi), lekin XULOSA
             # yopilishi SHART: qatorlar − chek chegirmasi = sof daromad.
             _odisc_rep, _ = _order_discount_share(qs)
+            _rret, _, _ = _returns_adjustment(qs)
             summary = {'Jami sotilgan dona': total_qty,
                        "Qatorlar bo'yicha (so'm)": total_rev,
                        "Chek chegirmasi (so'm)": -_dec(_odisc_rep),
-                       "Jami daromad (so'm)": _dec(total_rev) - _dec(_odisc_rep),
+                       "Qaytarilgan (so'm)": -_rret,
+                       "Jami daromad (so'm)": (_dec(total_rev)
+                                               - _dec(_odisc_rep) - _rret),
                        'Sotuvlar soni': qs.count()}
 
         elif rtype == 'intakes':
@@ -8983,10 +9077,13 @@ def reports(request):
                 total_qty += a['qty'] or 0
                 total_rev += a['revenue'] or 0
             _odisc_rep, _ = _order_discount_share(sale_qs)
+            _rret, _, _ = _returns_adjustment(sale_qs)
             summary = {'Jami sotilgan dona': total_qty,
                        "Mahsulotlar bo'yicha (so'm)": total_rev,
                        "Chek chegirmasi (so'm)": -_dec(_odisc_rep),
-                       "Jami daromad (so'm)": _dec(total_rev) - _dec(_odisc_rep),
+                       "Qaytarilgan (so'm)": -_rret,
+                       "Jami daromad (so'm)": (_dec(total_rev)
+                                               - _dec(_odisc_rep) - _rret),
                        'Mahsulotlar soni': len(agg)}
 
         elif rtype == 'pivot':
@@ -9136,9 +9233,13 @@ def reports(request):
                              a['qty'] or 0, rev, cost, profit, round(margin, 1)])
                 t_rev += rev; t_cost += cost; t_qty += a['qty'] or 0
             _odisc_rep, _ = _order_discount_share(sale_qs)
-            _net_rep = _dec(t_rev) - _dec(_odisc_rep)
+            # RET-1: qaytarish tushumdan ham, tannarxdan ham chiqadi.
+            _rret, _cret, _ = _returns_adjustment(sale_qs)
+            _net_rep = _dec(t_rev) - _dec(_odisc_rep) - _rret
+            t_cost = _dec(t_cost) - _cret
             summary = {"Kategoriyalar bo'yicha (so'm)": t_rev,
                        "Chek chegirmasi (so'm)": -_dec(_odisc_rep),
+                       "Qaytarilgan (so'm)": -_rret,
                        "Jami daromad (so'm)": _net_rep,
                        "Jami foyda (so'm)": _net_rep - _dec(t_cost),
                        'Umumiy marja %': (round(float((_net_rep - _dec(t_cost))
@@ -9986,7 +10087,19 @@ def _insights_context(request):
     _, _od_by_seller = _order_discount_share(sales, 'sold_by_id')
     _, _, _disc_split = _order_discount_share(sales, split=True)
 
-    revenue = (totals['revenue'] or 0) - order_disc
+    # RET-1: qaytarish tushumdan ham, tannarxdan ham chiqadi. Ilgari
+    # /insights/ qaytarishni UMUMAN ko'rmasdi — 3 dona sotilib 1 dona
+    # qaytsa ham uchalasining tushumi va tannarxi turaverardi.
+    _ret_rev, _ret_cost, _ret_by_prod = _returns_adjustment(
+        sales, 'variant__product_id')
+    _, _, _ret_by_branch2 = _returns_adjustment(sales, 'branch_id')
+    _, _, _ret_by_seller2 = _returns_adjustment(sales, 'sold_by_id')
+    _, _, _ret_by_catname = _returns_adjustment(
+        sales, 'variant__product__category__name')
+    _, _, _ret_by_groupname = _returns_adjustment(
+        sales, 'variant__product__category__group__name')
+
+    revenue = (totals['revenue'] or 0) - order_disc - _ret_rev
     qty = totals['qty'] or 0
     sales_count = totals['sales_count'] or 0
     discount_total = order_disc + (sales.aggregate(s=Sum('line_discount'))['s'] or 0)
@@ -10000,7 +10113,7 @@ def _insights_context(request):
         F('quantity') * F('cost_at_sale'),
         output_field=DecimalField(max_digits=14, decimal_places=2)
     )
-    total_cost = sales.aggregate(c=Sum(cost_expr))['c'] or 0
+    total_cost = _dec(sales.aggregate(c=Sum(cost_expr))['c'] or 0) - _ret_cost
 
     profit_by_product_qs = sales.values(
         'variant__product_id', 'variant__product__code', 'variant__product__name',
@@ -10011,12 +10124,16 @@ def _insights_context(request):
     )
     profit_by_product = {}
     for row in profit_by_product_qs:
+        _rr, _cc = (_ret_by_prod.get(row['variant__product_id'])
+                    or (Decimal('0'), Decimal('0')))
+        _rev = _dec(row['revenue'] or 0) - _rr
+        _cost = _dec(row['cost'] or 0) - _cc
         profit_by_product[row['variant__product_id']] = {
             'code': row['variant__product__code'],
             'name': row['variant__product__name'],
-            'revenue': row['revenue'] or 0,
-            'cost': row['cost'] or 0,
-            'profit': (row['revenue'] or 0) - (row['cost'] or 0),
+            'revenue': _rev,
+            'cost': _cost,
+            'profit': _rev - _cost,
             'qty': row['qty'] or 0,
         }
 
@@ -10068,8 +10185,9 @@ def _insights_context(request):
             rev=Sum(revenue_expr), cost=Sum(cost_expr),
             qty=Sum('quantity'), n=Count('id'),
         )
-        b_rev = _net_rev(b_agg['rev'], _od_by_branch.get(br.id))
-        b_cost = float(b_agg['cost'] or 0)
+        _rr, _cc = _ret_by_branch2.get(br.id) or (Decimal('0'), Decimal('0'))
+        b_rev = _net_rev(b_agg['rev'], _od_by_branch.get(br.id)) - float(_rr)
+        b_cost = float(_dec(b_agg['cost'] or 0) - _cc)
         b_profit = b_rev - b_cost
         b_n = b_agg['n'] or 0
         b_qty = b_agg['qty'] or 0
@@ -10121,6 +10239,11 @@ def _insights_context(request):
         revenue=Sum(revenue_expr),
         n_sales=Count('id'),
     ).order_by('-revenue')[:10])
+    for _tp in top_products:      # RET-1
+        _rr, _ = (_ret_by_prod.get(_tp['variant__product__id'])
+                  or (Decimal('0'), Decimal('0')))
+        _tp['revenue'] = _dec(_tp['revenue'] or 0) - _rr
+    top_products.sort(key=lambda r: -r['revenue'])
 
     # SLOW MOVERS — bu davrda umuman sotilmagan mahsulotlar
     sold_product_ids = sales.values_list('variant__product_id', flat=True).distinct()
@@ -10146,7 +10269,10 @@ def _insights_context(request):
         # SOTUVCHI — chek darajasidagi o'lchov. Komissiya ham shu sof
         # summadan hisoblanadi (aks holda kassir chegirma qilib bergan
         # puldan ham foiz olardi).
-        rev = _net_rev(s.get('revenue'), _od_by_seller.get(s.get('sold_by__id')))
+        _rr, _ = (_ret_by_seller2.get(s.get('sold_by__id'))
+                  or (Decimal('0'), Decimal('0')))
+        rev = (_net_rev(s.get('revenue'), _od_by_seller.get(s.get('sold_by__id')))
+               - float(_rr))
         s['revenue'] = rev
         s['commission_percent'] = pct
         s['commission'] = rev * pct / 100 if pct else 0
@@ -10160,7 +10286,10 @@ def _insights_context(request):
         n_sales=Count('id'),
     ).order_by('-revenue'))
     for _b in by_branch:      # FILIAL — chek darajasidagi o'lchov
-        _b['revenue'] = _net_rev(_b['revenue'], _od_by_branch.get(_b['branch__id']))
+        _rr, _ = (_ret_by_branch2.get(_b['branch__id'])
+                  or (Decimal('0'), Decimal('0')))
+        _b['revenue'] = (_net_rev(_b['revenue'],
+                                  _od_by_branch.get(_b['branch__id'])) - float(_rr))
     by_branch.sort(key=lambda r: -r['revenue'])
 
     # Kategoriya bo'yicha
@@ -10170,6 +10299,11 @@ def _insights_context(request):
         revenue=Sum(revenue_expr),
         qty=Sum('quantity'),
     ).order_by('-revenue'))
+    for _r in by_category:        # RET-1
+        _rr, _ = (_ret_by_catname.get(_r['variant__product__category__name'])
+                  or (Decimal('0'), Decimal('0')))
+        _r['revenue'] = _dec(_r['revenue'] or 0) - _rr
+    by_category.sort(key=lambda r: -r['revenue'])
 
     # Bo'lim (4 katta guruh) bo'yicha
     by_group = list(sales.values(
@@ -10178,9 +10312,13 @@ def _insights_context(request):
         revenue=Sum(revenue_expr),
         qty=Sum('quantity'),
     ).order_by('-revenue'))
-    for r in by_group:
+    for r in by_group:            # RET-1 (nomlar o'zgartirilishidan OLDIN)
+        _rr, _ = (_ret_by_groupname.get(r['variant__product__category__group__name'])
+                  or (Decimal('0'), Decimal('0')))
+        r['revenue'] = _dec(r['revenue'] or 0) - _rr
         if not r['variant__product__category__group__name']:
             r['variant__product__category__group__name'] = "Bo'limsiz"
+    by_group.sort(key=lambda r: -r['revenue'])
 
     # Ierarxiya daraxti: Bo'lim -> Kategoriya (daromad bo'yicha)
     _tree_rows = list(sales.values(
@@ -10197,7 +10335,9 @@ def _insights_context(request):
         gorder = 99 if gorder is None else gorder
         node = _tree.setdefault(gname, {
             'name': gname, 'order': gorder, 'revenue': 0.0, 'qty': 0, 'cats': []})
-        rev = float(r['revenue'] or 0)
+        _rr, _ = (_ret_by_catname.get(r['variant__product__category__name'])
+                  or (Decimal('0'), Decimal('0')))
+        rev = float(_dec(r['revenue'] or 0) - _rr)   # RET-1
         node['revenue'] += rev
         node['qty'] += r['qty'] or 0
         node['cats'].append({

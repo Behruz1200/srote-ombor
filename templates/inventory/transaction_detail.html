@@ -56,7 +56,12 @@
             </div>
             <div class="dash-kpi__footer">
                 {% if txn.discount_total > 0 %}
-                    <span style="color: var(--yrt-warning);">−{{ txn.discount_total|som }} chegirma</span>
+                    {% if txn.customer_discount %}
+                    <span style="color: var(--yrt-warning);">−{{ txn.customer_discount|som }} chegirma</span>
+                    {% endif %}
+                    {% if txn.exchange_credit %}
+                    <span class="d-block">−{{ txn.exchange_credit|som }} almashtirish krediti</span>
+                    {% endif %}
                 {% else %}
                     <span>chegirma yo'q</span>
                 {% endif %}
@@ -138,8 +143,20 @@
                 {% if txn.discount_total > 0 %}
                 <tr><th colspan="2" class="text-start small">Oraliq summa:</th>
                     <td colspan="2" class="text-end">{{ txn.gross|som }}</td></tr>
+                {% comment %}
+                DISC-4: almashtirish krediti CHEGIRMA EMAS — mijoz o'sha
+                summani oldingi chekда to'lagan, endi eski tovarni qaytardi.
+                Bitta "Chegirma" qatoriда ko'rsatish mijozни ham, kassirni
+                ham chalkashtirardi.
+                {% endcomment %}
+                {% if txn.customer_discount %}
                 <tr><th colspan="2" class="text-start small text-danger">Chegirma:</th>
-                    <td colspan="2" class="text-end text-danger text-nowrap">−{{ txn.discount_total|som }}</td></tr>
+                    <td colspan="2" class="text-end text-danger text-nowrap">−{{ txn.customer_discount|som }}</td></tr>
+                {% endif %}
+                {% if txn.exchange_credit %}
+                <tr><th colspan="2" class="text-start small">Almashtirish krediti:</th>
+                    <td colspan="2" class="text-end text-nowrap">−{{ txn.exchange_credit|som }}</td></tr>
+                {% endif %}
                 {% endif %}
                 <tr><th colspan="2" class="text-start">JAMI:</th>
                     <th colspan="2" class="text-end fs-5 text-nowrap">{{ txn.total|som }}&nbsp;so'm</th></tr>

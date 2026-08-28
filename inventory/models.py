@@ -730,6 +730,19 @@ class SaleTransaction(models.Model):
         return f'#{self.pk} — {self.branch.name} ({self.sold_at:%d.%m.%Y %H:%M})'
 
     @property
+    def customer_discount(self):
+        """Chekда mijozga CHEGIRMA deb ko'rsatiladigan summa (DISC-4).
+
+        `discount_total` ichида almashtirish krediti ham bor edi, shu bois
+        mijozning qo'lidagi chekда "Chegirma −80 500" deb chiqardi — aslida
+        mijoz o'sha 80 500 ni oldingi chekда to'lagan va endi eski tovarni
+        qaytarib bergan edi. Bu chegirma emas; kassa oldiда bahsga sabab.
+        Kredit alohida qator bo'lib chiqadi.
+        """
+        v = _dec(self.discount_total) - _dec(self.exchange_credit)
+        return v if v > 0 else Decimal('0')
+
+    @property
     def manual_discount(self):
         """Kassir O'Z ixtiyori bilan bergan chegirma (DISC-1).
 

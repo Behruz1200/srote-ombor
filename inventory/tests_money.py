@@ -2347,3 +2347,233 @@ class Disc3DiscountFilter(MoneyTestBase):
         day = c['daily_list'][0]
         # 5 chek × 100 000 − (5k + 9k + 20k + 12k qator-chegirmasiz) − 3k qator
         self.assertEqual(_dec(str(day['total'])), Decimal('451000'))
+
+
+class Ret1ReturnsAffectProfit(MoneyTestBase):
+    """RET-1 — qaytarilgan tovar TUSHUMdan ham, TANNARXdan ham chiqsin.
+
+    Topilgani: `/sales/` dan boshqa HECH BIR sahifa qaytarishni hisobga
+    olmasdi. 3 dona sotilib 1 dona qaytsa ham hamma joyда uchalasining
+    tushumi va tannarxi turaverardi:
+
+        haqiqat     tushum 161 000  tannarx 90 000  foyda 71 000
+        /insights/  tushum 241 500  tannarx 135 000 foyda 106 500
+
+    Ikki tuzatma ALOHIDA qoidaga bo'ysunadi:
+      TUSHUM  — kassadan HAQIQATDA chiqqan pul (effective_cash_refund).
+                Almashtirishда naqd chiqmaydi, demak tushum kamaymaydi.
+      TANNARX — tovar OMBORGA QAYTGAN bo'lsagina qaytariladi. Ochiq narxli
+                tovar qaytmaydi (pos_refund uni tiklamaydi), demak uning
+                tannarxi COGSда qolishi KERAK.
+
+    Shu ikki qoida almashtirishni ham to'g'ri hisoblaydi: eski tovarning
+    tannarxi ikki marta sanalmaydi (bir marta asl chekда, ikkinchi marta
+    yangi chekда) — bu har almashtirishда foydani tannarx miqdorida
+    kamaytirib ko'rsatardi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_ret', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+        self.today = timezone.localdate().strftime('%Y-%m-%d')
+
+    def _sale(self, qty=1, price='100000', cost='60000', variant=None):
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash')
+        return Sale.objects.create(
+            transaction=t, variant=variant or self.variant, branch=self.branch,
+            quantity=qty, sale_price=Decimal(price),
+            cost_at_sale=Decimal(cost), sold_by=self.cashier)
+
+    def _pages(self):
+        def ctx(url, prm=None):
+            r = self.client.get(url, prm or {})
+            self.assertEqual(r.status_code, 200, url)
+            c = r.context
+            return c[0] if isinstance(c, list) else c
+        day = {'date_from': self.today, 'date_to': self.today}
+        ins = ctx('/insights/', day)
+        cash = ctx(f'/cashier/{self.cashier.pk}/')
+        dash = ctx('/dashboard/')['today_stats']
+        return ins, cash, dash
+
+    # ---- oddiy qaytarish ------------------------------------------------
+    def test_full_return_leaves_zero_profit_everywhere(self):
+        s = self._sale(qty=1)
+        Return.objects.create(sale=s, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier,
+                              refund_cash=Decimal('100000'))
+        ins, cash, dash = self._pages()
+        for name, c in (('insights', ins), ('cashier', cash), ('dashboard', dash)):
+            with self.subTest(page=name):
+                self.assertEqual(_dec(c['revenue']), Decimal('0'), name)
+                self.assertEqual(_dec(c['cost'] if 'cost' in c else c['total_cost']),
+                                 Decimal('0'), name)
+                self.assertEqual(_dec(c['profit']), Decimal('0'), name)
+
+    def test_partial_return(self):
+        """3 sotildi, 1 qaytdi -> 2 dona: 200 000 / 120 000 / 80 000."""
+        s = self._sale(qty=3)
+        Return.objects.create(sale=s, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier,
+                              refund_cash=Decimal('100000'))
+        ins, cash, _ = self._pages()
+        self.assertEqual(_dec(ins['revenue']), Decimal('200000'))
+        self.assertEqual(_dec(ins['total_cost']), Decimal('120000'))
+        self.assertEqual(_dec(ins['profit']), Decimal('80000'))
+        self.assertEqual(_dec(cash['profit']), Decimal('80000'))
+
+    # ---- ALMASHTIRISH ---------------------------------------------------
+    def test_exchange_does_not_double_count_cost(self):
+        """Asl tovar (tannarx 60 000) qaytdi, yangisi (70 000) ketdi.
+        Mijoz 100 000 to'lagan. Haqiqiy foyda = 100 000 − 70 000 = 30 000.
+        Ilgari eski tannarx ham qolib, foyda 100 000 − 130 000 = −30 000
+        bo'lib ko'rinardi."""
+        p2 = Product.objects.create(name='Yangi', default_sale_price=Decimal('100000'))
+        v2 = ProductVariant.objects.create(product=p2, size='L', color='Oq',
+                                           barcode='2000000000031')
+        BranchStock.objects.create(variant=v2, branch=self.branch, stock_count=10,
+                                   cost_price=Decimal('70000'),
+                                   sale_price=Decimal('100000'))
+        old = self._sale(qty=1)                       # 100 000 / tannarx 60 000
+        Return.objects.create(sale=old, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier, is_exchange=True,
+                              cash_refunded=Decimal('0'))
+        t2 = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal('100000'),
+            exchange_credit=Decimal('100000'),
+            discount_reason='Almashtirish: eski tovar hisobiga')
+        Sale.objects.create(transaction=t2, variant=v2, branch=self.branch,
+                            quantity=1, sale_price=Decimal('100000'),
+                            cost_at_sale=Decimal('70000'), sold_by=self.cashier)
+        ins, _, _ = self._pages()
+        self.assertEqual(_dec(ins['revenue']), Decimal('100000'),
+                         'almashtirishда naqd chiqmaydi — tushum kamaymasin')
+        self.assertEqual(_dec(ins['total_cost']), Decimal('70000'),
+                         'eski tovar tannarxi ikki marta sanalmasin')
+        self.assertEqual(_dec(ins['profit']), Decimal('30000'))
+
+    # ---- OCHIQ NARXLI: omborga qaytmaydi -> tannarx qoladi --------------
+    def test_open_price_return_keeps_the_cost(self):
+        self.product.is_open_price = True
+        self.product.save(update_fields=['is_open_price'])
+        s = self._sale(qty=1)
+        Return.objects.create(sale=s, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier,
+                              refund_cash=Decimal('100000'))
+        ins, _, _ = self._pages()
+        self.assertEqual(_dec(ins['revenue']), Decimal('0'))
+        self.assertEqual(_dec(ins['total_cost']), Decimal('60000'),
+                         'omborga qaytmagan tovar tannarxi COGSда qolsin')
+        self.assertEqual(_dec(ins['profit']), Decimal('-60000'),
+                         'bu HAQIQIY zarar: tovar ham ketdi, pul ham qaytdi')
+
+    # ---- bo'linmalar ham ergashsin --------------------------------------
+    def test_breakdowns_follow(self):
+        s = self._sale(qty=3)
+        Return.objects.create(sale=s, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier,
+                              refund_cash=Decimal('100000'))
+        ins, _, _ = self._pages()
+        self.assertEqual(_dec(ins['top_products'][0]['revenue']), Decimal('200000'))
+        self.assertEqual(_dec(ins['by_branch'][0]['revenue']), Decimal('200000'))
+        self.assertEqual(_dec(ins['branch_compare'][0]['revenue']), Decimal('200000'))
+        self.assertEqual(_dec(ins['top_sellers'][0]['revenue']), Decimal('200000'))
+        self.assertEqual(_dec(ins['top_profit'][0]['profit']), Decimal('80000'))
+
+    def test_branches_users_categories_follow(self):
+        s = self._sale(qty=3)
+        Return.objects.create(sale=s, shift=self.shift, quantity=1,
+                              refunded_by=self.cashier,
+                              refund_cash=Decimal('100000'))
+        def ctx(url):
+            r = self.client.get(url)
+            self.assertEqual(r.status_code, 200, url)
+            c = r.context
+            return c[0] if isinstance(c, list) else c
+        br = ctx('/branches/')['branches'][0]
+        self.assertEqual(_dec(br.m_revenue), Decimal('200000'))
+        self.assertEqual(_dec(br.m_gross), Decimal('80000'))
+        us = [x for x in ctx('/users/')['users'] if x.pk == self.cashier.pk][0]
+        self.assertEqual(_dec(us.s_revenue), Decimal('200000'),
+                         'qaytgan tovardan komissiya to\'lanmasin')
+        # Kategoriya bo'yicha ham: test mahsulotiga kategoriya biriktiramiz,
+        # aks holda sotuv hech qaysi kategoriyaga tushmaydi va tekshiruv
+        # hech nimani isbotlamaydi.
+        cat = Category.objects.create(name='Test kategoriya')
+        self.product.category = cat
+        self.product.save(update_fields=['category'])
+        ca = [x for x in ctx('/categories/')['categories'] if x.pk == cat.pk][0]
+        self.assertEqual(_dec(ca.s_rev), Decimal('200000'))
+        self.assertEqual(_dec(ca.s_profit), Decimal('80000'))
+
+    def test_no_returns_changes_nothing(self):
+        self._sale(qty=2)
+        ins, _, _ = self._pages()
+        self.assertEqual(_dec(ins['revenue']), Decimal('200000'))
+        self.assertEqual(_dec(ins['total_cost']), Decimal('120000'))
+        self.assertEqual(_dec(ins['profit']), Decimal('80000'))
+
+
+class Disc4ExchangeCreditOnTheReceipt(MoneyTestBase):
+    """DISC-4 — mijozning chekida almashtirish krediti "Chegirma" deb
+    chiqmasin.
+
+    Chek #4706 da shunday chiqqan edi:
+        Oraliq summa 80 500 · Chegirma −80 500 · JAMI 0 so'm
+    Mijoz o'sha 80 500 ni oldingi chekда to'lagan va eski tovarni qaytargan
+    edi — bu chegirma emas. Kassa oldiда bahsga sabab bo'ladigan yorliq.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_d4', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.shift = self.open_shift()
+
+    def _txn(self, odisc='0', exch='0', ldisc='0'):
+        t = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.cashier, shift=self.shift,
+            payment_method='cash', order_discount=Decimal(odisc),
+            exchange_credit=Decimal(exch))
+        Sale.objects.create(transaction=t, variant=self.variant,
+                            branch=self.branch, quantity=1,
+                            sale_price=Decimal('100000'),
+                            line_discount=Decimal(ldisc),
+                            cost_at_sale=Decimal('60000'), sold_by=self.cashier)
+        return t
+
+    def test_customer_discount_excludes_the_credit(self):
+        t = self._txn(odisc='100000', exch='100000')
+        self.assertEqual(t.discount_total, Decimal('100000'))
+        self.assertEqual(t.customer_discount, Decimal('0'),
+                         'almashtirish krediti chegirma emas')
+
+    def test_mixed_receipt_splits_both(self):
+        t = self._txn(odisc='30000', exch='20000', ldisc='5000')
+        # qator 5 000 + chek 30 000 = 35 000; shundan 20 000 kredit
+        self.assertEqual(t.discount_total, Decimal('35000'))
+        self.assertEqual(t.customer_discount, Decimal('15000'))
+
+    def test_receipt_page_labels_the_credit_separately(self):
+        t = self._txn(odisc='100000', exch='100000')
+        r = self.client.get(reverse('transaction_detail', args=[t.public_id]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'Almashtirish krediti')
+        self.assertNotContains(r, 'Chegirma:')
+
+    def test_plain_discount_still_says_chegirma(self):
+        t = self._txn(odisc='7000')
+        r = self.client.get(reverse('transaction_detail', args=[t.public_id]))
+        self.assertContains(r, 'Chegirma:')
+        self.assertNotContains(r, 'Almashtirish krediti')
