@@ -3139,3 +3139,67 @@ class Ai2ConfidenceUnderstandsBoxRows(TestCase):
         d = self._invoice(boxes=0, pieces=1, free=9)
         # 9 ta bonus maxrajga kirmaydi -> 1/1 = 1.0, +0.5 jami mos
         self.assertGreaterEqual(_confidence(d), 1.4)
+
+
+class Stk14LockingNeverJoinsNullableSide(MoneyTestBase):
+    """STK-14 — FOR UPDATE nullable outer join bilan ishlamaydi (Postgres).
+
+    /prices/apply/ prodda 500 berardi:
+
+        psycopg.errors.FeatureNotSupported:
+        FOR UPDATE cannot be applied to the nullable side of an outer join
+
+    Sabab: `_price_qs` 'variant__product__category' ni select_related qiladi,
+    `Product.category` esa null=True -> LEFT OUTER JOIN. Postgres bunday
+    so'rovni qulflashni rad etadi.
+
+    NEGA TESTDA CHIQMAGAN: bu to'plam SQLite'да ishlaydi, SQLite esa
+    select_for_update'ni umuman e'tiborsiz qoldiradi. Ya'ni xatoni QAYTA
+    KELTIRIB bo'lmaydi — shuning uchun test XATONI emas, SO'ROV SHAKLINI
+    tekshiradi: qulflanadigan so'rovда LEFT OUTER JOIN BO'LMASIN. Bu shart
+    ikkala bazada ham bir xil tekshiriladi.
+
+    Xuddi shu xato ilgari pos_refund'да ham bo'lgan — takrorlanuvchi tuzoq,
+    shuning uchun qulflash bitta yordamchiga (_lock_stocks) yig'ildi.
+    """
+
+    def test_input_queryset_really_is_dangerous(self):
+        """Avval xavfni ISBOTLAYMIZ — aks holda test hech narsani ushlamaydi."""
+        qs = BranchStock.objects.select_related('variant__product__category')
+        self.assertIn('LEFT OUTER JOIN', str(qs.query).upper(),
+                      'category null=True bo`lgani uchun outer join kutilgan')
+
+    def test_locked_queryset_has_no_outer_join(self):
+        from inventory.views import _lock_stocks
+        qs = BranchStock.objects.select_related('variant__product__category')
+        sql = str(_lock_stocks(qs).query).upper()
+        self.assertNotIn('LEFT OUTER JOIN', sql,
+                         'qulflanadigan so`rovda outer join BO`LMASLIGI shart')
+
+    def test_lock_still_selects_the_same_rows(self):
+        from inventory.views import _lock_stocks
+        qs = BranchStock.objects.select_related('variant__product__category')
+        self.assertEqual(
+            set(_lock_stocks(qs).values_list('pk', flat=True)),
+            set(qs.values_list('pk', flat=True)),
+            'qulflash to`plamni o`zgartirmasligi kerak')
+
+    def test_price_apply_actually_works(self):
+        """Uchdan-uchgacha: sahifa 500 bermasin va narx yangilansin."""
+        admin = User.objects.create_user(
+            username='admin_stk14', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        c = Client()
+        c.force_login(admin)
+        self.stock.cost_price = Decimal('10000')
+        self.stock.sale_price = Decimal('0')
+        self.stock.save()
+        r = c.post('/prices/apply/', {
+            'mode': 'bulk',            # 'rows' default — ommaviy amal EMAS
+            'op': 'margin_from_cost', 'pct': '20',
+            'scope': 'selected', 'sel': [str(self.stock.pk)],
+        })
+        self.assertIn(r.status_code, (200, 302), 'sahifa 500 bermasin')
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.sale_price, Decimal('12000.00'),
+                         '10 000 + 20% = 12 000')

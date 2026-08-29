@@ -11376,6 +11376,29 @@ PRICE_ISSUES = [
 ]
 
 
+def _lock_stocks(qs):
+    """STK-14: BranchStock qatorlarini JOIN'SIZ qulflaydi.
+
+    Postgres FOR UPDATE ni outer join'ning NULLABLE tomoniga qo'llay olmaydi:
+
+        psycopg.errors.FeatureNotSupported:
+        FOR UPDATE cannot be applied to the nullable side of an outer join
+
+    `_price_qs` 'variant__product__category' ni select_related qiladi,
+    `Product.category` esa null=True — demak LEFT OUTER JOIN paydo bo'ladi va
+    butun /prices/apply/ 500 beradi. SQLite select_for_update'ni UMUMAN
+    e'tiborsiz qoldiradi, shuning uchun test bazasida chiqmaydi va faqat
+    prodda ko'rinadi. Aynan shu xato ilgari pos_refund'да ham bo'lgan
+    (REF-1 izohiga qarang) — ya'ni bu takrorlanuvchi tuzoq.
+
+    Yechim: qulflanadigan so'rovда JOIN umuman bo'lmasin. Avval PK'larni
+    o'qiymiz (bu FOR UPDATE emas, join zarar qilmaydi), keyin faqat PK
+    bo'yicha qulflaymiz.
+    """
+    ids = list(qs.order_by().values_list('pk', flat=True))
+    return BranchStock.objects.select_for_update().filter(pk__in=ids)
+
+
 def _price_qs(request, params=None):
     """Filtrlangan BranchStock queryset. STK-9: `params` — GET yoki POST.
     price_apply POST bo'lgani uchun filtrlar GET'да YO'Q edi; natijada
@@ -11580,12 +11603,13 @@ def price_apply(request):
             return redirect(back)
         targets = _price_qs(request, request.POST)      # POST filtridagi qatorlar
 
-    targets = targets.select_related('variant__product')
     factor = Decimal('1') + pct / Decimal('100')
     q2 = Decimal('0.01')
 
     with transaction.atomic():
-        for stock in targets.select_for_update():
+        # STK-14: select_related'siz QULFLAYMIZ — pastdagi halqa faqat narx
+        # maydonlarini o'qiydi, bogʻlangan jadvallar kerak emas.
+        for stock in _lock_stocks(targets):
             ch = {}
             if op == 'margin_from_cost':
                 # tannarx bor -> sotuv = tannarx × (1 + marja)
