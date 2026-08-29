@@ -1918,8 +1918,26 @@ function renderCart() {
     const keys = Object.keys(cart);
     if (keys.length === 0) {
         cartBody.innerHTML = '<tr id="emptyRow"><td colspan="5" class="text-center text-muted py-4">Savat bo\'sh. Kodni skanerlang yoki qidiring.</td></tr>';
+        // UX-10: savat bo'shaganda CHEGIRMA ham ketishi SHART.
+        //
+        // Ilgari bu yerda faqat "jami" va "dona" nolga qaytarilardi. Chegirma
+        // maydoni esa (summa, foiz va sabab) o'z holicha qolardi — ya'ni
+        // kassir yaxlitlash tugmasini bosib, keyin savatni bo'shatsa, o'sha
+        // 1 000 KEYINGI mijozning chekiga jimgina o'tib ketardi. Hech qanday
+        // ogohlantirish yo'q: chegirma qatori savat bo'sh bo'lgani uchun
+        // ko'rinmaydi ham. Bu pul xatosi, ko'rinish xatosi emas.
+        //
+        // "Oraliq" va "Chegirma" ham eski qiymatда qolib ketardi (bo'sh
+        // savatда 15 000 ko'rsatardi) — o'sha sababdan: bu tarmoq ularni
+        // umuman yangilamasdi.
+        cartSubtotalEl.textContent = '0';
+        cartDiscountEl.textContent = '0';
+        if (discountRowEl) discountRowEl.style.display = 'none';
         cartTotalEl.textContent = '0';
         cartCountEl.textContent = '0';
+        discountPct = 0;
+        if (orderDiscountInput) orderDiscountInput.value = '';
+        if (typeof resetDiscountReason === 'function') resetDiscountReason();
         checkoutBtn.disabled = true;
         parkBtn.disabled = true;
         if (openPayBtn) openPayBtn.disabled = true;

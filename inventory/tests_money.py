@@ -3291,3 +3291,53 @@ class Ux9PayModalResetsChange(MoneyTestBase):
         self.assertIn('modal-lg', self.html)
         self.assertIn('form-control-lg', self.html)
         self.assertIn('#payModal .payment-btn', self.html)
+
+
+class Ux10EmptyCartClearsDiscount(MoneyTestBase):
+    """UX-10 — savat bo'shaganda chegirma KEYINGI mijozga o'tib ketmasin.
+
+    Kassir yaxlitlash tugmasini bosadi (-1 000), keyin savatni bo'shatadi va
+    yangi sotuvni boshlaydi — 1 000 chegirma joyida qolib, yangi chekka
+    JIMGINA qo'llanadi. Ogohlantirish yo'q: savat bo'sh bo'lgani uchun
+    chegirma qatori ko'rinmaydi ham.
+
+    Bu ko'rinish emas, PUL xatosi: har savat bo'shatilishidan keyingi chek
+    kamroq to'lanadi va kassa kamomadi sifatida chiqadi.
+
+    Sababi: renderCart()ning "savat bo'sh" tarmog'i faqat jami va donani
+    nolga qaytarardi. Chegirma summasi, foizi va sababi — hech biri
+    tozalanmasdi. "Oraliq" va "Chegirma" ko'rsatkichlari ham eski qiymatда
+    qolib ketardi (bo'sh savatда 15 000 ko'rsatardi).
+
+    Bu tarmoq — YAGONA choke point: oxirgi tovarni o'chirish ham, "savatni
+    tozalash" ham, sotuvdan keyingi tozalash ham shu yerдан o'tadi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_ux10', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    def _empty_branch(self):
+        """renderCart()ning "savat bo'sh" tarmog'i."""
+        start = self.html.index("Savat bo\\'sh. Kodni skanerlang")
+        return self.html[start:start + 1600]
+
+    def test_discount_amount_is_cleared(self):
+        self.assertIn("orderDiscountInput.value = ''", self._empty_branch())
+
+    def test_discount_percent_is_cleared(self):
+        self.assertIn('discountPct = 0', self._empty_branch())
+
+    def test_discount_reason_is_cleared(self):
+        self.assertIn('resetDiscountReason()', self._empty_branch())
+
+    def test_subtotal_and_discount_labels_reset(self):
+        b = self._empty_branch()
+        self.assertIn("cartSubtotalEl.textContent = '0'", b)
+        self.assertIn("cartDiscountEl.textContent = '0'", b)
