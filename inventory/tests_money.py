@@ -3203,3 +3203,52 @@ class Stk14LockingNeverJoinsNullableSide(MoneyTestBase):
         self.stock.refresh_from_db()
         self.assertEqual(self.stock.sale_price, Decimal('12000.00'),
                          '10 000 + 20% = 12 000')
+
+
+class Disc8RoundingButtonBoundary(MoneyTestBase):
+    """DISC-8 — POS yaxlitlash tugmasi va server tasnifi BIR XIL chegarada.
+
+    POS 5 000 gacha taklif qiladi (85 000 -> 80 000 aynan 5 000). Server esa
+    ilgari `manual >= ROUNDING_MAX` deb tekshirardi, ya'ni AYNAN 5 000 lik
+    yaxlitlash "qo'lda chegirma" bo'lib ko'rinardi — kassir tugmani bosgan
+    va sabab "Yaxlitlash" deb yozilgan bo'lsa ham. Ikki chegara bir xil
+    bo'lishi kerak, aks holda karta o'zi taklif qilgan summani boshqa
+    ustunga yozadi.
+    """
+
+    def test_exactly_5000_declared_rounding_counts_as_rounding(self):
+        from inventory.views import _is_rounding, ROUNDING_MAX
+        self.assertEqual(ROUNDING_MAX, Decimal('5000'))
+        self.assertTrue(
+            _is_rounding(Decimal('5000'), Decimal('85000'), Decimal('80000'),
+                         'Yaxlitlash'),
+            "POS aynan shu summani taklif qiladi — yaxlitlash bo'lishi kerak")
+
+    def test_just_over_the_cap_is_manual(self):
+        from inventory.views import _is_rounding
+        self.assertFalse(
+            _is_rounding(Decimal('5001'), Decimal('85000'), Decimal('79999'),
+                         'Yaxlitlash'))
+
+    def test_inferred_rounding_still_needs_the_round_total(self):
+        """Sababsiz 5 000: jami butun bo'lsa VA yalpi butun bo'lmasa."""
+        from inventory.views import _is_rounding
+        self.assertTrue(_is_rounding(Decimal('4800'), Decimal('234800'),
+                                     Decimal('230000')))
+        self.assertFalse(_is_rounding(Decimal('4800'), Decimal('234000'),
+                                      Decimal('229200')))
+
+    def test_pos_page_offers_15_not_20(self):
+        admin = User.objects.create_user(
+            username='admin_d8', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        c = Client()
+        c.force_login(admin)
+        self.open_shift()
+        r = c.get('/pos/')
+        self.assertEqual(r.status_code, 200)
+        html = r.content.decode()
+        self.assertIn('data-pct="15"', html)
+        self.assertNotIn('data-pct="20"', html,
+                         "-20% zarar keltiradi (marja 20% -> chegara 16.7%)")
+        self.assertIn('id="roundSuggestWrap"', html)

@@ -8311,7 +8311,11 @@ def _is_rounding(manual, gross, paid, reason=''):
     ham mayda summa cheklovidan o'tadi: "Yaxlitlash" deb 50 000 yozilsa, u
     kartada QO'LDA bo'lib ko'rinishi kerak.
     """
-    if manual <= 0 or manual >= ROUNDING_MAX:
+    if manual <= 0 or manual > ROUNDING_MAX:
+        # DISC-8: chegara ICHIGA oladi — POS'dagi yaxlitlash tugmasi ham
+        # aynan 5 000 gacha taklif qiladi (85 000 -> 80 000 = 5 000).
+        # '>=' bo'lsa o'sha tugma bosilgan chek "qo'lda chegirma" bo'lib
+        # ko'rinardi, holbuki u YAXLITLASH deb belgilangan.
         return False
     if (reason or '').strip().lower().startswith('yaxlitlash'):
         return True

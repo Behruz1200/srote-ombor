@@ -658,8 +658,16 @@
                     <small class="text-muted text-uppercase me-1">Chegirma</small>
                     <button type="button" class="btn btn-sm btn-outline-warning disc-pct py-0 px-2" data-pct="5">−5%</button>
                     <button type="button" class="btn btn-sm btn-outline-warning disc-pct py-0 px-2" data-pct="10">−10%</button>
-                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct py-0 px-2" data-pct="20">−20%</button>
+                    <button type="button" class="btn btn-sm btn-outline-warning disc-pct py-0 px-2" data-pct="15">−15%</button>
                     <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="discClear">×</button>
+                </div>
+                {% comment %}DISC-8: chekni "chiroyli" songa tushiradigan
+                yaxlitlash summalari. Tovar ham, narx ham o'zgarmaydi — faqat
+                qoldiq tashlanadi.{% endcomment %}
+                <div class="d-flex gap-1 mb-1 flex-wrap align-items-center"
+                     id="roundSuggestWrap" style="display:none;">
+                    <small class="text-muted text-uppercase me-1">Yaxlitlash</small>
+                    <span id="roundSuggestBtns" class="d-flex gap-1 flex-wrap"></span>
                 </div>
                 <div class="row g-1">
                     <div class="col-6">
@@ -1456,6 +1464,58 @@ const orderDiscountInput = document.getElementById('orderDiscount');
 const discountReasonInput = document.getElementById('discountReason');
 const discReasonOther = document.getElementById('discountReasonOther');
 const discReasonOtherWrap = document.getElementById('discReasonOtherWrap');
+const roundSuggestWrap = document.getElementById('roundSuggestWrap');
+const roundSuggestBtns = document.getElementById('roundSuggestBtns');
+
+// DISC-8: chekni pastki "chiroyli" songa tushiradigan yaxlitlash summalari.
+//
+// Qoida: chekni MINGGА tushiramiz, va shu zanjirni eng yaqin O'N MINGgacha
+// davom ettiramiz. Shuning uchun 83 000 -> 1000/2000/3000 (80 000 da to'xtaydi),
+// 36 500 esa -> 500..4500 (30 000 gacha 6 500 kerak, u 5 000 chegarasidan
+// oshadi, shuning uchun chegara to'xtatadi).
+//
+// Ikki cheklov bor:
+//   5 000  — egasi qo'ygan mutlaq chegara (server tomondagi ROUNDING_MAX ham shu);
+//   20%    — KICHIK chekni himoya qiladi. Usiz 5 200 lik chekka 4 200
+//            taklif qilinardi (81% chegirma!) — mutlaq chegara yolg'iz
+//            o'zi kichik summalarda ma'nosiz.
+function roundingSuggestions(cart) {
+    const out = [];
+    if (!cart || cart <= 0) return out;
+    const cap = Math.min(5000, Math.floor(cart * 0.2));
+    const floor10k = Math.floor(cart / 10000) * 10000;
+    let t = Math.floor((cart - 1) / 1000) * 1000;   // chekdan KICHIK eng katta ming
+    while (t >= floor10k && t > 0) {
+        const d = cart - t;
+        if (d > cap) break;
+        out.push(d);
+        t -= 1000;
+    }
+    return out;
+}
+
+function renderRoundSuggestions(subtotal) {
+    if (!roundSuggestWrap) return;
+    const base = Math.round(subtotal || 0);
+    const list = roundingSuggestions(base);
+    roundSuggestBtns.innerHTML = '';
+    if (!list.length) { roundSuggestWrap.style.display = 'none'; return; }
+    roundSuggestWrap.style.display = 'flex';
+    list.forEach(function (d) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-sm btn-outline-secondary py-0 px-2';
+        b.textContent = '−' + fmt(d);
+        b.title = 'Chek ' + fmt(base - d) + ' so\'m bo\'ladi';
+        b.addEventListener('click', function () {
+            discountPct = 0;                    // aniq summa — foizli rejim emas
+            orderDiscountInput.value = d;
+            setDiscountReason('Yaxlitlash');    // DISC-7 sababi + DISC-6 tasnifi
+            renderCart();
+        });
+        roundSuggestBtns.appendChild(b);
+    });
+}
 
 // DISC-7: tanlangan sabab. "Boshqa…" bo'lsa erkin matn, aks holda ro'yxat qatori.
 function currentDiscountReason() {
@@ -1853,6 +1913,7 @@ function renderCart() {
         const cs = document.getElementById('cashSuggest');
         if (cs) { cs.innerHTML = ''; }
         if (typeof broadcastDisplay === 'function') broadcastDisplay({action: 'idle'});
+        renderRoundSuggestions(0);
         saveCart();
         return;
     }
@@ -1915,6 +1976,7 @@ function renderCart() {
     const disc = manualDisc + promoDiscount;
     const total = Math.max(0, subtotal - disc);
     cartSubtotalEl.textContent = fmt(subtotal);
+    renderRoundSuggestions(subtotal);
     cartDiscountEl.textContent = fmt(disc);
     discountRowEl.style.display = disc > 0 ? 'flex' : 'none';
     cartTotalEl.textContent = fmt(total);
@@ -2099,6 +2161,7 @@ function refreshTotalsFromPromo() {
     const disc = manualDisc + promoDiscount;
     const total = Math.max(0, subtotal - disc);
     cartSubtotalEl.textContent = fmt(subtotal);
+    renderRoundSuggestions(subtotal);
     cartDiscountEl.textContent = fmt(disc);
     discountRowEl.style.display = disc > 0 ? 'flex' : 'none';
     cartTotalEl.textContent = fmt(total);
