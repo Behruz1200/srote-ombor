@@ -3592,3 +3592,95 @@ class Tg1NoTelegramOnTheSalePath(MoneyTestBase):
         self.open_shift()
         self.assertEqual(self.checkout().status_code, 200)
         self.assertEqual(SaleTransaction.objects.count(), 1)
+
+
+class Off8OfflineCatalog(MoneyTestBase):
+    """OFF-8 — offline'da HAR QANDAY tovar topilsin, faqat ilgari skanerlangani emas.
+
+    Service worker /pos/lookup/ javoblarini TO'LIQ URL bo'yicha keshlaydi,
+    ya'ni offline faqat shu qurilmada ilgari skanerlangan kod topilardi.
+    Yangi tovar "topilmadi" berardi — kassir buni "bunday tovar yo'q" deb
+    o'qiydi va mijozni qaytarib yuborishi mumkin.
+
+    Endi butun katalog oldindan yuklanadi (har 1 soatda yangilanadi) va
+    offline mahalliy nusxadan qidiriladi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_off8', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+
+    # ---- server ----
+    def test_catalog_returns_this_branch_products(self):
+        r = self.client.get('/pos/catalog/')
+        self.assertEqual(r.status_code, 200)
+        d = r.json()
+        self.assertTrue(d['ok'])
+        self.assertEqual(d['branch_id'], self.branch.id)
+        codes = [p['code'] for p in d['products']]
+        self.assertIn(self.product.code, codes)
+
+    def test_variant_fields_match_pos_lookup(self):
+        """Ikki shakl bir xil bo'lsin — mijozda tarjima qilinmaydi."""
+        cat = self.client.get('/pos/catalog/').json()
+        row = next(p for p in cat['products'] if p['code'] == self.product.code)
+        v = row['variants'][0]
+        lk = self.client.get('/pos/lookup/', {'q': self.product.code}).json()
+        lv = lk['variants'][0]
+        for key in ('stock_id', 'variant_id', 'size', 'color', 'barcode',
+                    'stock_count', 'sale_price', 'wholesale_price'):
+            self.assertIn(key, v, key)
+            self.assertEqual(v[key], lv[key], key)
+
+    def test_cost_price_is_not_shipped(self):
+        """POS uni ishlatmaydi — butun tannarx kitobi brauzerga tushmasin."""
+        cat = self.client.get('/pos/catalog/').json()
+        row = next(p for p in cat['products'] if p['code'] == self.product.code)
+        self.assertNotIn('cost_price', row['variants'][0])
+
+    def test_open_price_products_are_excluded(self):
+        """Ular 'Tezkor sotuv' panelidan sotiladi, skanerlanmaydi."""
+        p2 = Product.objects.create(name='Ochiq', default_sale_price=Decimal('0'),
+                                    is_open_price=True)
+        v2 = ProductVariant.objects.create(product=p2, size='', color='Paypoq')
+        BranchStock.objects.create(variant=v2, branch=self.branch, stock_count=5,
+                                   cost_price=Decimal('0'), sale_price=Decimal('0'))
+        cat = self.client.get('/pos/catalog/').json()
+        self.assertNotIn(p2.code, [p['code'] for p in cat['products']])
+
+    def test_other_branch_stock_is_not_included(self):
+        b2 = Branch.objects.create(name='Ikkinchi')
+        p2 = Product.objects.create(name='Faqat B2', default_sale_price=Decimal('1000'))
+        v2 = ProductVariant.objects.create(product=p2, size='M', color='Oq')
+        BranchStock.objects.create(variant=v2, branch=b2, stock_count=3,
+                                   cost_price=Decimal('500'), sale_price=Decimal('1000'))
+        cat = self.client.get('/pos/catalog/').json()
+        self.assertNotIn(p2.code, [p['code'] for p in cat['products']])
+
+    def test_requires_login(self):
+        c = Client()
+        r = c.get('/pos/catalog/')
+        self.assertIn(r.status_code, (302, 403))
+
+    # ---- mijoz tomoni ----
+    def test_pos_page_wires_the_offline_fallback(self):
+        html = self.client.get('/pos/').content.decode()
+        self.assertIn('function localLookup', html)
+        self.assertIn("data.offline === true", html)
+        self.assertIn('refreshCatalog', html)
+
+    def test_refresh_is_hourly(self):
+        html = self.client.get('/pos/').content.decode()
+        self.assertIn('60 * 60 * 1000', html)
+        self.assertIn('setInterval(() => refreshCatalog(false)', html)
+
+    def test_indexeddb_upgrade_keeps_the_queue(self):
+        """v1 -> v2 da yuborilmagan sotuvlar yo'qolmasin."""
+        html = self.client.get('/pos/').content.decode()
+        self.assertIn('objectStoreNames.contains(QUEUE_STORE)', html)
+        self.assertIn("indexedDB.open(QUEUE_DB, 2)", html)

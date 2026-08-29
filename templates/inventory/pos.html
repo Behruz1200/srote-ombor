@@ -1799,8 +1799,30 @@ async function search(q) {
     setStatus('Qidirilmoqda...', '');
     hideExtras();
     try {
-        const resp = await fetch(`/pos/lookup/?q=${encodeURIComponent(q)}`);
-        const data = await resp.json();
+        // OFF-8: avval tarmoq (narx/qoldiq eng yangisi bo'lsin), bo'lmasa
+        // mahalliy katalog. Service worker offline'da {offline:true} bilan
+        // 503 qaytaradi — ilgari uni HECH KIM tekshirmasdi va kassir
+        // "topilmadi" ko'rardi, ya'ni "bunday tovar yo'q" deb tushunardi.
+        let data = null;
+        try {
+            const resp = await fetch(`/pos/lookup/?q=${encodeURIComponent(q)}`);
+            data = await resp.json();
+        } catch (netErr) {
+            data = null;
+        }
+        if (!data || data.offline === true) {
+            const local = localLookup(q);
+            if (local) data = local;
+        }
+        if (!data) {
+            setStatus("Internet yo'q va katalog hali yuklanmagan. "
+                      + "Onlayn bo'lganda POS sahifasini bir marta oching.", 'error');
+            refocus();
+            return;
+        }
+        if (data._local) {
+            setStatus('Internet yo\'q — mahalliy katalogdan', '');
+        }
         if (!data.found) {
             // Tezkor sotuv toifasi yozilgan ("Paypoq", "Ich kiyim") — panelni
             // ochib, o'sha toifaning narx tugmalarini ko'rsatamiz.
@@ -1830,6 +1852,9 @@ async function search(q) {
                     });
                     suggestionList.appendChild(b);
                 }
+            } else if (data._local) {
+                setStatus(`Internet yo'q. "${q}" mahalliy katalogda topilmadi `
+                          + `(katalog ${_catalogAgeText()}).`, 'error');
             } else {
                 setStatus(`"${q}" topilmadi.`, 'error');
             }
@@ -2682,17 +2707,134 @@ scanInput.addEventListener('input', () => {
     }, 350);
 });
 
+// ---- OFF-8: offline katalog ----
+// Service worker /pos/lookup/ ni TO'LIQ URL bo'yicha keshlaydi, ya'ni offline
+// faqat ILGARI skanerlangan tovar topilardi. Yangi tovar "topilmadi" berardi
+// va kassir buni "bunday tovar yo'q" deb o'qirdi. Endi butun katalog oldindan
+// yuklab qo'yiladi.
+let _catalog = null;
+const CATALOG_MAX_AGE_MS = 60 * 60 * 1000;   // egasi so'rovi: har 1 soatda
+
+async function catalogSave(data) {
+    const db = await openQueueDB();
+    await new Promise((res, rej) => {
+        const tx = db.transaction(CATALOG_STORE, 'readwrite');
+        tx.objectStore(CATALOG_STORE).put({k: 'main', at: Date.now(), data: data});
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+}
+
+async function catalogLoad() {
+    try {
+        const db = await openQueueDB();
+        return await new Promise((res, rej) => {
+            const tx = db.transaction(CATALOG_STORE, 'readonly');
+            const rq = tx.objectStore(CATALOG_STORE).get('main');
+            rq.onsuccess = () => res(rq.result || null);
+            rq.onerror = () => rej(rq.error);
+        });
+    } catch (e) { return null; }
+}
+
+async function refreshCatalog(force) {
+    if (!navigator.onLine) return;
+    try {
+        const cur = await catalogLoad();
+        if (!force && cur && (Date.now() - cur.at) < CATALOG_MAX_AGE_MS) {
+            _catalog = cur.data;
+            _catalogAt = cur.at;
+            return;
+        }
+        const resp = await fetch('/pos/catalog/', {headers: {'Accept': 'application/json'}});
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data || !data.ok || !Array.isArray(data.products)) return;
+        _catalog = data;
+        _catalogAt = Date.now();
+        await catalogSave(data);
+    } catch (e) { /* offline yoki xato — eski kesh qoladi */ }
+}
+
+let _catalogAt = 0;
+function _catalogAgeText() {
+    if (!_catalogAt) return 'yuklanmagan';
+    const mins = Math.round((Date.now() - _catalogAt) / 60000);
+    if (mins < 1) return 'hozir yangilandi';
+    if (mins < 60) return mins + ' daqiqa oldingi';
+    return Math.round(mins / 60) + ' soat oldingi';
+}
+
+function _nrm(v) { return (v == null ? '' : String(v)).trim().toLowerCase(); }
+
+// pos_lookup ning moslash tartibini AYNAN takrorlaydi:
+// aniq kod -> ishlab chiqaruvchi shtrix-kodi -> tur shtrix-kodi ->
+// tezkor sotuv toifasi -> nom bo'yicha.
+function localLookup(q) {
+    if (!_catalog || !Array.isArray(_catalog.products)) return null;
+    const raw = (q || '').trim();
+    if (!raw) return null;
+    const up = raw.toUpperCase(), low = raw.toLowerCase();
+    const prods = _catalog.products;
+    let p = null, matchedVid = null;
+
+    for (const x of prods) {
+        if (x.code === up || (x.external_barcode && x.external_barcode === raw)) { p = x; break; }
+    }
+    if (!p) {
+        outer:
+        for (const x of prods) {
+            for (const v of (x.variants || [])) {
+                if (v.barcode && v.barcode === raw) { p = x; matchedVid = v.variant_id; break outer; }
+            }
+        }
+    }
+    if (!p) {
+        const qs = (_catalog.quick_sell || []).find(k =>
+            _nrm(k.name) === low || (raw.length >= 3 && _nrm(k.name).startsWith(low)));
+        if (qs) return {found: false, _local: true,
+                        quick_sell: {name: qs.name, prices: qs.prices || []}};
+    }
+    if (!p) {
+        const m = prods.filter(x =>
+            _nrm(x.name).includes(low) ||
+            (x.variants || []).some(v => (v.color && _nrm(v.color).includes(low)) ||
+                                         (v.size && _nrm(v.size).includes(low)))
+        ).slice(0, 8);
+        if (m.length === 1) p = m[0];
+        else return {found: false, _local: true,
+                     suggestions: m.map(x => ({code: x.code, name: x.name}))};
+    }
+    if (!p) return {found: false, _local: true, suggestions: []};
+    return {
+        found: true, _local: true,
+        product: {code: p.code, name: p.name,
+                  default_sale_price: p.default_sale_price},
+        variants: p.variants || [],
+        matched_variant_id: matchedVid,
+        other_branches: [],
+    };
+}
+
 // ---- Offline checkout queue (IndexedDB) ----
 // When the browser is offline (or the network call throws), we stash the
 // checkout payload locally and replay it as soon as we're online again.
 const QUEUE_DB = 'yurit-pos';
 const QUEUE_STORE = 'checkout-queue';
 
+const CATALOG_STORE = 'catalog';   // OFF-8
 function openQueueDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(QUEUE_DB, 1);
+        // OFF-8: v1 -> v2, katalog do'koni qo'shildi. Mavjud navbat do'koni
+        // QAYTA yaratilmaydi — aks holda yuborilmagan sotuvlar yo'qolardi.
+        const req = indexedDB.open(QUEUE_DB, 2);
         req.onupgradeneeded = () => {
-            req.result.createObjectStore(QUEUE_STORE, {keyPath: 'id', autoIncrement: true});
+            const db = req.result;
+            if (!db.objectStoreNames.contains(QUEUE_STORE)) {
+                db.createObjectStore(QUEUE_STORE, {keyPath: 'id', autoIncrement: true});
+            }
+            if (!db.objectStoreNames.contains(CATALOG_STORE)) {
+                db.createObjectStore(CATALOG_STORE, {keyPath: 'k'});
+            }
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
@@ -2795,6 +2937,16 @@ async function flushQueue() {
     }
 }
 window.addEventListener('online', flushQueue);
+// OFF-8: katalogni yuklab qo'yamiz va HAR SOATDA yangilaymiz. Onlayn
+// bo'lganda ham darhol yangilaymiz — uzilishdan keyin narx/qoldiq eskirib
+// qolmasin.
+(async function () {
+    const cur = await catalogLoad();
+    if (cur) { _catalog = cur.data; _catalogAt = cur.at; }   // offline'da ham tayyor
+    refreshCatalog(false);
+})();
+setInterval(() => refreshCatalog(false), CATALOG_MAX_AGE_MS);
+window.addEventListener('online', () => refreshCatalog(true));
 broadcastQueueCount();
 if (navigator.onLine) flushQueue();
 

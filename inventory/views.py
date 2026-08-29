@@ -6228,6 +6228,72 @@ def pos_terminal(request):
 
 
 @login_required
+def pos_catalog(request):
+    """GET /pos/catalog/ — OFF-8: butun katalog (offline skanerlash uchun).
+
+    NEGA KERAK: service worker /pos/lookup/ javoblarini TO'LIQ URL bo'yicha
+    keshlaydi, ya'ni offline faqat SHU qurilmada ILGARI skanerlangan tovar
+    topilardi. Yangi tovar — "topilmadi". Kassir uni "bunday tovar yo'q" deb
+    o'qiydi. Endi butun katalog oldindan yuklanadi va offline HAR QANDAY
+    tovar topiladi.
+
+    Javob /pos/lookup/ bilan BIR XIL maydon nomlarini ishlatadi — mijoz
+    tomonda tarjima qilish shart emas, demak ikki shakl bir-biridan
+    ajralib ketmaydi.
+
+    `cost_price` ATAYLAB yuborilmaydi: POS uni ishlatmaydi, butun tannarx
+    kitobini brauzerga tushirishning hojati yo'q.
+    """
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+
+    rows = (BranchStock.objects
+            .filter(branch=branch)
+            .select_related('variant__product')
+            .order_by('variant__product__code', 'variant__size', 'variant__color'))
+
+    by_code = {}
+    for st in rows:
+        prod = st.variant.product
+        # Ochiq narxli yashirin mahsulot — u "Tezkor sotuv" panelidan sotiladi,
+        # skanerlanmaydi (pos_lookup ham uni nom qidiruvidan chiqaradi).
+        if prod.is_open_price:
+            continue
+        item = by_code.get(prod.code)
+        if item is None:
+            item = by_code[prod.code] = {
+                'code': prod.code,
+                'name': prod.name,
+                'external_barcode': prod.external_barcode or '',
+                'default_sale_price': float(prod.default_sale_price or 0),
+                'variants': [],
+            }
+        item['variants'].append({
+            'stock_id': st.id,
+            'variant_id': st.variant_id,
+            'size': st.variant.size,
+            'color': st.variant.color,
+            'barcode': st.variant.barcode or '',
+            'stock_count': st.stock_count,
+            'sale_price': float(st.sale_price or prod.default_sale_price or 0),
+            'wholesale_price': float(st.wholesale_price or 0),
+        })
+
+    quick = [{'name': q.name, 'prices': q.price_list}
+             for q in QuickSellItem.objects.filter(is_active=True)]
+
+    return JsonResponse({
+        'ok': True,
+        'branch_id': branch.id,
+        'generated_at': timezone.now().isoformat(),
+        'count': len(by_code),
+        'products': list(by_code.values()),
+        'quick_sell': quick,
+    })
+
+
+@login_required
 def pos_lookup(request):
     """GET /pos/lookup/?q=OYO-0001 [&branch=ID]
     Admins may pass &branch= to query a different branch (used by transfers).
