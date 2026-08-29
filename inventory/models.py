@@ -2031,3 +2031,47 @@ class PosDevice(models.Model):
             return 'none'
         age = self.catalog_age_minutes
         return 'ok' if age is not None and age <= 120 else 'stale'
+
+
+class BackgroundJob(models.Model):
+    """OPS-15 — so'rovdan tashqarida bajariladigan ish.
+
+    NEGA KERAK: sotuv yo'lida tashqi chaqiruvlar bor edi va ular kassirni
+    kutishga majbur qilardi. Telegram (TG-1 da olib tashlandi) 10 s time-out
+    bilan, biri esa transaction.atomic() ICHIDA — ya'ni tarmoq sekinlashsa
+    ombor qatorlari qulfda turib, BOSHQA kassirning sotuvi ham to'xtardi.
+    Fiskal chek va SMS ham xuddi shunday sinxron edi.
+
+    Bu — ATAYLAB eng sodda navbat: alohida broker (Redis/Celery) yo'q, chunki
+    server bitta va yuk kichik (kuniga ~150 chek). Bazadagi jadval + har
+    daqiqada ishlaydigan systemd timer yetarli, va u ishlamay qolsa sotuv
+    baribir davom etadi — ish navbatda kutib turadi.
+    """
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Navbatda'
+        RUNNING = 'running', 'Bajarilmoqda'
+        DONE = 'done', 'Bajarildi'
+        FAILED = 'failed', 'Xato'
+
+    kind = models.CharField(max_length=40, db_index=True,
+                            help_text="Ishlovchi nomi (jobs.HANDLERS kaliti)")
+    payload = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices,
+                              default=Status.PENDING, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=5)
+    last_error = models.TextField(blank=True)
+    run_after = models.DateTimeField(default=timezone.now, db_index=True,
+                                     help_text="Shu vaqtdan oldin olinmaydi (qayta urinish)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Fon ishi'
+        verbose_name_plural = 'Fon ishlari'
+        ordering = ['run_after', 'id']
+        indexes = [models.Index(fields=['status', 'run_after'],
+                                name='bgjob_status_runafter')]
+
+    def __str__(self):
+        return f'{self.kind} #{self.pk} ({self.status})'

@@ -6987,18 +6987,24 @@ def pos_checkout(request):
             logger.exception('price-override audit failed for txn %s', txn.pk)
 
     try:
-        from .fiscal import submit_for_transaction
-        submit_for_transaction(txn)
+        # OPS-15: fiskal chek va SMS endi FON ishlari. Ilgari ikkalasi ham
+        # sotuv so'rovi ichida sinxron ketardi — tashqi xizmat sekinlashsa
+        # kassir mijoz oldida kutib qolardi. Chek allaqachon yozilgan;
+        # ular kechiksa ham sotuvga ta'sir qilmaydi va navbat qayta uriniб
+        # ko'radi (5 martagacha, o'suvchi kechikish bilan).
+        from .jobs import enqueue
+        enqueue('fiscal_submit', txn_id=txn.pk)
     except Exception:
-        logger.exception('fiscal submit failed for txn %s (sotuv saqlangan)', txn.pk)
+        logger.exception('fiskal ishni navbatga qo`yib bo`lmadi (txn %s)', txn.pk)
 
-    sms_result = None
+    sms_queued = False
     if data.get('send_sms') and customer_phone:
         try:
-            from .sms import send_receipt
-            sms_result = send_receipt(txn, customer_phone)
+            from .jobs import enqueue
+            enqueue('sms_receipt', txn_id=txn.pk, phone=customer_phone)
+            sms_queued = True
         except Exception:
-            logger.exception('SMS receipt failed for txn %s', txn.pk)
+            logger.exception('SMS ishni navbatga qo`yib bo`lmadi (txn %s)', txn.pk)
 
     return JsonResponse({
         'ok': True,
@@ -7006,7 +7012,8 @@ def pos_checkout(request):
         'receipt_url': f'/transaction/{txn.public_id}/?autoprint=1',
         'total': float(txn.total),
         'item_count': txn.item_count,
-        'sms': sms_result,
+        # Mijoz tomoni bu maydonni o'qimaydi; endi u "navbatga olindi" degani.
+        'sms': {'queued': sms_queued} if sms_queued else None,
     })
 
 

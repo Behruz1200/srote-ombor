@@ -4049,3 +4049,112 @@ class Ops14AuditPruneKeepsTheMoneyTrail(MoneyTestBase):
         from inventory.models import AuditLog
         self._run(all_models=True)
         self.assertFalse(AuditLog.objects.filter(pk=self.money.pk).exists())
+
+
+class Ops15SaleNeverWaitsOnExternalServices(MoneyTestBase):
+    """OPS-15 — sotuv yo'lida tashqi chaqiruv QOLMASIN.
+
+    Ilgari chek yozilgandan keyin so'rov ichida hali fiskal chek yuborilar
+    va SMS ketardi. Ikkalasi ham tashqi tarmoq: sekinlashsa kassir mijoz
+    oldida kutardi. Telegram esa bundan ham yomon edi —
+    transaction.atomic() ichida, ya'ni ombor qatorlari qulfda turib
+    BOSHQA kassirning sotuvi ham to'xtardi (TG-1 da olib tashlandi).
+
+    Endi ular fon navbatiga tushadi. Chek allaqachon yozilgan; ish
+    kechiksa ham, umuman bajarilmasa ham sotuv joyida qoladi.
+
+    Navbat ATAYLAB eng sodda: broker yo'q, bazadagi jadval + systemd timer.
+    Server bitta, kuniga ~150 chek — bunga yetadi va ishlovchi to'xtasa
+    sotuv baribir davom etadi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.open_shift()
+
+    def test_checkout_enqueues_instead_of_calling(self):
+        from inventory.models import BackgroundJob
+        r = self.checkout()
+        self.assertEqual(r.status_code, 200)
+        kinds = list(BackgroundJob.objects.values_list('kind', flat=True))
+        self.assertIn('fiscal_submit', kinds)
+
+    def test_sms_is_queued_not_sent_inline(self):
+        from inventory.models import BackgroundJob
+        r = self.checkout(send_sms=True, customer_phone='901234567')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(BackgroundJob.objects.filter(kind='sms_receipt').exists())
+        self.assertEqual(r.json()['sms'], {'queued': True})
+
+    def test_no_outbound_call_remains_on_the_sale_path(self):
+        """Manba matnida tekshiriladi — kelajakda qaytib qo'shilmasin."""
+        import inventory, os, re
+        path = os.path.join(os.path.dirname(inventory.__file__), 'views.py')
+        src = open(path, encoding='utf-8').read()
+        start = src.index('def pos_checkout(request):')
+        nxt = re.search(r'\n@\w|\ndef ', src[start + 10:])
+        body = src[start:start + 10 + (nxt.start() if nxt else 0)]
+        for bad in ('send_telegram(', 'submit_for_transaction(txn)', 'send_receipt('):
+            self.assertNotIn(bad, body, f'{bad} sotuv yo`lida qolmasin')
+
+    def test_a_failing_job_does_not_touch_the_sale(self):
+        """Eng muhim kafolat: ish yiqilsa ham chek joyida qoladi."""
+        from inventory.models import BackgroundJob
+        from inventory import jobs
+        r = self.checkout()
+        self.assertEqual(r.status_code, 200)
+        txn_count = SaleTransaction.objects.count()
+
+        @jobs.handler('always_fails')
+        def _boom():
+            raise RuntimeError('tashqi xizmat javob bermadi')
+
+        jobs.enqueue('always_fails')
+        ok, err = jobs.run_once()
+        self.assertEqual((ok, err), (1, 1))          # fiskal ok, boom xato
+        self.assertEqual(SaleTransaction.objects.count(), txn_count)
+        j = BackgroundJob.objects.get(kind='always_fails')
+        self.assertEqual(j.status, BackgroundJob.Status.PENDING)  # qayta uriniladi
+        self.assertIn('javob bermadi', j.last_error)
+
+    def test_retries_back_off_then_give_up(self):
+        from inventory.models import BackgroundJob
+        from inventory import jobs
+
+        @jobs.handler('flaky')
+        def _flaky():
+            raise RuntimeError('yana xato')
+
+        jobs.enqueue('flaky', max_attempts=2)
+        jobs.run_once()
+        j = BackgroundJob.objects.get(kind='flaky')
+        self.assertEqual(j.status, BackgroundJob.Status.PENDING)
+        self.assertGreater(j.run_after, timezone.now())   # kechiktirildi
+
+        j.run_after = timezone.now()
+        j.save(update_fields=['run_after'])
+        jobs.run_once()
+        j.refresh_from_db()
+        self.assertEqual(j.status, BackgroundJob.Status.FAILED)
+        self.assertEqual(j.attempts, 2)
+
+    def test_unknown_kind_is_refused_at_enqueue(self):
+        from inventory import jobs
+        with self.assertRaises(ValueError):
+            jobs.enqueue('yoq-bunday-ish')
+
+    def test_successful_job_is_marked_done(self):
+        from inventory.models import BackgroundJob
+        from inventory import jobs
+        seen = []
+
+        @jobs.handler('noop_ok')
+        def _ok(**kw):
+            seen.append(kw)
+
+        jobs.enqueue('noop_ok', a=1)
+        ok, err = jobs.run_once()
+        self.assertEqual(err, 0)
+        self.assertEqual(seen, [{'a': 1}])
+        self.assertEqual(BackgroundJob.objects.get(kind='noop_ok').status,
+                         BackgroundJob.Status.DONE)
