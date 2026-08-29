@@ -3252,3 +3252,42 @@ class Disc8RoundingButtonBoundary(MoneyTestBase):
         self.assertNotIn('data-pct="20"', html,
                          "-20% zarar keltiradi (marja 20% -> chegara 16.7%)")
         self.assertIn('id="roundSuggestWrap"', html)
+
+
+class Ux9PayModalResetsChange(MoneyTestBase):
+    """UX-9 — "Qaytim" oldingi sotuvning summasini ko'rsatmasin.
+
+    Tozalash faqat openPayModal() ichida edi. Oyna boshqa yo'l bilan
+    ko'rsatilganda (Bootstrap hodisasi, klaviatura, qayta ochish) eski
+    "Naqd berildi" va "Qaytim" raqamlari ekranda qolardi. Bundan tashqari
+    updateChange() qatorni YASHIRARDI, lekin span ichidagi MATNNI
+    tozalamasdi — qator qayta ko'ringan lahzada oldingi mijozning qaytimi
+    ko'rinib ketardi. Kassa uchun bu xavfli: kassir uni yangi chekning
+    qaytimi deb o'qib, noto'g'ri pul qaytarishi mumkin.
+
+    Endi tozalash oynaning O'Z hodisasiga (show/hidden.bs.modal) bog'langan,
+    ya'ni chaqiruv yo'liga bog'liq emas.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_ux9', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    def test_reset_is_bound_to_the_modal_event_not_the_opener(self):
+        self.assertIn("pm.addEventListener('show.bs.modal'", self.html)
+        self.assertIn("pm.addEventListener('hidden.bs.modal'", self.html)
+
+    def test_hiding_the_row_also_clears_the_text(self):
+        """Faqat display:none yetarli emas — matn ham nolga qaytsin."""
+        self.assertIn("if (amt) amt.textContent = '0';", self.html)
+
+    def test_modal_is_enlarged_for_touch(self):
+        self.assertIn('modal-lg', self.html)
+        self.assertIn('form-control-lg', self.html)
+        self.assertIn('#payModal .payment-btn', self.html)

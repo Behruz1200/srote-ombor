@@ -1050,8 +1050,33 @@
 </div>
 
 <!-- To'lov modali — "Sotuvni yakunlash" bosilgandan keyin chiqadi -->
+<style>
+/* UX-8: kassa oynasi barmoq bilan ishlash uchun — elementlar kattaroq.
+   Faqat #payModal ichida: to'lov turi kartasi yon paneldan SHU YERGA
+   ko'chiriladi, shuning uchun uni ham shu qoidalar qamrab oladi. */
+#payModal .modal-body { padding: 1.25rem 1.5rem; }
+#payModal #payModalTotal { font-size: 3.25rem; line-height: 1.1; }
+#payModal .payment-btn {
+    font-size: 1.1rem; font-weight: 600; padding: .9rem .5rem;
+    border-width: 2px; border-radius: 12px;
+}
+#payModal .payment-btn .bi { font-size: 1.25rem; vertical-align: -2px; }
+#payModal #cashGiven { font-size: 1.75rem; font-weight: 700; padding: .7rem .9rem; }
+#payModal #cashSuggest .btn {
+    font-size: 1.05rem; font-weight: 600; padding: .55rem 1rem;
+    border-width: 2px; border-radius: 10px;
+}
+#payModal #changeLabel { font-size: 1.05rem; }
+#payModal #changeAmount { font-size: 2.1rem; line-height: 1.1; }
+#payModal #checkoutBtn { font-size: 1.3rem; font-weight: 700; padding: .95rem; border-radius: 12px; }
+#payModal .modal-title { font-size: 1.25rem; }
+@media (max-width: 576px) {
+    #payModal #payModalTotal { font-size: 2.5rem; }
+    #payModal #changeAmount { font-size: 1.7rem; }
+}
+</style>
 <div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-wallet2"></i> To'lov</h5>
@@ -1067,18 +1092,17 @@
         <div id="payMethodMount"></div>
 
         <!-- Qaytim / qolgan hisoblagich -->
-        <div class="card p-2 mb-2">
-            <div class="d-flex align-items-center gap-2">
-                <label class="small text-muted mb-0" for="cashGiven" style="white-space:nowrap">
-                    <i class="bi bi-cash-coin"></i> Naqd berildi
-                </label>
-                <input type="number" id="cashGiven" class="form-control form-control-sm text-end"
-                       placeholder="so'm" min="0" step="1000" inputmode="numeric">
-            </div>
-            <div class="d-flex flex-wrap gap-1 mt-1" id="cashSuggest"></div>
-            <div class="d-flex justify-content-between align-items-baseline mt-1" id="changeRow" style="display:none;">
-                <span class="small" id="changeLabel">Qaytim:</span>
-                <span class="fs-5 fw-bold" id="changeAmount">0</span>
+        <div class="card p-3 mb-2">
+            <label class="text-muted mb-1" for="cashGiven">
+                <i class="bi bi-cash-coin"></i> Naqd berildi
+            </label>
+            <input type="number" id="cashGiven" class="form-control form-control-lg text-end"
+                   placeholder="so'm" min="0" step="1000" inputmode="numeric">
+            <div class="d-flex flex-wrap gap-2 mt-2" id="cashSuggest"></div>
+            <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top"
+                 id="changeRow" style="display:none;">
+                <span id="changeLabel">Qaytim:</span>
+                <span class="fw-bold" id="changeAmount">0</span>
             </div>
         </div>
       </div>
@@ -2040,7 +2064,14 @@ function updateChange() {
     if (!el || !row) return;
     const given = parseFloat(el.value || '');
     const total = (typeof currentTotalAmount === 'function') ? currentTotalAmount() : 0;
-    if (!(given > 0) || !(total > 0)) { row.style.display = 'none'; return; }
+    if (!(given > 0) || !(total > 0)) {
+        row.style.display = 'none';
+        // UX-9: MATNNI ham tozalaymiz. Ilgari faqat qator yashirilardi va
+        // eski summa spanда qolib ketardi — keyingi mijozда qator qayta
+        // ko'ringanда bir lahza OLDINGI sotuvning qaytimi ko'rinardi.
+        if (amt) amt.textContent = '0';
+        return;
+    }
     row.style.display = 'flex';
     if (given >= total) {
         lbl.textContent = 'Qaytim:';
@@ -2057,6 +2088,39 @@ function updateChange() {
 (function () {
     const el = document.getElementById('cashGiven');
     if (el) el.addEventListener('input', updateChange);
+})();
+
+// UX-9: to'lov oynasi HAR QANDAY yo'l bilan ochilsa tozalanadi.
+// Ilgari tozalash faqat openPayModal() ichida edi, ya'ni oyna boshqa
+// yo'l bilan ko'rsatilsa (Bootstrap hodisasi, klaviatura, qayta ochish)
+// oldingi sotuvning "Naqd berildi" va "Qaytim" raqamlari ekranda qolardi —
+// kassir buni YANGI chekning qaytimi deb o'qishi mumkin edi. Endi tozalash
+// oynaning O'Z hodisasiga bog'langan, chaqiruv yo'liga emas.
+(function () {
+    const pm = document.getElementById('payModal');
+    if (!pm) return;
+    pm.addEventListener('show.bs.modal', function () {
+        const cg = document.getElementById('cashGiven');
+        if (cg) cg.value = '';
+        const amt = document.getElementById('changeAmount');
+        if (amt) amt.textContent = '0';
+        const row = document.getElementById('changeRow');
+        if (row) row.style.display = 'none';
+        if (typeof renderCashSuggestions === 'function') renderCashSuggestions();
+        const pt = document.getElementById('payModalTotal');
+        if (pt && typeof currentTotalAmount === 'function') {
+            pt.textContent = fmt(currentTotalAmount());
+        }
+    });
+    // Yopilganda ham qoldirmaymiz — ekranda turib qolmasin.
+    pm.addEventListener('hidden.bs.modal', function () {
+        const cg = document.getElementById('cashGiven');
+        if (cg) cg.value = '';
+        const row = document.getElementById('changeRow');
+        if (row) row.style.display = 'none';
+        const amt = document.getElementById('changeAmount');
+        if (amt) amt.textContent = '0';
+    });
 })();
 
 // Chek summasiga qarab tayyor naqd summalarni chiqaramiz (yaxlit, chekdan katta).
@@ -2087,7 +2151,7 @@ function renderCashSuggestions() {
     list.forEach((v, i) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'btn btn-sm py-0 px-2 ' + (i === 0 ? 'btn-outline-success' : 'btn-outline-secondary');
+        b.className = 'btn ' + (i === 0 ? 'btn-outline-success' : 'btn-outline-secondary');
         b.textContent = fmt(v) + (i === 0 ? ' (aniq)' : '');
         b.addEventListener('click', () => {
             const cg = document.getElementById('cashGiven');
