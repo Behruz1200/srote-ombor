@@ -33,8 +33,64 @@
         </div>
     </div>
 
-    {% comment %}OFF-9: shu QURILMANING offline katalogi tayyormi.{% endcomment %}
-    <div id="offlineCatalogBadge" class="mb-3"></div>
+    {% comment %}OFF-10: HAMMA kassa qurilmasi — offline katalog holati.
+    Ilgari bu yerda faqat SHU qurilmaning nishoni bor edi, ya'ni telefonda
+    ko'rilganda kassa haqida hech narsa aytmasdi.{% endcomment %}
+    <div class="yrt-section mb-3">
+        <div class="yrt-section-head">
+            <h2 class="yrt-h2"><i class="bi bi-hdd-network text-primary"></i>
+                Kassa qurilmalari — offline katalog</h2>
+            <span class="yrt-tag">{{ dev_ok }} / {{ dev_total }} tayyor</span>
+        </div>
+        <div class="yrt-section-body flush">
+            {% if devices %}
+            <div class="table-responsive">
+                <table class="yrt-data-table">
+                    <thead><tr>
+                        <th>Qurilma</th><th>Filial</th><th>Oxirgi kassir</th>
+                        <th class="text-end">Tovar</th><th>Katalog</th><th>Holat</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for d in devices %}
+                        <tr>
+                            <td>
+                                <strong>{{ d }}</strong>
+                                <div class="small text-muted">{{ d.user_agent|truncatechars:44 }}</div>
+                            </td>
+                            <td>{{ d.branch.name|default:"—" }}</td>
+                            <td>{{ d.last_user.username|default:"—" }}</td>
+                            <td class="text-end">{{ d.catalog_count }}</td>
+                            <td>
+                                {% if d.catalog_at %}
+                                    {% if d.catalog_age_minutes < 60 %}
+                                        {{ d.catalog_age_minutes }} daqiqa oldin
+                                    {% else %}
+                                        {{ d.catalog_at|timesince }} oldin
+                                    {% endif %}
+                                {% else %}—{% endif %}
+                            </td>
+                            <td>
+                                {% if d.status == 'ok' %}
+                                    <span class="badge text-bg-success">Tayyor</span>
+                                {% elif d.status == 'stale' %}
+                                    <span class="badge text-bg-warning">Eskirgan</span>
+                                {% else %}
+                                    <span class="badge text-bg-danger">Katalog yo'q</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-3 text-muted small">
+                Hali birorta kassa katalog yuklamagan. Har kassada POS sahifasini
+                internet bor paytda bir marta oching — qolganini tizim o'zi qiladi.
+            </div>
+            {% endif %}
+        </div>
+    </div>
 
     <div class="yrt-section">
         <div class="yrt-section-head">

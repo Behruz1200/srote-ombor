@@ -42,6 +42,7 @@ from .models import (
     Transfer, TransferLine, StockWriteOff, Stocktake, StocktakeCount, ParkedSale, Promotion,
     PaymentQR, PaymentIntent,
     Supplier, IntakeSession, ProductRequest, CashPayout, CashIn, InvoiceDraft,
+    PosDevice,
     InvoiceImage, QuickSellItem, WebOrder, WebOrderLine, EmployeeDebt,
     EmployeeDebtItem,
     split_breakdown, _norm_pay_method,  # ARCH-6: yagona to'lov-split manbai
@@ -6228,6 +6229,48 @@ def pos_terminal(request):
 
 
 @login_required
+def pos_device_sync(request):
+    """POST /pos/device-sync/ — OFF-10: qurilmaning katalog holati.
+
+    ATAYLAB juda arzon: bitta upsert, hech qanday hisob-kitob yo'q. Mijoz
+    tomonda ham bo'sh vaqtda va "yuborib unutamiz" tarzda chaqiriladi —
+    SOTUVGA hech qachon xalaqit bermasligi kerak.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    try:
+        data = _json.loads(request.body.decode('utf-8'))
+    except ValueError:
+        return JsonResponse({'ok': False}, status=400)
+    did = str(data.get('device_id') or '').strip()[:64]
+    if not did:
+        return JsonResponse({'ok': False, 'error': 'device_id kerak'}, status=400)
+    try:
+        cnt = int(data.get('catalog_count') or 0)
+    except (TypeError, ValueError):
+        cnt = 0
+    at = None
+    _at = data.get('catalog_at')
+    if _at:
+        try:
+            from datetime import timezone as _dt_tz
+            at = datetime.fromtimestamp(int(_at) / 1000.0, tz=_dt_tz.utc)
+        except (TypeError, ValueError, OSError):
+            at = None
+    PosDevice.objects.update_or_create(
+        device_id=did,
+        defaults={
+            'branch': getattr(request.user, 'branch', None),
+            'last_user': request.user,
+            'user_agent': (request.META.get('HTTP_USER_AGENT') or '')[:200],
+            'catalog_count': max(0, cnt),
+            'catalog_at': at,
+            'last_seen': timezone.now(),
+        })
+    return JsonResponse({'ok': True})
+
+
+@login_required
 def pos_catalog(request):
     """GET /pos/catalog/ — OFF-8: butun katalog (offline skanerlash uchun).
 
@@ -7959,11 +8002,20 @@ def branch_list(request):
     total_revenue = sum(float(b.m_revenue) for b in branches)
     total_stock_value = sum(float(b.stock_value or 0) for b in branches)
 
+    # OFF-10: hamma kassa qurilmasining offline katalog holati. Egasi har
+    # kassaga borib tekshirmasin — bitta ro'yxatda ko'rinsin.
+    devices = list(PosDevice.objects.select_related('branch', 'last_user')
+                   .order_by('-last_seen')[:50])
+    dev_ok = sum(1 for d in devices if d.status == 'ok')
+
     return render(request, 'inventory/branch_list.html', {
         'branches': branches,
         'total_branches': total_branches,
         'total_revenue': total_revenue,
         'total_stock_value': total_stock_value,
+        'devices': devices,
+        'dev_ok': dev_ok,
+        'dev_total': len(devices),
     })
 
 

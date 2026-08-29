@@ -1976,3 +1976,58 @@ class WebOrderLine(models.Model):
     @property
     def total(self):
         return self.price * self.quantity
+
+
+class PosDevice(models.Model):
+    """OFF-10 — kassa qurilmasining offline katalog holati.
+
+    Katalog HAR BRAUZERNING o'z IndexedDB'sida yotadi, ya'ni "tayyormi?"
+    degan savolga faqat o'sha qurilmaning o'zi javob bera oladi. Egasi esa
+    hamma kassani bitta ekranda ko'rishi kerak — aks holda har kassaga borib
+    tekshirish kerak bo'ladi.
+
+    Shuning uchun har qurilma katalogni yangilagach shu yerga qisqa xabar
+    yuboradi. Yozuv SOTUVGA hech qanday ta'sir qilmaydi: xabar bo'sh vaqtda
+    ketadi va xato bo'lsa jimgina tashlab yuboriladi.
+    """
+    device_id = models.CharField(
+        max_length=64, unique=True,
+        help_text="Brauzerda saqlanadigan tasodifiy ID (localStorage)")
+    label = models.CharField(
+        max_length=60, blank=True,
+        help_text="Egasi qo'ygan nom, masalan 'Kassa 1'")
+    branch = models.ForeignKey(
+        Branch, on_delete=models.CASCADE, related_name='pos_devices',
+        null=True, blank=True)
+    last_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='pos_devices')
+    user_agent = models.CharField(max_length=200, blank=True)
+    catalog_count = models.PositiveIntegerField(
+        default=0, help_text="Qurilmada saqlangan tovar soni")
+    catalog_at = models.DateTimeField(
+        null=True, blank=True, help_text="Katalog oxirgi marta yangilangan vaqt")
+    last_seen = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Kassa qurilmasi'
+        verbose_name_plural = 'Kassa qurilmalari'
+        ordering = ['-last_seen']
+
+    def __str__(self):
+        return self.label or f'Qurilma {self.device_id[:8]}'
+
+    @property
+    def catalog_age_minutes(self):
+        if not self.catalog_at:
+            return None
+        return int((timezone.now() - self.catalog_at).total_seconds() // 60)
+
+    @property
+    def status(self):
+        """ok / stale / none — katalog yangilanish oynasi 1 soat."""
+        if not self.catalog_at or not self.catalog_count:
+            return 'none'
+        age = self.catalog_age_minutes
+        return 'ok' if age is not None and age <= 120 else 'stale'

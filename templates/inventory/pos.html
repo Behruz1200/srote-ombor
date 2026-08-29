@@ -506,10 +506,6 @@
         </div><!-- /.dash-hero__inner -->
     </header>
 
-    {% comment %}OFF-9: shu kassaning offline katalogi tayyormi — eng muhim
-    joyi shu yer, chunki internetsiz sotadigan qurilma aynan shu.{% endcomment %}
-    <div id="offlineCatalogBadge" class="mb-2"></div>
-
     <div class="row g-3">
         <!-- LEFT: search + cart -->
         <div class="col-lg-8">
@@ -2009,6 +2005,8 @@ function renderCart() {
         if (cs) { cs.innerHTML = ''; }
         if (typeof broadcastDisplay === 'function') broadcastDisplay({action: 'idle'});
         renderRoundSuggestions(0);
+        // OFF-10: sotuv tugadi — kechiktirilgan katalog sinxroni endi bo'lsin.
+        if (_syncWanted) scheduleCatalogSync(false);
         saveCart();
         return;
     }
@@ -2740,13 +2738,42 @@ async function catalogLoad() {
     } catch (e) { return null; }
 }
 
+// OFF-10: SOTUV BIRINCHI O'RINDA. Katalog sinxroni hech qachon sotuvga
+// xalaqit bermasligi kerak, shuning uchun u:
+//   * savat BO'SH bo'lmasa umuman boshlanmaydi,
+//   * checkout ketayotgan bo'lsa boshlanmaydi,
+//   * brauzer bo'sh vaqtida (requestIdleCallback) ishlaydi,
+//   * xato bersa jimgina o'tib ketadi — kassirga hech narsa ko'rsatilmaydi.
+// Kechiktirilgan sinxron yo'qolmaydi: keyingi soatlik urinishда qayta
+// ko'riladi va savat bo'shashi bilan ham darhol qayta uriniladi.
+let _syncWanted = false, _syncing = false;
+
+function _posBusy() {
+    try {
+        if (typeof checkoutInFlight !== 'undefined' && checkoutInFlight) return true;
+        if (typeof cart === 'object' && cart && Object.keys(cart).length) return true;
+    } catch (e) {}
+    return false;
+}
+
+function _whenIdle(fn) {
+    if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(fn, {timeout: 15000});
+    } else {
+        setTimeout(fn, 1200);
+    }
+}
+
 async function refreshCatalog(force) {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || _syncing) return;
+    if (_posBusy()) { _syncWanted = true; return; }   // sotuv ketyapti — keyin
+    _syncing = true;
     try {
         const cur = await catalogLoad();
         if (!force && cur && (Date.now() - cur.at) < CATALOG_MAX_AGE_MS) {
             _catalog = cur.data;
             _catalogAt = cur.at;
+            _syncWanted = false;
             return;
         }
         const resp = await fetch('/pos/catalog/', {headers: {'Accept': 'application/json'}});
@@ -2756,7 +2783,48 @@ async function refreshCatalog(force) {
         _catalog = data;
         _catalogAt = Date.now();
         await catalogSave(data);
-    } catch (e) { /* offline yoki xato — eski kesh qoladi */ }
+        _syncWanted = false;
+        reportDeviceSync();
+    } catch (e) {
+        /* offline yoki xato — eski kesh qoladi, kassirga ko'rsatilmaydi */
+    } finally {
+        _syncing = false;
+    }
+}
+
+// Sinxronni faqat BO'SH vaqtda boshlaymiz.
+function scheduleCatalogSync(force) {
+    _whenIdle(() => { refreshCatalog(force); });
+}
+
+// OFF-10: qurilma holatini serverga bildiramiz — egasi hamma kassani
+// bitta ekranda ko'rsin. "Yuborib unutamiz": javob kutilmaydi, xato
+// yutiladi, sotuvga hech qanday aloqasi yo'q.
+function deviceId() {
+    let d = null;
+    try { d = localStorage.getItem('yurit_device_id'); } catch (e) {}
+    if (!d) {
+        d = (self.crypto && crypto.randomUUID) ? crypto.randomUUID()
+            : ('d' + Date.now() + Math.random().toString(16).slice(2));
+        try { localStorage.setItem('yurit_device_id', d); } catch (e) {}
+    }
+    return d;
+}
+
+function reportDeviceSync() {
+    try {
+        const body = JSON.stringify({
+            device_id: deviceId(),
+            catalog_count: _catalog && _catalog.products ? _catalog.products.length : 0,
+            catalog_at: _catalogAt || 0,
+        });
+        fetch('/pos/device-sync/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: body,
+            keepalive: true,
+        }).catch(() => {});
+    } catch (e) {}
 }
 
 let _catalogAt = 0;
@@ -2945,12 +3013,14 @@ window.addEventListener('online', flushQueue);
 // bo'lganda ham darhol yangilaymiz — uzilishdan keyin narx/qoldiq eskirib
 // qolmasin.
 (async function () {
+    // Mahalliy nusxa DARHOL o'qiladi (arzon) — offline'da skaner ishlasin.
     const cur = await catalogLoad();
-    if (cur) { _catalog = cur.data; _catalogAt = cur.at; }   // offline'da ham tayyor
-    refreshCatalog(false);
+    if (cur) { _catalog = cur.data; _catalogAt = cur.at; }
+    reportDeviceSync();
+    scheduleCatalogSync(false);          // yuklab olish esa bo'sh vaqtda
 })();
-setInterval(() => refreshCatalog(false), CATALOG_MAX_AGE_MS);
-window.addEventListener('online', () => refreshCatalog(true));
+setInterval(() => scheduleCatalogSync(false), CATALOG_MAX_AGE_MS);
+window.addEventListener('online', () => scheduleCatalogSync(true));
 broadcastQueueCount();
 if (navigator.onLine) flushQueue();
 

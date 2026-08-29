@@ -3677,7 +3677,9 @@ class Off8OfflineCatalog(MoneyTestBase):
     def test_refresh_is_hourly(self):
         html = self.client.get('/pos/').content.decode()
         self.assertIn('60 * 60 * 1000', html)
-        self.assertIn('setInterval(() => refreshCatalog(false)', html)
+        # OFF-10: soatlik urinish endi BO'SH VAQT rejalashtiruvchisi orqali
+        # ketadi (sotuvga xalaqit bermasin), lekin davri o'sha-o'sha.
+        self.assertIn('setInterval(() => scheduleCatalogSync(false)', html)
 
     def test_indexeddb_upgrade_keeps_the_queue(self):
         """v1 -> v2 da yuborilmagan sotuvlar yo'qolmasin."""
@@ -3686,49 +3688,97 @@ class Off8OfflineCatalog(MoneyTestBase):
         self.assertIn("indexedDB.open(QUEUE_DB, 2)", html)
 
 
-class Off9CatalogStatusBadge(MoneyTestBase):
-    """OFF-9 — offline katalog holati ko'rinib tursin.
+class Off10SyncNeverBlocksSales(MoneyTestBase):
+    """OFF-10 — sotuv BIRINCHI o'rinda; katalog sinxroni ko'rinmas bo'lsin.
 
-    Katalog brauzerning IndexedDB'sida yotadi, ya'ni HAR QURILMA o'zi uchun
-    yuklab olishi kerak. Yangi kassa kompyuteri, yangi brauzer profili yoki
-    sayt ma'lumoti tozalangan mashina — hammasi bo'sh katalog bilan
-    boshlanadi va onlayn bir marta ochilmaguncha internetsiz sotolmaydi.
+    Egasi: "Offline catalog sync should be invisible and should not affect
+    POS sales at any time. Sales is prior No1."
 
-    Buni DevTools'siz ko'rish uchun nishon qo'shildi. U SHU QURILMANING
-    holatini ko'rsatadi — telefonda ko'rilgani kassa haqida hech narsa
-    aytmaydi, shuning uchun matni ham "Bu qurilmada" deb boshlanadi.
+    Shuning uchun sinxron:
+      * savat bo'sh bo'lmasa BOSHLANMAYDI,
+      * checkout ketayotgan bo'lsa boshlanmaydi,
+      * brauzer bo'sh vaqtida (requestIdleCallback) ishlaydi,
+      * xato bersa kassirga hech narsa ko'rsatmaydi,
+      * kechiktirilgani savat bo'shashi bilan qayta uriniladi (yo'qolmaydi).
+
+    Va POS sahifasidagi ko'rinadigan nishon OLIB TASHLANDI — kassirga
+    katalog holati kerak emas, u egasiga kerak.
     """
 
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_off9', password='x', role=User.Role.ADMIN,
+            username='admin_off10', password='x', role=User.Role.ADMIN,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
-
-    def test_badge_is_on_the_branches_page(self):
-        r = self.client.get('/branches/')
-        self.assertEqual(r.status_code, 200)
-        self.assertIn('id="offlineCatalogBadge"', r.content.decode())
-
-    def test_badge_is_on_the_pos_page(self):
         self.open_shift()
-        r = self.client.get('/pos/')
+        self.pos = self.client.get('/pos/').content.decode()
+
+    # ---- ko'rinmas ----
+    def test_sync_waits_while_a_sale_is_open(self):
+        self.assertIn('function _posBusy', self.pos)
+        self.assertIn('if (_posBusy()) { _syncWanted = true; return; }', self.pos)
+
+    def test_sync_runs_only_when_the_browser_is_idle(self):
+        self.assertIn('requestIdleCallback', self.pos)
+        self.assertIn('scheduleCatalogSync', self.pos)
+
+    def test_deferred_sync_is_retried_when_the_cart_empties(self):
+        self.assertIn('if (_syncWanted) scheduleCatalogSync(false);', self.pos)
+
+    def test_no_visible_badge_on_the_pos_page(self):
+        self.assertNotIn('offlineCatalogBadge', self.pos,
+                         'kassirga katalog holati ko`rsatilmaydi')
+
+    def test_sync_errors_are_swallowed(self):
+        self.assertIn('eski kesh qoladi, kassirga ko`rsatilmaydi'
+                      .replace('`', "'"), self.pos)
+
+    # ---- egasi hamma qurilmani ko'radi ----
+    def test_device_reports_its_status(self):
+        r = self.client.post('/pos/device-sync/',
+                             data=json.dumps({'device_id': 'dev-1',
+                                              'catalog_count': 800,
+                                              'catalog_at': 1756500000000}),
+                             content_type='application/json')
         self.assertEqual(r.status_code, 200)
-        self.assertIn('id="offlineCatalogBadge"', r.content.decode())
+        from inventory.models import PosDevice
+        d = PosDevice.objects.get(device_id='dev-1')
+        self.assertEqual(d.catalog_count, 800)
+        self.assertEqual(d.branch, self.branch)
+        self.assertEqual(d.last_user, self.admin)
 
-    def test_badge_says_it_is_this_device_only(self):
-        r = self.client.get('/branches/')
-        self.assertIn('Bu qurilmada', r.content.decode())
+    def test_second_report_updates_not_duplicates(self):
+        from inventory.models import PosDevice
+        for n in (100, 800):
+            self.client.post('/pos/device-sync/',
+                             data=json.dumps({'device_id': 'dev-1',
+                                              'catalog_count': n}),
+                             content_type='application/json')
+        self.assertEqual(PosDevice.objects.filter(device_id='dev-1').count(), 1)
+        self.assertEqual(PosDevice.objects.get(device_id='dev-1').catalog_count, 800)
 
-    def test_reader_releases_the_connection(self):
-        """Ochiq ulanish POS sahifasining v2 yangilanishini BLOKLARDI."""
+    def test_status_flags_a_device_with_no_catalog(self):
+        from inventory.models import PosDevice
+        d = PosDevice.objects.create(device_id='dev-empty', catalog_count=0)
+        self.assertEqual(d.status, 'none')
+
+    def test_status_flags_a_stale_catalog(self):
+        from inventory.models import PosDevice
+        d = PosDevice.objects.create(
+            device_id='dev-old', catalog_count=800,
+            catalog_at=timezone.now() - timezone.timedelta(hours=5))
+        self.assertEqual(d.status, 'stale')
+
+    def test_owner_sees_every_device_on_the_branches_page(self):
+        from inventory.models import PosDevice
+        PosDevice.objects.create(device_id='k1', label='Kassa 1',
+                                 branch=self.branch, catalog_count=800,
+                                 catalog_at=timezone.now())
+        PosDevice.objects.create(device_id='k2', label='Kassa 2',
+                                 branch=self.branch, catalog_count=0)
         html = self.client.get('/branches/').content.decode()
-        self.assertIn('db.onversionchange', html)
-        self.assertIn('db.close()', html)
-
-    def test_reader_does_not_force_a_version(self):
-        """indexedDB.open('yurit-pos') — versiya berilmasin, ziddiyat chiqmasin."""
-        html = self.client.get('/branches/').content.decode()
-        self.assertIn("indexedDB.open('yurit-pos')", html)
+        self.assertIn('Kassa 1', html)
+        self.assertIn('Kassa 2', html)
+        self.assertIn('1 / 2 tayyor', html)

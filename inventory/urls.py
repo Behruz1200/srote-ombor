@@ -67,6 +67,7 @@ urlpatterns = [
     path('pos/', views.pos_terminal, name='pos_terminal'),
     path('pos/lookup/', views.pos_lookup, name='pos_lookup'),
     path('pos/catalog/', views.pos_catalog, name='pos_catalog'),   # OFF-8
+    path('pos/device-sync/', views.pos_device_sync, name='pos_device_sync'),   # OFF-10
     path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
     path('pos/display/', views.pos_customer_display, name='pos_customer_display'),
     path('pos/park/', views.pos_park, name='pos_park'),
