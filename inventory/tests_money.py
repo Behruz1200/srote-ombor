@@ -3684,3 +3684,51 @@ class Off8OfflineCatalog(MoneyTestBase):
         html = self.client.get('/pos/').content.decode()
         self.assertIn('objectStoreNames.contains(QUEUE_STORE)', html)
         self.assertIn("indexedDB.open(QUEUE_DB, 2)", html)
+
+
+class Off9CatalogStatusBadge(MoneyTestBase):
+    """OFF-9 — offline katalog holati ko'rinib tursin.
+
+    Katalog brauzerning IndexedDB'sida yotadi, ya'ni HAR QURILMA o'zi uchun
+    yuklab olishi kerak. Yangi kassa kompyuteri, yangi brauzer profili yoki
+    sayt ma'lumoti tozalangan mashina — hammasi bo'sh katalog bilan
+    boshlanadi va onlayn bir marta ochilmaguncha internetsiz sotolmaydi.
+
+    Buni DevTools'siz ko'rish uchun nishon qo'shildi. U SHU QURILMANING
+    holatini ko'rsatadi — telefonda ko'rilgani kassa haqida hech narsa
+    aytmaydi, shuning uchun matni ham "Bu qurilmada" deb boshlanadi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_off9', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+
+    def test_badge_is_on_the_branches_page(self):
+        r = self.client.get('/branches/')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('id="offlineCatalogBadge"', r.content.decode())
+
+    def test_badge_is_on_the_pos_page(self):
+        self.open_shift()
+        r = self.client.get('/pos/')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('id="offlineCatalogBadge"', r.content.decode())
+
+    def test_badge_says_it_is_this_device_only(self):
+        r = self.client.get('/branches/')
+        self.assertIn('Bu qurilmada', r.content.decode())
+
+    def test_reader_releases_the_connection(self):
+        """Ochiq ulanish POS sahifasining v2 yangilanishini BLOKLARDI."""
+        html = self.client.get('/branches/').content.decode()
+        self.assertIn('db.onversionchange', html)
+        self.assertIn('db.close()', html)
+
+    def test_reader_does_not_force_a_version(self):
+        """indexedDB.open('yurit-pos') — versiya berilmasin, ziddiyat chiqmasin."""
+        html = self.client.get('/branches/').content.decode()
+        self.assertIn("indexedDB.open('yurit-pos')", html)
