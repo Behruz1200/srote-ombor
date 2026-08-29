@@ -6386,6 +6386,18 @@ def pos_checkout(request):
         customer_name, customer_phone, note }
     Creates SaleTransaction + Sales atomically. Returns {ok, txn_id, receipt_url}.
     """
+    # TG-1: SOTUV yo'lidan Telegram xabarlari OLIB TASHLANDI (do'kon egasi
+    # so'rovi, 2026-08). Ilgari bu yerda uchta send_telegram bor edi: kech
+    # offline sotuv, rad etilgan offline replay va tannarxdan past sotuv.
+    #
+    # Hech qanday yozuv YO'QOLMADI — uchalasi ham AuditLog'ga yoziladi va
+    # audit sahifasida ko'rinadi. Telegram faqat DUBLIKAT bildirishnoma edi.
+    #
+    # Yon foyda: send_telegram har chat_id uchun 10 s time-out bilan tashqi
+    # so'rov qiladi va ulardan biri transaction.atomic() ICHIDA edi — ya'ni
+    # tarmoq sekinlashsa BranchStock qatorlari qulfda turib, boshqa kassirning
+    # sotuvi ham kutib qolardi. Sotuv yo'lida tashqi chaqiruv qolmadi.
+
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
 
@@ -6629,12 +6641,6 @@ def pos_checkout(request):
                                              f"— yopilish naqd hisobiga kirmaydi")[:300],
                                 changes={'shift_id': _hist.id, 'client_ts': _client_ts},
                             )
-                            from .notifications import send_telegram
-                            send_telegram(
-                                f"⚠️ <b>Kech offline sotuv</b>\n"
-                                f"Filial: {branch.name} · Smen #{_hist.id} allaqachon yopilgan.\n"
-                                f"Sotuv vaqti: {_dt:%Y-%m-%d %H:%M}. Yopilish naqd hisobiga "
-                                f"kirmaydi — Z-hisobotни tekshiring.")
                         except Exception:
                             logger.exception('late-replay flag failed (shift %s)', _hist.id)
 
@@ -6744,17 +6750,8 @@ def pos_checkout(request):
                     # and log to AuditLog — kassir's offline sale was rejected at sync time.
                     if data.get('is_offline_replay'):
                         try:
-                            from .notifications import send_telegram
                             # OFF-6: TO'LIQ payload — sotuv yo'qolib ketmasin.
                             # Barcha qatorlar, narxlar, to'lov turi, mijoz.
-                            _pl_lines = []
-                            for _l in parsed_lines:
-                                _s = locked.get(_l['sid'])
-                                _nm = (f"{_s.variant.product.code} "
-                                       f"{_s.variant.size or ''}/{_s.variant.color or ''}"
-                                       if _s else f"stock {_l['sid']}")
-                                _pl_lines.append(
-                                    f"  • {_nm} — {_l['qty']} × {int(_l['price'])}")
                             _payload = {
                                 'lines': [{'sid': _l['sid'], 'qty': _l['qty'],
                                            'price': float(_l['price'])}
@@ -6764,16 +6761,6 @@ def pos_checkout(request):
                                 'customer_phone': customer_phone,
                                 'idempotency_key': idem_key,
                             }
-                            _cust = f"\nMijoz: {customer_phone}" if customer_phone else ""
-                            send_telegram(
-                                f"⚠️ <b>Offline sotuv RAD ETILDI</b>\n"
-                                f"Filial: {branch.name}\n"
-                                f"Kassir: {request.user.username}\n"
-                                f"Sabab: {err}\n"
-                                f"<b>Sotuv tarkibi:</b>\n" + "\n".join(_pl_lines) +
-                                f"\nTo'lov: {payment_method}{_cust}\n"
-                                f"⚠️ Pul allaqachon kassada bo'lishi mumkin — qo'lda tekshiring."
-                            )
                             AuditLog.objects.create(
                                 user=request.user,
                                 username_snapshot=request.user.username,
@@ -6887,20 +6874,6 @@ def pos_checkout(request):
                                  f"{int(ov['entered'])} ({ov['diff_pct']}%{flag})")[:300],
                     changes={'price_override': ov, 'txn_id': txn.pk},
                 )
-            # Faqat TANNARXDAN PAST (zararli) sotuvга Telegram ogohlantirish —
-            # bu eng o'tkir "pul oqib ketmoqda" signali, kamdan-kam bo'ladi.
-            loss = [o for o in price_overrides if o['below_cost']]
-            if loss:
-                try:
-                    from .notifications import send_telegram
-                    rows = '\n'.join(
-                        f"• {o['code']} {o['variant']}: {int(o['entered'])} so'm "
-                        f"(tannarx {int(o['cost'])})" for o in loss)
-                    send_telegram(
-                        f"🔴 <b>Tannarxdan past sotuv</b>\n"
-                        f"Kassir: {request.user.username} · Chek #{txn.pk}\n{rows}")
-                except Exception:
-                    logger.exception('below-cost telegram alert failed (txn %s)', txn.pk)
         except Exception:
             logger.exception('price-override audit failed for txn %s', txn.pk)
 

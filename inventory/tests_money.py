@@ -3539,3 +3539,56 @@ class Pos1CheckoutHasAClientTimeout(MoneyTestBase):
         self.assertEqual(r2.status_code, 200)
         self.assertEqual(SaleTransaction.objects.count(), 1,
                          'navbat qayta yuborsa ham chek BITTA bo`lsin')
+
+
+class Tg1NoTelegramOnTheSalePath(MoneyTestBase):
+    """TG-1 — sotuv yo'lida Telegram xabari qolmasin (do'kon egasi so'rovi).
+
+    pos_checkout ichida uchta send_telegram bor edi:
+      1. kech offline sotuv (yopilgan smenga tushgan),
+      2. rad etilgan offline replay,
+      3. tannarxdan past sotuv.
+
+    Hech qanday YOZUV yo'qolmaydi — uchalasi ham AuditLog'ga yoziladi.
+    Telegram faqat dublikat bildirishnoma edi.
+
+    Yon foyda: send_telegram har chat_id uchun 10 s time-out bilan tashqi
+    so'rov qiladi va ulardan biri transaction.atomic() ICHIDA edi — tarmoq
+    sekinlashsa BranchStock qatorlari qulfda turib, boshqa kassirning sotuvi
+    ham kutib qolardi.
+    """
+
+    def _checkout_source(self):
+        import inventory, os, re
+        path = os.path.join(os.path.dirname(inventory.__file__), 'views.py')
+        with open(path, encoding='utf-8') as f:
+            src = f.read()
+        start = src.index('def pos_checkout(request):')
+        nxt = re.search(r'\n@\w|\ndef ', src[start + 10:])
+        return src[start:start + 10 + (nxt.start() if nxt else len(src))]
+
+    def test_no_telegram_call_remains_in_checkout(self):
+        self.assertNotIn('send_telegram(', self._checkout_source(),
+                         "sotuv yo'lida Telegram chaqiruvi qolmasligi kerak")
+
+    def test_no_outbound_network_left_in_the_atomic_block(self):
+        """Qulf ushlab turib tarmoqni kutish — eng xavflisi shu edi."""
+        src = self._checkout_source()
+        atomic = src[src.index('with transaction.atomic():'):]
+        self.assertNotIn('send_telegram', atomic)
+
+    def test_below_cost_sale_is_still_recorded_in_audit(self):
+        """Telegram ketdi, AUDIT qoldi — signal yo'qolmadi."""
+        self.open_shift()
+        r = self.checkout(lines=[{'stock_id': self.stock.pk, 'qty': 1,
+                                  'sale_price': '50000'}])   # tannarx 60 000
+        self.assertEqual(r.status_code, 200)
+        from inventory.models import AuditLog
+        logs = AuditLog.objects.filter(model_name='PriceOverride')
+        self.assertEqual(logs.count(), 1, 'tannarxdan past sotuv audit`da qolsin')
+        self.assertTrue(logs.first().changes['price_override']['below_cost'])
+
+    def test_normal_sale_still_works(self):
+        self.open_shift()
+        self.assertEqual(self.checkout().status_code, 200)
+        self.assertEqual(SaleTransaction.objects.count(), 1)
