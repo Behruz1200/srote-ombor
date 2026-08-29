@@ -3936,3 +3936,116 @@ class Stk15BulkPricingDoesNotHoldTheCatalogue(MoneyTestBase):
                                  .filter(pk__in=chunk)))
             # tranzaksiya yopildi -> qulf bo'shadi, keyingi bo'lak kuta olmaydi
         self.assertEqual(seen, 3)
+
+
+class Pos3SpeedFeaturesAreVisible(MoneyTestBase):
+    """POS-3 — tezlik xususiyatlari KO'RINSIN.
+
+    Tizimda allaqachon bor edi, lekin yashiringan:
+      * '3 *' — miqdor yorlig'i, faqat yordam oynasida yozilgan;
+      * F1..F10 — to'liq to'plam, faqat yopiq akkordeonda.
+
+    Sotuvchilar shuning uchun "yorliqlar bilinmaydi" deyishdi: tizimning eng
+    tez yo'llari ekranda umuman ko'rinmasdi. Yangi sotuvchi ularni birinchi
+    kunidan ishlata olishi kerak.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_pos3', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    def test_quantity_buttons_are_on_screen(self):
+        self.assertIn('id="qtyQuickRow"', self.html)
+        for q in ('×2', '×3', '×5', '×10'):
+            self.assertIn(q, self.html)
+
+    def test_quantity_buttons_use_the_same_mechanism_as_the_shortcut(self):
+        """Ikki yo'l bir xil holatni o'zgartirsin — ajralib ketmasin."""
+        self.assertIn('pendingQty = (pendingQty === n) ? 1 : n', self.html)
+
+    def test_pressing_again_cancels(self):
+        self.assertIn('qayta bosish = bekor', self.html)
+
+    def test_key_hints_are_always_visible(self):
+        self.assertIn('id="posKeyHints"', self.html)
+        for k in ('F12', 'F4', 'F2', 'F6'):
+            self.assertIn(f'<kbd class="pos-key">{k}</kbd>', self.html)
+
+    def test_state_resets_after_the_item_is_added(self):
+        """pendingQty bir martalik — tugma ham qaytishi kerak."""
+        self.assertIn('window.__qtyQuickPaint', self.html)
+
+
+class Ops14AuditPruneKeepsTheMoneyTrail(MoneyTestBase):
+    """OPS-14 — audit tozalash PUL izini o'chirmasin.
+
+    AuditLog bazadagi ENG KATTA jadval (50 647 qator — sotuvlardan ham
+    ko'p) va hech narsa uni cheklamasdi. Tozalash buyrug'i bor edi, lekin
+    hech qachon rejalashtirilmagan.
+
+    Nozik joyi: eski buyruq oynadan eski HAMMA narsani o'chirardi. SEC-14
+    bo'yicha esa audit jadvaliga ataylab pul va ombor hodisalari qo'shilgan
+    — ichki o'g'irlik tergovi uchun. O'g'irlik ko'pincha ancha keyin
+    aniqlanadi, ya'ni aynan o'sha yozuvlarni o'chirish maqsadni yo'qqa
+    chiqaradi. Endi ular himoyalangan.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from inventory.models import AuditLog
+        old = timezone.now() - timezone.timedelta(days=800)
+        self.money = AuditLog.objects.create(
+            action=AuditLog.Action.UPDATE, model_name='CashPayout',
+            object_repr='kassa chiqimi', created_at=old)
+        self.sale = AuditLog.objects.create(
+            action=AuditLog.Action.CREATE, model_name='Return',
+            object_repr='qaytarish', created_at=old)
+        self.noise = AuditLog.objects.create(
+            action=AuditLog.Action.UPDATE, model_name='Product',
+            object_repr='nom tahrirlandi', created_at=old)
+        self.recent = AuditLog.objects.create(
+            action=AuditLog.Action.UPDATE, model_name='Product',
+            object_repr='yaqinda', created_at=timezone.now())
+
+    def _run(self, **kw):
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('prune_audit_log', stdout=out, **kw)
+        return out.getvalue()
+
+    def test_money_events_survive(self):
+        from inventory.models import AuditLog
+        self._run()
+        self.assertTrue(AuditLog.objects.filter(pk=self.money.pk).exists(),
+                        'kassa chiqimi o`chirilmasligi kerak')
+        self.assertTrue(AuditLog.objects.filter(pk=self.sale.pk).exists(),
+                        'qaytarish o`chirilmasligi kerak')
+
+    def test_routine_edits_are_pruned(self):
+        from inventory.models import AuditLog
+        self._run()
+        self.assertFalse(AuditLog.objects.filter(pk=self.noise.pk).exists())
+
+    def test_recent_rows_are_untouched(self):
+        from inventory.models import AuditLog
+        self._run()
+        self.assertTrue(AuditLog.objects.filter(pk=self.recent.pk).exists())
+
+    def test_dry_run_deletes_nothing(self):
+        from inventory.models import AuditLog
+        before = AuditLog.objects.count()
+        out = self._run(dry_run=True)
+        self.assertEqual(AuditLog.objects.count(), before)
+        self.assertIn('dry-run', out)
+
+    def test_all_models_flag_can_override(self):
+        from inventory.models import AuditLog
+        self._run(all_models=True)
+        self.assertFalse(AuditLog.objects.filter(pk=self.money.pk).exists())

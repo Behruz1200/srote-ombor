@@ -513,6 +513,18 @@
                 <label class="form-label small text-uppercase">
                     <i class="bi bi-upc-scan"></i> Kodni skanerlang yoki yozing
                 </label>
+                {% comment %}POS-3: "3 *" yorlig'i tez, lekin KO'RINMAS edi —
+                yangi sotuvchi uni bilmaydi. Endi ko'rinadigan tugmalar.
+                Bosilgach keyingi skanerlangan tovar shu miqdorda qo'shiladi.
+                {% endcomment %}
+                <div class="d-flex align-items-center gap-1 flex-wrap mb-2" id="qtyQuickRow">
+                    <small class="text-muted text-uppercase me-1">Miqdor</small>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 qty-quick" data-q="2">×2</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 qty-quick" data-q="3">×3</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 qty-quick" data-q="5">×5</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 qty-quick" data-q="10">×10</button>
+                    <span class="small text-muted ms-1" id="qtyQuickHint"></span>
+                </div>
                 <div class="d-flex gap-2">
                     <input type="text" id="scanInput" class="form-control form-control-lg"
                            placeholder="OYO-0001, nike, ko'ylak..."
@@ -798,6 +810,19 @@
                         <i class="bi bi-chat-dots"></i> Chek SMS yuborish
                     </label>
                 </div>
+            </div>
+
+            {% comment %}POS-3: F-tugmalar kodda bor edi, lekin faqat yopiq
+            yordam oynasida yozilgan — sotuvchilar "yorliqlar bilinmaydi"
+            deyishgani shundan. Endi eng kerakli to'rttasi doim ko'rinadi.
+            {% endcomment %}
+            <div class="d-flex gap-2 flex-wrap align-items-center mb-1 small text-muted"
+                 id="posKeyHints">
+                <span><kbd class="pos-key">F12</kbd> tez naqd</span>
+                <span><kbd class="pos-key">F4</kbd> yakunlash</span>
+                <span><kbd class="pos-key">F2</kbd> qidiruv</span>
+                <span><kbd class="pos-key">F6</kbd> oxirgi qatorni o'chirish</span>
+                <span><kbd class="pos-key">F1</kbd> hammasi</span>
             </div>
 
             <!-- Sticky checkout panel -->
@@ -1958,6 +1983,7 @@ function addToCart(product, variant) {
     // Patch 4: ko'paytirgichni qo'llaymiz va DARHOL 1 ga qaytaramiz (bir martalik).
     const want = pendingQty;
     pendingQty = 1;
+    if (typeof window.__qtyQuickPaint === 'function') window.__qtyQuickPaint();
     if (cart[key]) {
         const room = variant.stock_count - cart[key].qty;
         if (room <= 0) {
@@ -2708,6 +2734,7 @@ scanInput.addEventListener('keydown', (e) => {
         if (n > 0 && n <= 999) {
             pendingQty = n;
             scanInput.value = '';
+            if (typeof window.__qtyQuickPaint === 'function') window.__qtyQuickPaint();
             setStatus(`× ${n} — endi tovarni skanerlang`, 'success');
         }
         return;
@@ -2715,6 +2742,32 @@ scanInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
 });
 searchBtn.addEventListener('click', doSearch);
+
+// POS-3: ko'rinadigan miqdor tugmalari. '3 *' bilan AYNI mantiq —
+// pendingQty o'rnatiladi va keyingi qo'shilgan tovarga bir marta qo'llanadi.
+(function () {
+    const hint = document.getElementById('qtyQuickHint');
+    function paint() {
+        document.querySelectorAll('.qty-quick').forEach(b => {
+            const on = pendingQty > 1 && parseInt(b.dataset.q, 10) === pendingQty;
+            b.classList.toggle('btn-warning', on);
+            b.classList.toggle('btn-outline-secondary', !on);
+        });
+        if (hint) hint.textContent = pendingQty > 1
+            ? `× ${pendingQty} — endi tovarni skanerlang` : '';
+    }
+    document.querySelectorAll('.qty-quick').forEach(b => {
+        b.addEventListener('click', () => {
+            const n = parseInt(b.dataset.q, 10) || 1;
+            pendingQty = (pendingQty === n) ? 1 : n;   // qayta bosish = bekor
+            paint();
+            refocus();
+        });
+    });
+    // Savat o'zgarganda pendingQty 1 ga qaytadi — tugmalar ham qaytsin.
+    window.__qtyQuickPaint = paint;
+    paint();
+})();
 
 // Debounced auto-search: as user types (or scanner pastes), search
 // after 350ms idle. Helps when user types a name without hitting Enter.
