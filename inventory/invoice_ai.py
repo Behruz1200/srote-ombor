@@ -273,7 +273,22 @@ def _units(qty, cost, line_sum):
     Ya'ni "1 крб" bitta quti, ichida 72 dona. Nomdagi "12X1Л" kabi
     belgilarga ISHONMAYMIZ — faqat qog'ozdagi raqamlar hal qiladi.
 
-    Qaytaradi: (dona, quti_ichida, ishonchli_mi)
+    Qaytaradi: (dona, quti_ichida, ishonchli_mi, arifmetika_yopildimi)
+
+    AI-2 — oxirgi qiymat AJRATIB olindi. `ishonchli_mi` (sum_ok) XODIM uchun
+    belgi: "qog'ozdagi qty hisoblangan donaga mos kelmadi, tekshir". Quti
+    qatorida u TABIIY ravishda False bo'ladi (qty=1 quti, dona=12) — bu xato
+    emas, shunchaki tekshirishga arziydi.
+
+    `arifmetika_yopildimi` esa BOSHQA savolga javob beradi: Сумма / Цена
+    butun songa tushdimi? Rasm noto'g'ri burilganda model ustunlarni
+    chalkashtiradi va bu bo'linish umuman yopilmaydi — ya'ni bu BURILISHNI
+    aniqlash uchun to'g'ri signal. Ikkovini bitta songa qo'shib yuborish
+    (_confidence sum_ok ni ishlatardi) quti qatorlari ko'p fakturani "past
+    ishonch" deb belgilardi va uni behuda burib qayta o'qishga tushirardi.
+
+    None = hukm yo'q (narxi/summasi yo'q bonus qator — burilish haqida hech
+    narsa aytmaydi, shuning uchun maxrajga ham kirmaydi).
     """
     if cost > 0 and line_sum > 0:
         n = line_sum / cost
@@ -286,10 +301,10 @@ def _units(qty, cost, line_sum):
             # quti holati qty=1/r=72) — TRUSTED emas, xodim tekshirsin. Ilgari
             # doim True qaytarib, xato son "ishonchli" ko'rinardi.
             trusted = (qty > 0 and int(r) == int(qty))
-            return float(r), (per_box if per_box > 1.001 else 0), trusted
-        return qty, 0, False          # bo'linmadi — foydalanuvchi tekshirsin
+            return float(r), (per_box if per_box > 1.001 else 0), trusted, True
+        return qty, 0, False, False   # bo'linmadi — foydalanuvchi tekshirsin
     # narx yoki summa yo'q (masalan bonus tovar) — qty o'zi
-    return qty, 0, True
+    return qty, 0, True, None
 
 
 def _phone(v):
@@ -351,14 +366,31 @@ def _parse_payload(text):
 def _confidence(data):
     """Natija qanchalik ishonchli — fakturaning O'Z arifmetikasiga qarab.
 
-    Burilgan rasmda model qatorlarni chalkashtiradi va qty x narx = summa
-    tenglik buziladi. Shu bilan qaysi burilish to'g'ri ekanini bilamiz.
+    Burilgan rasmda model qatorlarni chalkashtiradi va Сумма / Цена bo'linishi
+    yopilmay qoladi. Shu bilan qaysi burilish to'g'ri ekanini bilamiz.
+
+    AI-2: ilgari bu yerda `sum_ok` ishlatilardi, u esa BOSHQA narsani
+    bildiradi — "qog'ozdagi qty hisoblangan donaga teng emas, xodim
+    tekshirsin". Quti bilan keladigan fakturada ("1 крб x 21 049 = 252 593")
+    har bir quti qatori tabiiy ravishda sum_ok=False bo'ladi. Natijada
+    MUKAMMAL o'qilgan faktura 1.11 baho olardi (chegara 1.4) va kod uni
+    behuda uch marta burib qayta o'qirdi — bu esa HTTP time-out'ini yeb,
+    javobni butunlay yo'q qilardi. Endi `arith_ok` ishlatiladi: u aynan
+    "bo'linish yopildimi" degan savolga javob beradi va quti/dona farqiga
+    befarq. Narxsiz bonus qatorlar maxrajga kirmaydi — ular burilish haqida
+    hech narsa aytmaydi.
     """
     rows = data.get('rows') or []
     if not rows:
         return -1.0
-    ok = sum(1 for r in rows if r.get('sum_ok'))
-    score = ok / len(rows)
+    # Eski payload'да arith_ok yo'q — o'shanda avvalgi xatti-harakat qoladi.
+    if any('arith_ok' in r for r in rows):
+        pool = [r for r in rows if r.get('arith_ok') is not None]
+        ok = sum(1 for r in pool if r.get('arith_ok'))
+    else:
+        pool = rows
+        ok = sum(1 for r in pool if r.get('sum_ok'))
+    score = (ok / len(pool)) if pool else 0.0
     total = data.get('total') or 0
     if total > 0:
         calc = sum((r.get('total_qty') or 0) * (r.get('cost') or 0) for r in rows)
@@ -532,7 +564,7 @@ def _extract_bytes(raw, media_type, timeout=120):
         line_sum = _num(r.get('line_sum'))
         unit = (r.get('unit') or '').strip()[:20]
         # Miqdorni qog'ozning o'z hisobidan chiqaramiz (izohga qarang).
-        total_qty, per_case, sum_ok = _units(qty, cost, line_sum)
+        total_qty, per_case, sum_ok, arith_ok = _units(qty, cost, line_sum)
         qty_note = ''
         if per_case > 1:
             qty_note = '%g %s × %g dona' % (qty, unit or 'quti', per_case)
@@ -557,6 +589,7 @@ def _extract_bytes(raw, media_type, timeout=120):
             'cost': cost,
             'line_sum': line_sum,
             'sum_ok': sum_ok,
+            'arith_ok': arith_ok,      # AI-2: burilishni aniqlash signali
         })
 
     return {

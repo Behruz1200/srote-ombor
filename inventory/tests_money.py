@@ -3050,3 +3050,92 @@ class Ai1ExtractRespectsTimeBudget(TestCase):
         with mock.patch.object(ai, '_extract_bytes', side_effect=fake):
             ai.extract_invoice(self.f, timeout=120, budget=20)
         self.assertTrue(all(t <= 20.001 for t in seen), seen)
+
+
+class Ai2ConfidenceUnderstandsBoxRows(TestCase):
+    """AI-2 — "quti" qatorlari TO'G'RI o'qilgan fakturani past baholamasin.
+
+    28.08 nakladnoyi: 41 qator, model hammasini to'g'ri o'qidi, lekin ishonch
+    1.11 chiqdi (chegara 1.4) va kod uni burib qayta o'qishga tushdi — bu esa
+    HTTP time-out'ini yeb, javobni butunlay yo'qotdi (AI-1 ga qarang).
+
+    Sabab: `sum_ok` XODIM uchun belgi — "qog'ozdagi qty hisoblangan donaga
+    teng emas, tekshir". "1 крб x 21 049,4 = 252 593" qatorida qty=1 (quti),
+    dona esa 12 — demak sum_ok tabiiy ravishda False. Fakturada 13 ta shunday
+    qator bor edi, ya'ni 68% o'tdi. Bu SIFAT belgisi edi, BURILISH belgisi
+    emas. Ikkovi boshqa savol.
+    """
+
+    def test_box_row_closes_arithmetic_but_is_not_sum_ok(self):
+        """Ikkala belgi ATAYLAB farq qiladi — chalkashtirmaslik kerak."""
+        from inventory.invoice_ai import _units
+        total_qty, per_case, sum_ok, arith_ok = _units(1, 21049.4, 252593)
+        self.assertEqual(total_qty, 12.0, 'dona = summa / narx')
+        self.assertEqual(per_case, 12.0)
+        self.assertFalse(sum_ok, 'xodim tekshirsin: qog`ozda 1, aslida 12')
+        self.assertTrue(arith_ok, 'lekin arifmetika YOPILDI — burilish to`g`ri')
+
+    def test_piece_row_is_both(self):
+        from inventory.invoice_ai import _units
+        _, _, sum_ok, arith_ok = _units(24, 11654.0, 279696)
+        self.assertTrue(sum_ok)
+        self.assertTrue(arith_ok)
+
+    def test_scrambled_row_closes_nothing(self):
+        """Burilgan rasmda ustunlar chalkashadi — bo'linish yopilmaydi."""
+        from inventory.invoice_ai import _units
+        _, _, sum_ok, arith_ok = _units(3, 7331.0, 50000)
+        self.assertFalse(sum_ok)
+        self.assertFalse(arith_ok)
+
+    def test_free_bonus_row_is_not_judged(self):
+        """Narxsiz bonus qator burilish haqida hech narsa aytmaydi."""
+        from inventory.invoice_ai import _units
+        _, _, sum_ok, arith_ok = _units(10, 0, 0)
+        self.assertTrue(sum_ok)
+        self.assertIsNone(arith_ok, 'maxrajga kirmasligi kerak')
+
+    def _invoice(self, boxes, pieces, free=0, scrambled=0):
+        rows = []
+        for _ in range(boxes):        # 1 крб x 21049.4 = 252593
+            rows.append({'total_qty': 12.0, 'cost': 21049.4,
+                         'sum_ok': False, 'arith_ok': True})
+        for _ in range(pieces):       # 24 шт x 11654 = 279696
+            rows.append({'total_qty': 24.0, 'cost': 11654.0,
+                         'sum_ok': True, 'arith_ok': True})
+        for _ in range(free):
+            rows.append({'total_qty': 10.0, 'cost': 0,
+                         'sum_ok': True, 'arith_ok': None})
+        for _ in range(scrambled):
+            rows.append({'total_qty': 3.0, 'cost': 7331.0,
+                         'sum_ok': False, 'arith_ok': False})
+        total = sum(r['total_qty'] * r['cost'] for r in rows)
+        return {'rows': rows, 'total': total}
+
+    def test_real_invoice_shape_is_now_confident(self):
+        """13 quti + 26 dona + 2 bonus — bu 28.08 fakturasining shakli."""
+        from inventory.invoice_ai import _confidence
+        score = _confidence(self._invoice(boxes=13, pieces=26, free=2))
+        self.assertGreaterEqual(
+            score, 1.4,
+            'to`g`ri o`qilgan faktura burishga tushmasligi kerak')
+
+    def test_old_rule_would_have_failed_this_invoice(self):
+        """Eski qoida (sum_ok) shu fakturani 1.4 dan past baholardi."""
+        data = self._invoice(boxes=13, pieces=26, free=2)
+        rows = data['rows']
+        old = sum(1 for r in rows if r['sum_ok']) / len(rows) + 0.5
+        self.assertLess(old, 1.4)
+
+    def test_scrambled_read_still_scores_low(self):
+        """Haqiqiy burilgan o'qish PAST baho olishда davom etsin."""
+        from inventory.invoice_ai import _confidence
+        bad = self._invoice(boxes=0, pieces=2, scrambled=10)
+        bad['total'] = 999999999      # jami ham mos kelmaydi
+        self.assertLess(_confidence(bad), 1.4)
+
+    def test_bonus_only_rows_do_not_inflate_the_score(self):
+        from inventory.invoice_ai import _confidence
+        d = self._invoice(boxes=0, pieces=1, free=9)
+        # 9 ta bonus maxrajga kirmaydi -> 1/1 = 1.0, +0.5 jami mos
+        self.assertGreaterEqual(_confidence(d), 1.4)
