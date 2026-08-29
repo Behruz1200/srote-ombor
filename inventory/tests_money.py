@@ -22,6 +22,8 @@ from django.db import connection
 from django.test import TestCase, Client
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from datetime import timedelta
+
 from django.utils import timezone
 
 from inventory.models import (
@@ -3578,13 +3580,13 @@ class Tg1NoTelegramOnTheSalePath(MoneyTestBase):
     """
 
     def _checkout_source(self):
-        import inventory, os, re
-        path = os.path.join(os.path.dirname(inventory.__file__), 'views.py')
-        with open(path, encoding='utf-8') as f:
-            src = f.read()
-        start = src.index('def pos_checkout(request):')
-        nxt = re.search(r'\n@\w|\ndef ', src[start + 10:])
-        return src[start:start + 10 + (nxt.start() if nxt else len(src))]
+        # ARCH-2: faylni emas, FUNKSIYANI topamiz. pos_checkout views.py dan
+        # views_pos.py ga ko'chdi va bu test faylga bog'langani uchun sindi —
+        # inspect ishlatilsa, keyingi ko'chirish ham sindirmaydi.
+        import inspect
+        from inventory.views import pos_checkout
+        # unwrap: @login_required o'rab turadi, bizga ASL tana kerak.
+        return inspect.getsource(inspect.unwrap(pos_checkout))
 
     def test_no_telegram_call_remains_in_checkout(self):
         self.assertNotIn('send_telegram(', self._checkout_source(),
@@ -4088,12 +4090,10 @@ class Ops15SaleNeverWaitsOnExternalServices(MoneyTestBase):
 
     def test_no_outbound_call_remains_on_the_sale_path(self):
         """Manba matnida tekshiriladi — kelajakda qaytib qo'shilmasin."""
-        import inventory, os, re
-        path = os.path.join(os.path.dirname(inventory.__file__), 'views.py')
-        src = open(path, encoding='utf-8').read()
-        start = src.index('def pos_checkout(request):')
-        nxt = re.search(r'\n@\w|\ndef ', src[start + 10:])
-        body = src[start:start + 10 + (nxt.start() if nxt else 0)]
+        import inspect
+        from inventory.views import pos_checkout
+        # ARCH-2: fayl emas, funksiya (unwrap — dekorator ostidagi tana)
+        body = inspect.getsource(inspect.unwrap(pos_checkout))
         for bad in ('send_telegram(', 'submit_for_transaction(txn)', 'send_receipt('):
             self.assertNotIn(bad, body, f'{bad} sotuv yo`lida qolmasin')
 
@@ -4158,3 +4158,174 @@ class Ops15SaleNeverWaitsOnExternalServices(MoneyTestBase):
         self.assertEqual(seen, [{'a': 1}])
         self.assertEqual(BackgroundJob.objects.get(kind='noop_ok').status,
                          BackgroundJob.Status.DONE)
+
+
+class Arch2ModulesStaySeparate(TestCase):
+    """ARCH-2: bo'linish vaqt o'tishi bilan yana qorishib ketmasin.
+
+    views.py 13 000 qator bo'lgani uchun bitta naqsh — aynan bir xil
+    qulflash xatosi — ikki xil view'da alohida prodga chiqdi. Bo'linish
+    faqat bir marta qilinsa foydasi yo'q: keyingi safar kimdir
+    views_pos.py ga views.py dan import qo'shsa, aylanma bog'liqlik
+    paydo bo'ladi va fayllar yana bir-biriga yopishadi.
+
+    Shuning uchun yo'nalish testda qattiq belgilanadi:
+        views.py  ->  views_pos.py  ->  access.py / money.py
+    Teskari yo'nalish yo'q.
+    """
+
+    def _imports(self, module_name):
+        import ast
+        import os
+
+        import inventory
+        path = os.path.join(os.path.dirname(inventory.__file__), module_name)
+        tree = ast.parse(open(path, encoding='utf-8').read())
+        out = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                out.add(node.module.lstrip('.'))
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    out.add(a.name)
+        return out
+
+    def test_pos_module_never_imports_views(self):
+        self.assertNotIn('views', self._imports('views_pos.py'),
+                         'views_pos.py views.py ni import qilmasligi kerak — '
+                         'aks holda aylanma import')
+
+    def test_access_module_imports_no_view_layer(self):
+        got = self._imports('access.py')
+        for forbidden in ('views', 'views_pos'):
+            self.assertNotIn(forbidden, got,
+                             f'access.py {forbidden} ni import qilmasligi kerak')
+
+    def test_money_module_imports_no_view_layer(self):
+        got = self._imports('money.py')
+        for forbidden in ('views', 'views_pos'):
+            self.assertNotIn(forbidden, got,
+                             f'money.py {forbidden} ni import qilmasligi kerak')
+
+    def test_pos_routes_still_resolve_through_views(self):
+        """urls.py hali views.pos_* deb chaqiradi — re-export uzilmasin."""
+        from django.urls import reverse
+        for name in ('pos_terminal', 'pos_lookup', 'pos_catalog',
+                     'pos_checkout', 'pos_refund', 'pos_exchange',
+                     'pos_device_sync', 'pos_park'):
+            self.assertTrue(reverse(name), name)
+
+    def test_checkout_lives_outside_views_py(self):
+        """Ko'chirish haqiqatan bo'ldimi — funksiya endi views_pos.py da."""
+        import inspect
+
+        from inventory.views import pos_checkout
+        self.assertEqual(pos_checkout.__module__, 'inventory.views_pos')
+        self.assertTrue(
+            inspect.getsourcefile(inspect.unwrap(pos_checkout))
+            .endswith('views_pos.py'),
+            'pos_checkout views_pos.py da bo\'lishi kerak')
+
+
+class Rpt1SalesPageIsPaginated(MoneyTestBase):
+    """RPT-1: /sales/ endi jimgina 300-qatorда kesilmaydi.
+
+    Avvalgi xatti-harakat: ro'yxat `qs[:300]` bilan kesilar, sahifa esa
+    kichkina yozuv bilan "eng so'nggi 300 ko'rsatildi" derdi. Ya'ni egasi
+    filtr qo'yib so'ragan qatorlarning bir qismi umuman ko'rinmasdi va
+    ularga yetib borishning yagona yo'li CSV eksport edi.
+
+    Eng muhim kafolat pastda: SAHIFALASH JAMILARGA TEGMAYDI. Agar jami
+    faqat ko'rinib turgan sahifa bo'yicha hisoblansa, hisobot butunlay
+    yolg'on bo'lardi — 2-sahifada boshqa "Jami tushum" chiqardi.
+    """
+
+    PER = 100
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='rpt1_admin', password='x', role=User.Role.ADMIN,
+        )
+        self.stock.stock_count = 500
+        self.stock.save(update_fields=['stock_count'])
+        self.open_shift()
+        # PER + 15 ta alohida chek — ikkinchi sahifa paydo bo'lsin.
+        for _ in range(self.PER + 15):
+            self.assertEqual(self.checkout().status_code, 200)
+        self.client.force_login(self.admin)
+
+    def _get(self, **params):
+        params.setdefault('date_from',
+                          (timezone.localdate() - timedelta(days=1)).isoformat())
+        return self.client.get('/sales/', params)
+
+    def test_first_page_shows_a_full_page_not_everything(self):
+        r = self._get(view='items')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.context['sales']), self.PER)
+        self.assertEqual(r.context['page_obj'].paginator.count, self.PER + 15)
+
+    def test_second_page_returns_the_remainder(self):
+        r = self._get(view='items', page=2)
+        self.assertEqual(len(r.context['sales']), 15)
+        self.assertEqual(r.context['page_obj'].number, 2)
+        self.assertFalse(r.context['page_obj'].has_next())
+
+    def test_no_row_is_lost_between_pages(self):
+        """Ikki sahifadagi qatorlar — jami qatorlarning AYNAN o'zi."""
+        seen = []
+        for page in (1, 2):
+            r = self._get(view='items', page=page)
+            seen += [s.pk for s in r.context['sales']]
+        self.assertEqual(len(seen), len(set(seen)), 'qator takrorlanmasin')
+        self.assertEqual(sorted(seen),
+                         sorted(Sale.objects.values_list('pk', flat=True)))
+
+    def test_totals_are_for_the_whole_filter_not_the_page(self):
+        """Eng muhim: 1- va 2-sahifada JAMI bir xil bo'lishi shart."""
+        p1 = self._get(view='items', page=1)
+        p2 = self._get(view='items', page=2)
+        for key in ('total', 'net_total', 'qty_total', 'txn_count',
+                    'line_count', 'gross_total'):
+            self.assertEqual(p1.context[key], p2.context[key],
+                             f'{key} sahifaga qarab o\'zgarmasligi kerak')
+        expected = Decimal('100000') * (self.PER + 15)
+        self.assertEqual(p1.context['total'], expected)
+
+    def test_checks_view_is_paginated_too(self):
+        r = self._get(view='checks')
+        self.assertEqual(len(r.context['checks']), self.PER)
+        self.assertEqual(r.context['check_count'], self.PER + 15)
+        r2 = self._get(view='checks', page=2)
+        self.assertEqual(len(r2.context['checks']), 15)
+
+    def test_filters_survive_the_page_link(self):
+        r = self._get(view='items', page=2, q='Test koylak')
+        self.assertIn('q=Test', r.context['page_qs'].replace('+', ' ')
+                      .replace('%20', ' '))
+        self.assertNotIn('page=', r.context['page_qs'])
+        self.assertIn('view=items', r.context['page_qs'])
+
+    def test_out_of_range_page_does_not_500(self):
+        """get_page() oxirgi sahifani beradi — 404 emas, 500 ham emas."""
+        r = self._get(view='items', page=9999)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context['page_obj'].number,
+                         r.context['page_obj'].paginator.num_pages)
+        r = self._get(view='items', page='abc')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context['page_obj'].number, 1)
+
+    def test_csv_export_still_ignores_pagination(self):
+        """Eksport butun filtrni beradi — sahifa emas."""
+        r = self._get(view='items', page=2, export='csv')
+        self.assertEqual(r.status_code, 200)
+        body = r.content.decode('utf-8-sig')
+        rows = [ln for ln in body.splitlines() if ln.strip()]
+        self.assertEqual(len(rows), self.PER + 15 + 1)   # + sarlavha
+
+    def test_the_old_silent_cap_is_gone(self):
+        r = self._get(view='items')
+        self.assertNotIn('shown_capped', r.context)
+        self.assertNotContains(r, "eng so'nggi 300")

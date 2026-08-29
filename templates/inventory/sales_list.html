@@ -442,9 +442,10 @@
         <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
             <i class="bi bi-box-seam"></i> <strong>{{ qty_total }}</strong> dona
         </span>
-        {% if checks_capped or shown_capped %}
-        <span class="badge rounded-pill bg-light border border-warning px-3 py-2 text-dark">
-            <i class="bi bi-info-circle text-warning"></i> eng so'nggi 300 ko'rsatildi — to'liq ma'lumot uchun CSV eksport
+        {% if page_obj and page_obj.has_other_pages %}
+        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
+            <i class="bi bi-file-earmark-text"></i>
+            {{ page_obj.number }}-sahifa / {{ page_obj.paginator.num_pages }}
         </span>
         {% endif %}
     </div>
@@ -531,11 +532,37 @@
             </table>
         </div>
     </div>
-    {% if checks_capped %}
-    <div class="alert alert-info small mt-2">
-        <i class="bi bi-info-circle"></i> Eng so'nggi 300 ta chek ko'rsatildi.
-        To'liq ma'lumot uchun filterni toraytiring yoki CSV export'dan foydalaning.
-    </div>
+{% if page_obj and page_obj.has_other_pages %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1&{{ page_qs }}" title="Birinchi sahifa">«</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ page_qs }}">←</a>
+                </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                    <span class="text-muted">({{ page_obj.paginator.count }} ta)</span>
+                </span>
+            </li>
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ page_qs }}">→</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&{{ page_qs }}"
+                       title="Oxirgi sahifa">»</a>
+                </li>
+            {% endif %}
+        </ul>
+        <div class="text-center small text-muted mt-1">
+            Jamilar yuqorida — ular BUTUN filtr bo'yicha, faqat shu sahifa emas.
+        </div>
+    </nav>
     {% endif %}
     {% else %}
 
@@ -621,11 +648,37 @@
             </table>
         </div>
     </div>
-    {% if sales|length >= 300 %}
-    <div class="alert alert-info small mt-2">
-        <i class="bi bi-info-circle"></i> Eng so'nggi 300 ta qator ko'rsatildi.
-        To'liq ma'lumot uchun filterni toraytiring yoki CSV export'dan foydalaning.
-    </div>
+{% if page_obj and page_obj.has_other_pages %}
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1&{{ page_qs }}" title="Birinchi sahifa">«</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ page_qs }}">←</a>
+                </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                    <span class="text-muted">({{ page_obj.paginator.count }} ta)</span>
+                </span>
+            </li>
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ page_qs }}">→</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&{{ page_qs }}"
+                       title="Oxirgi sahifa">»</a>
+                </li>
+            {% endif %}
+        </ul>
+        <div class="text-center small text-muted mt-1">
+            Jamilar yuqorida — ular BUTUN filtr bo'yicha, faqat shu sahifa emas.
+        </div>
+    </nav>
     {% endif %}
     {% endif %}{# /view_mode #}
 </div>
