@@ -92,6 +92,13 @@ BACKUP_TELEGRAM_CHAT_ID = os.environ.get('BACKUP_TELEGRAM_CHAT_ID', '')
 # Kalit bo'lmasa funksiya o'chiq turadi (sahifa ogohlantirish ko'rsatadi).
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 ANTHROPIC_MODEL = os.environ.get('ANTHROPIC_MODEL', 'claude-sonnet-4-5')
+# AI-1: faktura o'qishning UMUMIY vaqt budjeti (sekund). Bitta chaqiruv
+# amalda ~60 s, burib qayta o'qish esa yana bittasi. Budjet gunicorn
+# --timeout dan KICHIK bo'lishi shart, aks holda ishchi jarayon javob
+# yetkazilmasдан o'ldiriladi va brauzer bo'sh javob oladi.
+AI_INVOICE_BUDGET = float(os.environ.get('AI_INVOICE_BUDGET', '150'))
+# Burib qayta o'qish (har biri qo'shimcha chaqiruv). 0 = faqat bitta o'qish.
+AI_INVOICE_ROTATE = os.environ.get('AI_INVOICE_ROTATE', '1') not in ('0', 'false', 'False')
 TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')
 
 # ---------- Soliq.uz / OFD fiscal integration (optional) ----------

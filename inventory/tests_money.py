@@ -11,6 +11,8 @@ Guruhlar:
     Bug*            — tasdiqlangan nuqson; tuzatilgunча yiqiladi
 """
 import json
+import time
+from unittest import mock
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -2961,3 +2963,90 @@ class Disc7DiscountReasonQuality(MoneyTestBase):
         self.assertContains(r, 'tovar oldi')          # ro'yxat qatori
         self.assertContains(r, 'value="__other__"')   # "Boshqa" tanlovi
         self.assertContains(r, 'id="discountReasonOther"')
+
+
+class Ai1ExtractRespectsTimeBudget(TestCase):
+    """AI-1 — faktura o'qish HTTP time-out'iga SIG'ISHI shart.
+
+    Ishlab turgan tizimda o'lchangani: bitta AI chaqiruvi ~60 sekund,
+    gunicorn ishchisi esa 60 sekundda o'ldiriladi. Ishonch bahosi 1.4 dan
+    past chiqsa kod rasmni burib YANA UCH marta o'qirdi — jami ~240 sekund.
+    Ya'ni javob hech qachon yetkazilmasdi: brauzer 200 va BO'SH tana olardi,
+    sahifa esa "Rasmni aniqroq oling" deb yozardi. Model rasmni to'g'ri
+    o'qigan edi — faqat aytishga ulgurmagan.
+
+    Nozik joyi: bu invoice uchun ishonch 1.11 chiqadi, chunki "1 крб" li
+    qatorlarда qty QUTIда, narx esa DONAda — qty x narx = summa tengligi
+    tabiiy ravishda buziladi. Ya'ni TO'G'RI o'qilgan faktura ham past baho
+    oladi va behuda burishga tushadi.
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        import io as _io
+        from PIL import Image
+        buf = _io.BytesIO()
+        Image.new('RGB', (60, 40), 'white').save(buf, format='JPEG')
+        self.f = SimpleUploadedFile('n.jpg', buf.getvalue(), 'image/jpeg')
+
+    def _low(self):
+        """Ishonchi past natija — burishga undaydi."""
+        return {'supplier': '', 'total': 0,
+                'rows': [{'name': 'x', 'sum_ok': False,
+                          'total_qty': 1, 'cost': 1}]}
+
+    def test_budget_stops_the_rotation_retries(self):
+        """Budjet bitta chaqiruvga yetsa — ikkinchisi BOSHLANMASIN."""
+        import inventory.invoice_ai as ai
+        calls = []
+
+        def fake(raw, mt, timeout=120):
+            calls.append(timeout)
+            time.sleep(0.30)          # "sekin" chaqiruv
+            return self._low()
+
+        with mock.patch.object(ai, '_extract_bytes', side_effect=fake):
+            out = ai.extract_invoice(self.f, budget=0.35)
+        self.assertEqual(len(calls), 1,
+                         'budjet tugagach yangi chaqiruv boshlanmasligi kerak')
+        self.assertTrue(out.get('rows'), 'bor natija QAYTARILISHI kerak')
+
+    def test_generous_budget_still_tries_rotations(self):
+        """Vaqt yetsa — burib qayta o'qish ishlayveradi (xatti-harakat o'zgarmadi)."""
+        import inventory.invoice_ai as ai
+        calls = []
+
+        def fake(raw, mt, timeout=120):
+            calls.append(timeout)
+            return self._low()
+
+        with mock.patch.object(ai, '_extract_bytes', side_effect=fake):
+            ai.extract_invoice(self.f, budget=600)
+        self.assertEqual(len(calls), 4, 'asl + 3 burilish')
+
+    def test_confident_result_never_rotates(self):
+        import inventory.invoice_ai as ai
+        calls = []
+
+        def fake(raw, mt, timeout=120):
+            calls.append(timeout)
+            return {'supplier': 'A', 'total': 100,
+                    'rows': [{'name': 'x', 'sum_ok': True,
+                              'total_qty': 10, 'cost': 10}]}
+
+        with mock.patch.object(ai, '_extract_bytes', side_effect=fake):
+            ai.extract_invoice(self.f, budget=600)
+        self.assertEqual(len(calls), 1)
+
+    def test_per_call_timeout_never_exceeds_what_is_left(self):
+        """Har chaqiruvning time-out'i qolgan vaqtдан oshmasin."""
+        import inventory.invoice_ai as ai
+        seen = []
+
+        def fake(raw, mt, timeout=120):
+            seen.append(timeout)
+            return self._low()
+
+        with mock.patch.object(ai, '_extract_bytes', side_effect=fake):
+            ai.extract_invoice(self.f, timeout=120, budget=20)
+        self.assertTrue(all(t <= 20.001 for t in seen), seen)

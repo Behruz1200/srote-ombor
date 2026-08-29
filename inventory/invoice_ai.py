@@ -11,6 +11,7 @@ import io
 import json
 import logging
 import re
+import time
 import urllib.error
 import urllib.request
 
@@ -366,15 +367,36 @@ def _confidence(data):
     return score
 
 
-def extract_invoice(django_file, timeout=120):
+def extract_invoice(django_file, timeout=120, budget=None):
     """Rasm -> {supplier, invoice_no, date, rows[]}. Xatoda InvoiceAIError.
 
     Rasm yonboshiga burilgan bo'lsa (nakladnoy albom, telefon tik ushlagan),
     model qatorlarni chalkashtiradi. Shuning uchun natija ishonchsiz chiqsa
     rasmni burib qayta o'qiymiz va eng yaxshisini olamiz.
+
+    AI-1 — VAQT BUDJETI. Ilgari bu yerda chegara YO'Q edi: har chaqiruv
+    o'zining 120 s time-out'iga ega edi, chaqiruvlar esa TO'RTTAGACHA
+    (asl + 270 + 90 + 180). Amalda bitta chaqiruv ~60 s, gunicorn ishchisi
+    esa 60 s da o'ldiriladi — ya'ni ish TUGASHIGA imkon yo'q edi. Brauzer
+    bo'sh javob olardi va sahifa "Rasmni aniqroq oling" deb yozardi, holbuki
+    model rasmni to'g'ri o'qigan, faqat javobni yetkazishga ulgurmagan.
+
+    Endi umumiy budjet bor: har chaqiruvдан oldin "yana bittasiga vaqt
+    yetadimi?" deb so'raymiz — birinchi chaqiruv qancha davom etganiga
+    qarab. Yetmasa, BOR natijani qaytaramiz. Budjet HTTP time-out'idan
+    kichik bo'lishi SHART (AI_INVOICE_BUDGET), aks holda hech narsa
+    yetkazilmaydi.
     """
+    budget = budget or float(getattr(settings, 'AI_INVOICE_BUDGET', 150))
+    started = time.monotonic()
+
+    def _left():
+        return budget - (time.monotonic() - started)
+
     raw, media_type = prepare_image(django_file)
-    best = _extract_bytes(raw, media_type, timeout)
+    _t0 = time.monotonic()
+    best = _extract_bytes(raw, media_type, min(timeout, max(_left(), 5.0)))
+    one_call = time.monotonic() - _t0        # bitta chaqiruv qancha turadi
     best_score = _confidence(best)
     best['rotated'] = 0
     if best_score >= 1.4:                 # hammasi joyida — burishga hojat yo'q
@@ -387,6 +409,13 @@ def extract_invoice(django_file, timeout=120):
         return best
 
     for angle in (270, 90, 180):
+        # Boshlab bo'lmaydigan chaqiruvni BOSHLAMAYMIZ. Yarim yo'lda
+        # o'ldirilgan chaqiruv foydasiz: na natija, na pul qaytadi.
+        if _left() < one_call * 1.2:
+            logger.info('invoice_ai: budjet tugadi (%.0fs qoldi, chaqiruv ~%.0fs)'
+                        ' — %d burilish tekshirilmadi', _left(), one_call,
+                        3 - (270, 90, 180).index(angle))
+            break
         try:
             rotated = _rotate_jpeg(raw, angle)
         except Exception:                 # pragma: no cover
@@ -394,7 +423,8 @@ def extract_invoice(django_file, timeout=120):
         if rotated is None:
             continue
         try:
-            cand = _extract_bytes(rotated, media_type, timeout)
+            cand = _extract_bytes(rotated, media_type,
+                                  min(timeout, max(_left(), 5.0)))
         except InvoiceAIError:
             continue
         score = _confidence(cand)
