@@ -17,7 +17,7 @@
                 </p>
             </div>
             <div class="dash-hero__actions">
-                <a href="{% url 'shift_receipt' shift.pk %}" target="yuritReceipt" class="dash-btn dash-btn--ghost">
+                <a href="{% url 'shift_receipt' shift.pk %}" class="dash-btn dash-btn--ghost">
                     <i class="bi bi-receipt"></i> <span>Z-hisobot</span></a>
             </div>
         </div>
@@ -51,7 +51,7 @@
                 <tr>
                     <td><small>{{ r.refunded_at|date:"d.m H:i" }}</small></td>
                     <td>{% if r.public_id %}<a href="{% url 'transaction_detail' r.public_id %}"
-                           target="yuritReceipt" class="text-decoration-none">#{{ r.check_id }}</a>
+                           class="text-decoration-none">#{{ r.check_id }}</a>
                         {% else %}#{{ r.check_id }}{% endif %}</td>
                     <td>
                         <div>{{ r.product }}{% if r.is_exchange %} <span class="badge bg-info-subtle text-info">almashtirish</span>{% endif %}</div>

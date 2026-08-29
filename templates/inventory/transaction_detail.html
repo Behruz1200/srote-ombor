@@ -105,7 +105,7 @@
         {% if txn.customer_name or txn.customer_phone %}
         <div class="small">Mijoz:
             {% if txn.customer_id %}
-                <a href="{% url 'customer_detail' txn.customer_id %}" target="_blank">
+                <a href="{% url 'customer_detail' txn.customer_id %}">
                     <strong>{{ txn.customer_name }}</strong>
                 </a>
             {% else %}
@@ -218,12 +218,28 @@
 // the browser to be launched with `--kiosk-printing` (Chrome/Edge) — see
 // docs at the top of the file.
 const isAutoprint = new URLSearchParams(location.search).get('autoprint') === '1';
+// UX-11: chek endi POS'da KO'RINMAS IFRAME ichida ochiladi (yangi tab emas).
+// Shuning uchun ikki xil holat bor va ular bir xil emas:
+//   - iframe ichida: window.close() ishlamaydi va kerak ham emas — chop
+//     etilgach ota-sahifaga xabar yuboramiz, u iframe'ni o'zi olib tashlaydi;
+//   - alohida tabda (eski havolalar, qo'lda ochilgan): avvalgidek yopiladi.
+const inFrame = (function () {
+    try { return window.parent && window.parent !== window; }
+    catch (e) { return true; }     // cross-origin bo'lsa ham freym ichidamiz
+})();
 if (isAutoprint) {
     window.addEventListener('load', () => setTimeout(() => window.print(), 300));
     // Some browsers fire afterprint even when user cancels — that's fine,
-    // closing the tab is the right behavior in both cases.
+    // cleaning up is the right behavior in both cases.
     window.addEventListener('afterprint', () => {
-        setTimeout(() => window.close(), 200);
+        if (inFrame) {
+            try {
+                window.parent.postMessage({ yurit: 'receipt-printed' },
+                                          location.origin);
+            } catch (e) { /* jim — chek allaqachon chop etilgan */ }
+        } else {
+            setTimeout(() => window.close(), 200);
+        }
     });
 }
 </script>

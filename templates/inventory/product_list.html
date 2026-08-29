@@ -368,7 +368,6 @@
                                    class="btn btn-sm btn-outline-secondary border-0 px-1"
                                    title="Qabul qilish"><i class="bi bi-truck"></i></a>
                                 <a href="{% url 'variant_labels' %}?products={{ p.pk }}&copies=stock"
-                                   target="_blank"
                                    class="btn btn-sm btn-outline-secondary border-0 px-1"
                                    title="Etiketka"><i class="bi bi-tags"></i></a>
                                 <button type="button"
@@ -541,8 +540,11 @@
         if (!picked.length) return;
         const copiesEl = document.querySelector('#labelsForm [name="copies"]');
         const c = copiesEl ? copiesEl.value : 'stock';   // 'stock' = ombor soni
-        window.open('{% url "variant_labels" %}?products=' + picked.join(',') +
-                    '&copies=' + c, '_blank');
+        // UX-11: yangi tab ochilmaydi — o'sha tabda ochiladi (Orqaga bosib
+        // ro'yxatga qaytiladi). Kassirlar tab to'planib qolishidan shikoyat
+        // qilgan edi; endi butun tizimda bitta tab (mijoz ekranidan tashqari).
+        location.href = '{% url "variant_labels" %}?products=' + picked.join(',') +
+                        '&copies=' + c;
     });
     const catMoveBtn = document.getElementById('catMoveBtn');
     const catMoveSelect = document.getElementById('catMoveSelect');

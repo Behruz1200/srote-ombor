@@ -893,7 +893,7 @@
                     <td><small>{{ t.get_payment_method_display }}</small></td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <a href="{% url 'transaction_detail' t.public_id %}" target="yuritReceipt"
+                            <a href="{% url 'transaction_detail' t.public_id %}"
                                class="btn btn-outline-secondary" title="Chekni ko'rish">
                                 <i class="bi bi-receipt"></i>
                             </a>
@@ -1791,6 +1791,53 @@ function refocus() {
     }, 50);
 }
 
+// ---- UX-11: chek chop etish — YANGI TAB OCHILMAYDI ----
+// Avval chek `window.open(url, 'yuritReceipt')` bilan alohida tabda ochilardi:
+// u o'zi chop etib o'zi yopilardi, lekin chop etish oynasi bekor qilinsa yoki
+// brauzer window.close() ni rad etsa — tab qolib ketardi va kun oxirida
+// kassirda o'nlab chek tabi to'planardi.
+//
+// Endi chek KO'RINMAS iframe ichida yuklanadi va o'sha yerda chop etiladi.
+// Foydasi ikki tomonlama: hech qanday tab ochilmaydi va POS sahifasi joyida
+// qoladi — savat, skaner fokusi va offline navbat tegilmaydi. Bu muhim,
+// chunki chek chop etish KOSMETIK amal: u xato bersa ham sotuv allaqachon
+// bazaga yozilgan.
+function printReceipt(url) {
+    if (!url) return null;
+    try {
+        const old = document.getElementById('rcptFrame');
+        if (old) old.remove();
+        const f = document.createElement('iframe');
+        f.id = 'rcptFrame';
+        f.setAttribute('aria-hidden', 'true');
+        f.setAttribute('tabindex', '-1');
+        // Ko'rinmas, lekin display:none EMAS — display:none bo'lsa ba'zi
+        // brauzerlar iframe ichidagi window.print() ni ishlatmaydi.
+        f.style.cssText =
+            'position:fixed;left:-10000px;top:0;width:1px;height:1px;border:0;';
+        f.src = url;
+        document.body.appendChild(f);
+        // Zaxira tozalash: chek sahifasi xabar yubormasa ham (masalan chop
+        // etish oynasi ochiq qoldirilsa) iframe DOM'da abadiy qolmasin.
+        setTimeout(() => {
+            const g = document.getElementById('rcptFrame');
+            if (g === f) g.remove();
+        }, 120000);
+        return f;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Chek sahifasi chop etib bo'lgach xabar yuboradi — iframe'ni darhol olamiz.
+window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    if (!e.data || e.data.yurit !== 'receipt-printed') return;
+    const g = document.getElementById('rcptFrame');
+    if (g) g.remove();
+    refocus();          // fokus skanerga qaytsin
+});
+
 // ---- Audio feedback (scanner beep) ----
 // Two tones: 880Hz short "tsink" for success, 220Hz longer "buzz" for error.
 // Uses Web Audio API — no external files needed. Respects mute via
@@ -2154,7 +2201,7 @@ function prependRecentSale(data, method) {
         `<td><strong>${fmt(data.total)}</strong></td>` +
         `<td><small>${esc(PAY_LABELS[method] || method)}</small></td>` +
         `<td><div class="btn-group btn-group-sm">` +
-        `<a href="${esc(receipt)}" target="yuritReceipt" class="btn btn-outline-secondary"` +
+        `<a href="${esc(receipt)}" class="btn btn-outline-secondary"` +
         ` title="Chekni ko'rish"><i class="bi bi-receipt"></i></a>` +
         `<button type="button" class="btn btn-outline-warning refund-btn"` +
         ` data-txn-id="${esc(String(data.txn_id))}" title="Qaytarish">` +
@@ -3360,12 +3407,13 @@ checkoutBtn.addEventListener('click', async () => {
         // Qatorни AVVAL qo'shamiz — window.open (kamдан-kam) xato bersа ham
         // sotuv ro'yxatда ko'rinadi. review #3: takror javob bo'lса qo'shmaymiz.
         if (!data.duplicate) prependRecentSale(data, paymentMethod);
-        const _rcptWin = window.open(data.receipt_url, 'yuritReceipt');
-        if (!_rcptWin) {
-            // Popup bloklandi (FE-2: QR'да sun'iy bosish) — ko'rinadigan havola.
+        // UX-11: yangi tab emas — ko'rinmas iframe. Popup bloklovchi ham
+        // to'sib qo'ymaydi, shuning uchun eski "popup bloklandi" tarmog'i
+        // shart emas. Baribir iframe yaratilmasa — ko'rinadigan havola.
+        if (!printReceipt(data.receipt_url)) {
             checkoutStatus.innerHTML = `<span class="text-success">
                 ✓ Sotuv #${data.txn_id} saqlandi</span>
-                <a href="${data.receipt_url}" target="yuritReceipt"
+                <a href="${data.receipt_url}"
                    class="btn btn-sm btn-primary ms-2">🧾 Chekni chop etish</a>`;
         }
     } catch (e) { /* kosmetik — jim */ }
@@ -4355,7 +4403,7 @@ document.addEventListener('keydown', (e) => {
         // Patch 6: oxirgi chekni qayta chop etish
         e.preventDefault();
         const a = document.querySelector('#recentBody a[href*="/transaction/"]');
-        if (a) window.open(a.href + '?autoprint=1', 'yuritReceipt');
+        if (a) printReceipt(a.href + '?autoprint=1');   // UX-11: tab ochilmaydi
     } else if (e.key === 'F8') {
         // Patch 6: savatни tozalash. FIX (review #1): clearCartBtn O'ZI tasdiq
         // so'raydi — bu yerда qo'shimcha confirm QO'YMAYMIZ (ikki marta so'ramasin).

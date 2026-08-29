@@ -4329,3 +4329,111 @@ class Rpt1SalesPageIsPaginated(MoneyTestBase):
         r = self._get(view='items')
         self.assertNotIn('shown_capped', r.context)
         self.assertNotContains(r, "eng so'nggi 300")
+
+
+class Ux11OnlyCustomerDisplayOpensANewTab(TestCase):
+    """UX-11: butun tizim bitta tabda ishlaydi — bitta ataylab qilingan istisno.
+
+    Kassirlarda kun oxirida o'nlab tab to'planib qolardi: har chek, har
+    etiketka, har Z-hisobot yangi tab ochardi. Chek tabi o'zini yopishga
+    urinardi, lekin chop etish oynasi bekor qilinsa yoki brauzer
+    window.close() ni rad etsa — tab qolib ketardi.
+
+    Yagona istisno — MIJOZ EKRANI: u ataylab ikkinchi monitorga chiqariladi,
+    shuning uchun alohida oyna bo'lishi SHART.
+
+    Bu test shablonlarni matn sifatida o'qiydi. Sabab oddiy: yangi tab
+    ochadigan narsa qayta-qayta, ko'pincha "shunchaki bitta havola" deb
+    qo'shiladi va uni ko'rib chiqishда payqash qiyin.
+    """
+
+    EXCEPT_URL = 'pos_customer_display'
+
+    def _template_dir(self):
+        import os
+        from django.conf import settings
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory')
+            if os.path.isdir(p):
+                return p
+        self.fail('shablonlar papkasi topilmadi')
+
+    def _sources(self):
+        import os
+        root = self._template_dir()
+        for name in sorted(os.listdir(root)):
+            if name.endswith('.html'):
+                with open(os.path.join(root, name), encoding='utf-8') as f:
+                    yield name, f.read()
+
+    def test_no_template_opens_a_new_tab_except_the_customer_display(self):
+        import re
+        # target="_blank" va target="nomlangan_oyna" — ikkalasi ham yangi tab.
+        # (?<![\w-]) — Bootstrap'ning data-bs-target="#modal" iga tegmaydi;
+        # '#' bilan boshlanadigan qiymat ham tab emas (sahifa ichidagi tugma).
+        pat = re.compile(
+            r'(?<![\w-])target\s*=\s*["\'](?!_self|_top|_parent|#)([^"\']+)["\']')
+        offenders = []
+        for name, src in self._sources():
+            for m in pat.finditer(src):
+                # Havolaning o'zi mijoz ekranimi? Shu tegning ichiga qaraymiz.
+                start = src.rfind('<', 0, m.start())
+                end = src.find('>', m.end())
+                tag = src[start:end if end > 0 else m.end()]
+                if self.EXCEPT_URL in tag:
+                    continue
+                offenders.append(f'{name}: target="{m.group(1)}"')
+        self.assertEqual(
+            offenders, [],
+            'Faqat mijoz ekrani yangi tabda ochilishi kerak. Topildi:\n  '
+            + '\n  '.join(offenders))
+
+    def test_no_template_calls_window_open(self):
+        offenders = []
+        for name, src in self._sources():
+            for i, line in enumerate(src.splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith('//') or stripped.startswith('#'):
+                    continue          # izoh — kodda emas
+                if 'window.open(' in line:
+                    offenders.append(f'{name}:{i}')
+        self.assertEqual(offenders, [],
+                         'window.open() yangi tab ochadi: ' + ', '.join(offenders))
+
+    def test_static_js_opens_no_new_tab(self):
+        import os
+        from django.conf import settings
+        roots = [str(p) for p in getattr(settings, 'STATICFILES_DIRS', [])]
+        offenders = []
+        for root in roots:
+            for base, _dirs, files in os.walk(root):
+                for fn in files:
+                    if not fn.endswith('.js'):
+                        continue
+                    path = os.path.join(base, fn)
+                    with open(path, encoding='utf-8', errors='ignore') as f:
+                        src = f.read()
+                    if '_blank' in src or 'window.open(' in src:
+                        offenders.append(os.path.relpath(path, root))
+        self.assertEqual(offenders, [],
+                         'static JS yangi tab ochmasligi kerak: '
+                         + ', '.join(offenders))
+
+    def test_the_customer_display_link_is_still_there(self):
+        """Istisno YO'QOLMASIN — ikkinchi monitor shunga tayanadi."""
+        for name, src in self._sources():
+            if name == 'pos.html':
+                self.assertIn(self.EXCEPT_URL, src)
+                self.assertIn('target="_blank"', src)
+                return
+        self.fail('pos.html topilmadi')
+
+    def test_receipt_prints_through_a_hidden_iframe(self):
+        """Chek chop etish tab emas, ko'rinmas iframe orqali ketadi."""
+        for name, src in self._sources():
+            if name == 'pos.html':
+                self.assertIn('function printReceipt(', src)
+                self.assertIn("f.id = 'rcptFrame'", src)
+                self.assertNotIn("window.open(data.receipt_url", src)
+                return
+        self.fail('pos.html topilmadi')

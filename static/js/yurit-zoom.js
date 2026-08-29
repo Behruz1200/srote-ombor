@@ -14,7 +14,7 @@
 (function (global) {
     'use strict';
 
-    var el = null, pic = null, pct = null, newTab = null;
+    var el = null, pic = null, pct = null;
     var zs = 1, zx = 0, zy = 0, zrot = 0, zfit = 1;
 
     function build() {
@@ -30,7 +30,6 @@
               '<button type="button" class="btn btn-sm btn-light" data-z="in" title="Kattalashtirish"><i class="bi bi-zoom-in"></i></button>' +
               '<button type="button" class="btn btn-sm btn-light" data-z="fit" title="Ekranga moslash"><i class="bi bi-arrows-angle-contract"></i></button>' +
               '<button type="button" class="btn btn-sm btn-light" data-z="rot" title="Burish"><i class="bi bi-arrow-clockwise"></i></button>' +
-              '<a class="btn btn-sm btn-light" data-z="tab" target="_blank" rel="noopener" title="Yangi oynada ochish"><i class="bi bi-box-arrow-up-right"></i></a>' +
               '<button type="button" class="btn btn-sm btn-danger" data-z="close" title="Yopish (Esc)"><i class="bi bi-x-lg"></i></button>' +
             '</div>' +
             '<img alt="Rasm" draggable="false">' +
@@ -38,7 +37,6 @@
         document.body.appendChild(el);
         pic = el.querySelector('img');
         pct = el.querySelector('.yrt-zoom__pct');
-        newTab = el.querySelector('[data-z="tab"]');
         wire();
     }
 
@@ -74,7 +72,6 @@
         if (!src) return;
         build();
         pic.src = src;
-        newTab.href = src;
         el.classList.add('is-open');
         el.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';

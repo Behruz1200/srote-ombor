@@ -154,11 +154,11 @@
                 <h6 class="text-muted text-uppercase small mb-2">Keyingi amallar</h6>
                 <div class="d-grid gap-2">
                     <a href="{% url 'variant_labels' %}?ids={% for i in session.intakes.all %}{{ i.variant.pk }}{% if not forloop.last %},{% endif %}{% endfor %}&copies=stock"
-                       class="btn btn-outline-primary" target="_blank">
+                       class="btn btn-outline-primary">
                         <i class="bi bi-tags"></i> Etiketkalarni chop etish
                     </a>
                     <a href="{% url 'price_labels' %}?codes={% for i in session.intakes.all %}{{ i.variant.product.code }}{% if not forloop.last %},{% endif %}{% endfor %}&size=58x40"
-                       class="btn btn-outline-danger" target="_blank">
+                       class="btn btn-outline-danger">
                         <i class="bi bi-tag"></i> Narx etiketkasi (peshtaxta)
                     </a>
                     <a href="{% url 'intake_mixed' %}" class="btn btn-outline-success">
@@ -181,20 +181,21 @@
                     {% endif %}
                     <div class="d-flex flex-wrap gap-2 mb-2">
                         {% for pg in pages %}
-                            <a href="{{ pg.image.url }}" target="_blank"
-                               title="{{ pg.order }}-varaq — kattalashtirish">
-                                <img src="{{ pg.image.url }}" alt="{{ pg.order }}-varaq"
-                                     class="rounded border"
-                                     style="width:110px; height:150px; object-fit:cover;">
-                            </a>
+                            {# UX-11: yangi tab emas — o'sha sahifada zum oynasi #}
+                            <img src="{{ pg.image.url }}" alt="{{ pg.order }}-varaq"
+                                 data-zoom-src="{{ pg.image.url }}"
+                                 class="rounded border"
+                                 style="width:110px; height:150px; object-fit:cover; cursor:zoom-in;"
+                                 title="{{ pg.order }}-varaq — kattalashtirish">
                         {% endfor %}
                     </div>
                     <div class="small text-muted">Yana varaq qo'shish:</div>
                 {% elif session.invoice_image %}
-                    <a href="{{ session.invoice_image.url }}" target="_blank">
-                        <img src="{{ session.invoice_image.url }}" alt="Faktura"
-                             class="img-fluid rounded mb-2">
-                    </a>
+                    {# UX-11: yangi tab emas — o'sha sahifada zum oynasi #}
+                    <img src="{{ session.invoice_image.url }}" alt="Faktura"
+                         data-zoom-src="{{ session.invoice_image.url }}"
+                         class="img-fluid rounded mb-2" style="cursor:zoom-in;"
+                         title="Kattalashtirish uchun bosing">
                     <div class="small text-muted">Almashtirish uchun yangi rasm yuklang:</div>
                 {% else %}
                     <div class="text-muted small mb-2">Hali rasm yuklanmagan</div>

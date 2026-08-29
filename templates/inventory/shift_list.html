@@ -242,7 +242,7 @@
                             <a href="{% url 'shift_detail' s.pk %}" class="btn btn-outline-primary"
                                title="Batafsil"><i class="bi bi-eye"></i></a>
                             {% if s.status != 'open' %}
-                            <a href="{% url 'shift_receipt' s.pk %}" target="_blank"
+                            <a href="{% url 'shift_receipt' s.pk %}"
                                class="btn btn-outline-secondary" title="Z-hisobot (yopilish cheki)">
                                 <i class="bi bi-receipt"></i></a>
                             {% endif %}
