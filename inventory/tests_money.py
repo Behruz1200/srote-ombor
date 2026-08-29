@@ -3341,3 +3341,65 @@ class Ux10EmptyCartClearsDiscount(MoneyTestBase):
         b = self._empty_branch()
         self.assertIn("cartSubtotalEl.textContent = '0'", b)
         self.assertIn("cartDiscountEl.textContent = '0'", b)
+
+
+class Kbd1ScreenKeyboardIsAdaptive(MoneyTestBase):
+    """KBD-1/2 — ekran klaviaturasi (sotuvchilar shikoyati bo'yicha qayta qurildi).
+
+    Uch shikoyat bor edi:
+
+    1. "Raqam kiritish noqulay" — klaviatura DOIM QWERTY ko'rsatardi, raqamli
+       blok esa yonida kichik va 992px dan tor ekranda umuman yashirin edi.
+       Summa kataklarida eng kerakli '000' va 'C' tugmalari yo'q edi.
+    2. "Fokus noto'g'ri joyga sakraydi" — POS'ning refocus() funksiyasi ~30
+       joydan chaqiriladi va fokusni QIDIRUV katagiga qaytaradi (skaner uchun
+       shart). Kassir chegirma katagiga terayotganda shu chaqiruvlardan biri
+       fokusni tortib olardi va keyingi tugma qidiruvga tushardi.
+    3. "Yorliqlar bilinmaydi" — 1/2/3 va '3 *' faqat yordam oynasida edi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_kbd', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    # ---- 1. raqam kiritish ----
+    def test_numpad_has_the_two_keys_som_amounts_need(self):
+        self.assertIn("{t:'000'}", self.html, "10 000 uchun 1 + 000")
+        self.assertIn("{k:'clear',label:'C'}", self.html)
+
+    def test_numeric_field_switches_the_keyboard_to_123(self):
+        self.assertIn('function isNumericField', self.html)
+        self.assertIn('function effectiveMode', self.html)
+        self.assertIn('osk-num', self.html)
+
+    def test_money_fields_are_marked_numeric(self):
+        """OSK 123 rejimini SHU belgidan biladi."""
+        self.assertIn('id="orderDiscount"', self.html)
+        block = self.html[self.html.index('id="orderDiscount"'):][:260]
+        self.assertIn('inputmode="numeric"', block)
+
+    # ---- 2. fokus ----
+    def test_refocus_does_not_steal_from_another_field(self):
+        self.assertIn("osk.classList.contains('osk-open')", self.html)
+        self.assertIn("a !== scanInput", self.html)
+
+    def test_scanner_path_is_untouched(self):
+        """Klaviatura YOPIQ bo'lsa — eski xatti-harakat, skaner ishlayveradi."""
+        self.assertIn('scanInput.focus();', self.html)
+
+    # ---- 3. yorliqlar ----
+    def test_shortcuts_are_shown_on_the_keyboard(self):
+        self.assertIn('oskHint', self.html)
+        self.assertIn('Naqd', self.html)
+
+    # ---- qaysi katakka yozilyapti ----
+    def test_target_field_is_named_and_highlighted(self):
+        self.assertIn('oskTarget', self.html)
+        self.assertIn('yrt-osk-field', self.html)
+        self.assertIn('function fieldName', self.html)

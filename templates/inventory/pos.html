@@ -672,7 +672,7 @@
                 <div class="row g-1">
                     <div class="col-6">
                         <input type="number" id="orderDiscount" class="form-control form-control-sm"
-                               min="0" step="1000" placeholder="so'm">
+                               min="0" step="1000" placeholder="so'm" inputmode="numeric">
                     </div>
                     <div class="col-6">
                         {% comment %}DISC-7: erkin matn "s"/"c"/"3000" berardi —
@@ -751,21 +751,21 @@
                         <div class="col-7">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="bi bi-cash"></i></span>
-                                <input type="number" class="form-control mixed-input"
+                                <input type="number" class="form-control mixed-input" inputmode="numeric"
                                        data-method="cash" placeholder="Naqd" min="0" step="1000">
                             </div>
                         </div>
                         <div class="col-7">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="bi bi-credit-card"></i></span>
-                                <input type="number" class="form-control mixed-input"
+                                <input type="number" class="form-control mixed-input" inputmode="numeric"
                                        data-method="card" placeholder="Karta" min="0" step="1000">
                             </div>
                         </div>
                         <div class="col-7">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="bi bi-arrow-left-right"></i></span>
-                                <input type="number" class="form-control mixed-input"
+                                <input type="number" class="form-control mixed-input" inputmode="numeric"
                                        data-method="transfer" placeholder="O'tkazma" min="0" step="1000">
                             </div>
                         </div>
@@ -1721,7 +1721,31 @@ function esc(s) {
     });
 }
 
-function refocus() { setTimeout(() => scanInput.focus(), 50); }
+// KBD-2: fokus qidiruv katagiga QAYTADI — lekin kassir boshqa katakka
+// yozayotgan bo'lsa EMAS.
+//
+// refocus() ~30 joydan chaqiriladi (har sotuvdan keyin, oyna faollashganda,
+// deyarli har bosishda). Skaner uchun bu SHART: skaner oddiy klaviatura kabi
+// yozadi, fokus qidiruvda turmasa belgilar yo'qoladi. Ammo kassir chegirma
+// yoki "naqd berildi" katagiga ekran klaviaturasi bilan raqam terayotganda
+// shu chaqiruvlardan bittasi fokusni tortib olardi va keyingi bosilgan tugma
+// QIDIRUV katagiga tushardi — sotuvchilar aytgan "fokus noto'g'ri joyga
+// sakraydi" aynan shu.
+//
+// Endi: ekran klaviaturasi ochiq bo'lsa va fokus boshqa tahrirlanadigan
+// katakda tursa — tegmaymiz. Skaner ssenariysi (fokus hech qayerda emas yoki
+// qidiruvda) o'zgarishsiz qoladi.
+function refocus() {
+    setTimeout(() => {
+        const osk = document.getElementById('osk');
+        if (osk && osk.classList.contains('osk-open')) {
+            const a = document.activeElement;
+            if (a && a !== scanInput &&
+                (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+        }
+        scanInput.focus();
+    }, 50);
+}
 
 // ---- Audio feedback (scanner beep) ----
 // Two tones: 880Hz short "tsink" for success, 220Hz longer "buzz" for error.
