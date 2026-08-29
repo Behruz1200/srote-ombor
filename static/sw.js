@@ -4,7 +4,7 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'yurit-v215';   // UX-11: yurit-zoom.js o'zgardi
+const CACHE_NAME = 'yurit-v216';   // PRN-1: chek chop etish moduli
 // SEC-2: kutubxonalar endi o'zimizda (static/vendor/) — CDN emas. Bu yerда
 // oldindan keshlamaymiz (WhiteNoise hash'li nom beradi); /static/ so'rovlari
 // runtime'да cache-first bo'lib avtomat keshlanadi (pastдаgi handler).

@@ -4437,3 +4437,141 @@ class Ux11OnlyCustomerDisplayOpensANewTab(TestCase):
                 self.assertNotIn("window.open(data.receipt_url", src)
                 return
         self.fail('pos.html topilmadi')
+
+
+class Prn1ReceiptPrintsAsOnePage(TestCase):
+    """PRN-1: chek 80mm termal printerda BITTA uzluksiz chek bo'lib chiqsin.
+
+    14 qatorli chek XP-80'da IKKITA alohida chek bo'lib chiqardi: ikkinchi
+    varaqda ustun sarlavhalari va "JAMI" qaytadan bosilib, mijozga ikkita
+    yarim chek berilardi.
+
+    Sabab CSS'da bir qatorda edi:
+
+        @media print { @page { size: 80mm auto; margin: 0; } }
+
+    Ikki xato bor: (1) Chrome `@media print` ichiga yozilgan `@page` ni
+    butunlay e'tiborsiz qoldiradi — u yuqori darajada turishi kerak, ya'ni
+    bu qoida hech qachon ishlamagan; (2) Chrome balandlik uchun `auto` ni
+    ham qo'llamaydi. Endi balandlik o'lchanib, aniq son yoziladi.
+
+    Bu yerdagi testlar brauzersiz — ular NAQSHNI qo'riqlaydi. Haqiqiy
+    sahifa soni Chromium'da o'lchab tasdiqlangan (1/3/14/40 qatorli chek —
+    hammasi 1 sahifa).
+    """
+
+    def _module(self):
+        import os
+        from django.conf import settings
+        for d in getattr(settings, 'STATICFILES_DIRS', []):
+            p = os.path.join(str(d), 'js', 'yurit-receipt-print.js')
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail('yurit-receipt-print.js topilmadi')
+
+    def _code(self):
+        """Izohlarsiz KOD. Izohlarda xato naqsh ATAYLAB keltirilgan
+        (nima uchun bunday qilmaslik kerakligini tushuntirish uchun) —
+        test kodni tekshirishi kerak, izohni emas."""
+        import re
+        src = self._module()
+        src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)     # /* ... */
+        src = re.sub(r'^\s*//.*$', '', src, flags=re.M)      # // ...
+        return src
+
+    def test_page_rule_is_written_at_top_level(self):
+        """Eng muhimi: @page `@media print` ICHIGA yozilmasin."""
+        code = self._code()
+        self.assertIn("'@page { size: '", code)
+        self.assertNotIn('@media print { @page', code)
+        self.assertNotIn('@media print{@page', code)
+
+    def test_height_is_never_auto(self):
+        code = self._code()
+        self.assertNotIn('auto;', code.split('function fit')[-1])
+
+    def test_measures_bottom_not_scrollheight(self):
+        """scrollHeight oyna balandligidan kichik bo'lmaydi — kalta chek
+        uchun 84mm ortiqcha lenta chiqarardi."""
+        code = self._code()
+        self.assertIn('getBoundingClientRect().bottom', code)
+        self.assertNotIn('documentElement.scrollHeight', code)
+
+    def test_measure_styles_go_to_body_not_head(self):
+        """Chek uslublari body ichidagi <style> da — head'ga qo'yilsa
+        o'lchov 15% xato bo'lardi."""
+        code = self._code()
+        measure = code.split('function measure')[1].split('function fit')[0]
+        self.assertIn('document.body.appendChild', measure)
+        self.assertNotIn('document.head.appendChild', measure)
+
+    def test_templates_fit_the_page_before_printing(self):
+        import os
+        from django.conf import settings
+        root = None
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory')
+            if os.path.isdir(p):
+                root = p
+                break
+        for name in ('transaction_detail.html', 'shift_receipt.html'):
+            with open(os.path.join(root, name), encoding='utf-8') as f:
+                src = f.read()
+            self.assertIn('yuritReceiptPrint', src, name)
+            self.assertIn('beforeprint', src,
+                          f'{name}: qo\'lda Ctrl+P bosilganda ham moslansin')
+
+
+class Prn2ReceiptCanBeFramedBySelf(TestCase):
+    """PRN-1/UX-11: chek KO'RINMAS IFRAME ichida chop etiladi — demak
+    sahifa o'z saytimiz ichida freymga tusha olishi SHART.
+
+    Bu ikki joyda bloklangan edi va ikkalasi ham jimgina ishlardi —
+    chek shunchaki chop etilmasdi, hech qanday xato ko'rinmasdi:
+      - CSP: `frame-ancestors 'none'`
+      - prod sozlamasi: X_FRAME_OPTIONS = 'DENY'
+
+    Himoya YO'QOLMADI: 'self' va SAMEORIGIN begona saytga ruxsat bermaydi,
+    faqat o'z sahifamiz o'z sahifamizni freymlashi mumkin.
+    """
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial')
+        self.admin = User.objects.create_user(
+            username='prn2', password='x', role=User.Role.ADMIN)
+        self.shift = Shift.objects.create(
+            branch=self.branch, opened_by=self.admin, opening_cash=Decimal('0'))
+        self.txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.admin, shift=self.shift,
+            payment_method='cash')
+        self.client = Client()
+        self.client.force_login(self.admin)
+
+    def _receipt(self):
+        return self.client.get(f'/transaction/{self.txn.public_id}/')
+
+    def test_receipt_allows_same_origin_framing(self):
+        r = self._receipt()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers.get('X-Frame-Options'), 'SAMEORIGIN')
+
+    def test_csp_allows_self_as_frame_ancestor(self):
+        r = self._receipt()
+        csp = r.headers.get('Content-Security-Policy') or ''
+        self.assertIn("frame-ancestors 'self'", csp)
+        self.assertNotIn("frame-ancestors 'none'", csp)
+
+    def test_csp_still_refuses_other_sites(self):
+        """Clickjacking himoyasi joyida — 'self' ochiq eshik emas."""
+        r = self._receipt()
+        csp = r.headers.get('Content-Security-Policy') or ''
+        self.assertNotIn('frame-ancestors *', csp)
+        self.assertNotIn('frame-ancestors https:', csp)
+
+    def test_other_pages_are_not_loosened_more_than_needed(self):
+        """Boshqa sahifalar ham 'self' — lekin hech qachon '*' emas."""
+        r = self.client.get('/pos/')
+        csp = r.headers.get('Content-Security-Policy') or ''
+        if csp:
+            self.assertNotIn('frame-ancestors *', csp)

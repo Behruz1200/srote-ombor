@@ -15,6 +15,7 @@ from django.http import HttpResponseForbidden, HttpResponse, JsonResponse, Http4
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -7517,6 +7518,12 @@ def checkout(request):
     })
 
 
+# UX-11: chek POS'da KO'RINMAS IFRAME ichida chop etiladi (yangi tab emas).
+# Prodda X_FRAME_OPTIONS = 'DENY' — ya'ni bu sahifa HECH QANDAY freymда
+# ochilmaydi va chek umuman chop etilmasdi. Butun sayt uchun DENY'ni
+# bo'shatmaymiz: faqat SHU sahifaga O'Z SAYTIMIZ ichida freymga tushish
+# ruxsati beriladi. Boshqa saytlar baribir freymga ola olmaydi.
+@xframe_options_sameorigin
 @login_required
 def transaction_detail(request, token):
     txn = get_object_or_404(

@@ -290,9 +290,25 @@ yuqori panel, xabar chizig'i, tugmalar) ham qog'ozga tushardi.
 <script>
 // Smen yopilgach avtomatik chop etish (?autoprint=1). Kiosk-printing rejimida
 // dialogsiz. Popup bo'lsa — bosgandan keyin yopiladi; asosiy oynada qoladi.
+// Z-hisobot ham uzun bo'lishi mumkin (ko'p qaytarish / ko'p to'lov turi).
+// `@page { size: 80mm auto }` Chrome'da ishlamaydi — balandlik uchun `auto`
+// qo'llanmaydi va hisobot ikki sahifaga bo'linib, termal printerda ikkita
+// alohida qog'oz bo'lib chiqadi. Shuning uchun aniq balandlik o'lchanadi.
+var zPageFitted = false;
+function fitZReportPage() {
+    if (zPageFitted) return;
+    try {
+        if (window.yuritReceiptPrint) window.yuritReceiptPrint.fit('#receipt', 80);
+        zPageFitted = true;
+    } catch (e) { /* o'lchov xato bersa ham chop etish ketaversin */ }
+}
+window.addEventListener('beforeprint', fitZReportPage);
+
 (function () {
     if (new URLSearchParams(location.search).get('autoprint') !== '1') return;
-    window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 350); });
+    window.addEventListener('load', function () {
+        setTimeout(function () { fitZReportPage(); window.print(); }, 350);
+    });
     window.addEventListener('afterprint', function () {
         if (window.opener) setTimeout(function () { try { window.close(); } catch (e) {} }, 200);
     });

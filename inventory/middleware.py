@@ -59,7 +59,12 @@ _CSP = "; ".join([
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    # UX-11: 'none' -> 'self'. Chek endi POS sahifasidagi KO'RINMAS IFRAME
+    # ichida chop etiladi (yangi tab ochilmasin deb) va 'none' buni butunlay
+    # bloklardi — chek umuman chop etilmasdi. 'self' clickjacking'dan
+    # himoyani SAQLAB QOLADI: begona sayt bizni freymga sola olmaydi,
+    # faqat o'z sahifamiz o'z sahifamizni freymlashi mumkin.
+    "frame-ancestors 'self'",
 ])
 
 
