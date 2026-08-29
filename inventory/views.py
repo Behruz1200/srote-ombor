@@ -11494,6 +11494,16 @@ def _lock_stocks(qs):
     return BranchStock.objects.select_for_update().filter(pk__in=ids)
 
 
+# STK-15: ommaviy amallar uchun bo'lak o'lchami. Kichikroq = qulf kamroq
+# ushlanadi (sotuv kamroq kutadi), kattaroq = kamroq tranzaksiya.
+PRICE_CHUNK = 200
+
+
+def _chunked(seq, n=PRICE_CHUNK):
+    for i in range(0, len(seq), n):
+        yield seq[i:i + n]
+
+
 def _price_qs(request, params=None):
     """Filtrlangan BranchStock queryset. STK-9: `params` — GET yoki POST.
     price_apply POST bo'lgani uchun filtrlar GET'да YO'Q edi; natijada
@@ -11701,73 +11711,89 @@ def price_apply(request):
     factor = Decimal('1') + pct / Decimal('100')
     q2 = Decimal('0.01')
 
-    with transaction.atomic():
-        # STK-14: select_related'siz QULFLAYMIZ — pastdagi halqa faqat narx
-        # maydonlarini o'qiydi, bogʻlangan jadvallar kerak emas.
-        for stock in _lock_stocks(targets):
-            ch = {}
-            if op == 'margin_from_cost':
-                # tannarx bor -> sotuv = tannarx × (1 + marja)
-                if stock.cost_price > 0:
-                    new = (stock.cost_price * factor).quantize(q2)
-                    if new != stock.sale_price:
-                        ch['sotuv'] = [str(stock.sale_price), str(new)]
-                        stock.sale_price = new
-            elif op == 'cost_from_sale':
-                # sotuv narxi to'g'ri -> tannarx = sotuv / (1 + marja)
-                if stock.sale_price > 0 and factor > 0:
-                    new = (stock.sale_price / factor).quantize(q2)
-                    if new != stock.cost_price:
-                        ch['tannarx'] = [str(stock.cost_price), str(new)]
-                        stock.cost_price = new
-            elif op == 'wholesale_from_cost':
-                if stock.cost_price > 0:
-                    new = (stock.cost_price * factor).quantize(q2)
-                    if new != stock.wholesale_price:
-                        ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
-                        stock.wholesale_price = new
-            elif op == 'margin_add':
-                # Mavjud marjaga qo'shish: 20% edi, +5 -> 25%.
-                # sotuv = tannarx × (1 + (joriy_marja + pct)/100)
-                if stock.cost_price > 0 and stock.sale_price > 0:
-                    cur_m = (stock.sale_price / stock.cost_price
-                             - Decimal('1')) * Decimal('100')
-                    new_m = cur_m + pct
-                    if new_m > Decimal('-100'):
-                        new = (stock.cost_price
-                               * (Decimal('1') + new_m / Decimal('100'))
-                               ).quantize(q2)
-                        if new >= 0 and new != stock.sale_price:
+    # STK-15: ommaviy narx amali BUTUN katalogni bitta tranzaksiyada
+    # qulflab turardi. 4 000 qatorli qayta narxlash o'sha qatorlarni bir
+    # necha o'n soniya band qiladi va SHU vaqtda o'sha tovarni sotmoqchi
+    # bo'lgan kassir KUTIB qoladi — kassa qotib qolgandek ko'rinadi.
+    #
+    # Endi bo'laklab: har bo'lak o'z tranzaksiyasida ochilib darhol
+    # yopiladi, ya'ni qulflar uzluksiz bo'shatiladi. Sotuv eng ko'pi bilan
+    # bitta bo'lakni kutadi (200 qator, bir soniyadan kam).
+    #
+    # Yon ta'siri OCHIQ aytiladi: amal endi yagona atomik emas. Narx
+    # yangilash uchun bu maqbul — har qator o'zicha to'g'ri qoladi va amal
+    # takrorlansa qolganini tugatadi. Sotuvni bloklash esa maqbul emas.
+    #
+    # STK-14 saqlanadi: qulflanadigan so'rovda select_related YO'Q, aks
+    # holda Postgres nullable outer join ustida FOR UPDATE ni rad etadi.
+    _ids = list(targets.order_by().values_list('pk', flat=True))
+    for _chunk in _chunked(_ids):
+        with transaction.atomic():
+            for stock in (BranchStock.objects.select_for_update()
+                          .filter(pk__in=_chunk)):
+                ch = {}
+                if op == 'margin_from_cost':
+                    # tannarx bor -> sotuv = tannarx × (1 + marja)
+                    if stock.cost_price > 0:
+                        new = (stock.cost_price * factor).quantize(q2)
+                        if new != stock.sale_price:
                             ch['sotuv'] = [str(stock.sale_price), str(new)]
                             stock.sale_price = new
-            elif op == 'wholesale_margin_add':
-                if stock.cost_price > 0 and stock.wholesale_price > 0:
-                    cur_m = (stock.wholesale_price / stock.cost_price
-                             - Decimal('1')) * Decimal('100')
-                    new_m = cur_m + pct
-                    if new_m > Decimal('-100'):
-                        new = (stock.cost_price
-                               * (Decimal('1') + new_m / Decimal('100'))
-                               ).quantize(q2)
-                        if new >= 0 and new != stock.wholesale_price:
+                elif op == 'cost_from_sale':
+                    # sotuv narxi to'g'ri -> tannarx = sotuv / (1 + marja)
+                    if stock.sale_price > 0 and factor > 0:
+                        new = (stock.sale_price / factor).quantize(q2)
+                        if new != stock.cost_price:
+                            ch['tannarx'] = [str(stock.cost_price), str(new)]
+                            stock.cost_price = new
+                elif op == 'wholesale_from_cost':
+                    if stock.cost_price > 0:
+                        new = (stock.cost_price * factor).quantize(q2)
+                        if new != stock.wholesale_price:
                             ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
                             stock.wholesale_price = new
-            elif op == 'bump_sale':
-                if stock.sale_price > 0:
-                    new = (stock.sale_price * factor).quantize(q2)
-                    if new != stock.sale_price:
-                        ch['sotuv'] = [str(stock.sale_price), str(new)]
-                        stock.sale_price = new
-            elif op == 'bump_wholesale':
-                if stock.wholesale_price > 0:
-                    new = (stock.wholesale_price * factor).quantize(q2)
-                    if new != stock.wholesale_price:
-                        ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
-                        stock.wholesale_price = new
-            if ch:
-                stock.save(update_fields=['cost_price', 'sale_price',
-                                          'wholesale_price'])
-                changed += 1
+                elif op == 'margin_add':
+                    # Mavjud marjaga qo'shish: 20% edi, +5 -> 25%.
+                    # sotuv = tannarx × (1 + (joriy_marja + pct)/100)
+                    if stock.cost_price > 0 and stock.sale_price > 0:
+                        cur_m = (stock.sale_price / stock.cost_price
+                                 - Decimal('1')) * Decimal('100')
+                        new_m = cur_m + pct
+                        if new_m > Decimal('-100'):
+                            new = (stock.cost_price
+                                   * (Decimal('1') + new_m / Decimal('100'))
+                                   ).quantize(q2)
+                            if new >= 0 and new != stock.sale_price:
+                                ch['sotuv'] = [str(stock.sale_price), str(new)]
+                                stock.sale_price = new
+                elif op == 'wholesale_margin_add':
+                    if stock.cost_price > 0 and stock.wholesale_price > 0:
+                        cur_m = (stock.wholesale_price / stock.cost_price
+                                 - Decimal('1')) * Decimal('100')
+                        new_m = cur_m + pct
+                        if new_m > Decimal('-100'):
+                            new = (stock.cost_price
+                                   * (Decimal('1') + new_m / Decimal('100'))
+                                   ).quantize(q2)
+                            if new >= 0 and new != stock.wholesale_price:
+                                ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
+                                stock.wholesale_price = new
+                elif op == 'bump_sale':
+                    if stock.sale_price > 0:
+                        new = (stock.sale_price * factor).quantize(q2)
+                        if new != stock.sale_price:
+                            ch['sotuv'] = [str(stock.sale_price), str(new)]
+                            stock.sale_price = new
+                elif op == 'bump_wholesale':
+                    if stock.wholesale_price > 0:
+                        new = (stock.wholesale_price * factor).quantize(q2)
+                        if new != stock.wholesale_price:
+                            ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
+                            stock.wholesale_price = new
+                if ch:
+                    stock.save(update_fields=['cost_price', 'sale_price',
+                                              'wholesale_price'])
+                    changed += 1
 
     messages.success(request, f"{changed} ta narx yangilandi.")
     return redirect(back)

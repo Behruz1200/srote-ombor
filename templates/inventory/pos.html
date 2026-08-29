@@ -802,6 +802,15 @@
 
             <!-- Sticky checkout panel -->
             <div class="pos-checkout-sticky">
+                {% comment %}POS-2: sotuvlarning 83%i oddiy naqd. Ular uchun
+                uch bosish (Yakunlash -> to'lov turi -> Tasdiqlash) o'rniga
+                BITTA harakat. Bu "jimgina naqd" EMAS: kassir ataylab shu
+                tugmani bosadi, boshqa to'lov turi kerak bo'lsa pastdagi
+                yashil tugmadan odatdagidek boradi.{% endcomment %}
+                <button type="button" class="btn btn-primary btn-lg w-100 mb-1" id="quickCashBtn" disabled>
+                    <i class="bi bi-lightning-charge-fill"></i> TEZ NAQD
+                    <kbd class="pos-key ms-1">F12</kbd>
+                </button>
                 <button type="button" class="btn btn-success btn-lg w-100" id="openPayBtn" disabled>
                     <i class="bi bi-check2-circle"></i> SOTUVNI YAKUNLASH
                 </button>
@@ -961,7 +970,9 @@
                   <tbody>
                     <tr><td><kbd>F2</kbd></td><td>Skanerga focus qilish</td></tr>
                     <tr><td><kbd>F3</kbd></td><td>Chegirma maydoniga o'tish</td></tr>
-                    <tr><td><kbd>F4</kbd></td><td>Sotuvni yakunlash</td></tr>
+                    <tr><td><kbd>F12</kbd></td><td><b>Tez naqd</b> — bitta harakatda naqd sotuv</td></tr>
+                    <tr><td><kbd>F4</kbd></td><td>Sotuvni yakunlash (to'lov turini tanlash)</td></tr>
+                    <tr><td><kbd>Enter</kbd></td><td>To'lov oynasida — tanlangan usulni tasdiqlash</td></tr>
                     <tr><td><kbd>F6</kbd></td><td>Savatdagi oxirgi qatorni o'chirish</td></tr>
                     <tr><td><kbd>F7</kbd></td><td>Oxirgi chekni qayta chop etish</td></tr>
                     <tr><td><kbd>F8</kbd></td><td>Savatni tozalash</td></tr>
@@ -1621,6 +1632,14 @@ if (openPayBtn) openPayBtn.addEventListener('click', openPayModal);
     if (!pm) return;
     pm.addEventListener('keydown', (e) => {
         if (e.target.tagName === 'INPUT') return;
+        // POS-2: Enter = TANLANGAN usulni tasdiqlaydi. Ilgari kassir
+        // usulni tanlagach yana sichqoncha bilan tugmani bosishi kerak edi.
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (document.getElementById('paymentMethod').value &&
+                checkoutBtn && !checkoutBtn.disabled) checkoutBtn.click();
+            return;
+        }
         const map = {'1': 'cash', '2': 'card', '3': 'transfer'};
         const m = map[e.key];
         if (!m) return;
@@ -1990,6 +2009,7 @@ function renderCart() {
         checkoutBtn.disabled = true;
         parkBtn.disabled = true;
         if (openPayBtn) openPayBtn.disabled = true;
+        if (quickCashBtn) quickCashBtn.disabled = true;
         clearCartBtn.style.display = 'none';
         // Savat bo'shadi — keyingi savat yangi idempotentlik kaliti oladi (S1).
         if (!checkoutInFlight) cartIdemKey = null;
@@ -2080,6 +2100,7 @@ function renderCart() {
     checkoutBtn.disabled = checkoutInFlight;
     parkBtn.disabled = checkoutInFlight;
     if (openPayBtn) openPayBtn.disabled = checkoutInFlight;
+    if (quickCashBtn) quickCashBtn.disabled = checkoutInFlight;
     clearCartBtn.style.display = 'inline-block';
     if (typeof renderMixedSplit === 'function') renderMixedSplit();
     if (typeof schedulePromoEval === 'function') schedulePromoEval();
@@ -3071,6 +3092,31 @@ window.addEventListener('yurit:failed-changed', renderFailedBanner);
 renderFailedBanner();
 
 // Checkout
+// POS-2: to'lov oynasi YOPIQ bo'lsa xabar asosiy ekranda ko'rinsin.
+// "Tez naqd" oynani ochmaydi, ya'ni checkoutStatus ko'rinmaydi — usiz
+// rad etilgan sotuv JIMGINA yo'qolardi.
+function checkoutMsg(html, kind) {
+    checkoutStatus.innerHTML = html;
+    const pm = document.getElementById('payModal');
+    const open = pm && pm.classList.contains('show');
+    if (!open) {
+        const txt = (checkoutStatus.textContent || '').trim();
+        if (txt) setStatus(txt, kind || 'error');
+    }
+}
+
+const quickCashBtn = document.getElementById('quickCashBtn');
+function quickCash() {
+    if (checkoutInFlight) return;
+    if (!Object.keys(cart).length) return;
+    // Aniq naqd: to'lov turi naqd, qaytim yo'q (mijoz aniq summa berdi).
+    document.getElementById('paymentMethod').value = 'cash';
+    const cg = document.getElementById('cashGiven');
+    if (cg) cg.value = '';
+    checkoutBtn.click();
+}
+if (quickCashBtn) quickCashBtn.addEventListener('click', quickCash);
+
 checkoutBtn.addEventListener('click', async () => {
     // S1: so'rov ketayotган bo'lса qayta kirishни bloklaymiz (skaner vedji yoki
     // auto-trigger tugmani ikkinchi marta bossа ham ikkinchi chek ketmaydi).
@@ -3219,7 +3265,7 @@ checkoutBtn.addEventListener('click', async () => {
     }
 
     if (!data.ok) {
-        checkoutStatus.innerHTML = `<span class="text-danger">${data.error || 'Xatolik'}</span>`;
+        checkoutMsg(`<span class="text-danger">${data.error || 'Xatolik'}</span>`, 'error');
         // Server rad etди — chek yaratilmadi. O'sha savat/kalit qoladi.
         checkoutInFlight = false;
         checkoutBtn.disabled = false;
@@ -4228,6 +4274,10 @@ document.addEventListener('keydown', (e) => {
         const payOpen = document.getElementById('payModal').classList.contains('show');
         if (payOpen) { if (!checkoutBtn.disabled) checkoutBtn.click(); }
         else if (openPayBtn && !openPayBtn.disabled) openPayBtn.click();
+    } else if (e.key === 'F12') {
+        // POS-2: bitta harakatda naqd sotuv (sotuvlarning 83%i shu)
+        e.preventDefault();
+        if (typeof quickCash === 'function') quickCash();
     } else if (e.key === 'F9') {
         e.preventDefault();
         if (!parkBtn.disabled) parkBtn.click();

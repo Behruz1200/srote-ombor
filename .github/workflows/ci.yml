@@ -1,7 +1,21 @@
 name: CI
 
-# 56 ta test + Django check + JS check har push va PR'да ishlaydi.
-# DEBUG=1 => SQLite, tashqi baza kerak emas.
+# CI-2: testlar ENDI IKKI bazada ham ishlaydi.
+#
+# Sabab: to'plam faqat SQLite'da yurar edi, prod esa Postgres. SQLite
+# select_for_update() ni UMUMAN e'tiborsiz qoldiradi, ya'ni qulflash xatolari
+# testdan bemalol o'tib ketardi. Uch kunda IKKI marta prodda 500 berdi —
+# ikkalasi ham aynan bir xil xato, ikki xil view'da:
+#
+#   27.08  /pos/refund/    FOR UPDATE cannot be applied to the nullable side...
+#   29.08  /prices/apply/  FOR UPDATE cannot be applied to the nullable side...
+#
+# O'sha paytda 247 ta test yashil edi va ikkalasi haqida ham hech narsa
+# demasdi. Endi postgres ishi shu sinfni ushlaydi.
+#
+# DEBUG=1 + DATABASE_URL: Postgres ishlatiladi, lekin prod xavfsizlik
+# sozlamalari (SSL redirect va h.k.) yoqilmaydi — ular test mijoziga xalaqit
+# beradi va bu yerda tekshirilayotgan narsa emas.
 
 on:
   push:
@@ -10,35 +24,69 @@ on:
     branches: ["**"]
 
 jobs:
-  test:
+  sqlite:
+    name: Testlar (SQLite — dasturchi mashinasi bilan bir xil)
     runs-on: ubuntu-latest
     env:
       DEBUG: "1"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Baza migratsiyasi (check_js/check DB'ga murojaat qiladi)
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Baza migratsiyasi
         run: python manage.py migrate --noinput
-
       - name: JS sintaksis tekshiruvi (check_js)
         run: python manage.py check_js
-
       - name: Django tizim tekshiruvi (check)
         run: python manage.py check
-
-      - name: Migratsiyalar to'liqmi (makemigrations --check)
+      - name: Migratsiyalar to'liqmi
         run: python manage.py makemigrations --check --dry-run
+      - name: Testlar
+        run: python manage.py test inventory --verbosity 2
 
+  postgres:
+    name: Testlar (PostgreSQL — prod bilan bir xil)
+    runs-on: ubuntu-latest
+    env:
+      DEBUG: "1"
+      DATABASE_URL: "postgres://yurit:yurit@localhost:5432/yurit_test"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: yurit
+          POSTGRES_PASSWORD: yurit
+          POSTGRES_DB: yurit_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Baza haqiqatan Postgres ekanini tasdiqlaymiz
+        run: |
+          python - <<'PY'
+          import os, django
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'store_management.settings')
+          django.setup()
+          from django.conf import settings
+          engine = settings.DATABASES['default']['ENGINE']
+          print('ENGINE =', engine)
+          assert 'postgresql' in engine, f'Postgres kutilgan edi, {engine} keldi'
+          PY
+      - name: Baza migratsiyasi
+        run: python manage.py migrate --noinput
+      - name: Django tizim tekshiruvi (check)
+        run: python manage.py check
       - name: Testlar
         run: python manage.py test inventory --verbosity 2

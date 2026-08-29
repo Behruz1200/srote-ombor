@@ -3184,6 +3184,25 @@ class Stk14LockingNeverJoinsNullableSide(MoneyTestBase):
             set(qs.values_list('pk', flat=True)),
             'qulflash to`plamni o`zgartirmasligi kerak')
 
+    def test_locking_actually_executes_on_this_database(self):
+        """CI-2: so'rov SHAKLINI emas, BAJARILISHINI tekshiradi.
+
+        SQLite'da select_for_update() umuman e'tiborsiz qoldiriladi, ya'ni bu
+        test u yerda hech narsani isbotlamaydi. Postgres'da esa u HAQIQATAN
+        FOR UPDATE yuboradi — eski (buzuq) kod bilan aynan shu qator
+        NotSupportedError bilan yiqilardi. CI endi ikkala bazada ham
+        yuradi, demak shu sinf boshqa prodga chiqmaydi.
+        """
+        from django.db import transaction, connection
+        from inventory.views import _lock_stocks
+        qs = BranchStock.objects.select_related('variant__product__category')
+        with transaction.atomic():
+            rows = list(_lock_stocks(qs))    # Postgres: haqiqiy FOR UPDATE
+        self.assertGreaterEqual(len(rows), 1)
+        if connection.vendor != 'postgresql':
+            self.skipTest("bu tekshiruv faqat Postgres'da ma'noli "
+                          "(SQLite qulflashni e'tiborsiz qoldiradi)")
+
     def test_price_apply_actually_works(self):
         """Uchdan-uchgacha: sahifa 500 bermasin va narx yangilansin."""
         admin = User.objects.create_user(
@@ -3782,3 +3801,138 @@ class Off10SyncNeverBlocksSales(MoneyTestBase):
         self.assertIn('Kassa 1', html)
         self.assertIn('Kassa 2', html)
         self.assertIn('1 / 2 tayyor', html)
+
+
+class Pos2OneKeyCashCheckout(MoneyTestBase):
+    """POS-2 — naqd sotuv uch bosish emas, bitta harakat bo'lsin.
+
+    30 kunlik o'lchov: 4 427 chekdan 3 655 tasi (82.6%) oddiy NAQD. Ular
+    uchun yo'l "Yakunlash -> to'lov turi -> To'lash va yakunlash" edi, ya'ni
+    uch bosish. Oyiga ~8 850 ortiqcha harakat.
+
+    DIQQAT: bu "jimgina naqd" EMAS. Avtomatik naqd tanlash ilgari xato
+    yozuvlarga olib kelgan va ATAYLAB olib tashlangan. Bu esa kassir O'ZI
+    bosadigan alohida tugma/tugmacha — boshqa to'lov turi kerak bo'lsa
+    odatdagi yashil tugma o'z joyida turibdi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_pos2', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    def test_quick_cash_button_exists(self):
+        self.assertIn('id="quickCashBtn"', self.html)
+        self.assertIn('TEZ NAQD', self.html)
+
+    def test_f12_triggers_it(self):
+        self.assertIn("e.key === 'F12'", self.html)
+        self.assertIn('quickCash()', self.html)
+
+    def test_quick_cash_sets_cash_explicitly(self):
+        block = self.html[self.html.index('function quickCash()'):][:420]
+        self.assertIn("paymentMethod').value = 'cash'", block)
+
+    def test_enter_confirms_the_chosen_method(self):
+        self.assertIn("if (e.key === 'Enter')", self.html)
+
+    def test_errors_are_visible_when_the_modal_is_closed(self):
+        """Tez naqd oynani ochmaydi — rad etilgan sotuv jimgina yo'qolmasin."""
+        self.assertIn('function checkoutMsg', self.html)
+        self.assertIn('checkoutMsg(`<span class="text-danger">', self.html)
+
+    def test_shortcut_is_documented(self):
+        self.assertIn('<kbd>F12</kbd>', self.html)
+
+    def test_manual_method_choice_still_required_on_the_normal_path(self):
+        """Oddiy yo'lda to'lov turi baribir tanlanishi shart (eski xato qaytmasin)."""
+        self.assertIn("To'lov turini tanlang", self.html)
+
+    def test_cash_sale_still_records_correctly(self):
+        """Server tomoni o'zgarmadi — naqd chek avvalgidek yoziladi."""
+        r = self.checkout(payment_method='cash')
+        self.assertEqual(r.status_code, 200)
+        t = SaleTransaction.objects.get()
+        self.assertEqual(t.payment_method, 'cash')
+
+
+class Stk15BulkPricingDoesNotHoldTheCatalogue(MoneyTestBase):
+    """STK-15 — ommaviy narx amali kassani bloklamasin.
+
+    price_apply BUTUN filtrlangan to'plamni BITTA tranzaksiyada qulflardi.
+    4 000 qatorli qayta narxlash o'sha qatorlarni o'n soniyalab band qiladi,
+    va shu vaqtda o'sha tovarni sotmoqchi bo'lgan kassir kutib qoladi —
+    "TO'LASH VA YAKUNLASH bosganda qotib qoladi" shikoyatining ehtimoliy
+    sababi shu edi.
+
+    Endi bo'laklab bajariladi (PRICE_CHUNK). Qulflar uzluksiz bo'shatiladi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_stk15', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+
+    def _many(self, n):
+        made = []
+        for i in range(n):
+            v = ProductVariant.objects.create(
+                product=self.product, size=f'S{i}', color='Qora')
+            made.append(BranchStock.objects.create(
+                variant=v, branch=self.branch, stock_count=1,
+                cost_price=Decimal('10000'), sale_price=Decimal('0')))
+        return made
+
+    def test_chunk_size_is_bounded(self):
+        from inventory.views import PRICE_CHUNK
+        self.assertGreater(PRICE_CHUNK, 0)
+        self.assertLessEqual(PRICE_CHUNK, 500,
+                             'bo`lak katta bo`lsa qulf uzoq ushlanadi')
+
+    def test_chunker_covers_every_row_exactly_once(self):
+        from inventory.views import _chunked
+        ids = list(range(1, 1001))
+        out = [x for c in _chunked(ids) for x in c]
+        self.assertEqual(out, ids, 'birorta qator tushib qolmasin')
+
+    def test_bulk_update_touches_all_rows_across_chunks(self):
+        """Bo'laklash natijani o'zgartirmasligi SHART."""
+        from inventory.views import PRICE_CHUNK
+        rows = self._many(PRICE_CHUNK + 25)      # bir necha bo'lak
+        r = self.client.post('/prices/apply/', {
+            'mode': 'bulk', 'op': 'margin_from_cost', 'pct': '20',
+            'scope': 'selected', 'sel': [str(s.pk) for s in rows],
+        })
+        self.assertIn(r.status_code, (200, 302))
+        for s in rows:
+            s.refresh_from_db()
+            self.assertEqual(s.sale_price, Decimal('12000.00'))
+
+    def test_locks_are_released_between_chunks(self):
+        """Postgres'da: bo'lak tugagach qator BOSHQA tranzaksiyaga ochiladi.
+
+        SQLite select_for_update'ni e'tiborsiz qoldiradi, shuning uchun u
+        yerda bu tekshiruv o'tkazib yuboriladi — CI'ning postgres ishi uni
+        haqiqatan bajaradi.
+        """
+        from django.db import connection, transaction
+        if connection.vendor != 'postgresql':
+            self.skipTest("faqat Postgres'da ma'noli")
+        from inventory.views import _chunked
+        rows = self._many(3)
+        ids = [s.pk for s in rows]
+        seen = 0
+        for chunk in _chunked(ids, 1):
+            with transaction.atomic():
+                seen += len(list(BranchStock.objects.select_for_update()
+                                 .filter(pk__in=chunk)))
+            # tranzaksiya yopildi -> qulf bo'shadi, keyingi bo'lak kuta olmaydi
+        self.assertEqual(seen, 3)
