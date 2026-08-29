@@ -3452,3 +3452,90 @@ class Kbd3ModesAreSeparateAndRemembered(MoneyTestBase):
     def test_focus_change_no_longer_resets_the_choice(self):
         """Eski xatti-harakat: fokus o'zgarsa mode='auto' bo'lardi."""
         self.assertNotIn("mode = 'auto';   // yangi katak", self.html)
+
+
+class Scan1SingleScanAddsOnce(MoneyTestBase):
+    """SCAN-1 — bitta skanerlash savatga BITTA dona qo'shsin.
+
+    Sotuvchi: "bir marta skanerlasam ikki marta qo'shadi".
+
+    Poyga (race) shunday edi:
+      1. skaner kodni yozadi — har belgi 'input' hodisasi 350 ms taymerni
+         qayta qo'yadi;
+      2. skaner Enter yuboradi -> doSearch() -> search();
+      3. search() ASINXRON: /pos/lookup/ javobini kutadi va faqat javobdan
+         KEYIN savatga qo'shib, katakni tozalaydi;
+      4. lookup 350 ms dan uzoq ketsa, taymer o'sha orada ishga tushadi.
+         Katak hali tozalanmagan, ya'ni sharti bajariladi -> doSearch()
+         IKKINCHI marta -> savatga ikkinchi dona.
+
+    Ya'ni xato tarmoq tezligiga bog'liq edi: tez javobda ko'rinmasdi,
+    sekin javobda har skanerda takrorlanardi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_scan', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    def test_search_cancels_the_pending_debounce(self):
+        block = self.html[self.html.index('function doSearch()'):][:1400]
+        self.assertIn('clearTimeout(typeTimer);', block,
+                      'Enter bilan qidirilganda kutayotgan taymer bekor bo`lsin')
+
+    def test_timer_is_declared_before_use(self):
+        """typeTimer doSearch'dan OLDIN e'lon qilinsin (TDZ bo'lmasin)."""
+        self.assertLess(self.html.index('let typeTimer = null;'),
+                        self.html.index('function doSearch()'))
+
+    def test_lookup_is_still_async(self):
+        """Poyga sababi shu — hujjat sifatida qoladi."""
+        self.assertIn('async function search(q)', self.html)
+
+
+class Pos1CheckoutHasAClientTimeout(MoneyTestBase):
+    """POS-1 — "TO'LASH VA YAKUNLASH" cheksiz qotib turmasin.
+
+    fetch'ning o'z chegarasi yo'q edi: server sekinlashsa tugma cheksiz
+    "Saqlanmoqda..." holatida turardi va kassir mijoz oldida kutardi.
+
+    25 soniyadan keyin uzamiz va sotuvni navbatga olamiz. Bu XAVFSIZ, chunki
+    payload ichida idempotency_key bor — navbat qayta yuborganda server
+    o'sha kalit bilan ikkinchi chek YARATMAYDI.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_pos1', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    def test_checkout_fetch_is_aborted_after_a_wait(self):
+        self.assertIn('new AbortController()', self.html)
+        self.assertIn('_ctl.abort()', self.html)
+        self.assertIn('signal: _ctl.signal', self.html)
+
+    def test_timeout_falls_back_to_the_offline_queue(self):
+        self.assertIn("e.name === 'AbortError'", self.html)
+        self.assertIn('server javob bermadi', self.html)
+
+    def test_idempotency_key_makes_the_retry_safe(self):
+        self.assertIn('idempotency_key: idemKey', self.html)
+
+    def test_duplicate_key_creates_only_one_sale(self):
+        """Server tomoni: ayni kalit ikkinchi chek yaratmasligi SHART."""
+        r1 = self.checkout(idempotency_key='pos1-key')
+        self.assertEqual(r1.status_code, 200)
+        r2 = self.checkout(idempotency_key='pos1-key')
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(SaleTransaction.objects.count(), 1,
+                         'navbat qayta yuborsa ham chek BITTA bo`lsin')

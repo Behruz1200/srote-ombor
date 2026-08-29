@@ -125,3 +125,44 @@ class RequireAdminTwoFactorMiddleware:
                     "Administrator hisobi uchun 2FA majburiy. Iltimos, sozlang.")
                 return redirect('security_2fa')
         return self.get_response(request)
+
+
+class SlowRequestLogMiddleware:
+    """OPS-13 — sekin so'rovlarni logga yozadi (sababini topish uchun).
+
+    Sotuvchi "TO'LASH VA YAKUNLASH bosganda bir muddat qotib qoladi" dedi.
+    Tashqi chaqiruvlar tekshirildi va yo'q: TELEGRAM_BOT_TOKEN sozlanmagan
+    (send_telegram darhol qaytadi), SMS/fiskal kalitlari ham yo'q. Demak
+    sekinlik SERVER ichida — ehtimol qulf kutish (select_for_update boshqa
+    uzoq tranzaksiya ushlab turgan qatorni kutadi) yoki og'ir so'rov.
+
+    Taxmin qilib o'tirmaslik uchun o'lchaymiz: chegaradan uzoq ketgan har
+    so'rov usuli, manzili, davomiyligi va foydalanuvchisi bilan yoziladi.
+    Chegara SLOW_REQUEST_MS (default 3000) orqali sozlanadi; 0 = o'chiq.
+
+    Ataylab O'ta yengil: bitta time.monotonic() juftligi, sekin so'rovдан
+    boshqasiga hech narsa qilmaydi.
+    """
+
+    def __init__(self, get_response):
+        import time
+        from django.conf import settings
+        self.get_response = get_response
+        self._time = time
+        self.threshold = float(getattr(settings, 'SLOW_REQUEST_MS', 3000)) / 1000.0
+
+    def __call__(self, request):
+        if self.threshold <= 0:
+            return self.get_response(request)
+        t0 = self._time.monotonic()
+        response = self.get_response(request)
+        dt = self._time.monotonic() - t0
+        if dt >= self.threshold:
+            import logging
+            u = getattr(request, 'user', None)
+            logging.getLogger('yurit.slow').warning(
+                'SEKIN %.1fs %s %s status=%s user=%s',
+                dt, request.method, request.get_full_path()[:200],
+                getattr(response, 'status_code', '?'),
+                getattr(u, 'username', '-') if u and u.is_authenticated else '-')
+        return response

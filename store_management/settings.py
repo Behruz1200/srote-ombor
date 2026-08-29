@@ -97,6 +97,8 @@ ANTHROPIC_MODEL = os.environ.get('ANTHROPIC_MODEL', 'claude-sonnet-4-5')
 # --timeout dan KICHIK bo'lishi shart, aks holda ishchi jarayon javob
 # yetkazilmasдан o'ldiriladi va brauzer bo'sh javob oladi.
 AI_INVOICE_BUDGET = float(os.environ.get('AI_INVOICE_BUDGET', '150'))
+# OPS-13: shu millisekunddan uzoq ketgan so'rov logga yoziladi. 0 = o'chiq.
+SLOW_REQUEST_MS = float(os.environ.get('SLOW_REQUEST_MS', '3000'))
 # Burib qayta o'qish (har biri qo'shimcha chaqiruv). 0 = faqat bitta o'qish.
 AI_INVOICE_ROTATE = os.environ.get('AI_INVOICE_ROTATE', '1') not in ('0', 'false', 'False')
 TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')
@@ -232,6 +234,7 @@ MIDDLEWARE = [
     'inventory.middleware.ContentSecurityPolicyMiddleware',   # SEC-3
     'inventory.middleware.RequireAdminTwoFactorMiddleware',   # SEC-1 (gated)
     'inventory.middleware.ShopClosedMiddleware',              # SHOP-1/SHOP-2
+    'inventory.middleware.SlowRequestLogMiddleware',          # OPS-13
 ]
 
 # SHOP-1/SHOP-2: ochiq onlayn do'kon xavfsiz qurilmaguncha YOPIQ (0 buyurtma).

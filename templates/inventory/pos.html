@@ -2629,9 +2629,26 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
 })();
 
 // Search trigger (Enter, button, or typing pause)
+let typeTimer = null;      // SCAN-1: doSearch() uni bekor qiladi
 function doSearch() {
     const q = scanInput.value.trim();
     if (!q) { hideExtras(); setStatus('', ''); return; }
+    // SCAN-1: kutayotgan avto-qidiruvni BEKOR qilamiz.
+    //
+    // Skaner kodni yozadi (har belgi 'input' hodisasi bilan 350 ms taymerni
+    // qayta qo'yadi), so'ng Enter yuboradi. Enter doSearch() ni chaqiradi,
+    // u esa search() ni — search() ASINXRON: /pos/lookup/ javobini KUTADI va
+    // faqat javobdan keyin savatga qo'shib, katakni tozalaydi.
+    //
+    // Agar lookup 350 ms dan uzoq ketsa, taymer o'sha orada ishga tushadi,
+    // katak hali tozalanmagani uchun sharti bajariladi va doSearch() IKKINCHI
+    // marta chaqiriladi — natijada bitta skanerdan savatga IKKI dona tushadi.
+    // Sotuvchilar aytgan "bir marta skanerlasam ikki marta qo'shadi" shu.
+    //
+    // Taymerni shu yerda bekor qilish yetarli: Enter har doim taymerdan oldin
+    // keladi. Bir xil tovarni ataylab ikki marta skanerlash esa ishlayveradi —
+    // har skaner o'zining Enter'i bilan keladi.
+    clearTimeout(typeTimer);
     search(q);
 }
 scanInput.addEventListener('keydown', (e) => {
@@ -2653,7 +2670,6 @@ searchBtn.addEventListener('click', doSearch);
 
 // Debounced auto-search: as user types (or scanner pastes), search
 // after 350ms idle. Helps when user types a name without hitting Enter.
-let typeTimer = null;
 scanInput.addEventListener('input', () => {
     clearTimeout(typeTimer);
     const q = scanInput.value.trim();
@@ -2951,17 +2967,29 @@ checkoutBtn.addEventListener('click', async () => {
     // yolg'on aytar va navbatга arvoh yozuv qo'yardi. Endi tarmoq/parse xatosi
     // aniq ajratilган.
     let resp, data;
+    // POS-1: fetch'ning O'Z chegarasi YO'Q edi — server sekinlashsa tugma
+    // cheksiz "Saqlanmoqda..." holatida qotib turardi va kassir mijoz oldida
+    // kutib qolardi. Endi 25 soniyadan keyin uzamiz va sotuvni navbatga
+    // olamiz. Bu XAVFSIZ: payload ichida idempotency_key bor, server o'sha
+    // kalit bilan IKKINCHI chek yaratmaydi — navbat qayta yuborganda ham
+    // sotuv bir marta yoziladi.
+    const _ctl = new AbortController();
+    const _to = setTimeout(() => _ctl.abort(), 25000);
     try {
         resp = await fetch('/pos/checkout/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
             body: JSON.stringify(payload),
+            signal: _ctl.signal,
         });
         data = await resp.json();
     } catch (e) {
-        await queueOffline('tarmoq xatosi');
+        await queueOffline(e && e.name === 'AbortError'
+                           ? 'server javob bermadi (25 s)' : 'tarmoq xatosi');
         refocus();
         return;
+    } finally {
+        clearTimeout(_to);
     }
 
     if (!data.ok) {
