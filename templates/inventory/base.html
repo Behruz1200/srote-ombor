@@ -4364,6 +4364,11 @@ window.yuritScan = (function () {
     background: var(--yrt-surface-3); border: 1px solid var(--yrt-border);
     border-radius: 5px; padding: 1px 6px; font-size: 11px; color: var(--yrt-fg);
 }
+/* KBD-3: ABC = FAQAT harflar (yon raqamli blok yo'q, tepadagi raqam qatori
+   o'z joyida qoladi); 123 = FAQAT raqamlar. Ikki rejim bir-birini to'liq
+   almashtiradi — ilgari ABC'da o'ngda raqamli blok ham turardi va kassir
+   qaysi birini bosishni o'ylab qolardi. */
+#osk.osk-abc .osk-numpad { display: none; }
 /* 123 rejimi — raqamli blok markazda va KATTA */
 #osk.osk-num .osk-main { display: none; }
 #osk.osk-num .osk-numpad {
@@ -4450,12 +4455,19 @@ window.yuritScan = (function () {
         {t:'4'},{t:'5'},{t:'6'},{k:'clear',label:'C'},
         {t:'1'},{t:'2'},{t:'3'},{t:'000'},
         {t:'0',span:2},{t:'.'},{k:'enter',label:'⏎',accent:1},
+        // KBD-3: 123 rejimida ham yopish tugmasi bo'lsin — ilgari u faqat
+        // ABC qatorida edi va raqamli rejimda klaviaturani yopib bo'lmasdi
+        // (faqat pastdagi dumaloq tugma orqali).
+        {k:'hide',label:'▼ Yashirish',span:4},
     ];
 
     let shift = false, caps = false, lastField = null;
-    // KBD-1: 'auto' — katak turiga qarab o'zi tanlaydi; ABC/123 bosilsa
-    // fokus boshqa katakka o'tguncha shu rejim qoladi.
-    let mode = 'auto';
+    // KBD-3: rejim ESLAB QOLINADI. 'auto' — hali hech kim tanlamagan, katak
+    // turiga qarab o'zi hal qiladi. Kassir ABC yoki 123 ni bossa — o'sha
+    // tanlov YOPIB-OCHGANDA ham, boshqa katakka o'tganda ham saqlanadi.
+    // Ilgari tanlov fokus o'zgarishi bilan yo'qolardi: kassir 123 ni tanlab,
+    // keyingi katakka o'tganda yana QWERTY chiqib qolardi.
+    let mode = sGet('yurit_osk_mode') || 'auto';
     const TARGET = document.getElementById('oskTarget');
     const HINT = document.getElementById('oskHint');
 
@@ -4501,6 +4513,7 @@ window.yuritScan = (function () {
         }
         const em = effectiveMode();
         KB.classList.toggle('osk-num', em === '123');
+        KB.classList.toggle('osk-abc', em === 'abc');
         document.querySelectorAll('.osk-mode button').forEach(function (b) {
             b.classList.toggle('is-on', b.dataset.oskMode === em);
         });
@@ -4526,8 +4539,7 @@ window.yuritScan = (function () {
 
     document.addEventListener('focusin', function(e){
         if (!isEditable(e.target)) return;
-        if (e.target !== lastField) mode = 'auto';   // yangi katak — yana avtomat
-        lastField = e.target;
+        lastField = e.target;   // KBD-3: tanlangan rejim saqlanadi
         if (KB.classList.contains('osk-open')) { render(); updateTarget(); }
     });
 
@@ -4668,6 +4680,7 @@ window.yuritScan = (function () {
         b.addEventListener('mousedown', function (e) { e.preventDefault(); });
         b.addEventListener('click', function () {
             mode = b.dataset.oskMode;
+            sSet('yurit_osk_mode', mode);
             render();
             updateTarget();
         });

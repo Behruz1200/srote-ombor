@@ -3403,3 +3403,52 @@ class Kbd1ScreenKeyboardIsAdaptive(MoneyTestBase):
         self.assertIn('oskTarget', self.html)
         self.assertIn('yrt-osk-field', self.html)
         self.assertIn('function fieldName', self.html)
+
+
+class Kbd3ModesAreSeparateAndRemembered(MoneyTestBase):
+    """KBD-3 — ABC va 123 bir-birini TO'LIQ almashtiradi, tanlov eslab qolinadi.
+
+    Sotuvchilar aytdi: ABC rejimida o'ng tomonda raqamli blok ham turardi,
+    ya'ni bitta raqamni ikki joydan terish mumkin edi va qaysi birini bosish
+    noaniq edi. Endi ABC = faqat harflar (tepadagi raqam qatori qoladi),
+    123 = faqat raqamlar.
+
+    Ikkinchisi: kassir 123 ni tanlab, klaviaturani yopib qayta ochsa yana
+    QWERTY chiqardi — tanlov saqlanmasdi. Ilgari fokus boshqa katakka
+    o'tganda ham rejim 'auto' ga qaytardi. Endi tanlov localStorage'da
+    saqlanadi va yopib-ochganda ham, katak almashganda ham qoladi.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username='admin_kbd3', password='x', role=User.Role.ADMIN,
+            is_staff=True, branch=self.branch)
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.open_shift()
+        self.html = self.client.get('/pos/').content.decode()
+
+    def test_abc_hides_the_side_numpad(self):
+        self.assertIn('#osk.osk-abc .osk-numpad { display: none; }', self.html)
+
+    def test_123_hides_the_qwerty(self):
+        self.assertIn('#osk.osk-num .osk-main { display: none; }', self.html)
+
+    def test_abc_keeps_its_top_number_row(self):
+        """Tepadagi 1..0 qatori QWERTY qismida qoladi — u olib tashlanmadi."""
+        self.assertIn("[['`','~'],['1','!']", self.html)
+
+    def test_hide_button_exists_in_both_modes(self):
+        self.assertIn("{k:'hide',label:'▼ Yashirish',w:2,sp:1}", self.html)   # ABC
+        self.assertIn("{k:'hide',label:'▼ Yashirish',span:4}", self.html)      # 123
+
+    def test_mode_is_read_from_storage_on_load(self):
+        self.assertIn("sGet('yurit_osk_mode')", self.html)
+
+    def test_mode_is_saved_when_chosen(self):
+        self.assertIn("sSet('yurit_osk_mode', mode)", self.html)
+
+    def test_focus_change_no_longer_resets_the_choice(self):
+        """Eski xatti-harakat: fokus o'zgarsa mode='auto' bo'lardi."""
+        self.assertNotIn("mode = 'auto';   // yangi katak", self.html)
