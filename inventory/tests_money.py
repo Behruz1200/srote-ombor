@@ -19,9 +19,10 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db import connection
-from django.test import TestCase, Client
+from django.test import LiveServerTestCase, TestCase, Client, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+import unittest
 from datetime import timedelta
 
 from django.utils import timezone
@@ -5002,3 +5003,115 @@ class Stk14LockingQueriesNeverJoin(TestCase):
         self.assertIn('select_for_update', body)
         self.assertNotIn('select_related', body)
         self.assertIn("values_list('pk'", body)
+
+
+def _browser_available():
+    """Playwright + Chromium bormi? Yo'q bo'lsa test o'tkazib yuboriladi."""
+    import os
+    try:
+        import playwright  # noqa: F401
+    except Exception:
+        return False
+    return os.path.exists('/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
+
+
+@unittest.skipUnless(_browser_available(),
+                     'playwright/chromium yo\'q — brauzer testi o\'tkazib yuborildi')
+@override_settings(STORAGES={
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    # Testda manifest (hashli nom) ishlatilmaydi — collectstatic qilinmagani
+    # uchun bootstrap.bundle.js 404 bo'lardi va tekshiruv ma'nosiz chiqardi.
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+})
+class Kp1PosPageHasNoScriptErrors(LiveServerTestCase):
+    """KP-1: POS sahifasida BITTA JS xatosi butun sahifani o'ldiradi.
+
+    "Boshqa summa" kalkulyatori ishlamay qoldi. Sababi kalkulyatorda emas
+    edi: undan YUQORIDA, xuddi shu <script> blokida `new bootstrap.Modal(...)`
+    yozilgan edi. bootstrap.bundle.js base.html'da sahifa mazmunidan KEYIN
+    yuklanadi, shuning uchun u qator shu zahoti "bootstrap is not defined"
+    beradi va blokning QOLGAN QISMI umuman ishga tushmaydi — kalkulyator
+    tugmalari o'sha "qolgan qism"da bog'lanardi.
+
+    Ya'ni bir joydagi xato butunlay boshqa joydagi tugmani o'ldirdi. Buni
+    kodni o'qib topish qiyin; brauzerda esa bir zumda ko'rinadi. Shuning
+    uchun test HAR QANDAY sahifa xatosini tekshiradi — faqat bootstrap'ni
+    emas.
+
+    (Kod ichida qoida oddiy: bootstrap'ga faqat HODISA ichida murojaat
+    qiling — getPayModal() va pfGetModal() shuning uchun lazy.)
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # Playwright'ning sync API'si o'z hodisa siklida ishlaydi va Django
+        # buni "async kontekst" deb hisoblab, bazaga murojaatni rad etadi.
+        # Testda bu xavfsiz.
+        import os
+        os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
+        super().setUpClass()
+        from playwright.sync_api import sync_playwright
+        cls._pw = sync_playwright().start()
+        cls._browser = cls._pw.chromium.launch(
+            executable_path='/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._browser.close()
+        cls._pw.stop()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial')
+        self.seller = User.objects.create_user(
+            username='kp_kassir', password='x', role=User.Role.SOTUVCHI,
+            branch=self.branch)
+        Shift.objects.create(branch=self.branch, opened_by=self.seller,
+                             opening_cash=Decimal('0'))
+        self.errors = []
+        self.page = self._browser.new_context().new_page()
+        self.page.on('pageerror', lambda e: self.errors.append(str(e)))
+        self.page.goto(self.live_server_url + '/login/')
+        self.page.fill('input[name=username]', 'kp_kassir')
+        self.page.fill('input[name=password]', 'x')
+        self.page.click('button[type=submit]')
+        self.page.wait_for_load_state('networkidle')
+        self.page.goto(self.live_server_url + '/pos/')
+        self.page.wait_for_load_state('networkidle')
+        self.page.wait_for_selector('#openPriceBtn', timeout=15000)
+        self.page.wait_for_timeout(400)
+
+    def tearDown(self):
+        self.page.close()
+
+    def test_pos_page_loads_without_any_script_error(self):
+        self.assertEqual(
+            self.errors, [],
+            'POS sahifasida JS xatosi bor — u XATODAN KEYINGI barcha '
+            'tugmalarni o\'ldiradi: ' + ' | '.join(self.errors))
+
+    def test_open_price_keypad_computes_and_adds_to_cart(self):
+        """Kalkulyator — xato bo'lsa birinchi bo'lib shu sinadi."""
+        # Modalni OCHMAYMIZ — bu test bootstrap'ni emas, KALKULYATOR
+        # tugmalari bog'langanini tekshiradi. Aynan shu bog'lanish
+        # yo'qolgan edi: undan yuqoridagi xato script blokini o'ldirgan.
+        for key in ('5', '0', '000'):
+            self.page.click(f'#keypadModal [data-kp="{key}"]', force=True)
+        self.assertIn('50', self.page.inner_text('#kpDisplay'))
+        self.assertFalse(self.page.eval_on_selector('#kpAdd', 'e => e.disabled'),
+                         "Savatga qo'shish tugmasi o'chiq qolgan")
+        self.page.click('#kpAdd', force=True)
+        self.page.wait_for_timeout(600)
+        rows = self.page.eval_on_selector_all(
+            '#cartBody tr:not([id])', 'els => els.length')
+        self.assertEqual(rows, 1, 'ochiq narxli qator savatga tushmadi')
+
+    def test_keypad_arithmetic_works(self):
+        """2 * 3000 = 6000 — kalkulyator haqiqatan hisoblaydi."""
+        # Modalni OCHMAYMIZ — bu test bootstrap'ni emas, KALKULYATOR
+        # tugmalari bog'langanini tekshiradi. Aynan shu bog'lanish
+        # yo'qolgan edi: undan yuqoridagi xato script blokini o'ldirgan.
+        for key in ('2', '*', '3', '000', 'eq'):
+            self.page.click(f'#keypadModal [data-kp="{key}"]', force=True)
+        self.assertIn('6', self.page.inner_text('#kpDisplay'))

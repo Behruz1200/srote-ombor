@@ -3968,11 +3968,23 @@ document.addEventListener('click', (e) => {
     // chiqmay nizo chiqadi. Bu yerda FAQAT tur almashadi.
     let pfTxnId = null, pfBusy = false;
     const pfModalEl = document.getElementById('payFixModal');
-    const pfModal = pfModalEl ? new bootstrap.Modal(pfModalEl) : null;
+    // LAZY. bootstrap.bundle.js base.html'da SAHIFA MAZMUNIDAN KEYIN
+    // yuklanadi, shuning uchun bu yerda `new bootstrap.Modal(...)` yozib
+    // bo'lmaydi — u shu zahoti ReferenceError beradi va SHU <script>
+    // blokining QOLGAN QISMI umuman ishga tushmaydi. Aynan shu sababdan
+    // "Boshqa summa" kalkulyatori ishlamay qolgan edi: uning tugmalari
+    // pastroqda bog'lanadi va u yergacha yetib borilmasdi.
+    // Yuqoridagi getPayModal() ham xuddi shu sababga ko'ra lazy.
+    let _pfBs = null;
+    function pfGetModal() {
+        if (!pfModalEl) return null;
+        if (!_pfBs) _pfBs = bootstrap.Modal.getOrCreateInstance(pfModalEl);
+        return _pfBs;
+    }
 
     document.addEventListener('click', (e) => {
         const b = e.target.closest('.payfix-btn');
-        if (!b || !pfModal) return;
+        if (!b || !pfModalEl) return;
         pfTxnId = b.dataset.txnId;
         document.getElementById('pfTxn').textContent = '#' + pfTxnId;
         document.getElementById('pfTotal').textContent =
@@ -3988,7 +4000,7 @@ document.addEventListener('click', (e) => {
             x.classList.toggle('btn-primary', same);
             x.classList.toggle('btn-outline-primary', !same);
         });
-        pfModal.show();
+        pfGetModal().show();
     });
 
     document.addEventListener('click', async (e) => {
@@ -4021,7 +4033,7 @@ document.addEventListener('click', (e) => {
             document.querySelectorAll(
                 `.payfix-btn[data-txn-id="${CSS.escape(String(pfTxnId))}"]`
             ).forEach(el => { el.dataset.method = data.method; });
-            pfModal.hide();
+            pfGetModal().hide();
             setStatus(`\u2713 Chek #${data.txn_id}: to'lov turi `
                       + `${data.method_label} ga o'zgartirildi`, 'success');
             refocus();
