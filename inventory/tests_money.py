@@ -4575,3 +4575,120 @@ class Prn2ReceiptCanBeFramedBySelf(TestCase):
         csp = r.headers.get('Content-Security-Policy') or ''
         if csp:
             self.assertNotIn('frame-ancestors *', csp)
+
+
+class Ws1WholesaleModeActuallyChangesPrices(TestCase):
+    """WS-1: POS'da ulgurji rejim chakana bilan bir xil narx berardi.
+
+    Ma'lumot to'g'ri edi — 3 038 ta zaxirali qatorda ulgurji chakanadan
+    arzon, AYNAN teng bo'lgani esa BITTA ham yo'q. Xato POS sahifasida edi
+    va u ikki qismdan iborat:
+
+      1. "Ulgurji" tugmasi FAQAT izoh matnini ko'rsatardi. Savatdagi
+         qatorlarni qayta narxlamasdi. Sotuvchi tovarlarni skanerlab,
+         keyin ulgurjiga o'tsa — narx o'zgarmasdi. Aynan shu "ulgurji
+         ishlamayapti" degan shikoyat.
+      2. Rejim hech qayerda saqlanmasdi va sahifa yangilanganda jimgina
+         chakanaga qaytardi — savat esa localStorage'da qolardi. Ya'ni
+         sotuv o'rtasidagi yangilanish narxlarni bildirmay ko'tarib
+         yuborardi.
+
+    Endi: rejim almashganda savat qayta narxlanadi, rejim yangilanishdan
+    omon qoladi, va HAR SOTUVDAN KEYIN chakanaga qaytadi (ulgurji —
+    istisno; rejim keyingi mijozga yopishib qolsa, sotuvchi esdan
+    chiqarib chakana mijozlarga arzon narx qo'yib yuborardi).
+
+    Brauzerda (Chromium) to'rt ssenariy ham tekshirilgan. Bu yerdagi
+    testlar mantiqning yo'qolib ketmasligini qo'riqlaydi.
+    """
+
+    def _pos(self):
+        import os
+        from django.conf import settings
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory', 'pos.html')
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail('pos.html topilmadi')
+
+    def test_switching_mode_reprices_the_cart(self):
+        """Eng muhimi: tugma endi savatga TEGADI."""
+        src = self._pos()
+        self.assertIn('function applyPriceMode()', src)
+        # rejim o'zgarganda applyPriceMode chaqirilishi shart
+        handler = src.split("input[name=\"priceMode\"]")[-1][:400]
+        self.assertIn('applyPriceMode()', handler)
+
+    def test_cart_line_keeps_both_prices(self):
+        """Qayta narxlash uchun ikkala narx qatorda saqlanadi."""
+        src = self._pos()
+        self.assertIn('retail_price:', src)
+        self.assertIn('ws_price:', src)
+
+    def test_manual_open_price_lines_are_never_repriced(self):
+        """Qo'lda kiritilgan narxni rejim bosib ketmasin."""
+        src = self._pos()
+        body = src.split('function applyPriceMode()')[1].split('function ')[0]
+        self.assertIn('if (it.open) continue;', body)
+
+    def test_mode_survives_a_reload(self):
+        src = self._pos()
+        self.assertIn('yurit_pos_price_mode', src)
+        self.assertIn("lsGet(PRICE_MODE_LS)", src)
+
+    def test_mode_resets_after_every_completed_sale(self):
+        """Ulgurji keyingi mijozga YOPISHIB QOLMASIN — pul yo'qotish xavfi."""
+        src = self._pos()
+        self.assertIn('function resetPriceMode()', src)
+        # sotuv tugagan/savat tozalangan joylarda chaqirilsin
+        self.assertGreaterEqual(src.count('resetPriceMode();'), 4,
+                                'resetPriceMode() barcha savat tozalash '
+                                'joylarida chaqirilishi kerak')
+
+    def test_lines_without_a_wholesale_price_say_so(self):
+        """Jim qolsa — yana 'ulgurji ishlamayapti' deb o'ylanadi."""
+        src = self._pos()
+        self.assertIn('function wsNote(', src)
+        self.assertIn("ulgurji narx yo'q", src)
+
+    def test_wholesale_higher_than_retail_is_flagged(self):
+        src = self._pos()
+        self.assertIn('ulgurji &gt; chakana', src)
+
+    def test_wholesale_mode_is_visible(self):
+        """Rejim jimgina yoqilib qolmasin."""
+        src = self._pos()
+        self.assertIn('wsBanner', src)
+        self.assertIn('pos-wholesale', src)
+
+
+class Ws1LookupSendsWholesalePrice(MoneyTestBase):
+    """Server ulgurji narxni HAR IKKALA yo'l bilan ham yuborishi shart:
+    onlayn qidiruv (/pos/lookup/) va oflayn katalog (/pos/catalog/).
+    Oflayn katalogda tushib qolsa, internet uzilganda ulgurji jimgina
+    chakanaga aylanardi."""
+
+    def setUp(self):
+        super().setUp()
+        self.stock.wholesale_price = Decimal('80000')
+        self.stock.save(update_fields=['wholesale_price'])
+        self.open_shift()
+
+    def test_lookup_includes_wholesale_price(self):
+        r = self.client.get('/pos/lookup/', {'q': self.variant.barcode})
+        self.assertEqual(r.status_code, 200)
+        v = r.json()['variants'][0]
+        self.assertEqual(v['wholesale_price'], 80000.0)
+        self.assertEqual(v['sale_price'], 100000.0)
+
+    def test_offline_catalog_includes_wholesale_price(self):
+        r = self.client.get('/pos/catalog/')
+        self.assertEqual(r.status_code, 200)
+        found = [v
+                 for p in r.json()['products']
+                 for v in p['variants']
+                 if v.get('barcode') == self.variant.barcode]
+        self.assertTrue(found, 'katalogda tovar topilmadi')
+        self.assertEqual(found[0]['wholesale_price'], 80000.0)
+        self.assertEqual(found[0]['sale_price'], 100000.0)

@@ -208,6 +208,33 @@
     outline-offset: 2px;
 }
 
+/* WS-1: ULGURJI rejim KO'RINIB tursin. Rejim jimgina yoqilib qolsa,
+   sotuvchi chakana mijozga ham ulgurji narx qo'yib yuboradi va buni
+   hech kim payqamaydi — shuning uchun butun savat chekkasi belgilanadi
+   va tepada doimiy yozuv turadi. */
+#priceModeWholesale:checked + .pos-tier__opt {
+    background: linear-gradient(135deg, #B54708, #DB8B3C);
+    box-shadow: 0 2px 10px rgba(181, 71, 8, .35);
+}
+body.pos-wholesale #cartTable thead th {
+    background: #FDF1E6 !important;
+    color: #B54708;
+}
+body.pos-wholesale #wsBanner { display: flex !important; }
+#wsBanner {
+    display: none;
+    align-items: center;
+    gap: .5rem;
+    background: #FDF1E6;
+    color: #B54708;
+    border: 1px solid #B54708;
+    border-radius: var(--yrt-radius);
+    padding: .45rem .7rem;
+    font-weight: 700;
+    font-size: .85rem;
+    margin-bottom: .5rem;
+}
+
 /* ════════════════════════════════════════════════════════════════════
    POS header collapse — saves vertical real-estate for cashiers
    ════════════════════════════════════════════════════════════════════ */
@@ -601,6 +628,10 @@
                         <i class="bi bi-x"></i> Tozalash
                     </button>
                 </div>
+                <div id="wsBanner">
+                    <i class="bi bi-boxes"></i>
+                    <span>ULGURJI REJIM — narxlar ulgurji. Sotuv tugagach chakanaga qaytadi.</span>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0" id="cartTable">
                         <thead class="table-light">
@@ -637,7 +668,8 @@
                     </label>
                 </div>
                 <div class="small text-muted mt-1" id="priceModeHint" style="display:none;">
-                    Ulgurji rejim: yangi qatorlar ulgurji narxda qo'shiladi
+                    Ulgurji rejim: savatdagi narxlar ulgurjiga o'tkazildi.
+                    Sotuv tugagach chakanaga qaytadi.
                 </div>
             </div>
 
@@ -2022,6 +2054,45 @@ function priceForVariant(variant) {
     return variant.sale_price;
 }
 
+// WS-1 — ULGURJI REJIM. Ilgari bu tugma FAQAT izoh matnini ko'rsatardi:
+// savatdagi qatorlarni qayta narxlamasdi va rejim sahifa yangilanganda
+// jimgina chakanaga qaytardi (savat esa saqlanib qolardi). Ya'ni sotuvchi
+// tovarlarni skanerlab, keyin "Ulgurji" ni bosса — narx o'zgarmasdi va
+// ulgurji ishlamayaptidek ko'rinardi. Aynan shu shikoyat kelgan edi.
+const PRICE_MODE_LS = 'yurit_pos_price_mode';
+
+function setPriceMode(mode, save) {
+    const el = document.getElementById(
+        mode === 'wholesale' ? 'priceModeWholesale' : 'priceModeRetail');
+    if (el) el.checked = true;
+    if (save !== false) { try { lsSet(PRICE_MODE_LS, mode); } catch (e) {} }
+    applyPriceMode();
+}
+
+// Sotuv tugagach HAR DOIM chakanaga qaytamiz. Ulgurji — istisno, chakana —
+// kundalik holat; rejim keyingi mijozga "yopishib" qolsa, sotuvchi esdan
+// chiqarib chakana mijozlarga ham arzon narx qo'yib yuborardi va buni
+// hech kim payqamasdi.
+function resetPriceMode() { setPriceMode('retail'); }
+
+// Rejim o'zgarganda savatdagi qatorlar HAM qayta narxlanadi.
+// Qo'lda kiritilgan (open) qatorlarga TEGILMAYDI — ularning narxini
+// sotuvchi o'zi yozgan, uni bosib ketish mumkin emas.
+function applyPriceMode() {
+    const isWs = currentPriceMode() === 'wholesale';
+    const hint = document.getElementById('priceModeHint');
+    if (hint) hint.style.display = isWs ? 'block' : 'none';
+    document.body.classList.toggle('pos-wholesale', isWs);
+    for (const key of Object.keys(cart)) {
+        const it = cart[key];
+        if (it.open) continue;
+        if (typeof it.retail_price !== 'number') continue;   // eski savat
+        const ws = Number(it.ws_price) || 0;
+        it.sale_price = (isWs && ws > 0) ? ws : it.retail_price;
+    }
+    renderCart();
+}
+
 function addToCart(product, variant) {
     // Patch 2: idempotentlik kaliti SAVAT bilan yashaydi — birinchi tovar
     // qo'shilganда yaratiladi va sotuv tugagунча o'zgarmaydi.
@@ -2047,12 +2118,37 @@ function addToCart(product, variant) {
             color: variant.color,
             qty: Math.min(want, variant.stock_count),
             sale_price: priceForVariant(variant),
+            // WS-1: ikkala narx ham saqlanadi — rejim almashganda qayta
+            // so'rov yubormasdan qatorni qayta narxlash uchun.
+            retail_price: Number(variant.sale_price) || 0,
+            ws_price: Number(variant.wholesale_price) || 0,
             max: variant.stock_count,
         };
     }
     // Eng oxirgi skanerlangan/qo'shilgan tur savat tepasida chiqsin
     cart[key]._seq = (window.__cartSeq = (window.__cartSeq || 0) + 1);
     renderCart();
+}
+
+// WS-1: ulgurji rejimda qator nega chakana narxda turganini AYTAMIZ.
+// Jim qolsa, sotuvchi "ulgurji ishlamayapti" deb o'ylardi — aslida
+// o'sha tovarga ulgurji narx umuman qo'yilmagan bo'lishi mumkin.
+function wsNote(it) {
+    if (currentPriceMode() !== 'wholesale' || it.open) return '';
+    const ws = Number(it.ws_price) || 0;
+    const rt = Number(it.retail_price) || 0;
+    if (typeof it.retail_price !== 'number') return '';
+    if (ws <= 0) {
+        return `<br><span class="badge bg-secondary-subtle text-secondary border"
+                 title="Bu tovarga ulgurji narx qo'yilmagan — chakana narx olindi"
+                 >ulgurji narx yo'q</span>`;
+    }
+    if (ws > rt) {
+        return `<br><span class="badge bg-warning-subtle text-warning border"
+                 title="Ulgurji narx chakanadan QIMMAT — narx ro'yxatini tekshiring"
+                 >ulgurji &gt; chakana</span>`;
+    }
+    return '';
 }
 
 function renderCart() {
@@ -2136,7 +2232,7 @@ function renderCart() {
                     <button class="btn btn-outline-secondary qty-inc" type="button">+</button>
                 </div>
             </td>
-            <td class="text-end">${(!it.open && Number(it.sale_price) === 0) ? `<span class="badge bg-danger" title="Narx 0 — narx qo'ying"><i class="bi bi-exclamation-triangle"></i> 0</span>` : fmt(it.sale_price)}</td>
+            <td class="text-end">${(!it.open && Number(it.sale_price) === 0) ? `<span class="badge bg-danger" title="Narx 0 — narx qo'ying"><i class="bi bi-exclamation-triangle"></i> 0</span>` : fmt(it.sale_price)}${wsNote(it)}</td>
             <td class="text-end"><strong>${fmt(sub)}</strong></td>
             <td><button class="btn btn-sm btn-outline-danger remove-btn" type="button">
                 <i class="bi bi-trash"></i></button></td>
@@ -2421,6 +2517,7 @@ orderDiscountInput.addEventListener('input', () => { discountPct = 0; renderCart
 clearCartBtn.addEventListener('click', () => {
     if (confirm('Savatni tozalashni tasdiqlaysizmi?')) {
         cart = {}; discountPct = 0; pendingQty = 1; cartIdemKey = null;
+        resetPriceMode();   // WS-1
         clearMixedInputs(); renderCart(); refocus();
     }
 });
@@ -3308,6 +3405,7 @@ checkoutBtn.addEventListener('click', async () => {
             pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
             cart = {};
             qrBreakdownExtra = [];
+            resetPriceMode();   // WS-1: keyingi mijoz — chakana
             renderCart();
             document.getElementById('customerName').value = '';
             document.getElementById('customerPhone').value = '';
@@ -3381,6 +3479,7 @@ checkoutBtn.addEventListener('click', async () => {
     pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
     cart = {};
     qrBreakdownExtra = [];
+    resetPriceMode();   // WS-1: keyingi mijoz — chakana
     renderCart();
     document.getElementById('customerName').value = '';
     document.getElementById('customerPhone').value = '';
@@ -3420,13 +3519,23 @@ checkoutBtn.addEventListener('click', async () => {
     refocus();
 });
 
-// ---- Price mode (retail/wholesale) ----
+// ---- Price mode (retail/wholesale) — WS-1 ----
 document.querySelectorAll('input[name="priceMode"]').forEach(r => {
     r.addEventListener('change', () => {
-        const isWholesale = currentPriceMode() === 'wholesale';
-        document.getElementById('priceModeHint').style.display = isWholesale ? 'block' : 'none';
+        try { lsSet(PRICE_MODE_LS, currentPriceMode()); } catch (e) {}
+        applyPriceMode();          // savatdagi qatorlar ham qayta narxlanadi
     });
 });
+
+// Sahifa yangilanganda rejim SAQLANADI. Savat localStorage'da qolgani
+// uchun rejim qolmasa — sotuv o'rtasida yangilangan sahifa narxlarni
+// jimgina chakanaga qaytarib yuborardi.
+(function () {
+    let saved = null;
+    try { saved = lsGet(PRICE_MODE_LS); } catch (e) {}
+    if (saved === 'wholesale') setPriceMode('wholesale', false);
+    else applyPriceMode();
+})();
 
 // ---- Park / hold sale ----
 // Park snapshot includes the full cart object so resume can restore size/color/max
@@ -3463,6 +3572,7 @@ parkBtn.addEventListener('click', async () => {
         addParkedChip(data.id, trimmed);
         cart = {};
         qrBreakdownExtra = [];
+        resetPriceMode();   // WS-1
         renderCart();
         document.getElementById('customerName').value = '';
         document.getElementById('customerPhone').value = '';
