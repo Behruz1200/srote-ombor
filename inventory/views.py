@@ -68,7 +68,7 @@ from .views_pos import (      # ARCH-2 — urls.py hali views.pos_* deb chaqirad
     pos_catalog, pos_checkout, pos_customer_display, pos_customer_lookup,
     pos_device_sync, pos_exchange, pos_lookup, pos_park, pos_parked_delete,
     pos_parked_resume, pos_payment_check, pos_payment_create,
-    pos_payment_intent, pos_payment_status, pos_promo_eval, pos_refund,
+    pos_payment_fix, pos_payment_intent, pos_payment_status, pos_promo_eval, pos_refund,
     pos_static_qr, pos_terminal, pos_txn_refundable, pos_unlock,
 )
 _SIZE_WORDS = {'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '2xl', '3xl', '4xl'}
@@ -5321,9 +5321,31 @@ def shift_detail(request, pk):
     cash_ins = list(shift.cash_ins.select_related('created_by').order_by('-created_at'))
     cash_ins_total = shift.cash_ins_total()
 
+    # PAY-1: shu smenada TO'LOV TURI TUZATILGAN cheklar.
+    # Bu shunchaki ma'lumot emas — NAZORAT. "Naqd -> Karta" tuzatishi
+    # kutilgan naqdni kamaytiradi, ya'ni naqd kamomadini yashirishning eng
+    # oson yo'li. Shuning uchun har bir tuzatish smena sahifasida, aynan
+    # kassa hisoblanadigan joyda ko'rinib turishi kerak — audit jurnalini
+    # kimdir ochib o'qishini kutib bo'lmaydi.
+    _pay_ids = [str(t.pk) for t in txns]
+    pay_fixes = []
+    if _pay_ids:
+        pay_fixes = list(
+            AuditLog.objects
+            .filter(model_name='SaleTransaction', object_id__in=_pay_ids)
+            # 'sabab' kaliti — bu ATAYLAB qilingan PAY-1 tuzatishi.
+            # Signal ham har save'da payment_method diffini yozadi; u yerda
+            # 'sabab' bo'lmaydi, shuning uchun bir tuzatish ikki qator
+            # bo'lib ko'rinmaydi.
+            .filter(changes__has_key='payment_method')
+            .filter(changes__has_key='sabab')
+            .select_related('user')
+            .order_by('-created_at')[:50])
+
     return render(request, 'inventory/shift_detail.html', {
         'shift': shift,
         'txns': txns,
+        'pay_fixes': pay_fixes,
         'cash_sales': shift.cash_sales(),
         'expected': shift.expected_cash(),
         'payouts': payouts,
@@ -7527,13 +7549,29 @@ def checkout(request):
 @login_required
 def transaction_detail(request, token):
     txn = get_object_or_404(
-        SaleTransaction.objects.select_related('branch', 'sold_by')
+        SaleTransaction.objects.select_related('branch', 'sold_by', 'shift')
             .prefetch_related('lines__variant__product'),
         public_id=token,   # SEC-6: ketma-ket PK emas, tasodifiy token
     )
     if not request.user.is_admin() and request.user.branch_id != txn.branch_id:
         return HttpResponseForbidden("Bu chekni ko'rishga ruxsat yo'q.")
-    return render(request, 'inventory/transaction_detail.html', {'txn': txn})
+    # PAY-1: to'lov turini shu yerdan ham tuzatish mumkin — lekin AYNAN
+    # POS'dagi shartlar bilan: ochiq smena, aralash emas, va sotuvchi faqat
+    # o'zi sotgan chekni. Shartlar ikki joyda ikki xil bo'lib qolmasin deb
+    # bitta joyda hisoblanadi va shablon faqat ko'rsatadi.
+    can_fix_payment = (
+        txn.payment_method != SaleTransaction.PaymentMethod.MIXED
+        and txn.shift_id is not None
+        and txn.shift.status == Shift.Status.OPEN
+        and (request.user.is_admin() or txn.sold_by_id == request.user.id)
+    )
+    return render(request, 'inventory/transaction_detail.html', {
+        'txn': txn,
+        'can_fix_payment': can_fix_payment,
+        'pay_methods': [
+            ('cash', 'Naqd'), ('card', 'Karta'), ('transfer', "O'tkazma"),
+        ],
+    })
 
 
 # ---------- RETURNS ----------

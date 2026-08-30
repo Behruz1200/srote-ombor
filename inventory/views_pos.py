@@ -1604,6 +1604,127 @@ def pos_txn_refundable(request, pk):
     return JsonResponse({'ok': True, 'txn_id': txn.pk, 'lines': lines})
 
 
+# ---------------------------------------------------------------------------
+# PAY-1 — TO'LOV TURINI TUZATISH
+#
+# Sotuvchilar bir chekni ba'zan noto'g'ri to'lov turi bilan yakunlaydi
+# (naqd deb bosib yuboradi, aslida karta edi) va keyin smena yopilishida
+# kassa hisobi to'g'ri chiqmay, kim haq ekani bo'yicha nizo chiqadi.
+#
+# Bu endpoint FAQAT to'lov turini almashtiradi. Summa, qatorlar, chegirma,
+# mijoz — hech biriga tegilmaydi. Tur o'zgargach kassa hisobi, Z-hisobot,
+# pul oqimi va hisobotlar O'ZI to'g'rilanadi, chunki ularning hammasi shu
+# ikkita maydondan (payment_method / payment_breakdown) hisoblanadi.
+#
+# UCHTA QAT'IY CHEGARA — hammasi pul nazorati uchun:
+#
+#   1. FAQAT OCHIQ SMENA. Yopilgan smenaning Z-hisoboti qotib qoladi
+#      (MON-22) — u kassada HAQIQATAN sanalgan pulni qayd etadi. Yopilgan
+#      smenadagi chekni o'zgartirsak, hisobot bilan cheklar bir-biriga zid
+#      bo'lib qolardi. Shuning uchun tuzatish smena yopilgunga qadar.
+#
+#   2. SOTUVCHI FAQAT O'ZINIKINI. Sotuvchi o'zi sotgan chekni tuzatadi,
+#      admin esa filialdagi istalganini. "Naqd -> Karta" tuzatishi
+#      kutilgan naqdni KAMAYTIRADI, ya'ni bu naqd kamomadini yashirishning
+#      eng oson yo'li — shuning uchun har bir tuzatish audit'ga yoziladi
+#      va smena sahifasida ko'rinib turadi.
+#
+#   3. ARALASH CHEKKA TEGILMAYDI. Aralash to'lovda summalar bo'linishi bor;
+#      uni o'zgartirish "faqat tur" emas, summa tahriri bo'lib qoladi.
+#      Bunday holda qaytarish + qayta sotish to'g'ri yo'l.
+PAYMENT_FIX_METHODS = ('cash', 'card', 'transfer')
+
+
+@login_required
+@require_POST
+def pos_payment_fix(request):
+    """POST /pos/payment/fix/ — chekning FAQAT to'lov turini almashtiradi."""
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return JsonResponse({'ok': False, 'error': 'filial yo\'q'}, status=403)
+    try:
+        payload = _json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'json xato'}, status=400)
+
+    txn_id = payload.get('txn_id')
+    method = (payload.get('method') or '').strip()
+    reason = (payload.get('reason') or '').strip()[:200]
+
+    if method not in PAYMENT_FIX_METHODS:
+        return JsonResponse({'ok': False,
+                             'error': "To'lov turi noto'g'ri."}, status=400)
+
+    with transaction.atomic():
+        # STK-14: QULFLANADIGAN so'rovda select_related YO'Q. `shift` —
+        # nullable FK, ya'ni select_related uni LEFT OUTER JOIN qiladi va
+        # Postgres "FOR UPDATE cannot be applied to the nullable side of an
+        # outer join" deb rad etadi. SQLite buni jimgina yutadi, shuning
+        # uchun bu xato faqat prodda chiqardi — Postgres CI (CI-2) uni
+        # aynan shu yerda tutdi. Smenani qulflagandan KEYIN alohida olamiz.
+        txn = (SaleTransaction.objects
+               .select_for_update()
+               .filter(pk=txn_id, branch=branch)
+               .first())
+        if txn is None:
+            return JsonResponse({'ok': False, 'error': 'Chek topilmadi.'},
+                                status=404)
+
+        # (3) aralash chekka tegilmaydi
+        if txn.payment_method == SaleTransaction.PaymentMethod.MIXED:
+            return JsonResponse({'ok': False, 'error':
+                "Aralash to'lovli chekning turini o'zgartirib bo'lmaydi — "
+                "qaytarish qilib, qaytadan sotish kerak."}, status=400)
+
+        # (1) faqat ochiq smena
+        if txn.shift_id is None or txn.shift.status != Shift.Status.OPEN:
+            return JsonResponse({'ok': False, 'error':
+                "Smena yopilgan — bu chekni endi o'zgartirib bo'lmaydi. "
+                "Yopilgan kun hisoboti kassada sanalgan pulni qayd etadi."},
+                status=400)
+
+        # (2) sotuvchi faqat o'zinikini
+        is_admin = request.user.is_admin()
+        if not is_admin and txn.sold_by_id != request.user.id:
+            return JsonResponse({'ok': False, 'error':
+                "Bu chekni siz sotmagansiz — adminga murojaat qiling."},
+                status=403)
+
+        old = txn.payment_method
+        if old == method:
+            return JsonResponse({'ok': False,
+                                 'error': "To'lov turi allaqachon shunday."},
+                                status=400)
+
+        txn.payment_method = method
+        # Yagona turdagi chekda bo'linish bo'lmasligi kerak — eskisi qolib
+        # ketsa, kassa hisobi ikki xil manbadan ikki xil javob berardi.
+        txn.payment_breakdown = []
+        txn.save(update_fields=['payment_method', 'payment_breakdown'])
+
+        AuditLog.objects.create(
+            user=request.user,
+            username_snapshot=request.user.username,
+            action=AuditLog.Action.UPDATE,
+            model_name='SaleTransaction',
+            object_id=str(txn.pk),
+            object_repr=f"To'lov turi tuzatildi: chek #{txn.pk}",
+            changes={'payment_method': [old, method],
+                     'sabab': reason or '(sabab yozilmagan)'},
+        )
+
+    shift = txn.shift
+    return JsonResponse({
+        'ok': True,
+        'txn_id': txn.pk,
+        'old_method': old,
+        'method': method,
+        'method_label': txn.get_payment_method_display(),
+        # Kassir darhol ko'rsin: tuzatish kutilgan naqdga qanday ta'sir qildi.
+        'expected_cash': float(shift.expected_cash()),
+    })
+
+
 @login_required
 def pos_refund(request):
     """POST /pos/refund/ JSON body: {lines: [{sale_id, qty, reason}]}.

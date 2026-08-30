@@ -79,6 +79,7 @@ urlpatterns = [
     path('pos/unlock/', views.pos_unlock, name='pos_unlock'),
     path('pos/payment/intent/', views.pos_payment_intent, name='pos_payment_intent'),
     path('pos/payment/status/', views.pos_payment_status, name='pos_payment_status'),
+    path('pos/payment/fix/', views.pos_payment_fix, name='pos_payment_fix'),   # PAY-1
     path('pos/promo-eval/', views.pos_promo_eval, name='pos_promo_eval'),
     path('pos/qr/<int:pk>/', views.pos_static_qr, name='pos_static_qr'),
     path('pos/payment/create/', views.pos_payment_create, name='pos_payment_create'),

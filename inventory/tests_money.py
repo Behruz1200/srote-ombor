@@ -4692,3 +4692,313 @@ class Ws1LookupSendsWholesalePrice(MoneyTestBase):
         self.assertTrue(found, 'katalogda tovar topilmadi')
         self.assertEqual(found[0]['wholesale_price'], 80000.0)
         self.assertEqual(found[0]['sale_price'], 100000.0)
+
+
+class Pay1FixPaymentMethodOnly(MoneyTestBase):
+    """PAY-1: yakunlangan chekning FAQAT to'lov turini tuzatish.
+
+    Sotuvchilar ba'zan chekni noto'g'ri turda yakunlaydi (naqd bosib
+    yuboradi, aslida karta edi). Smena yopilishida kassa to'g'ri chiqmaydi
+    va kim haq ekani bo'yicha nizo chiqadi.
+
+    Bu testlarning asosiy vazifasi — CHEGARALARNI qo'riqlash. "Naqd ->
+    Karta" tuzatishi kutilgan naqdni KAMAYTIRADI, ya'ni bu naqd kamomadini
+    yashirishning eng oson yo'li. Shuning uchun:
+      - faqat OCHIQ smena (yopilgan kun hisoboti qotib qoladi, MON-22);
+      - sotuvchi faqat O'ZI sotgan chekni;
+      - aralash chekka umuman tegilmaydi;
+      - har bir tuzatish audit'ga yoziladi.
+    """
+
+    URL = '/pos/payment/fix/'
+
+    def setUp(self):
+        super().setUp()
+        self.shift = self.open_shift(opening_cash='0')
+        r = self.checkout()
+        self.assertEqual(r.status_code, 200)
+        self.txn = SaleTransaction.objects.order_by('-pk').first()
+        self.assertEqual(self.txn.payment_method, 'cash')
+
+    def fix(self, method='card', txn=None, reason='karta o\'tdi'):
+        return self.client.post(self.URL, data=json.dumps({
+            'txn_id': (txn or self.txn).pk,
+            'method': method,
+            'reason': reason,
+        }), content_type='application/json')
+
+    # ---- asosiy xatti-harakat ----
+
+    def test_payment_method_changes(self):
+        r = self.fix('card')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(r.json()['ok'])
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.payment_method, 'card')
+
+    def test_amount_and_lines_are_untouched(self):
+        """ENG MUHIMI: faqat TUR o'zgaradi."""
+        before = {
+            'total': self.txn.total,
+            'lines': [(l.pk, l.quantity, l.sale_price) for l in self.txn.lines.all()],
+            'order_discount': self.txn.order_discount,
+            'customer_name': self.txn.customer_name,
+            'sold_by': self.txn.sold_by_id,
+            'sold_at': self.txn.sold_at,
+        }
+        self.fix('transfer')
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.total, before['total'])
+        self.assertEqual(
+            [(l.pk, l.quantity, l.sale_price) for l in self.txn.lines.all()],
+            before['lines'])
+        self.assertEqual(self.txn.order_discount, before['order_discount'])
+        self.assertEqual(self.txn.customer_name, before['customer_name'])
+        self.assertEqual(self.txn.sold_by_id, before['sold_by'])
+        self.assertEqual(self.txn.sold_at, before['sold_at'])
+
+    def test_expected_cash_follows_the_correction(self):
+        """Butun tizim bo'ylab aks etadi — kassa hisobi o'zi to'g'rilanadi."""
+        cash_before = self.shift.cash_sales()
+        self.assertEqual(cash_before, Decimal('100000'))
+        self.fix('card')
+        self.shift.refresh_from_db()
+        self.assertEqual(self.shift.cash_sales(), Decimal('0'))
+        # va teskarisi
+        self.fix('cash')
+        self.shift.refresh_from_db()
+        self.assertEqual(self.shift.cash_sales(), Decimal('100000'))
+
+    def test_totals_do_not_move(self):
+        """Savdo jami o'zgarmasligi kerak — faqat qaysi ustunda turishi."""
+        before = self.shift.total_sales()
+        self.fix('card')
+        self.shift.refresh_from_db()
+        self.assertEqual(self.shift.total_sales(), before)
+
+    def test_change_is_audited_with_who_and_reason(self):
+        from inventory.models import AuditLog
+        self.fix('card', reason='mijoz karta bilan to\'ladi')
+        lg = (AuditLog.objects
+              .filter(model_name='SaleTransaction', object_id=str(self.txn.pk))
+              .filter(changes__has_key='sabab')
+              .order_by('-created_at').first())
+        self.assertIsNotNone(lg, 'tuzatish audit\'ga yozilmadi')
+        self.assertEqual(lg.changes['payment_method'], ['cash', 'card'])
+        self.assertIn('karta', lg.changes['sabab'])
+        self.assertEqual(lg.username_snapshot, self.cashier.username)
+
+    # ---- chegaralar ----
+
+    def test_closed_shift_is_refused(self):
+        """Yopilgan smenaning Z-hisoboti qotgan — cheklar unga zid bo'lmasin."""
+        self.shift.status = Shift.Status.CLOSED
+        self.shift.closing_expected_cash = Decimal('100000')
+        self.shift.save(update_fields=['status', 'closing_expected_cash'])
+        r = self.fix('card')
+        self.assertEqual(r.status_code, 400)
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.payment_method, 'cash')
+
+    def test_mixed_receipt_is_refused(self):
+        self.txn.payment_method = 'mixed'
+        self.txn.payment_breakdown = [{'method': 'cash', 'amount': '60000'},
+                                      {'method': 'card', 'amount': '40000'}]
+        self.txn.save(update_fields=['payment_method', 'payment_breakdown'])
+        r = self.fix('cash')
+        self.assertEqual(r.status_code, 400)
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.payment_method, 'mixed')
+
+    def test_seller_cannot_touch_someone_elses_receipt(self):
+        other = User.objects.create_user(
+            username='boshqa', password='x', role=User.Role.SOTUVCHI,
+            branch=self.branch)
+        self.txn.sold_by = other
+        self.txn.save(update_fields=['sold_by'])
+        r = self.fix('card')
+        self.assertEqual(r.status_code, 403)
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.payment_method, 'cash')
+
+    def test_admin_may_fix_any_receipt_in_the_branch(self):
+        other = User.objects.create_user(
+            username='boshqa2', password='x', role=User.Role.SOTUVCHI,
+            branch=self.branch)
+        self.txn.sold_by = other
+        self.txn.save(update_fields=['sold_by'])
+        admin = User.objects.create_user(
+            username='pay_admin', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+        self.client.force_login(admin)
+        r = self.fix('card')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.payment_method, 'card')
+
+    def test_other_branch_receipt_is_not_found(self):
+        other_branch = Branch.objects.create(name='Boshqa filial')
+        self.txn.branch = other_branch
+        self.txn.save(update_fields=['branch'])
+        r = self.fix('card')
+        self.assertEqual(r.status_code, 404)
+
+    def test_unknown_method_is_refused(self):
+        for bad in ('mixed', 'naqd', '', 'CASH', 'bitcoin'):
+            r = self.fix(bad)
+            self.assertEqual(r.status_code, 400, bad)
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.payment_method, 'cash')
+
+    def test_same_method_is_refused(self):
+        r = self.fix('cash')
+        self.assertEqual(r.status_code, 400)
+
+    def test_get_is_not_allowed(self):
+        r = self.client.get(self.URL)
+        self.assertEqual(r.status_code, 405)
+
+    def test_breakdown_is_cleared_so_one_source_of_truth_remains(self):
+        """Yagona turdagi chekda eski bo'linish qolib ketmasin — aks holda
+        kassa hisobi ikki manbadan ikki xil javob berardi."""
+        self.txn.payment_breakdown = [{'method': 'cash', 'amount': '100000'}]
+        self.txn.save(update_fields=['payment_breakdown'])
+        self.fix('card')
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.payment_breakdown, [])
+        self.assertEqual(self.shift.cash_sales(), Decimal('0'))
+
+    def test_correction_is_visible_on_the_shift_page(self):
+        """NAZORAT: tuzatish kassa hisoblanadigan joyda ko'rinishi shart.
+
+        Audit jurnali bor, lekin uni kimdir ochib o'qishini kutib bo'lmaydi.
+        Kutilgan naqdni kamaytiradigan tuzatish smena sahifasida turishi
+        kerak — kassani sanashdan oldin ko'zga tashlanadigan joyda.
+        """
+        admin = User.objects.create_user(
+            username='pay_admin2', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+        self.fix('card', reason='karta bilan to\'landi')
+        self.client.force_login(admin)
+        r = self.client.get(f'/shift/{self.shift.pk}/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.context['pay_fixes']), 1)
+        self.assertContains(r, "To'lov turi tuzatilgan cheklar")
+        self.assertContains(r, "karta bilan to&#x27;landi")
+
+
+class Stk14LockingQueriesNeverJoin(TestCase):
+    """STK-14: qulflanadigan so'rovda select_related BO'LMASIN.
+
+    Bu naqsh endi UCH MARTA takrorlandi va har safar bir xil:
+
+        pos_refund    (27.08)  -> prodda 500
+        price_apply   (29.08)  -> prodda 500
+        pos_payment_fix (30.08) -> Postgres CI tutdi
+
+    Sababi har safar bir xil: `select_for_update()` ga `select_related()`
+    qo'shilsa va bog'lanish NULLABLE bo'lsa, Django LEFT OUTER JOIN yasaydi,
+    Postgres esa "FOR UPDATE cannot be applied to the nullable side of an
+    outer join" deb rad etadi. SQLite qulflashni umuman e'tiborsiz
+    qoldiradi, shuning uchun xato faqat PRODDA chiqadi.
+
+    Postgres CI (CI-2) uchinchisini tutdi — bu yaxshi. Lekin CI ishga
+    tushguncha kutish shart emas: naqsh MATNDAN ko'rinadi. Bu test uni
+    yozilgan zahoti to'xtatadi va nima uchunligini aytadi.
+    """
+
+    FILES = ('views.py', 'views_pos.py', 'money.py')
+
+    def _sources(self):
+        import os
+        import inventory
+        root = os.path.dirname(inventory.__file__)
+        for name in self.FILES:
+            path = os.path.join(root, name)
+            if os.path.exists(path):
+                with open(path, encoding='utf-8') as f:
+                    yield name, f.read()
+
+    def _chain(self, node):
+        """Zanjirni yig'adi: (ildiz nomi, {metod: [matn argumentlari]})."""
+        import ast
+        calls = {}
+        cur = node
+        while True:
+            if isinstance(cur, ast.Call):
+                if isinstance(cur.func, ast.Attribute):
+                    args = [a.value for a in cur.args
+                            if isinstance(a, ast.Constant)
+                            and isinstance(a.value, str)]
+                    calls.setdefault(cur.func.attr, []).extend(args)
+                cur = cur.func
+            elif isinstance(cur, ast.Attribute):
+                cur = cur.value
+            elif isinstance(cur, ast.Name):
+                return cur.id, calls
+            else:
+                return None, calls
+
+    def _path_is_nullable(self, model, path):
+        """select_related yo'lida NULLABLE bog'lanish bormi?"""
+        from django.core.exceptions import FieldDoesNotExist
+        cur = model
+        for part in path.split('__'):
+            try:
+                f = cur._meta.get_field(part)
+            except FieldDoesNotExist:
+                return False          # bilmasak — ayblamaymiz
+            if getattr(f, 'null', False):
+                return True
+            rel = getattr(f, 'related_model', None)
+            if rel is None:
+                return False
+            cur = rel
+        return False
+
+    def test_locking_queries_never_join_a_nullable_relation(self):
+        """Qoida ANIQ: qulflashda NULLABLE bog'lanishni join qilmang.
+
+        NOT NULL bog'lanish (variant, branch) INNER JOIN beradi va Postgres
+        uni bemalol qulflaydi — bunday kod ishlaydi va unga tegmaymiz.
+        Muammo faqat NULLABLE bog'lanishda: u LEFT OUTER JOIN beradi va
+        Postgres FOR UPDATE ni rad etadi. Uchala prod xatosi ham aynan
+        shunday bo'lgan: Product.category (null), SaleTransaction.shift (null).
+
+        Izohlarga emas, KODGA va MODEL maydonlariga qaraydi.
+        """
+        import ast
+        from django.apps import apps
+        models = {m.__name__: m for m in apps.get_app_config('inventory').get_models()}
+        offenders = []
+        for name, src in self._sources():
+            for node in ast.walk(ast.parse(src)):
+                if not isinstance(node, ast.Call):
+                    continue
+                root, calls = self._chain(node)
+                if 'select_for_update' not in calls or 'select_related' not in calls:
+                    continue
+                model = models.get(root)
+                if model is None:
+                    continue
+                for path in calls['select_related']:
+                    if self._path_is_nullable(model, path):
+                        offenders.append(f'{name}:{node.lineno} -> {root}.{path}')
+        self.assertEqual(
+            sorted(set(offenders)), [],
+            "Qulflanadigan so'rovda NULLABLE bog'lanish join qilingan. "
+            "Postgres buni RAD ETADI (SQLite jimgina yutadi, shuning uchun "
+            "xato faqat PRODDA chiqadi). Avval PK bo'yicha qulflang, "
+            "bog'liq obyektlarni keyin oling. Joylar: "
+            + '; '.join(sorted(set(offenders))))
+
+    def test_the_helper_that_does_it_right_still_exists(self):
+        """_lock_stocks — to'g'ri naqsh: avval PK, keyin qulf."""
+        from inventory.money import _lock_stocks
+        import inspect
+        src = inspect.getsource(_lock_stocks)
+        # Izohni tashlab, faqat KODga qaraymiz
+        body = src.split('"""')[-1]
+        self.assertIn('select_for_update', body)
+        self.assertNotIn('select_related', body)
+        self.assertIn("values_list('pk'", body)
