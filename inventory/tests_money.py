@@ -5171,3 +5171,96 @@ class Var1RenameThenReuseAColour(TestCase):
         after = set(ProductVariant.objects.filter(product=self.product)
                     .values_list('pk', 'size', 'color'))
         self.assertTrue(before <= after or len(after) >= len(before))
+
+
+class Row1TablesAreNumbered(TestCase):
+    """ROW-1: jadval qatorlariga raqam.
+
+    Xato xabarlari qator raqami bilan gapiradi ("5-qator: manfiy qiymat
+    kiritilmaydi"), lekin jadvalda raqam yo'q edi — foydalanuvchi barmoq
+    bilan sanardi. 79 turli mahsulotda bu jiddiy vaqt.
+
+    Raqamlar bitta umumiy modul (yurit-rownum.js) orqali qo'shiladi:
+    jadvalga `yrt-numbered` sinfi qo'yiladi, qolganini modul qiladi —
+    sarlavhaga "#", har qatorga raqam, qator qo'shilsa/o'chirilsa qayta
+    raqamlash. Shablonlarni qo'lda o'zgartirish shart emas.
+
+    Bu testlar CHEGARALARNI qo'riqlaydi: chek chop etiladigan jadvalga
+    raqam TUSHMASLIGI kerak (u yerda ustun kengliklari nth-child bilan
+    qattiq belgilangan — bitta ustun qo'shilsa chek buziladi).
+    """
+
+    def _tpl(self, name):
+        import os
+        from django.conf import settings
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory', name)
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail(f'{name} topilmadi')
+
+    def _static(self, rel):
+        import os
+        from django.conf import settings
+        for d in getattr(settings, 'STATICFILES_DIRS', []):
+            p = os.path.join(str(d), rel)
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail(f'{rel} topilmadi')
+
+    def test_the_module_is_loaded_for_every_page(self):
+        base = self._tpl('base.html')
+        self.assertIn('js/yurit-rownum.js', base)
+        self.assertIn('.yrt-rownum', base, 'raqam ustuni uchun uslub yo\'q')
+
+    def test_the_variants_grid_is_numbered(self):
+        """Aynan shu jadval so'ralgan edi."""
+        src = self._tpl('product_variants_edit.html')
+        self.assertIn('yrt-numbered', src)
+
+    def test_the_printed_receipt_is_never_numbered(self):
+        """Chekda ustun kengliklari nth-child bilan qattiq belgilangan —
+        bitta ustun qo'shilsa chek buziladi."""
+        src = self._tpl('transaction_detail.html')
+        self.assertNotIn('yrt-numbered', src)
+
+    def test_row_numbers_are_hidden_when_printing(self):
+        base = self._tpl('base.html')
+        self.assertIn('@media print { .yrt-rownum { display: none !important; } }',
+                      base)
+
+    def test_module_skips_tables_without_a_header(self):
+        """Sarlavhasiz jadvalga katak qo'shilsa ustunlar siljib ketardi."""
+        js = self._static('js/yurit-rownum.js')
+        self.assertIn('function usable(', js)
+        self.assertIn('table.tHead', js)
+
+    def test_module_renumbers_when_rows_change(self):
+        """Qator qo'shilgach raqamlar qayta chizilishi shart — xato
+        xabari aynan o'sha raqamga ishora qiladi."""
+        js = self._static('js/yurit-rownum.js')
+        self.assertIn('MutationObserver', js)
+
+    def test_empty_state_rows_keep_the_table_aligned(self):
+        js = self._static('js/yurit-rownum.js')
+        self.assertIn('colSpan', js)
+
+    def test_a_broad_set_of_tables_opted_in(self):
+        """Bitta jadval emas — butun tizim bo'ylab."""
+        import os
+        from django.conf import settings
+        root = None
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory')
+            if os.path.isdir(p):
+                root = p
+                break
+        n = 0
+        for name in os.listdir(root):
+            if not name.endswith('.html'):
+                continue
+            with open(os.path.join(root, name), encoding='utf-8') as f:
+                n += f.read().count('yrt-numbered')
+        self.assertGreaterEqual(n, 40, f'faqat {n} ta jadval belgilangan')

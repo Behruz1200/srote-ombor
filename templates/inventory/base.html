@@ -3034,6 +3034,23 @@
     .sort-th-link i { opacity: .4; transition: opacity .15s; }
     .sort-th-link:hover i { opacity: 1; }
 
+    /* --- Jadval qator raqamlari (yurit-rownum.js) ---
+       Tor, xira va tanlanmaydigan: raqam yo'l ko'rsatadi, lekin
+       ma'lumot bilan bellashmaydi. Nusxa olishda ham qo'shilmaydi. */
+    .yrt-rownum {
+        width: 34px;
+        min-width: 34px;
+        text-align: right;
+        padding-right: 10px !important;
+        color: var(--yrt-muted, #6B7280);
+        font-size: .78rem;
+        font-variant-numeric: tabular-nums;
+        user-select: none;
+        white-space: nowrap;
+    }
+    th.yrt-rownum { font-weight: 600; }
+    @media print { .yrt-rownum { display: none !important; } }
+
     /* --- Rasmni kattalashtirib ko'rish (yurit-zoom.js) --- */
     /* --- Faktura rasmini kattalashtirish --- */
     .yrt-zoom {
@@ -3462,6 +3479,7 @@
 <script src="{% static 'js/yurit-table-resize.js' %}"></script>
 <script src="{% static 'js/yurit-zoom.js' %}"></script>
 <script src="{% static 'js/yurit-receipt-print.js' %}"></script>
+<script src="{% static 'js/yurit-rownum.js' %}"></script>
 
 <!-- PWA install hint (iOS Safari can't auto-prompt; show a one-time banner) -->
 <div id="iosInstallHint" class="position-fixed bottom-0 start-0 end-0 m-2 p-3 bg-dark text-light rounded shadow"

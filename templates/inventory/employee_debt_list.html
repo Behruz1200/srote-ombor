@@ -94,7 +94,7 @@
                 <h2 class="yrt-h2"><i class="bi bi-hourglass-split text-warning"></i> Ochiq qarzlar
                     <span class="yrt-tag ms-1">{{ open_debts|length }}</span></h2>
                 <div class="table-responsive mt-2">
-                    <table class="table table-sm align-middle mb-0">
+                    <table class="yrt-numbered table table-sm align-middle mb-0">
                         <thead><tr>
                             <th>Xodim</th><th>Izoh</th><th class="text-end">Summa</th>
                             <th>Sana</th><th></th>
@@ -141,7 +141,7 @@
             <div class="card p-3">
                 <h2 class="yrt-h2"><i class="bi bi-check2-circle text-success"></i> To'langanlar</h2>
                 <div class="table-responsive mt-2">
-                    <table class="table table-sm align-middle mb-0">
+                    <table class="yrt-numbered table table-sm align-middle mb-0">
                         <thead><tr><th>Xodim</th><th class="text-end">Summa</th><th>To'landi</th></tr></thead>
                         <tbody>
                         {% for d in paid_debts %}
