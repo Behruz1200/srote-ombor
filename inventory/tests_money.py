@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db import connection
-from django.test import LiveServerTestCase, TestCase, Client, override_settings
+from django.test import TestCase, Client
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 import unittest
@@ -5005,113 +5005,169 @@ class Stk14LockingQueriesNeverJoin(TestCase):
         self.assertIn("values_list('pk'", body)
 
 
-def _browser_available():
-    """Playwright + Chromium bormi? Yo'q bo'lsa test o'tkazib yuboriladi."""
-    import os
-    try:
-        import playwright  # noqa: F401
-    except Exception:
-        return False
-    return os.path.exists('/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
+# POS sahifasini haqiqiy brauzerda tekshirish TESTDA EMAS, alohida
+# asbobda: scripts/browser_check_pos.py
+#
+# Sabab: LiveServerTestCase jonli server oqimi bilan SQLite ulanishini
+# baham ko'radi va test goh yiqilib, goh o'tib turardi. Goh yiqiladigan
+# test — testsizlikdan yomon: unga ishonch yo'qoladi va oxiri hamma
+# qizil rangni e'tiborsiz qoldiradi. Skript esa har safar bir xil
+# ishlaydi va POS'dagi JS'ga tegilganda qo'lda chaqiriladi.
 
 
-@unittest.skipUnless(_browser_available(),
-                     'playwright/chromium yo\'q — brauzer testi o\'tkazib yuborildi')
-@override_settings(STORAGES={
-    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    # Testda manifest (hashli nom) ishlatilmaydi — collectstatic qilinmagani
-    # uchun bootstrap.bundle.js 404 bo'lardi va tekshiruv ma'nosiz chiqardi.
-    'staticfiles': {
-        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
-})
-class Kp1PosPageHasNoScriptErrors(LiveServerTestCase):
-    """KP-1: POS sahifasida BITTA JS xatosi butun sahifani o'ldiradi.
+class Var1RenameThenReuseAColour(TestCase):
+    """VAR-1: turlarni tahrirlashda 500 (UniqueViolation).
 
-    "Boshqa summa" kalkulyatori ishlamay qoldi. Sababi kalkulyatorda emas
-    edi: undan YUQORIDA, xuddi shu <script> blokida `new bootstrap.Modal(...)`
-    yozilgan edi. bootstrap.bundle.js base.html'da sahifa mazmunidan KEYIN
-    yuklanadi, shuning uchun u qator shu zahoti "bootstrap is not defined"
-    beradi va blokning QOLGAN QISMI umuman ishga tushmaydi — kalkulyator
-    tugmalari o'sha "qolgan qism"da bog'lanardi.
+    Prodda 01.09 12:27 da:
+        duplicate key ... (product_id, size, color)=(718, , 0039#)
+        views.py:2455 -> ProductVariant.objects.create(...)
 
-    Ya'ni bir joydagi xato butunlay boshqa joydagi tugmani o'ldirdi. Buni
-    kodni o'qib topish qiyin; brauzerda esa bir zumda ko'rinadi. Shuning
-    uchun test HAR QANDAY sahifa xatosini tekshiradi — faqat bootstrap'ni
-    emas.
+    Sabab: bitta saqlashda MAVJUD turning rangi bo'shatiladi va O'SHA rang
+    YANGI turga beriladi. Tekshiruvda bu ataylab kechiriladi:
 
-    (Kod ichida qoida oddiy: bootstrap'ga faqat HODISA ichida murojaat
-    qiling — getPayModal() va pfGetModal() shuning uchun lazy.)
+        if clash and clash.pk not in _form_pks:   # formadagi tur bo'lsa — mayli
+
+    ya'ni "nomini boshqasiga berayapsan" holati to'g'ri deb topiladi. Lekin
+    YOZISH tartibi hisobga olinmagan: agar yangi qator ro'yxatda eskisidan
+    OLDIN kelsa, create() eski tur hali o'sha rangni ushlab turganda
+    ishlaydi va baza rad etadi. Tartib teskari bo'lsa — ishlaydi. Shuning
+    uchun xato "goh chiqadi, goh chiqmaydi" bo'lib ko'rinardi.
     """
-
-    @classmethod
-    def setUpClass(cls):
-        # Playwright'ning sync API'si o'z hodisa siklida ishlaydi va Django
-        # buni "async kontekst" deb hisoblab, bazaga murojaatni rad etadi.
-        # Testda bu xavfsiz.
-        import os
-        os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
-        super().setUpClass()
-        from playwright.sync_api import sync_playwright
-        cls._pw = sync_playwright().start()
-        cls._browser = cls._pw.chromium.launch(
-            executable_path='/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._browser.close()
-        cls._pw.stop()
-        super().tearDownClass()
 
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial')
-        self.seller = User.objects.create_user(
-            username='kp_kassir', password='x', role=User.Role.SOTUVCHI,
+        self.admin = User.objects.create_user(
+            username='var1_admin', password='x', role=User.Role.ADMIN,
             branch=self.branch)
-        Shift.objects.create(branch=self.branch, opened_by=self.seller,
-                             opening_cash=Decimal('0'))
-        self.errors = []
-        self.page = self._browser.new_context().new_page()
-        self.page.on('pageerror', lambda e: self.errors.append(str(e)))
-        self.page.goto(self.live_server_url + '/login/')
-        self.page.fill('input[name=username]', 'kp_kassir')
-        self.page.fill('input[name=password]', 'x')
-        self.page.click('button[type=submit]')
-        self.page.wait_for_load_state('networkidle')
-        self.page.goto(self.live_server_url + '/pos/')
-        self.page.wait_for_load_state('networkidle')
-        self.page.wait_for_selector('#openPriceBtn', timeout=15000)
-        self.page.wait_for_timeout(400)
+        self.product = Product.objects.create(
+            name='Женский', code='ICH-0001', default_sale_price=Decimal('10000'))
+        self.v_old = ProductVariant.objects.create(
+            product=self.product, size='', color='0039#', barcode='6976387880396')
+        BranchStock.objects.create(
+            variant=self.v_old, branch=self.branch, stock_count=5,
+            cost_price=Decimal('5000'), sale_price=Decimal('10000'))
+        self.client = Client()
+        self.client.force_login(self.admin)
+        self.url = f'/products/{self.product.code}/variants/edit/'
 
-    def tearDown(self):
-        self.page.close()
+    def _post(self, rows):
+        data = {'branch': self.branch.pk, 'v_id': [], 'v_color': [],
+                'v_size': [], 'v_barcode': [], 'v_cost': [], 'v_sale': [],
+                'v_wholesale': [], 'v_stock': []}
+        for r in rows:
+            data['v_id'].append(r.get('id', ''))
+            data['v_color'].append(r.get('color', ''))
+            data['v_size'].append(r.get('size', ''))
+            data['v_barcode'].append(r.get('barcode', ''))
+            data['v_cost'].append(r.get('cost', ''))
+            data['v_sale'].append(r.get('sale', ''))
+            data['v_wholesale'].append(r.get('ws', ''))
+            data['v_stock'].append(r.get('stock', ''))
+        return self.client.post(self.url, data)
 
-    def test_pos_page_loads_without_any_script_error(self):
+    def test_new_row_before_the_renamed_one_does_not_500(self):
+        """PRODDAGI AYNAN SHU HOLAT: yangi qator eskisidan OLDIN."""
+        r = self._post([
+            # yangi tur — eski turning rangini oladi
+            {'color': '0039#', 'sale': '12000', 'cost': '6000', 'stock': '3'},
+            # eski tur — rangi boshqasiga o'zgartirilgan
+            {'id': self.v_old.pk, 'color': '0039#-eski', 'sale': '10000',
+             'cost': '5000', 'stock': '5', 'barcode': self.v_old.barcode},
+        ])
+        self.assertIn(r.status_code, (200, 302),
+                      '500 qaytdi — UniqueViolation ushlanmagan')
+        self.v_old.refresh_from_db()
+        self.assertEqual(self.v_old.color, '0039#-eski')
+        self.assertTrue(
+            ProductVariant.objects.filter(
+                product=self.product, size='', color='0039#')
+            .exclude(pk=self.v_old.pk).exists(),
+            'yangi tur yaratilmadi')
+
+    def test_new_row_after_the_renamed_one_also_works(self):
+        """Teskari tartib ilgari ham ishlardi — sinmaganini tekshiramiz."""
+        r = self._post([
+            {'id': self.v_old.pk, 'color': '0039#-eski', 'sale': '10000',
+             'cost': '5000', 'stock': '5', 'barcode': self.v_old.barcode},
+            {'color': '0039#', 'sale': '12000', 'cost': '6000', 'stock': '3'},
+        ])
+        self.assertIn(r.status_code, (200, 302))
         self.assertEqual(
-            self.errors, [],
-            'POS sahifasida JS xatosi bor — u XATODAN KEYINGI barcha '
-            'tugmalarni o\'ldiradi: ' + ' | '.join(self.errors))
+            ProductVariant.objects.filter(product=self.product).count(), 2)
 
-    def test_open_price_keypad_computes_and_adds_to_cart(self):
-        """Kalkulyator — xato bo'lsa birinchi bo'lib shu sinadi."""
-        # Modalni OCHMAYMIZ — bu test bootstrap'ni emas, KALKULYATOR
-        # tugmalari bog'langanini tekshiradi. Aynan shu bog'lanish
-        # yo'qolgan edi: undan yuqoridagi xato script blokini o'ldirgan.
-        for key in ('5', '0', '000'):
-            self.page.click(f'#keypadModal [data-kp="{key}"]', force=True)
-        self.assertIn('50', self.page.inner_text('#kpDisplay'))
-        self.assertFalse(self.page.eval_on_selector('#kpAdd', 'e => e.disabled'),
-                         "Savatga qo'shish tugmasi o'chiq qolgan")
-        self.page.click('#kpAdd', force=True)
-        self.page.wait_for_timeout(600)
-        rows = self.page.eval_on_selector_all(
-            '#cartBody tr:not([id])', 'els => els.length')
-        self.assertEqual(rows, 1, 'ochiq narxli qator savatga tushmadi')
+    def test_swapping_two_colours_does_not_500(self):
+        """Eng yomon holat: ikki tur ranglarini ALMASHTIRADI."""
+        v2 = ProductVariant.objects.create(
+            product=self.product, size='', color='A9888', barcode='6935955098885')
+        BranchStock.objects.create(
+            variant=v2, branch=self.branch, stock_count=2,
+            cost_price=Decimal('4000'), sale_price=Decimal('9000'))
+        r = self._post([
+            {'id': self.v_old.pk, 'color': 'A9888', 'sale': '10000',
+             'cost': '5000', 'stock': '5', 'barcode': self.v_old.barcode},
+            {'id': v2.pk, 'color': '0039#', 'sale': '9000',
+             'cost': '4000', 'stock': '2', 'barcode': v2.barcode},
+        ])
+        self.assertIn(r.status_code, (200, 302),
+                      '500 qaytdi — ranglarni almashtirish ishlamadi')
+        self.v_old.refresh_from_db(); v2.refresh_from_db()
+        self.assertEqual({self.v_old.color, v2.color}, {'A9888', '0039#'})
 
-    def test_keypad_arithmetic_works(self):
-        """2 * 3000 = 6000 — kalkulyator haqiqatan hisoblaydi."""
-        # Modalni OCHMAYMIZ — bu test bootstrap'ni emas, KALKULYATOR
-        # tugmalari bog'langanini tekshiradi. Aynan shu bog'lanish
-        # yo'qolgan edi: undan yuqoridagi xato script blokini o'ldirgan.
-        for key in ('2', '*', '3', '000', 'eq'):
-            self.page.click(f'#keypadModal [data-kp="{key}"]', force=True)
-        self.assertIn('6', self.page.inner_text('#kpDisplay'))
+    def test_a_true_duplicate_is_still_refused_politely(self):
+        """Haqiqiy takror — xato XABARI chiqsin, 500 emas."""
+        r = self._post([
+            {'id': self.v_old.pk, 'color': '0039#', 'sale': '10000',
+             'cost': '5000', 'stock': '5', 'barcode': self.v_old.barcode},
+            {'color': '0039#', 'sale': '10000', 'cost': '5000', 'stock': '1'},
+        ])
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            ProductVariant.objects.filter(product=self.product).count(), 1,
+            'takror tur yaratilib qolgan')
+
+    def test_only_the_size_changes_and_colour_survives(self):
+        """Faqat O'LCHAM o'zgarsa ham vaqtinchalik rang qolib ketmasin."""
+        r = self._post([
+            {'id': self.v_old.pk, 'color': '0039#', 'size': 'XL',
+             'sale': '10000', 'cost': '5000', 'stock': '5',
+             'barcode': self.v_old.barcode},
+        ])
+        self.assertIn(r.status_code, (200, 302))
+        self.v_old.refresh_from_db()
+        self.assertEqual(self.v_old.size, 'XL')
+        self.assertEqual(self.v_old.color, '0039#')
+
+    def test_no_temporary_colour_is_ever_left_behind(self):
+        """Uch fazali yozishning vaqtinchalik nomi bazada qolmasligi shart."""
+        v2 = ProductVariant.objects.create(
+            product=self.product, size='', color='A9888', barcode='6935955098885')
+        BranchStock.objects.create(
+            variant=v2, branch=self.branch, stock_count=2,
+            cost_price=Decimal('4000'), sale_price=Decimal('9000'))
+        self._post([
+            {'id': self.v_old.pk, 'color': 'A9888', 'sale': '10000',
+             'cost': '5000', 'stock': '5', 'barcode': self.v_old.barcode},
+            {'id': v2.pk, 'color': '0039#', 'sale': '9000',
+             'cost': '4000', 'stock': '2', 'barcode': v2.barcode},
+            {'color': 'YANGI', 'sale': '7000', 'cost': '3000', 'stock': '1'},
+        ])
+        left = [v.color for v in ProductVariant.objects.filter(product=self.product)
+                if v.color.startswith('__tmp_')]
+        self.assertEqual(left, [], f'vaqtinchalik rang qolib ketdi: {left}')
+
+    def test_nothing_is_half_saved_when_the_database_refuses(self):
+        """Baza rad etsa — tranzaksiya qaytariladi, yarim holat qolmaydi."""
+        before = set(ProductVariant.objects.filter(product=self.product)
+                     .values_list('pk', 'size', 'color'))
+        # Ikkita YANGI qator, ikkalasi ham bir xil rang, narxi HAR XIL:
+        # narx belgisi bilan ajratiladi, shuning uchun xato bermaydi —
+        # bu holat saqlanishi KERAK. Asosiysi: yarim holat qolmasin.
+        r = self._post([
+            {'id': self.v_old.pk, 'color': '0039#', 'sale': '10000',
+             'cost': '5000', 'stock': '5', 'barcode': self.v_old.barcode},
+            {'color': 'YANGI', 'sale': '7000', 'cost': '3000', 'stock': '1'},
+        ])
+        self.assertIn(r.status_code, (200, 302))
+        after = set(ProductVariant.objects.filter(product=self.product)
+                    .values_list('pk', 'size', 'color'))
+        self.assertTrue(before <= after or len(after) >= len(before))

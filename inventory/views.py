@@ -2448,100 +2448,140 @@ def product_variants_edit(request, code):
                 messages.error(request, e)
         else:
             changed = []
-            with transaction.atomic():
-                for r in rows:
-                    v = r['variant']
-                    if v is None:
-                        v = ProductVariant.objects.create(
-                            product=product, size=r['size'],
-                            color=r['color'], barcode=r['barcode'] or None)
-                        # Shtrix-kod kiritilmagan bo'lsa — o'zi beriladi
-                        # (boshqa qabul yo'llarida shunday, bu yerda tushib
-                        # qolgan edi: kodsiz tur kassada skanerlanmaydi va
-                        # etiketka ham chiqmaydi)
-                        if not v.barcode:
-                            code = gen_internal_ean13(v.pk)
-                            k = 0
-                            while ProductVariant.objects.filter(
-                                    barcode=code).exclude(pk=v.pk).exists():
-                                k += 1
-                                code = gen_internal_ean13(v.pk + k * 100000)
-                            v.barcode = code
-                            v.save(update_fields=['barcode'])
-                        stock = BranchStock.objects.create(
-                            variant=v, branch=branch,
-                            cost_price=r['cost'], sale_price=r['sale'],
-                            wholesale_price=r['wholesale'],
-                            stock_count=r['stock'])
-                        if r['stock'] > 0:
-                            Intake.objects.create(
+            # VAR-1: YOZISH TARTIBI muhim. Bitta saqlashda mavjud turning
+            # rangi bo'shatilib, o'sha rang yangi turga berilishi mumkin
+            # ("0039# ni eskisidan olib yangisiga berdim"). Agar yangi qator
+            # ro'yxatda eskisidan OLDIN kelsa, create() eski tur hali o'sha
+            # rangni ushlab turganda ishlaydi va baza rad etadi — prodda
+            # 500 shundan chiqqan edi. Tartib teskari bo'lsa ishlardi, shu
+            # sababli xato "goh chiqib, goh chiqmay" turardi.
+            #
+            # Yechim uch fazali:
+            #   1) (o'lcham, rang) o'zgaradigan MAVJUD turlarni vaqtinchalik
+            #      noyob rangga ko'chiramiz — shunda eski nomlar bo'shaydi.
+            #      Bu ranglarni ALMASHTIRISH holatini ham hal qiladi
+            #      (A->B, B->A), aks holda uni hech qanday tartib qutqarmaydi.
+            #   2) mavjud turlarni yakuniy qiymatlarga yozamiz;
+            #   3) yangilarini yaratamiz.
+            # QueryString update() ishlatiladi: xotiradagi obyekt tegilmaydi,
+            # shuning uchun quyidagi "rang X->Y" izohlari to'g'ri qoladi.
+            _renamed = [r for r in rows
+                        if r['variant'] is not None
+                        and (r['variant'].size, r['variant'].color)
+                            != (r['size'], r['color'])]
+            _existing = [r for r in rows if r['variant'] is not None]
+            _fresh = [r for r in rows if r['variant'] is None]
+            try:
+                with transaction.atomic():
+                    for _r in _renamed:
+                        ProductVariant.objects.filter(pk=_r['variant'].pk).update(
+                            color=f"__tmp_{_r['variant'].pk}__")
+                    for r in _existing + _fresh:
+                        v = r['variant']
+                        if v is None:
+                            v = ProductVariant.objects.create(
+                                product=product, size=r['size'],
+                                color=r['color'], barcode=r['barcode'] or None)
+                            # Shtrix-kod kiritilmagan bo'lsa — o'zi beriladi
+                            # (boshqa qabul yo'llarida shunday, bu yerda tushib
+                            # qolgan edi: kodsiz tur kassada skanerlanmaydi va
+                            # etiketka ham chiqmaydi)
+                            if not v.barcode:
+                                code = gen_internal_ean13(v.pk)
+                                k = 0
+                                while ProductVariant.objects.filter(
+                                        barcode=code).exclude(pk=v.pk).exists():
+                                    k += 1
+                                    code = gen_internal_ean13(v.pk + k * 100000)
+                                v.barcode = code
+                                v.save(update_fields=['barcode'])
+                            stock = BranchStock.objects.create(
                                 variant=v, branch=branch,
-                                quantity=r['stock'],
-                                cost_per_unit=r['cost'],
-                                sale_price=r['sale'] or None,
-                                note="Yangi tur (tahrirlash sahifasidan)",
+                                cost_price=r['cost'], sale_price=r['sale'],
+                                wholesale_price=r['wholesale'],
+                                stock_count=r['stock'])
+                            if r['stock'] > 0:
+                                Intake.objects.create(
+                                    variant=v, branch=branch,
+                                    quantity=r['stock'],
+                                    cost_per_unit=r['cost'],
+                                    sale_price=r['sale'] or None,
+                                    note="Yangi tur (tahrirlash sahifasidan)",
+                                    received_by=request.user)
+                            changed.append(
+                                f"+ yangi: {v.size or '—'}/{v.color or '—'}")
+                            continue
+                        v_fields = []
+                        if v.color != r['color']:
+                            v_fields.append(f"rang {v.color}→{r['color']}")
+                            v.color = r['color']
+                        if v.size != r['size']:
+                            v_fields.append(f"o'lcham {v.size}→{r['size']}")
+                            v.size = r['size']
+                        if (v.barcode or None) != r['barcode']:
+                            v_fields.append(f"shtrix {v.barcode or '—'}→{r['barcode'] or '—'}")
+                            v.barcode = r['barcode']
+                        if v_fields:
+                            v.save()
+                        stock, _ = BranchStock.objects.select_for_update().get_or_create(
+                            variant=v, branch=branch)
+                        s_fields = []
+                        if stock.cost_price != r['cost']:
+                            s_fields.append(f"tannarx {stock.cost_price}→{r['cost']}")
+                            stock.cost_price = r['cost']
+                        if stock.sale_price != r['sale']:
+                            s_fields.append(f"narx {stock.sale_price}→{r['sale']}")
+                            stock.sale_price = r['sale']
+                        if stock.wholesale_price != r['wholesale']:
+                            s_fields.append(
+                                f"ulgurji {stock.wholesale_price}→{r['wholesale']}")
+                            stock.wholesale_price = r['wholesale']
+                        delta = r['stock'] - stock.stock_count
+                        if delta:
+                            s_fields.append(
+                                f"ombor {stock.stock_count}→{r['stock']}")
+                            stock.stock_count = r['stock']
+                            Intake.objects.create(
+                                variant=v, branch=branch, quantity=delta,
+                                cost_per_unit=stock.cost_price,
+                                note="Qo'lda tuzatish (turlarni tahrirlash)",
                                 received_by=request.user)
-                        changed.append(
-                            f"+ yangi: {v.size or '—'}/{v.color or '—'}")
-                        continue
-                    v_fields = []
-                    if v.color != r['color']:
-                        v_fields.append(f"rang {v.color}→{r['color']}")
-                        v.color = r['color']
-                    if v.size != r['size']:
-                        v_fields.append(f"o'lcham {v.size}→{r['size']}")
-                        v.size = r['size']
-                    if (v.barcode or None) != r['barcode']:
-                        v_fields.append(f"shtrix {v.barcode or '—'}→{r['barcode'] or '—'}")
-                        v.barcode = r['barcode']
-                    if v_fields:
-                        v.save()
-                    stock, _ = BranchStock.objects.select_for_update().get_or_create(
-                        variant=v, branch=branch)
-                    s_fields = []
-                    if stock.cost_price != r['cost']:
-                        s_fields.append(f"tannarx {stock.cost_price}→{r['cost']}")
-                        stock.cost_price = r['cost']
-                    if stock.sale_price != r['sale']:
-                        s_fields.append(f"narx {stock.sale_price}→{r['sale']}")
-                        stock.sale_price = r['sale']
-                    if stock.wholesale_price != r['wholesale']:
-                        s_fields.append(
-                            f"ulgurji {stock.wholesale_price}→{r['wholesale']}")
-                        stock.wholesale_price = r['wholesale']
-                    delta = r['stock'] - stock.stock_count
-                    if delta:
-                        s_fields.append(
-                            f"ombor {stock.stock_count}→{r['stock']}")
-                        stock.stock_count = r['stock']
-                        Intake.objects.create(
-                            variant=v, branch=branch, quantity=delta,
-                            cost_per_unit=stock.cost_price,
-                            note="Qo'lda tuzatish (turlarni tahrirlash)",
-                            received_by=request.user)
-                    if s_fields:
-                        stock.save()
-                    if v_fields or s_fields:
-                        changed.append(
-                            f"{v.size or '—'}/{v.color or '—'}: "
-                            + ', '.join(v_fields + s_fields))
+                        if s_fields:
+                            stock.save()
+                        if v_fields or s_fields:
+                            changed.append(
+                                f"{v.size or '—'}/{v.color or '—'}: "
+                                + ', '.join(v_fields + s_fields))
+                    if changed:
+                        AuditLog.objects.create(
+                            user=request.user,
+                            username_snapshot=request.user.username,
+                            action=AuditLog.Action.UPDATE,
+                            model_name='ProductVariant',
+                            object_id=str(product.pk),
+                            object_repr=(f"{product.code} ({branch.name}): "
+                                         + ' | '.join(changed))[:300],
+                        )
+            except IntegrityError:
+                # Oxirgi himoya. Yuqoridagi tekshiruvlar va uch fazali
+                # yozish deyarli hamma holatni qamraydi, lekin BAZA
+                # oxirgi hakam bo'lib qolsin: foydalanuvchi 500 sahifasini
+                # ko'rmasin va nima bo'lganini tushunsin. Tranzaksiya
+                # qaytariladi — yarim saqlangan holat qolmaydi.
+                messages.error(
+                    request,
+                    "Saqlanmadi: bunday o'lcham/rang juftligi bu mahsulotda "
+                    "allaqachon bor. Qatorlarni tekshiring — bittasining "
+                    "rangi boshqasi bilan bir xil bo'lib qolgan.")
+                errors.append('duplicate')
+            if not errors:
                 if changed:
-                    AuditLog.objects.create(
-                        user=request.user,
-                        username_snapshot=request.user.username,
-                        action=AuditLog.Action.UPDATE,
-                        model_name='ProductVariant',
-                        object_id=str(product.pk),
-                        object_repr=(f"{product.code} ({branch.name}): "
-                                     + ' | '.join(changed))[:300],
-                    )
-            if changed:
-                messages.success(
-                    request, f"Saqlandi: {len(changed)} ta tur yangilandi "
-                             f"({branch.name}).")
-            else:
-                messages.info(request, "O'zgarish yo'q.")
-            return redirect('product_detail', code=product.code)
+                    messages.success(
+                        request, f"Saqlandi: {len(changed)} ta tur yangilandi "
+                                 f"({branch.name}).")
+                else:
+                    messages.info(request, "O'zgarish yo'q.")
+                return redirect('product_detail', code=product.code)
 
     # E1: POST xato bo'lса — submitlaган qatorlarni QAYTA ko'rsatamiz (bitta
     # xato tufayli barcha qatorlar yo'qolmasin; intake_variants'даgi post_back
