@@ -1994,6 +1994,19 @@ async function search(q) {
         if (data._local) {
             setStatus('Internet yo\'q — mahalliy katalogdan', '');
         }
+        // SCAN-2: javob kelishi bilan katak TOZALANADI — tovar topilgan
+        // yoki topilmaganidan qat'i nazar.
+        //
+        // Ilgari faqat muvaffaqiyatda tozalanardi. Topilmasa eski kod
+        // katakda qolib ketardi va kassir keyingi tovarni skanerlaganда
+        // yangi kod eskisining USTIGA yozilar edi — natijada aralashgan
+        // kod bilan qidiruv yana topilmasdi. Kassir buni sezmay ikki-uch
+        // marta skanerlab, oxiri qo'lda tozalashi kerak bo'lardi.
+        //
+        // Skanerlangan matn yo'qolmaydi: quyidagi xato xabarlarining
+        // hammasi nima izlanganini o'zi aytadi.
+        scanInput.value = '';
+
         if (!data.found) {
             // Tezkor sotuv toifasi yozilgan ("Paypoq", "Ich kiyim") — panelni
             // ochib, o'sha toifaning narx tugmalarini ko'rsatamiz.
@@ -2006,7 +2019,6 @@ async function search(q) {
                 } else {
                     setStatus(`${qs.name} uchun narx qo'yilmagan — "Boshqa summa"dan kiriting`, '');
                 }
-                scanInput.value = '';
                 return;
             }
             if (data.suggestions && data.suggestions.length) {
@@ -2049,7 +2061,6 @@ async function search(q) {
             if (mv) {
                 addToCart(product, mv);
                 setStatus(`\u2713 Qo'shildi: ${product.name} ${mv.size}/${mv.color}`, 'success');
-                scanInput.value = '';
                 refocus();
                 return;
             }
@@ -2061,7 +2072,6 @@ async function search(q) {
             // Single variant -> add directly
             addToCart(product, inStock[0]);
             setStatus(`✓ Qo'shildi: ${product.name} ${inStock[0].size}/${inStock[0].color}`, 'success');
-            scanInput.value = '';
         } else {
             // Show variant picker
             setStatus(`${product.code} — ${product.name}: variant tanlang`, '');
@@ -2085,7 +2095,11 @@ async function search(q) {
             }
         }
     } catch (e) {
-        setStatus('Xatolik: ' + e.message, 'error');
+        // SCAN-2: bu yerga yetib kelinsa, yuqoridagi tozalash bajarilmagan
+        // bo'lishi mumkin (xato javobdan OLDIN chiqqan) — tozalaymiz va
+        // qaysi kod ekanini xabarda ko'rsatamiz.
+        scanInput.value = '';
+        setStatus(`"${q}" — xatolik: ${e.message}`, 'error');
     }
     refocus();
 }

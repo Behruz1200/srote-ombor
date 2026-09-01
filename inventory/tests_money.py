@@ -5366,3 +5366,56 @@ class Wsm1WholesaleMarginColumn(TestCase):
         block = src.split("getElementById('wsmAll')")[1][:1500]
         self.assertNotIn('fetch(', block)
         self.assertNotIn('.submit()', block)
+
+
+class Scan2SearchBoxAlwaysClears(TestCase):
+    """SCAN-2: skanerlangan katak HAR DOIM tozalansin.
+
+    Ilgari katak faqat tovar TOPILGANDA tozalanardi. Topilmasa eski kod
+    joyida qolib ketardi va kassir keyingi tovarni skanerlaganda yangi
+    kod eskisining USTIGA yozilardi — natijada aralashgan kod bilan
+    qidiruv yana topilmasdi. Kassir buni sezmay ikki-uch marta
+    skanerlab, oxiri katakni qo'lda tozalashi kerak bo'lardi.
+
+    Endi javob kelishi bilan katak tozalanadi: topilsa ham, topilmasa
+    ham, omborda bo'lmasa ham, tarmoq xatosida ham.
+
+    Skanerlangan matn YO'QOLMAYDI — xato xabarlarining hammasi nima
+    izlanganini aytadi ("9999999999999" topilmadi). Brauzerda
+    tekshirilgan.
+    """
+
+    def _pos(self):
+        import os
+        from django.conf import settings
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory', 'pos.html')
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail('pos.html topilmadi')
+
+    def _do_search(self):
+        src = self._pos()
+        start = src.index('async function search(q)')
+        return src[start:start + 9000]
+
+    def test_the_box_is_cleared_before_any_branch(self):
+        """Tozalash SHOXLANISHDAN OLDIN — hamma yo'l uchun bitta joyda."""
+        body = self._do_search()
+        clear = body.index("scanInput.value = '';")
+        notfound = body.index('if (!data.found)')
+        self.assertLess(clear, notfound,
+                        "katak 'topilmadi' shoxidan OLDIN tozalanishi kerak")
+
+    def test_the_not_found_message_still_shows_what_was_scanned(self):
+        body = self._do_search()
+        self.assertIn('topilmadi', body)
+        self.assertIn('${q}', body,
+                      'xato xabari nima izlanganini aytishi kerak')
+
+    def test_network_errors_also_clear_and_name_the_code(self):
+        body = self._do_search()
+        tail = body[body.index('} catch (e) {'):][:400]
+        self.assertIn("scanInput.value = '';", tail)
+        self.assertIn('${q}', tail)
