@@ -6074,14 +6074,34 @@ def branch_list(request):
         output_field=DecimalField(max_digits=14, decimal_places=2)
     )
 
-    branches = list(Branch.objects.annotate(
-        stock_total=Coalesce(Sum('stocks__stock_count'), 0),
-        staff_count=Count('staff', distinct=True),
-        stock_value=Coalesce(Sum(
-            ExpressionWrapper(F('stocks__stock_count') * F('stocks__cost_price'),
-                              output_field=DecimalField(max_digits=14, decimal_places=2))
-        ), 0, output_field=DecimalField(max_digits=14, decimal_places=2)),
-    ).order_by('-is_active', 'name'))
+    # KPI-9: ilgari `stocks__` (ombor) va `staff` (xodimlar) BITTA annotate
+    # ichida yig'ilardi. Ikkalasi ham "ko'p qatorli" bog'lanish — SQL ularni
+    # JOIN qilganda har bir ombor qatori xodimlar soniga KO'PAYIB ketardi.
+    # Natijada 2 xodimli filialda "Zaxira qiymati" va "Ombor" ANIQ 2 BARAVAR
+    # katta ko'rinardi (bosh sahifadagi to'g'ri raqamdan farq qilardi).
+    # Yechim: har bir yig'indi O'Z so'rovida hisoblanadi — fan-out yo'q.
+    branches = list(Branch.objects.order_by('-is_active', 'name'))
+    _stock_rows = {
+        r['branch_id']: r for r in
+        BranchStock.objects.values('branch_id').annotate(
+            q=Coalesce(Sum('stock_count'), 0),
+            v=Coalesce(Sum(ExpressionWrapper(
+                F('stock_count') * F('cost_price'),
+                output_field=DecimalField(max_digits=18, decimal_places=2))),
+                Decimal('0'),
+                output_field=DecimalField(max_digits=18, decimal_places=2)),
+        )
+    }
+    _staff_rows = {
+        r['branch_id']: r['n'] for r in
+        User.objects.filter(branch__isnull=False)
+        .values('branch_id').annotate(n=Count('id'))
+    }
+    for br in branches:
+        _sr = _stock_rows.get(br.id) or {}
+        br.stock_total = _sr.get('q') or 0
+        br.stock_value = _sr.get('v') or Decimal('0')
+        br.staff_count = _staff_rows.get(br.id, 0)
 
     # 30-day stats per branch
     _sales_30d = Sale.objects.filter(sold_at__gte=since_30d)

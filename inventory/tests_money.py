@@ -5419,3 +5419,59 @@ class Scan2SearchBoxAlwaysClears(TestCase):
         tail = body[body.index('} catch (e) {'):][:400]
         self.assertIn("scanInput.value = '';", tail)
         self.assertIn('${q}', tail)
+
+
+class Kpi9BranchTotalsAreNotMultipliedByStaff(TestCase):
+    """/branches/ dagi "Zaxira qiymati" xodimlar soniga ko'paymasin.
+
+    Ilgari bitta annotate() ichida `stocks__` va `staff` birga yig'ilardi;
+    SQL JOIN har bir ombor qatorini xodimlar soniga takrorlab, qiymatni
+    ANIQ N baravar oshirib ko'rsatardi (bosh sahifadagi to'g'ri raqamdan
+    farq qilardi).
+    """
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial-KPI9')
+        self.admin = User.objects.create_user(
+            username='kpi9admin', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+        # yana 2 ta xodim — jami 3 ta (fan-out bo'lsa 3 baravar bo'lardi)
+        for i in range(2):
+            User.objects.create_user(username=f'kpi9s{i}', password='x',
+                                     role=User.Role.SOTUVCHI,
+                                     branch=self.branch)
+        cat = Category.objects.create(name='KPI9')
+        p = Product.objects.create(code='KPI-0001', name='Tovar', category=cat)
+        for i in range(3):
+            v = ProductVariant.objects.create(product=p, size=str(i), color='q')
+            BranchStock.objects.create(
+                variant=v, branch=self.branch, stock_count=10,
+                cost_price=Decimal('1000'), sale_price=Decimal('1500'))
+
+    def test_stock_value_matches_a_plain_aggregate(self):
+        real_q = sum(s.stock_count for s in
+                     BranchStock.objects.filter(branch=self.branch))
+        real_v = sum(s.stock_count * s.cost_price for s in
+                     BranchStock.objects.filter(branch=self.branch))
+        self.assertEqual(real_q, 30)
+        self.assertEqual(real_v, Decimal('30000'))
+
+        c = Client()
+        c.force_login(self.admin)
+        resp = c.get(reverse('branch_list'))
+        self.assertEqual(resp.status_code, 200)
+        br = [b for b in resp.context['branches'] if b.pk == self.branch.pk][0]
+        self.assertEqual(br.staff_count, 3)
+        self.assertEqual(br.stock_total, real_q,
+                         'ombor soni xodimlar soniga ko\'paygan')
+        self.assertEqual(Decimal(str(br.stock_value)), real_v,
+                         'zaxira qiymati xodimlar soniga ko\'paygan')
+        self.assertEqual(Decimal(str(resp.context['total_stock_value'])),
+                         real_v)
+
+    def test_branch_page_agrees_with_dashboard(self):
+        c = Client()
+        c.force_login(self.admin)
+        b = c.get(reverse('branch_list')).context['total_stock_value']
+        d = c.get(reverse('dashboard')).context['stock_value']
+        self.assertEqual(Decimal(str(b)), Decimal(str(d)))
