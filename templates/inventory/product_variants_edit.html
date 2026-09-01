@@ -63,6 +63,7 @@
                             <th style="min-width:100px">Tannarx</th>
                             <th style="min-width:90px">Marja %</th>
                             <th style="min-width:100px">Sotuv narx</th>
+                            <th style="min-width:90px">Ulg. marja %</th>
                             <th style="min-width:100px">Ulgurji</th>
                             <th style="min-width:80px">Ombor</th>
                             <th style="width:40px"></th>
@@ -82,7 +83,8 @@
                             <td><input type="text" name="v_cost" class="form-control form-control-sm text-end v-cost" inputmode="decimal" value="{{ r.cost|floatformat:'0u' }}"></td>
                             <td><input type="text" name="v_marja" class="form-control form-control-sm text-end v-marja" inputmode="decimal" placeholder="%"></td>
                             <td><input type="text" name="v_sale" class="form-control form-control-sm text-end v-sale" inputmode="decimal" value="{{ r.sale|floatformat:'0u' }}"></td>
-                            <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" value="{{ r.wholesale|floatformat:'0u' }}"></td>
+                            <td><input type="text" name="v_wsmarja" class="form-control form-control-sm text-end v-wsmarja" inputmode="decimal" placeholder="10"></td>
+                            <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end v-ws" inputmode="decimal" value="{{ r.wholesale|floatformat:'0u' }}"></td>
                             <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" value="{{ r.stock|unlocalize }}"></td>
                             <td class="text-center align-middle">
                                 <button type="button" class="btn btn-sm btn-outline-danger v-del" tabindex="-1"
@@ -114,6 +116,9 @@
                            style="width:84px" inputmode="decimal" placeholder="marja %">
                     <input type="text" id="bulkSale" class="form-control form-control-sm text-end"
                            style="width:96px" inputmode="decimal" placeholder="sotuv">
+                    {# WSM-1: hammasiga ulgurji marjani bir marta qo'yish #}
+                    <input type="text" id="bulkWsMarja" class="form-control form-control-sm text-end"
+                           style="width:96px" inputmode="decimal" placeholder="ulg. marja %">
                     <button type="button" id="bulkApply" class="btn btn-sm btn-primary">
                         Qo'llash
                     </button>
@@ -179,7 +184,8 @@
         <td><input type="text" name="v_cost" class="form-control form-control-sm text-end v-cost" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="v_marja" class="form-control form-control-sm text-end v-marja" inputmode="decimal" placeholder="%"></td>
         <td><input type="text" name="v_sale" class="form-control form-control-sm text-end v-sale" inputmode="decimal" placeholder="0"></td>
-        <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end" inputmode="decimal" placeholder="0"></td>
+        <td><input type="text" name="v_wsmarja" class="form-control form-control-sm text-end v-wsmarja" inputmode="decimal" placeholder="10"></td>
+        <td><input type="text" name="v_wholesale" class="form-control form-control-sm text-end v-ws" inputmode="decimal" placeholder="0"></td>
         <td><input type="text" name="v_stock" class="form-control form-control-sm text-end" inputmode="numeric" placeholder="0"></td>
         <td></td>
     </tr>
@@ -553,11 +559,67 @@ document.getElementById('editForm') && document.getElementById('editForm')
     // Boshlang'ich: mavjud tannarx va sotuvdan marjani chiqaramiz
     function initRow(tr) {
         const c = tr.querySelector('.v-cost'), m = tr.querySelector('.v-marja'), s = tr.querySelector('.v-sale');
-        if (!c || !m || !s || m.value.trim()) return;
-        const cost = num(c.value), sale = num(s.value);
-        if (cost && sale !== null) m.value = asMarja((sale / cost - 1) * 100);
+        if (c && m && s && !m.value.trim()) {
+            const cost = num(c.value), sale = num(s.value);
+            if (cost && sale !== null) m.value = asMarja((sale / cost - 1) * 100);
+        }
+        initWsRow(tr);
+    }
+
+    // WSM-1 — ULGURJI MARJA ustuni.
+    //
+    // Ulgurji narx uchun ham tannarx <-> marja <-> narx bog'lanishi
+    // bo'lsin: "10%" deb yozilsa narx o'zi chiqadi, narx yozilsa marja
+    // o'zi ko'rinadi. Chakana marja ustuni bilan bir xil ishlaydi.
+    //
+    // 10% — FAQAT TAKLIF, yozuv emas. Ulgurji narxi bo'lmagan qatorda
+    // katakda xira "10" turadi (placeholder), lekin narx O'ZGARMAYDI.
+    // Nega: hozir 43 ta zaxirali tovarda ulgurji narx yo'q va agar 10%
+    // avtomatik yozilsa, barkodni tuzatgani kirgan odam ham bilmasdan
+    // 43 ta narxni o'zgartirib yuborardi. Katakka tegilganda esa 10
+    // hoziroq qo'yiladi — ya'ni "10% qilaman" degan bitta bosish yetadi.
+    const WS_DEFAULT = 10;
+
+    function initWsRow(tr) {
+        const c = tr.querySelector('.v-cost');
+        const wm = tr.querySelector('.v-wsmarja');
+        const w = tr.querySelector('.v-ws');
+        if (!c || !wm || !w || wm.value.trim()) return;
+        const cost = num(c.value), ws = num(w.value);
+        // Narx bor -> HAQIQIY marja. Yo'q -> bo'sh qoladi, xira "10" taklif.
+        if (cost && ws) wm.value = asMarja((ws / cost - 1) * 100);
     }
     body.querySelectorAll('tr').forEach(initRow);
+
+    // Ulgurji uchligini moslashtiradi.
+    // fromPrice=true bo'lsa narxdan marja chiqadi, aks holda marjadan narx.
+    function syncWs(tr, fromPrice) {
+        if (!tr) return;
+        const c = tr.querySelector('.v-cost');
+        const wm = tr.querySelector('.v-wsmarja');
+        const w = tr.querySelector('.v-ws');
+        if (!c || !wm || !w) return;
+        const cost = num(c.value), m = num(wm.value), ws = num(w.value);
+        if (fromPrice) {
+            if (cost && ws !== null) wm.value = asMarja((ws / cost - 1) * 100);
+        } else if (cost !== null && m !== null) {
+            w.value = asInt(cost * (1 + m / 100));
+        }
+    }
+
+    // Bo'sh ulgurji marja katagiga TEGILSA — 10 hoziroq qo'yiladi va
+    // narx hisoblanadi. Tegilmasa hech narsa o'zgarmaydi.
+    body.addEventListener('focusin', function (e) {
+        const t = e.target;
+        if (!t.classList || !t.classList.contains('v-wsmarja')) return;
+        if (t.value.trim()) return;
+        const tr = t.closest('tr');
+        const w = tr && tr.querySelector('.v-ws');
+        if (w && num(w.value)) return;      // narxi bor — taklif kerak emas
+        t.value = String(WS_DEFAULT);
+        syncWs(tr, false);
+        t.select();
+    });
 
     body.addEventListener('input', function (e) {
         const t = e.target;
@@ -565,6 +627,9 @@ document.getElementById('editForm') && document.getElementById('editForm')
         const isCost = t.classList.contains('v-cost');
         const isMarja = t.classList.contains('v-marja');
         const isSale = t.classList.contains('v-sale');
+        const isWsM = t.classList.contains('v-wsmarja');
+        const isWs = t.classList.contains('v-ws');
+        if (isWsM || isWs || isCost) syncWs(t.closest('tr'), isWs);
         if (!isCost && !isMarja && !isSale) return;
         const tr = t.closest('tr');
         if (!tr) return;
@@ -600,7 +665,8 @@ document.getElementById('editForm') && document.getElementById('editForm')
         var cost = num(document.getElementById('bulkCost').value);
         var marja = num(document.getElementById('bulkMarja').value);
         var sale = num(document.getElementById('bulkSale').value);
-        if (cost === null && marja === null && sale === null) return;
+        var wsm = num(document.getElementById('bulkWsMarja').value);
+        if (cost === null && marja === null && sale === null && wsm === null) return;
         var rows = document.querySelectorAll('#editRows tr');
         var n = 0;
         rows.forEach(function (tr) {
@@ -622,8 +688,16 @@ document.getElementById('editForm') && document.getElementById('editForm')
                 var cv2 = num(c.value);
                 if (cv2) m.value = Math.round((sale / cv2 - 1) * 1000) / 10;
             }
-            [c, m, sp].forEach(function (el) {
-                el.dispatchEvent(new Event('input', { bubbles: true }));
+            // WSM-1: ulgurji marja berilsa — ulgurji narx tannarxdan
+            // hisoblanadi (chakana marja bilan bir xil mantiq).
+            var wm = tr.querySelector('.v-wsmarja'), w = tr.querySelector('.v-ws');
+            if (wsm !== null && wm && w) {
+                wm.value = wsm;
+                var cv3 = num(c.value);
+                if (cv3) w.value = Math.round(cv3 * (1 + wsm / 100));
+            }
+            [c, m, sp, wm, w].forEach(function (el) {
+                if (el) el.dispatchEvent(new Event('input', { bubbles: true }));
             });
             n++;
         });

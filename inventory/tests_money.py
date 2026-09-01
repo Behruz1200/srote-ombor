@@ -5264,3 +5264,80 @@ class Row1TablesAreNumbered(TestCase):
             with open(os.path.join(root, name), encoding='utf-8') as f:
                 n += f.read().count('yrt-numbered')
         self.assertGreaterEqual(n, 40, f'faqat {n} ta jadval belgilangan')
+
+
+class Wsm1WholesaleMarginColumn(TestCase):
+    """WSM-1: turlarni tahrirlashda "Ulg. marja %" ustuni.
+
+    Chakana uchun tannarx <-> marja <-> sotuv bog'lanishi bor edi;
+    ulgurji uchun esa faqat narx katagi bor edi va marjani odam o'zi
+    hisoblardi. Endi ulgurji ham xuddi shunday ishlaydi.
+
+    ENG MUHIM QOIDA — 10% FAQAT TAKLIF, YOZUV EMAS.
+
+    Hozir 43 ta zaxirali tovarda ulgurji narx yo'q. Agar 10% avtomatik
+    to'ldirilsa, bu sahifani BARKODNI tuzatgani ochgan odam ham Saqlash
+    bosishi bilan 43 ta narxni bilmasdan o'zgartirib yuborardi. Shu bois
+    bo'sh katakda 10 faqat XIRA TAKLIF (placeholder) bo'lib turadi;
+    haqiqiy qiymat foydalanuvchi katakka tekkanda qo'yiladi.
+
+    Xatti-harakat brauzerda (Chromium) tekshirilgan: marja yozilsa narx
+    hisoblanadi, narx yozilsa marja chiqadi, tegilmagan qator esa
+    saqlashdan keyin ham o'zgarmaydi.
+    """
+
+    def _tpl(self):
+        import os
+        from django.conf import settings
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory', 'product_variants_edit.html')
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail('shablon topilmadi')
+
+    def test_the_column_exists_in_the_header(self):
+        self.assertIn("Ulg. marja %", self._tpl())
+
+    def test_every_row_has_an_editable_margin_input(self):
+        src = self._tpl()
+        # mavjud qatorlarda ham, yangi qator andozasida ham
+        self.assertGreaterEqual(src.count('v-wsmarja'), 2)
+        self.assertIn('name="v_wsmarja"', src)
+
+    def test_ten_percent_is_only_a_placeholder(self):
+        """Qiymat emas, TAKLIF: value="10" bo'lmasligi shart."""
+        src = self._tpl()
+        self.assertIn('placeholder="10"', src)
+        self.assertNotIn('name="v_wsmarja" ... value="10"', src)
+        for chunk in src.split('v-wsmarja')[1:]:
+            head = chunk[:160]
+            self.assertNotIn('value="10"', head,
+                             'ulgurji marja katagiga 10 QIYMAT sifatida '
+                             'yozilgan — bu tegilmagan qatorlarni ham '
+                             'o\'zgartirib yuboradi')
+
+    def test_the_server_ignores_the_margin_field(self):
+        """Marja — yordamchi ustun. Bazaga NARX yoziladi, marja emas."""
+        # admin_required functools.wraps ishlatmaydi, shuning uchun
+        # inspect asl funksiyaga yeta olmaydi — manbani fayldan o'qiymiz.
+        import os
+        import inventory
+        path = os.path.join(os.path.dirname(inventory.__file__), 'views.py')
+        with open(path, encoding='utf-8') as f:
+            src = f.read()
+        start = src.index('def product_variants_edit(')
+        body = src[start:start + 8000]
+        self.assertIn("getlist('v_wholesale')", body)
+        self.assertNotIn("v_wsmarja", src,
+                         'server ulgurji MARJANI o\'qimasligi kerak — '
+                         'u faqat yordamchi ustun, bazaga NARX yoziladi')
+
+    def test_bulk_row_can_set_every_wholesale_margin_at_once(self):
+        """43 ta tovarga 10% ni bittalab emas, ATAYLAB bir marta."""
+        src = self._tpl()
+        self.assertIn('bulkWsMarja', src)
+
+    def test_default_is_ten(self):
+        src = self._tpl()
+        self.assertIn('WS_DEFAULT = 10', src)

@@ -4,7 +4,7 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'yurit-v219';   // ROW-1: jadval qator raqamlari
+const CACHE_NAME = 'yurit-v220';   // WSM-1: ulgurji marja ustuni
 // SEC-2: kutubxonalar endi o'zimizda (static/vendor/) — CDN emas. Bu yerда
 // oldindan keshlamaymiz (WhiteNoise hash'li nom beradi); /static/ so'rovlari
 // runtime'да cache-first bo'lib avtomat keshlanadi (pastдаgi handler).
