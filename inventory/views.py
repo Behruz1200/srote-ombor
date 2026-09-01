@@ -56,6 +56,8 @@ from .money import (            # ARCH-1
     _chunked, _is_rounding, _lock_stocks, _order_discount_share,
     _ret_group_value, _returns_adjustment, _valid_discount_reason,
 )
+from .audit import BATCH_PREVIEW, audit_batch, log_action   # AUD-1
+from .signals import pin_before                             # AUD-2
 from .access import (          # ARCH-2
     POS_BRANCH_SESSION_KEY, _open_shift_for, _user_branch_or_403,
     admin_required, get_user_branch, normalize_code,
@@ -896,7 +898,9 @@ def product_bulk_update(request):
     affected_codes = []
     from django.db.models import ProtectedError
     # STK-19: butun amal BITTA tranzaksiyada — yarim qo'llanib qolmasin.
-    with transaction.atomic():
+    with transaction.atomic(), audit_batch(
+            'Mahsulotlar ustida ommaviy amal',
+            model_name='ProductBulk') as _batch:
         for p in products:
             affected_codes.append(p.code)
             if op == 'set_price':
@@ -931,27 +935,27 @@ def product_bulk_update(request):
                         request,
                         f"'{p.name}' ({p.code}) o'chirilmadi — sotuv tarixi bor.")
 
-    # M9: audit the bulk operation as a single summary row
-    if n > 0:
-        OP_LABELS = {
-            'set_price': f"narx={value}",
-            'set_markup': f"markup={value}%",
-            'multiply_price': f"narx×{value}%",
-            'change_category': f"category={value}",
-            'delete': "DELETE",
-        }
-        op_label = OP_LABELS.get(op, op)
-        codes_preview = ', '.join(affected_codes[:10])
-        if len(affected_codes) > 10:
-            codes_preview += f", ... (+{len(affected_codes)-10})"
-        AuditLog.objects.create(
-            user=request.user,
-            username_snapshot=request.user.username,
-            action=(AuditLog.Action.DELETE if op == 'delete'
-                    else AuditLog.Action.UPDATE),
-            model_name='ProductBulk',
-            object_repr=f"{n}×{op_label}: {codes_preview}"[:200],
-        )
+        # M9: audit the bulk operation as a single summary row
+        if n <= 0:
+            _batch.cancel()
+        if n > 0:
+            OP_LABELS = {
+                'set_price': f"narx={value}",
+                'set_markup': f"markup={value}%",
+                'multiply_price': f"narx×{value}%",
+                'change_category': f"category={value}",
+                'delete': "DELETE",
+            }
+            op_label = OP_LABELS.get(op, op)
+            codes_preview = ', '.join(affected_codes[:10])
+            if len(affected_codes) > 10:
+                codes_preview += f", ... (+{len(affected_codes)-10})"
+            # AUD-1: xulosa endi partiya BOSHI bo'lib yoziladi — har bir
+            # mahsulot qatori uning ichida ochilib ko'rinadi.
+            _batch.describe(f"{n}×{op_label}: {codes_preview}"[:300])
+            _batch.note('amal', op_label)
+            _batch.action = (AuditLog.Action.DELETE if op == 'delete'
+                             else AuditLog.Action.UPDATE)
 
     messages.success(request, f"{n} ta mahsulot yangilandi/o'chirildi.")
     if op == 'change_category' and n > 0:
@@ -1293,9 +1297,7 @@ def employee_debt_list(request):
                                 bs.stock_count = F('stock_count') + it.quantity
                                 bs.save(update_fields=['stock_count'])
                                 _restored.append(f"{prod.code}×{it.quantity}")
-                    AuditLog.objects.create(
-                        user=request.user, username_snapshot=request.user.username,
-                        action=AuditLog.Action.DELETE, model_name='EmployeeDebt',
+                    log_action(action=AuditLog.Action.DELETE, model_name='EmployeeDebt',
                         object_id=str(d.pk),
                         object_repr=f"Qarz o'chirildi: {d.who} — {int(d.amount)} so'm"[:300],
                         changes={'amount': float(d.amount), 'who': d.who,
@@ -1443,9 +1445,7 @@ def product_resolve_name(request):
         product.name = alt
     product.pending_name = ''
     product.save(update_fields=['name', 'pending_name'])
-    AuditLog.objects.create(
-        user=request.user, username_snapshot=request.user.username,
-        action=AuditLog.Action.UPDATE, model_name='Product',
+    log_action(action=AuditLog.Action.UPDATE, model_name='Product',
         object_id=str(product.pk),
         object_repr=(f"Nom ziddiyati hal qilindi: "
                      f"{'YANGI: ' + alt if choice == 'use' else 'ESKI: ' + old}"))
@@ -1505,10 +1505,7 @@ def product_delete(request, code):
             f"saqlanishi shart — o'rniga zaxirani 0 ga tushiring yoki "
             f"boshqa mahsulotga birlashtiring.")
         return redirect('product_list')
-    AuditLog.objects.create(
-        user=request.user,
-        username_snapshot=request.user.username,
-        action=AuditLog.Action.DELETE,
+    log_action(action=AuditLog.Action.DELETE,
         model_name='Product',
         object_id=str(pk),
         object_repr=f'{code} — {name}',
@@ -1540,10 +1537,7 @@ def variant_delete(request, pk):
             f"{label} o'chirilmadi: sotuv/transfer/inventarizatsiya tarixi "
             f"bor. Tarix saqlanishi shart — o'rniga omborni 0 qiling.")
         return redirect(back)
-    AuditLog.objects.create(
-        user=request.user,
-        username_snapshot=request.user.username,
-        action=AuditLog.Action.DELETE,
+    log_action(action=AuditLog.Action.DELETE,
         model_name='ProductVariant', object_id=str(pk),
         object_repr=f'{code}: {label}')
     messages.success(request, f"O'chirildi: {label}")
@@ -1581,10 +1575,7 @@ def product_variants_move(request, code):
             v.save(update_fields=['product'])
             moved += 1
         if moved:
-            AuditLog.objects.create(
-                user=request.user,
-                username_snapshot=request.user.username,
-                action=AuditLog.Action.UPDATE,
+            log_action(action=AuditLog.Action.UPDATE,
                 model_name='ProductVariant', object_id=str(product.pk),
                 object_repr=(f"{moved} ta tur {product.code} -> "
                              f"{target.code}")[:300])
@@ -1632,72 +1623,71 @@ def product_merge(request):
         from django.db.models import ProtectedError
         moved_variants = 0
         try:
-          with transaction.atomic():
-            for src in sources:
-                src_variants = list(src.variants.all())
-                single = len(src_variants) == 1
-                for v in src_variants:
-                    tv = target.variants.filter(
-                        size=v.size, color=v.color).first()
-                    if tv:
-                        # Bir xil tur — variant darajasida birlashtiramiz
-                        for bs in list(v.branch_stocks.all()):
-                            tbs = BranchStock.objects.filter(
-                                variant=tv, branch=bs.branch).first()
-                            if tbs:
-                                tbs.stock_count += bs.stock_count
-                                if not tbs.sale_price:
-                                    tbs.sale_price = bs.sale_price
-                                if not tbs.cost_price:
-                                    tbs.cost_price = bs.cost_price
-                                if not tbs.wholesale_price:
-                                    tbs.wholesale_price = bs.wholesale_price
-                                tbs.save()
-                                bs.delete()
-                            else:
-                                bs.variant = tv
-                                bs.save(update_fields=['variant'])
-                        Sale.objects.filter(variant=v).update(variant=tv)
-                        Intake.objects.filter(variant=v).update(variant=tv)
-                        TransferLine.objects.filter(variant=v).update(variant=tv)
-                        StocktakeCount.objects.filter(variant=v).update(variant=tv)
-                        # R5: StockWriteOff.variant PROTECT — qayta bog'lamasak
-                        # v.delete() ProtectedError berib butun birlashuv buzilardi.
-                        StockWriteOff.objects.filter(variant=v).update(variant=tv)
-                        if v.barcode and not tv.barcode:
-                            bc = v.barcode
-                            v.barcode = None
-                            v.save(update_fields=['barcode'])
-                            tv.barcode = bc
-                            tv.save(update_fields=['barcode'])
-                        v.delete()
-                    else:
-                        v.product = target
-                        if (single and src.external_barcode and not v.barcode
-                                and not ProductVariant.objects.filter(
-                                    barcode=src.external_barcode).exists()):
-                            v.barcode = src.external_barcode
-                        v.save()
-                    moved_variants += 1
-                if target.external_barcode is None and src.external_barcode \
-                        and not single:
-                    # ko'p variantli manba barcode'i variantga bog'lanmadi —
-                    # yo'qolmasligi uchun targetga o'tkazamiz
-                    bc = src.external_barcode
-                    src.external_barcode = None
-                    src.save(update_fields=['external_barcode'])
-                    target.external_barcode = bc
-                    target.save(update_fields=['external_barcode'])
-                src.delete()
-            AuditLog.objects.create(
-                user=request.user,
-                username_snapshot=request.user.username,
-                action=AuditLog.Action.UPDATE,
-                model_name='Product',
-                object_id=str(target.pk),
-                object_repr=(f"Birlashtirildi -> {target.code}: "
-                             + ', '.join(x.code for x in sources))[:300],
-            )
+            with transaction.atomic():
+                for src in sources:
+                    src_variants = list(src.variants.all())
+                    single = len(src_variants) == 1
+                    for v in src_variants:
+                        tv = target.variants.filter(
+                            size=v.size, color=v.color).first()
+                        if tv:
+                            # Bir xil tur — variant darajasida birlashtiramiz
+                            for bs in list(v.branch_stocks.all()):
+                                tbs = BranchStock.objects.filter(
+                                    variant=tv, branch=bs.branch).first()
+                                if tbs:
+                                    tbs.stock_count += bs.stock_count
+                                    if not tbs.sale_price:
+                                        tbs.sale_price = bs.sale_price
+                                    if not tbs.cost_price:
+                                        tbs.cost_price = bs.cost_price
+                                    if not tbs.wholesale_price:
+                                        tbs.wholesale_price = bs.wholesale_price
+                                    tbs.save()
+                                    bs.delete()
+                                else:
+                                    bs.variant = tv
+                                    bs.save(update_fields=['variant'])
+                            Sale.objects.filter(variant=v).update(variant=tv)
+                            Intake.objects.filter(variant=v).update(variant=tv)
+                            TransferLine.objects.filter(variant=v).update(variant=tv)
+                            StocktakeCount.objects.filter(variant=v).update(variant=tv)
+                            # R5: StockWriteOff.variant PROTECT — qayta bog'lamasak
+                            # v.delete() ProtectedError berib butun birlashuv buzilardi.
+                            StockWriteOff.objects.filter(variant=v).update(variant=tv)
+                            if v.barcode and not tv.barcode:
+                                bc = v.barcode
+                                v.barcode = None
+                                v.save(update_fields=['barcode'])
+                                tv.barcode = bc
+                                tv.save(update_fields=['barcode'])
+                            v.delete()
+                        else:
+                            v.product = target
+                            if (single and src.external_barcode and not v.barcode
+                                    and not ProductVariant.objects.filter(
+                                        barcode=src.external_barcode).exists()):
+                                v.barcode = src.external_barcode
+                            v.save()
+                        moved_variants += 1
+                    if target.external_barcode is None and src.external_barcode \
+                            and not single:
+                        # ko'p variantli manba barcode'i variantga bog'lanmadi —
+                        # yo'qolmasligi uchun targetga o'tkazamiz
+                        bc = src.external_barcode
+                        src.external_barcode = None
+                        src.save(update_fields=['external_barcode'])
+                        target.external_barcode = bc
+                        target.save(update_fields=['external_barcode'])
+                    src.delete()
+                log_action(action=AuditLog.Action.UPDATE,
+                    model_name='Product',
+                    object_id=str(target.pk),
+                    object_repr=(f"Birlashtirildi -> {target.code}: "
+                                 + ', '.join(x.code for x in sources))[:300],
+                    changes={'manba': [x.code for x in sources][:200],
+                             'maqsad': target.code},
+                )
         except ProtectedError:
             # R5: kutilmagan PROTECT bog'lanish (masalan onlayn buyurtma qatori)
             # — butun birlashuv orqaga qaytadi, ma'lumot buzilmaydi.
@@ -2472,8 +2462,15 @@ def product_variants_edit(request, code):
             _existing = [r for r in rows if r['variant'] is not None]
             _fresh = [r for r in rows if r['variant'] is None]
             try:
-                with transaction.atomic():
+                with transaction.atomic(), audit_batch(
+                        f"Turlar tahrirlandi: {product.code} — {product.name}"
+                        f" ({branch.name})",
+                        model_name='ProductVariant',
+                        object_id=str(product.pk)) as _batch:
                     for _r in _renamed:
+                        # AUD-2: vaqtincha `__tmp_N__` qiymati AUDITGA
+                        # tushmasin — haqiqiy eski holatni muhrlaymiz.
+                        pin_before(_r['variant'])
                         ProductVariant.objects.filter(pk=_r['variant'].pk).update(
                             color=f"__tmp_{_r['variant'].pk}__")
                     for r in _existing + _fresh:
@@ -2553,15 +2550,14 @@ def product_variants_edit(request, code):
                                 f"{v.size or '—'}/{v.color or '—'}: "
                                 + ', '.join(v_fields + s_fields))
                     if changed:
-                        AuditLog.objects.create(
-                            user=request.user,
-                            username_snapshot=request.user.username,
-                            action=AuditLog.Action.UPDATE,
-                            model_name='ProductVariant',
-                            object_id=str(product.pk),
-                            object_repr=(f"{product.code} ({branch.name}): "
-                                         + ' | '.join(changed))[:300],
-                        )
+                        # AUD-1: alohida "xulosa" qatori endi YOZILMAYDI —
+                        # partiyaning BOSH qatori shu vazifani bajaradi va
+                        # o'zgarishlar ro'yxatini ichiga oladi.
+                        _batch.describe(
+                            f"{product.code} — {product.name} ({branch.name}): "
+                            f"{len(changed)} ta tur o'zgardi")
+                    else:
+                        _batch.cancel()
             except IntegrityError:
                 # Oxirgi himoya. Yuqoridagi tekshiruvlar va uch fazali
                 # yozish deyarli hamma holatni qamraydi, lekin BAZA
@@ -3468,10 +3464,7 @@ def intake_import(request):
                     if product.default_sale_price == 0 and r['price'] > 0:
                         product.default_sale_price = r['price']
                         product.save(update_fields=['default_sale_price'])
-                AuditLog.objects.create(
-                    user=request.user,
-                    username_snapshot=request.user.username,
-                    action=AuditLog.Action.CREATE,
+                log_action(action=AuditLog.Action.CREATE,
                     model_name='Product',
                     object_id='',
                     object_repr=(f"Excel import: {len(rows)} qator, "
@@ -4680,10 +4673,7 @@ def intake_photo_save(request):
                         and _norm_name(ai_name) != _norm_name(product.pending_name)):
                     product.pending_name = ai_name
                     product.save(update_fields=['pending_name'])
-                    AuditLog.objects.create(
-                        user=request.user,
-                        username_snapshot=request.user.username,
-                        action=AuditLog.Action.UPDATE,
+                    log_action(action=AuditLog.Action.UPDATE,
                         model_name='Product', object_id=str(product.pk),
                         object_repr=(f"Nom ziddiyati (nakladnoy): "
                                      f"'{product.name}' ↔ '{ai_name}'"))
@@ -4856,7 +4846,9 @@ def stocktake_detail(request, pk):
             # H6 fix: lock the session row so concurrent apply attempts can't
             # both succeed. select_for_update inside atomic() blocks the second
             # transaction until the first commits.
-            with transaction.atomic():
+            with transaction.atomic(), audit_batch(
+                    'Inventarizatsiya tasdiqlandi',
+                    model_name='Stocktake') as _batch:
                 locked = (Stocktake.objects
                           .select_for_update()
                           .filter(pk=session.pk, status=Stocktake.Status.OPEN)
@@ -4909,14 +4901,12 @@ def stocktake_detail(request, pk):
                 locked.save()
                 # STK-9: har tasdiqni AUDIT LOGGA yozamiz (ombor tuzatishlari
                 # ilgari umuman iz qoldirmasdi).
-                AuditLog.objects.create(
-                    user=request.user, username_snapshot=request.user.username,
-                    action=AuditLog.Action.UPDATE, model_name='Stocktake',
-                    object_id=str(locked.pk),
-                    object_repr=(f"Inventarizatsiya #{locked.pk} tasdiqlandi "
-                                 f"({locked.branch.name}): {len(adjustments)} tuzatish")[:300],
-                    changes={'branch': locked.branch.name,
-                             'adjustments': adjustments[:500]})
+                _batch.object_id = str(locked.pk)
+                _batch.describe(
+                    f"Inventarizatsiya #{locked.pk} tasdiqlandi "
+                    f"({locked.branch.name}): {len(adjustments)} tuzatish")
+                _batch.note('branch', locked.branch.name)
+                _batch.note('adjustments', adjustments[:500])
             messages.success(request, "Inventarizatsiya tasdiqlandi va ombor yangilandi.")
             return redirect('stocktake_detail', pk=session.pk)
 
@@ -5155,10 +5145,7 @@ def writeoff_list(request):
                     cost_at_writeoff=stock.cost_price or 0,
                     created_by=request.user,
                 )
-                AuditLog.objects.create(
-                    user=request.user,
-                    username_snapshot=request.user.username,
-                    action=AuditLog.Action.DELETE,
+                log_action(action=AuditLog.Action.DELETE,
                     model_name='StockWriteOff',
                     object_id=str(wo.pk),
                     object_repr=(f"{variant.product.code} "
@@ -5754,9 +5741,7 @@ def cash_payout(request):
     # Telegram ogohlantirish. Ilgari chiqim hech qayerда qayd etilmasdi —
     # kassir 500 000 olib, "chiqim" yozib, smenни nol farq bilan yopardi.
     try:
-        AuditLog.objects.create(
-            user=request.user, username_snapshot=request.user.username,
-            action=AuditLog.Action.CREATE, model_name='CashPayout',
+        log_action(action=AuditLog.Action.CREATE, model_name='CashPayout',
             object_id=str(payout.id),
             object_repr=(f"Kassa chiqimi {int(amount)} so'm — "
                          f"{payout.get_category_display()} ({branch.name})")[:300],
@@ -5877,9 +5862,7 @@ def cash_in(request):
     # ogohlantirish (chiqim bilan bir xil nazorat — aks holда qo'shimchalar
     # hech qayerда qayd etilmай, kutilган naqdни shishirar edi).
     try:
-        AuditLog.objects.create(
-            user=request.user, username_snapshot=request.user.username,
-            action=AuditLog.Action.CREATE, model_name='CashIn',
+        log_action(action=AuditLog.Action.CREATE, model_name='CashIn',
             object_id=str(ci.id),
             object_repr=(f"Kassaga qo'shildi {int(amount)} so'm — "
                          f"{ci.get_category_display()} ({branch.name})")[:300],
@@ -6258,10 +6241,7 @@ def user_create(request):
         if form.is_valid():
             user = form.save()
             # H7 fix: audit account creation (password set is implicit)
-            AuditLog.objects.create(
-                user=request.user,
-                username_snapshot=request.user.username,
-                action=AuditLog.Action.CREATE,
+            log_action(action=AuditLog.Action.CREATE,
                 model_name='User',
                 object_id=str(user.pk),
                 object_repr=f'{user.username} ({user.get_role_display()})',
@@ -6286,10 +6266,7 @@ def user_edit(request, pk):
             # H7 fix: explicit audit row when password changes — never log the
             # password itself, only the fact that it changed (and by whom)
             if new_password:
-                AuditLog.objects.create(
-                    user=request.user,
-                    username_snapshot=request.user.username,
-                    action=AuditLog.Action.UPDATE,
+                log_action(action=AuditLog.Action.UPDATE,
                     model_name='UserPassword',
                     object_id=str(user.pk),
                     object_repr=f'Parol o\'zgartirildi: {user.username}',
@@ -6338,10 +6315,7 @@ def category_list(request):
                         return redirect('category_list')
                 name = cat.name
                 cat.delete()
-                AuditLog.objects.create(
-                    user=request.user,
-                    username_snapshot=request.user.username,
-                    action=AuditLog.Action.DELETE,
+                log_action(action=AuditLog.Action.DELETE,
                     model_name='Category', object_id=str(pk),
                     object_repr=name)
                 messages.success(request, f"\"{name}\" o'chirildi.")
@@ -7689,9 +7663,34 @@ def return_create(request, sale_id):
 
 # ---------- AUDIT LOG ----------
 
+def _changes_text(changes):
+    """AuditLog.changes ni bitta o'qiladigan satrga aylantiradi (CSV uchun)."""
+    if not changes:
+        return ''
+    out = []
+    for k, v in changes.items():
+        if isinstance(v, (list, tuple)) and len(v) == 2:
+            out.append(f'{k}: {v[0]} -> {v[1]}')
+        elif isinstance(v, (list, tuple)):
+            out.append(f'{k}: ' + '; '.join(str(x) for x in v[:20]))
+        elif isinstance(v, dict):
+            out.append(f'{k}: ' + ', '.join(f'{a}={b}' for a, b in
+                                            list(v.items())[:20]))
+        else:
+            out.append(f'{k}: {v}')
+    return ' | '.join(out)[:2000]
+
+
 @admin_required
 def audit_list(request):
     logs = AuditLog.objects.select_related('user').all()
+    # AUD-1: bitta foydalanuvchi amali — bitta satr. Partiya ichidagi
+    # qatorlar (batch_id bor, batch_count == 0) ro'yxatda YASHIRILADI va
+    # bosh qatorni ochganda ko'rinadi. ?raw=1 — hammasini ko'rsatadi
+    # (tergov uchun: qaysi obyekt aynan qachon o'zgargan).
+    raw = request.GET.get('raw') == '1'
+    if not raw:
+        logs = logs.filter(Q(batch_id='') | Q(batch_count__gt=0))
     # Filters
     action = request.GET.get('action') or ''
     user_filter = request.GET.get('user') or ''
@@ -7732,9 +7731,15 @@ def audit_list(request):
         resp['Content-Disposition'] = 'attachment; filename="audit_log.csv"'
         resp.write('﻿')
         w = csv.writer(resp)
+        # AUD-1: "O'zgarishlar" ustuni ilgari CSV'da UMUMAN yo'q edi —
+        # eksport qilingan fayl kim-nima-qachon deb aytardi-yu, NIMA
+        # o'zgarganini aytmasdi. Endi maydon: eski -> yangi ko'rinishida.
         w.writerow(['Sana', 'Vaqt', 'Foydalanuvchi', 'Amal', 'Model',
-                    'Obyekt ID', 'Obyekt', 'IP'])
-        for l in logs[:10000]:
+                    'Obyekt ID', 'Obyekt', "O'zgarishlar", 'Qatorlar', 'IP'])
+        _EXPORT_MAX = 10000
+        _n = 0
+        for l in logs[:_EXPORT_MAX]:
+            _n += 1
             w.writerow([_csv_safe(c) for c in [   # SEC-20
                 l.created_at.strftime('%Y-%m-%d'),
                 l.created_at.strftime('%H:%M:%S'),
@@ -7743,8 +7748,14 @@ def audit_list(request):
                 l.model_name or '',
                 l.object_id or '',
                 l.object_repr or '',
+                _changes_text(l.changes),
+                (l.batch_count or ''),
                 l.ip or '',   # SEC-15: model maydoni `ip` (ip_address emas — 500 berardi)
             ]])
+        if _n >= _EXPORT_MAX:
+            # Jim kesilmasin — fayl to'liq emasligi FAYLNING O'ZIDA yozilsin.
+            w.writerow([f'... eksport {_EXPORT_MAX} qator bilan cheklandi — '
+                        'sana oralig\'ini toraytiring'])
         return resp
 
     # Pagination
@@ -7760,11 +7771,36 @@ def audit_list(request):
                    .distinct().order_by('model_name'))
     models_list = [m for m in models_list if m]
 
+    # AUD-1: bosh qatorlarning bolalarini BITTA so'rovda olib beramiz.
+    _bids = [l.batch_id for l in page if l.batch_count and l.batch_id]
+    _kids = {}
+    if _bids and not raw:
+        for k in (AuditLog.objects
+                  .filter(batch_id__in=_bids, batch_count=0)
+                  .order_by('id')[:5000]):
+            _kids.setdefault(k.batch_id, []).append(k)
+    for l in page:
+        _all = _kids.get(l.batch_id or '\x00', [])
+        l.kids = _all[:BATCH_PREVIEW]
+        l.kids_more = max(0, len(_all) - BATCH_PREVIEW)
+
+    # AUD-1: sahifalash havolalari SANA filtrini yo'qotardi — 2-sahifaga
+    # o'tganda oraliq tushib qolib, butun tarix qaytadan chiqardi.
+    _qs = request.GET.copy()
+    _qs.pop('page', None)
+    _qs.pop('export', None)
+    page_qs = _qs.urlencode()
+    _qs2 = _qs.copy()
+    _qs2.pop('raw', None)
+    page_qs_nogroup = _qs2.urlencode()
+
     return render(request, 'inventory/audit_list.html', {
         'page': page, 'actions': actions, 'users': users,
         'models_list': models_list,
         'f_action': action, 'f_user': user_filter, 'f_model': model, 'q': q,
         'date_from': date_from, 'date_to': date_to,
+        'raw': raw, 'page_qs': page_qs,
+        'page_qs_nogroup': page_qs_nogroup,
     })
 
 
@@ -9508,7 +9544,9 @@ def price_apply(request):
     if mode == 'rows':
         # Jadvalda qo'lda o'zgartirilgan kataklar
         ids = request.POST.getlist('row_id')
-        with transaction.atomic():
+        with transaction.atomic(), audit_batch(
+                'Narxlar tahrirlandi (qatorlab)',
+                model_name='BranchStock') as _batch:
             for i, sid in enumerate(ids):
                 stock = BranchStock.objects.select_for_update().filter(pk=sid).first()
                 if not stock:
@@ -9538,6 +9576,9 @@ def price_apply(request):
                     stock.save(update_fields=['cost_price', 'sale_price',
                                               'wholesale_price'])
                     changed += 1
+            if changed:
+                _batch.describe(f"Narxlar tahrirlandi (qatorlab): "
+                                f"{changed} ta qator")
         messages.success(request, f"{changed} ta qator yangilandi.")
         if skipped:
             messages.warning(request,
@@ -9591,73 +9632,85 @@ def price_apply(request):
     # STK-14 saqlanadi: qulflanadigan so'rovda select_related YO'Q, aks
     # holda Postgres nullable outer join ustida FOR UPDATE ni rad etadi.
     _ids = list(targets.order_by().values_list('pk', flat=True))
-    for _chunk in _chunked(_ids):
-        with transaction.atomic():
-            for stock in (BranchStock.objects.select_for_update()
-                          .filter(pk__in=_chunk)):
-                ch = {}
-                if op == 'margin_from_cost':
-                    # tannarx bor -> sotuv = tannarx × (1 + marja)
-                    if stock.cost_price > 0:
-                        new = (stock.cost_price * factor).quantize(q2)
-                        if new != stock.sale_price:
-                            ch['sotuv'] = [str(stock.sale_price), str(new)]
-                            stock.sale_price = new
-                elif op == 'cost_from_sale':
-                    # sotuv narxi to'g'ri -> tannarx = sotuv / (1 + marja)
-                    if stock.sale_price > 0 and factor > 0:
-                        new = (stock.sale_price / factor).quantize(q2)
-                        if new != stock.cost_price:
-                            ch['tannarx'] = [str(stock.cost_price), str(new)]
-                            stock.cost_price = new
-                elif op == 'wholesale_from_cost':
-                    if stock.cost_price > 0:
-                        new = (stock.cost_price * factor).quantize(q2)
-                        if new != stock.wholesale_price:
-                            ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
-                            stock.wholesale_price = new
-                elif op == 'margin_add':
-                    # Mavjud marjaga qo'shish: 20% edi, +5 -> 25%.
-                    # sotuv = tannarx × (1 + (joriy_marja + pct)/100)
-                    if stock.cost_price > 0 and stock.sale_price > 0:
-                        cur_m = (stock.sale_price / stock.cost_price
-                                 - Decimal('1')) * Decimal('100')
-                        new_m = cur_m + pct
-                        if new_m > Decimal('-100'):
-                            new = (stock.cost_price
-                                   * (Decimal('1') + new_m / Decimal('100'))
-                                   ).quantize(q2)
-                            if new >= 0 and new != stock.sale_price:
+    _op_labels = {
+        'margin_from_cost': f"sotuv = tannarx +{pct}%",
+        'cost_from_sale': f"tannarx = sotuv /(1+{pct}%)",
+        'wholesale_from_cost': f"ulgurji = tannarx +{pct}%",
+        'margin_add': f"marja {pct:+}%",
+        'wholesale_margin_add': f"ulgurji marja {pct:+}%",
+    }
+    with audit_batch(f"Ommaviy narx amali: {_op_labels.get(op, op)} "
+                     f"— {len(_ids)} ta qator tanlandi",
+                     model_name='BranchStock') as _batch:
+        _batch.note('amal', _op_labels.get(op, op))
+        _batch.note('foiz', str(pct))
+        for _chunk in _chunked(_ids):
+            with transaction.atomic():
+                for stock in (BranchStock.objects.select_for_update()
+                              .filter(pk__in=_chunk)):
+                    ch = {}
+                    if op == 'margin_from_cost':
+                        # tannarx bor -> sotuv = tannarx × (1 + marja)
+                        if stock.cost_price > 0:
+                            new = (stock.cost_price * factor).quantize(q2)
+                            if new != stock.sale_price:
                                 ch['sotuv'] = [str(stock.sale_price), str(new)]
                                 stock.sale_price = new
-                elif op == 'wholesale_margin_add':
-                    if stock.cost_price > 0 and stock.wholesale_price > 0:
-                        cur_m = (stock.wholesale_price / stock.cost_price
-                                 - Decimal('1')) * Decimal('100')
-                        new_m = cur_m + pct
-                        if new_m > Decimal('-100'):
-                            new = (stock.cost_price
-                                   * (Decimal('1') + new_m / Decimal('100'))
-                                   ).quantize(q2)
-                            if new >= 0 and new != stock.wholesale_price:
+                    elif op == 'cost_from_sale':
+                        # sotuv narxi to'g'ri -> tannarx = sotuv / (1 + marja)
+                        if stock.sale_price > 0 and factor > 0:
+                            new = (stock.sale_price / factor).quantize(q2)
+                            if new != stock.cost_price:
+                                ch['tannarx'] = [str(stock.cost_price), str(new)]
+                                stock.cost_price = new
+                    elif op == 'wholesale_from_cost':
+                        if stock.cost_price > 0:
+                            new = (stock.cost_price * factor).quantize(q2)
+                            if new != stock.wholesale_price:
                                 ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
                                 stock.wholesale_price = new
-                elif op == 'bump_sale':
-                    if stock.sale_price > 0:
-                        new = (stock.sale_price * factor).quantize(q2)
-                        if new != stock.sale_price:
-                            ch['sotuv'] = [str(stock.sale_price), str(new)]
-                            stock.sale_price = new
-                elif op == 'bump_wholesale':
-                    if stock.wholesale_price > 0:
-                        new = (stock.wholesale_price * factor).quantize(q2)
-                        if new != stock.wholesale_price:
-                            ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
-                            stock.wholesale_price = new
-                if ch:
-                    stock.save(update_fields=['cost_price', 'sale_price',
-                                              'wholesale_price'])
-                    changed += 1
+                    elif op == 'margin_add':
+                        # Mavjud marjaga qo'shish: 20% edi, +5 -> 25%.
+                        # sotuv = tannarx × (1 + (joriy_marja + pct)/100)
+                        if stock.cost_price > 0 and stock.sale_price > 0:
+                            cur_m = (stock.sale_price / stock.cost_price
+                                     - Decimal('1')) * Decimal('100')
+                            new_m = cur_m + pct
+                            if new_m > Decimal('-100'):
+                                new = (stock.cost_price
+                                       * (Decimal('1') + new_m / Decimal('100'))
+                                       ).quantize(q2)
+                                if new >= 0 and new != stock.sale_price:
+                                    ch['sotuv'] = [str(stock.sale_price), str(new)]
+                                    stock.sale_price = new
+                    elif op == 'wholesale_margin_add':
+                        if stock.cost_price > 0 and stock.wholesale_price > 0:
+                            cur_m = (stock.wholesale_price / stock.cost_price
+                                     - Decimal('1')) * Decimal('100')
+                            new_m = cur_m + pct
+                            if new_m > Decimal('-100'):
+                                new = (stock.cost_price
+                                       * (Decimal('1') + new_m / Decimal('100'))
+                                       ).quantize(q2)
+                                if new >= 0 and new != stock.wholesale_price:
+                                    ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
+                                    stock.wholesale_price = new
+                    elif op == 'bump_sale':
+                        if stock.sale_price > 0:
+                            new = (stock.sale_price * factor).quantize(q2)
+                            if new != stock.sale_price:
+                                ch['sotuv'] = [str(stock.sale_price), str(new)]
+                                stock.sale_price = new
+                    elif op == 'bump_wholesale':
+                        if stock.wholesale_price > 0:
+                            new = (stock.wholesale_price * factor).quantize(q2)
+                            if new != stock.wholesale_price:
+                                ch['ulgurji'] = [str(stock.wholesale_price), str(new)]
+                                stock.wholesale_price = new
+                    if ch:
+                        stock.save(update_fields=['cost_price', 'sale_price',
+                                                  'wholesale_price'])
+                        changed += 1
 
     messages.success(request, f"{changed} ta narx yangilandi.")
     return redirect(back)
@@ -9801,9 +9854,7 @@ def promotion_save(request):
         return redirect('promotion_list')
     promo.save()
 
-    AuditLog.objects.create(
-        user=request.user, username_snapshot=request.user.username,
-        action=(AuditLog.Action.UPDATE if pk else AuditLog.Action.CREATE),
+    log_action(action=(AuditLog.Action.UPDATE if pk else AuditLog.Action.CREATE),
         model_name='Promotion', object_id=str(promo.pk),
         object_repr=f'Aksiya: {promo.name}'[:300],
     )
@@ -9817,9 +9868,7 @@ def promotion_delete(request, pk):
         return redirect('promotion_list')
     promo = get_object_or_404(Promotion, pk=pk)
     name = promo.name
-    AuditLog.objects.create(
-        user=request.user, username_snapshot=request.user.username,
-        action=AuditLog.Action.DELETE, model_name='Promotion',
+    log_action(action=AuditLog.Action.DELETE, model_name='Promotion',
         object_id=str(pk), object_repr=f'Aksiya: {name}'[:300],
     )
     promo.delete()
@@ -10141,9 +10190,7 @@ def variant_split_batch(request):
         src_stock.stock_count = F('stock_count') - qty
         src_stock.save(update_fields=['stock_count'])
 
-        AuditLog.objects.create(
-            user=request.user, username_snapshot=request.user.username,
-            action=AuditLog.Action.CREATE, model_name='ProductVariant',
+        log_action(action=AuditLog.Action.CREATE, model_name='ProductVariant',
             object_id=str(new_v.pk),
             object_repr=f"Partiya ajratildi: {src.product.name} — {qty} dona"[:300],
             changes={'ajratildi': [str(src.pk), str(new_v.pk)],
@@ -10807,7 +10854,10 @@ def warehouse_adjust(request):
 
     reason = (request.POST.get('reason') or '').strip()[:60] or "Qo'lda tuzatish"
 
-    with transaction.atomic():
+    # AUD-3: bu amal ikki qator yozardi — o'zimizniki va BranchStock
+    # signal qatori. Endi bittasi bosh, ikkinchisi uning ichida.
+    with transaction.atomic(), audit_batch(
+            'Ombor tuzatildi', model_name='BranchStock') as _batch:
         # STK-9: qatorni QULFLAB, HOZIRGI (yangi) qoldiqni o'qiymiz — delta va
         # Intake yozuvi eskirgan o'qishга emas, jonli qiymatga nisbatan.
         st = (BranchStock.objects.select_for_update()
@@ -10830,14 +10880,11 @@ def warehouse_adjust(request):
             return_reason=reason if delta < 0 else '',
             note=f"Ombor tuzatishi: {reason}",
             received_by=request.user)
-        AuditLog.objects.create(
-            user=request.user, username_snapshot=request.user.username,
-            action=AuditLog.Action.UPDATE, model_name='BranchStock',
-            object_id=str(st.pk),
-            object_repr=f"{st.variant.product.name} {st.variant.size}"[:300],
-            changes={'stock_count': [str(old), str(new_count)],
-                     'sabab': ['', reason]},
-        )
+        _batch.object_id = str(st.pk)
+        _batch.describe(f"Ombor tuzatildi: {st.variant.product.name} "
+                        f"{st.variant.size} — {old} → {new_count}")
+        _batch.note('stock_count', [str(old), str(new_count)])
+        _batch.note('sabab', reason)
     messages.success(
         request,
         f"{st.variant.product.name} — {old} → {new_count} dona ({reason}).")

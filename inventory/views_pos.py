@@ -43,6 +43,7 @@ from .access import (
     POS_BRANCH_SESSION_KEY, _open_shift_for, _user_branch_or_403,
     admin_required, get_user_branch, normalize_code,
 )
+from .audit import audit_batch, log_action   # AUD-1
 from .money import (
     DISCOUNT_REASONS, ROUNDING_MAX, ROUNDING_STEP, _is_rounding,
     _lock_stocks, _order_discount_share, _ret_group_value,
@@ -806,10 +807,7 @@ def pos_checkout(request):
                     # egaга ko'rinadigan qilib belgilaymiz (audit + xabar).
                     if _hist.closed_at is not None:
                         try:
-                            AuditLog.objects.create(
-                                user=request.user,
-                                username_snapshot=request.user.username,
-                                action=AuditLog.Action.CREATE,
+                            log_action(action=AuditLog.Action.CREATE,
                                 model_name='SaleTransaction',
                                 object_id='',
                                 object_repr=(f"Kech offline sotuv YOPILGAN smen #{_hist.id} "
@@ -895,7 +893,13 @@ def pos_checkout(request):
             self.status = status
 
     try:
-        with transaction.atomic():
+        # AUD-3: bitta chek — audit ro'yxatida BITTA satr. Ilgari har bir
+        # savat qatori alohida "Sale yaratildi" yozuvi bo'lib tushardi
+        # (o'rtacha 11 qator/chek, jadvalning eng katta shovqini) va ularda
+        # HECH QANDAY diff yo'q edi — sotuvning o'zi /sales/ da ko'rinadi.
+        # Endi qatorlar chek boshining ichida turadi.
+        with transaction.atomic(), audit_batch(
+                'Sotuv', model_name='SaleTransaction') as _batch:
             # Lock all referenced stocks first (sort by pk to avoid deadlocks
             # when two checkouts overlap on the same items in different order).
             sids = sorted({l['sid'] for l in parsed_lines})
@@ -937,10 +941,7 @@ def pos_checkout(request):
                                 'customer_phone': customer_phone,
                                 'idempotency_key': idem_key,
                             }
-                            AuditLog.objects.create(
-                                user=request.user,
-                                username_snapshot=request.user.username,
-                                action=AuditLog.Action.UPDATE,
+                            log_action(action=AuditLog.Action.UPDATE,
                                 model_name='OfflineConflict',
                                 object_repr=err[:200],
                                 changes={'rejected_sale': _payload, 'reason': err[:200]},
@@ -975,6 +976,8 @@ def pos_checkout(request):
                 sold_at=target_sold_at or timezone.now(),  # OFF-7
                 idempotency_key=idem_key,
             )
+            _batch.object_id = str(txn.pk)                       # AUD-3
+            _batch.describe(f"Sotuv: chek #{txn.pk} — {len(parsed_lines)} qator")
             price_overrides = []  # MON-8: qo'lda kiritilgan narx auditи
             for ln in parsed_lines:
                 stock = locked[ln['sid']]
@@ -1039,10 +1042,7 @@ def pos_checkout(request):
         try:
             for ov in price_overrides:
                 flag = ', TANNARXDAN PAST!' if ov['below_cost'] else ''
-                AuditLog.objects.create(
-                    user=request.user,
-                    username_snapshot=request.user.username,
-                    action=AuditLog.Action.UPDATE,
+                log_action(action=AuditLog.Action.UPDATE,
                     model_name='PriceOverride',
                     object_id=str(txn.pk),
                     object_repr=(f"{ov['code']} {ov['variant']}: katalog "
@@ -1655,7 +1655,11 @@ def pos_payment_fix(request):
         return JsonResponse({'ok': False,
                              'error': "To'lov turi noto'g'ri."}, status=400)
 
-    with transaction.atomic():
+    # AUD-1: bu amal ikkita qator yozardi — o'zimiz yozgan "tuzatildi"
+    # qatori VA SaleTransaction.save() dan kelib chiqqan signal qatori.
+    # Endi ikkovi bitta partiyada: ro'yxatda bitta amal ko'rinadi.
+    with transaction.atomic(), audit_batch(
+            "To'lov turi tuzatildi", model_name='SaleTransaction') as _batch:
         # STK-14: QULFLANADIGAN so'rovda select_related YO'Q. `shift` —
         # nullable FK, ya'ni select_related uni LEFT OUTER JOIN qiladi va
         # Postgres "FOR UPDATE cannot be applied to the nullable side of an
@@ -1702,16 +1706,12 @@ def pos_payment_fix(request):
         txn.payment_breakdown = []
         txn.save(update_fields=['payment_method', 'payment_breakdown'])
 
-        AuditLog.objects.create(
-            user=request.user,
-            username_snapshot=request.user.username,
-            action=AuditLog.Action.UPDATE,
-            model_name='SaleTransaction',
-            object_id=str(txn.pk),
-            object_repr=f"To'lov turi tuzatildi: chek #{txn.pk}",
-            changes={'payment_method': [old, method],
-                     'sabab': reason or '(sabab yozilmagan)'},
-        )
+        _LBL = {'cash': 'naqd', 'card': 'karta', 'transfer': "o'tkazma"}
+        _batch.object_id = str(txn.pk)
+        _batch.describe(f"To'lov turi tuzatildi: chek #{txn.pk} — "
+                        f"{_LBL.get(old, old)} → {_LBL.get(method, method)}")
+        _batch.note('payment_method', [old, method])
+        _batch.note('sabab', reason or '(sabab yozilmagan)')
 
     shift = txn.shift
     return JsonResponse({
@@ -1796,7 +1796,8 @@ def pos_refund(request):
     _first_row = True
     _txn_refunded = {}   # REF-3: chek pk -> shu chekда jami qaytarilgan naqd
     try:
-        with transaction.atomic():
+        with transaction.atomic(), audit_batch(
+                'Qaytarish', model_name='Return') as _batch:      # AUD-3
             for p in parsed:
                 # REF-1: qatorni QULFLAB qayta tekshiramiz — bir vaqtда ikki
                 # refund bir xil qatorga o'tmasin (pos_exchange kabi).
@@ -1859,6 +1860,11 @@ def pos_refund(request):
                         'refunded_total': 0, 'duplicate': True}, status=200)
                 refunded_qty += p['qty']
                 refunded_total += _cash
+            # AUD-3
+            _batch.describe(f"Qaytarish: {refunded_qty} dona, "
+                            f"{int(refunded_total)} so'm")
+            _batch.note('qaytarildi', [str(refunded_qty),
+                                       str(int(refunded_total))])
     except _RefundAbort as e:
         return JsonResponse(e.payload, status=e.status)
     return JsonResponse({
@@ -1956,7 +1962,8 @@ def pos_exchange(request):
             self.payload = payload; self.status = status
 
     try:
-        with transaction.atomic():
+        with transaction.atomic(), audit_batch(
+                'Almashtirish', model_name='SaleTransaction') as _batch:  # AUD-3
             # ---- eski tovar(lar)ni tekshirib qiymatlash ----
             old_total = Decimal('0')
             ret_ctx = []
@@ -2012,6 +2019,8 @@ def pos_exchange(request):
                 discount_reason='Almashtirish: eski tovar hisobiga',
                 shift=open_shift,
             )
+            _batch.object_id = str(txn.pk)                       # AUD-3
+            _batch.describe(f"Almashtirish: chek #{txn.pk}")
             for ln in parsed_new:
                 stock = locked[ln['sid']]
                 if not stock.variant.product.is_open_price:

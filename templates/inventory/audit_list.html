@@ -18,7 +18,18 @@
                 <span class="dash-pill dash-pill--muted" style="padding: 0.4rem 0.85rem;">
                     Jami: <strong style="margin-left: 0.3rem;">{{ page.paginator.count }}</strong>
                 </span>
-                <a href="?{{ request.GET.urlencode }}&export=csv" class="dash-btn dash-btn--ghost">
+                {% if raw %}
+                <a href="?{{ page_qs_nogroup }}" class="dash-btn dash-btn--ghost"
+                   title="Bir amal — bir satr">
+                    <i class="bi bi-collection"></i> <span>Guruhlab</span>
+                </a>
+                {% else %}
+                <a href="?{{ page_qs }}&amp;raw=1" class="dash-btn dash-btn--ghost"
+                   title="Har bir obyekt alohida satr — tergov uchun">
+                    <i class="bi bi-list-nested"></i> <span>Har bir qator</span>
+                </a>
+                {% endif %}
+                <a href="?{{ page_qs }}&amp;export=csv" class="dash-btn dash-btn--ghost">
                     <i class="bi bi-file-earmark-spreadsheet"></i> <span>CSV eksport</span>
                 </a>
             </div>
@@ -125,23 +136,56 @@
                             </td>
                             <td>
                                 <small class="text-muted">{{ log.model_name }}</small>
+                                {% if log.batch_count %}
+                                    <span class="yrt-tag" title="Bitta amal">
+                                        <i class="bi bi-collection"></i> {{ log.batch_count }}
+                                    </span>
+                                {% endif %}
                                 {% if log.object_repr %}
-                                <div>{{ log.object_repr|truncatechars:60 }}</div>
+                                <div>{{ log.object_repr|truncatechars:90 }}</div>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if log.changes %}
+                                {% if log.batch_count %}
+                                {# AUD-1: bitta amal — bitta satr, ichida o'sha amal tegib o'tgan qatorlar. #}
+                                <details>
+                                    <summary class="text-primary fw-semibold" style="cursor:pointer;">
+                                        {{ log.batch_count }} ta o'zgarish — ochish
+                                    </summary>
+                                    <div class="small mt-1 yrt-audit-batch">
+                                        {% for k, v in log.changes.items %}
+                                            <div class="text-muted">
+                                                <code>{{ k }}</code>: {{ v|audit_val }}
+                                            </div>
+                                        {% endfor %}
+                                        <ol class="mt-1 mb-0 ps-3">
+                                        {% for kid in log.kids %}
+                                            <li>
+                                                <span class="text-muted">{{ kid.model_name }}</span>
+                                                {{ kid.object_repr|truncatechars:70 }}
+                                                {% for field, pair in kid.changes.items %}
+                                                    <div><code>{{ field }}</code>: {{ pair|audit_val }}</div>
+                                                {% endfor %}
+                                            </li>
+                                        {% endfor %}
+                                        </ol>
+                                        {% if log.kids_more %}
+                                            <div class="text-muted mt-1">
+                                                … yana {{ log.kids_more }} ta qator —
+                                                <a href="?{{ page_qs }}&amp;raw=1">hammasini ko'rish</a>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </details>
+                                {% elif log.changes %}
                                 <details>
                                     <summary class="text-primary" style="cursor:pointer;">
                                         {{ log.changes|length }} ta o'zgarish
                                     </summary>
-                                    <div class="small mt-1" style="max-width: 480px;">
+                                    <div class="small mt-1 yrt-audit-batch">
                                         {% for field, pair in log.changes.items %}
                                             <div>
-                                                <code>{{ field }}</code>:
-                                                <span class="text-danger">{{ pair.0|default_if_none:"—"|truncatechars:40 }}</span>
-                                                →
-                                                <span class="text-success">{{ pair.1|default_if_none:"—"|truncatechars:40 }}</span>
+                                                <code>{{ field }}</code>: {{ pair|audit_val }}
                                             </div>
                                         {% endfor %}
                                     </div>
@@ -168,7 +212,7 @@
         <ul class="pagination pagination-sm justify-content-center">
             {% if page.has_previous %}
                 <li class="page-item">
-                    <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if f_action %}action={{ f_action }}&{% endif %}{% if f_user %}user={{ f_user }}&{% endif %}{% if f_model %}model={{ f_model }}&{% endif %}page={{ page.previous_page_number }}">‹ Oldingi</a>
+                    <a class="page-link" href="?{{ page_qs }}&amp;page={{ page.previous_page_number }}">‹ Oldingi</a>
                 </li>
             {% endif %}
             <li class="page-item disabled">
@@ -176,7 +220,7 @@
             </li>
             {% if page.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if f_action %}action={{ f_action }}&{% endif %}{% if f_user %}user={{ f_user }}&{% endif %}{% if f_model %}model={{ f_model }}&{% endif %}page={{ page.next_page_number }}">Keyingi ›</a>
+                    <a class="page-link" href="?{{ page_qs }}&amp;page={{ page.next_page_number }}">Keyingi ›</a>
                 </li>
             {% endif %}
         </ul>

@@ -2,6 +2,8 @@
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django import template
+from django.utils.html import escape          # AUD-1
+from django.utils.safestring import mark_safe  # AUD-1
 
 register = template.Library()
 
@@ -162,3 +164,28 @@ def initials(text, count=2):
     """Nomdan bosh harflar: "Doctor S Shampun" -> "DS"."""
     words = [w for w in str(text or '').split() if w[:1].isalnum()]
     return ''.join(w[0].upper() for w in words[:int(count)]) or '?'
+
+
+@register.filter
+def audit_val(value):
+    """AUD-1: AuditLog.changes qiymatini o'qiladigan ko'rinishga keltiradi.
+
+    Ilgari shablon HAR DOIM `pair.0 -> pair.1` deb chizardi. O'chirish
+    yozuvida esa qiymat JUFTLIK emas, butun SNAPSHOT lug'ati bo'ladi —
+    natijada "1 ta o'zgarish" deb yozilib, ichi BO'SH ko'rinardi.
+    """
+    if isinstance(value, (list, tuple)) and len(value) == 2 \
+            and not isinstance(value[0], (list, tuple, dict)) \
+            and not isinstance(value[1], (list, tuple, dict)):
+        old = '—' if value[0] in (None, '') else value[0]
+        new = '—' if value[1] in (None, '') else value[1]
+        return mark_safe(
+            f'<span class="text-danger">{escape(str(old)[:60])}</span> '
+            f'&rarr; <span class="text-success">{escape(str(new)[:60])}</span>')
+    if isinstance(value, dict):
+        parts = [f'{escape(str(k))}={escape(str(v)[:40])}'
+                 for k, v in list(value.items())[:30]]
+        return mark_safe(', '.join(parts))
+    if isinstance(value, (list, tuple)):
+        return mark_safe('<br>'.join(escape(str(x)[:120]) for x in value[:50]))
+    return escape(str(value)[:200])

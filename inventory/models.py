@@ -551,6 +551,12 @@ class AuditLog(models.Model):
         help_text='{"field": ["old", "new"], ...}'
     )
     ip = models.GenericIPAddressField(null=True, blank=True)
+    # AUD-1: bitta foydalanuvchi amali — bitta guruh. Guruhdagi HAR BIR
+    # obyekt o'z qatorini saqlaydi (diff yo'qolmaydi), lekin ro'yxatda
+    # faqat BOSH qator ko'rinadi.  batch_count > 0  =>  bosh qator.
+    batch_id = models.CharField(max_length=32, blank=True, db_index=True)
+    batch_count = models.PositiveIntegerField(
+        default=0, help_text='0 = oddiy qator; >0 = partiya boshi (nechta qator)')
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
 
     class Meta:

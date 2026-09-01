@@ -30,7 +30,7 @@ from django.utils import timezone
 from inventory.models import (
     Branch, Product, ProductVariant, BranchStock, Shift,
     SaleTransaction, Sale, CashPayout, PaymentIntent, Return,
-    split_breakdown, _dec, Customer, Category,
+    split_breakdown, _dec, Customer, Category, AuditLog,
 )
 
 User = get_user_model()
@@ -3596,7 +3596,9 @@ class Tg1NoTelegramOnTheSalePath(MoneyTestBase):
     def test_no_outbound_network_left_in_the_atomic_block(self):
         """Qulf ushlab turib tarmoqni kutish — eng xavflisi shu edi."""
         src = self._checkout_source()
-        atomic = src[src.index('with transaction.atomic():'):]
+        # AUD-3: endi `with transaction.atomic(), audit_batch(...)` —
+        # shuning uchun ikki nuqtaga emas, chaqiruvning O'ZIGA bog'lanamiz.
+        atomic = src[src.index('with transaction.atomic()'):]
         self.assertNotIn('send_telegram', atomic)
 
     def test_below_cost_sale_is_still_recorded_in_audit(self):
@@ -5475,3 +5477,367 @@ class Kpi9BranchTotalsAreNotMultipliedByStaff(TestCase):
         b = c.get(reverse('branch_list')).context['total_stock_value']
         d = c.get(reverse('dashboard')).context['stock_value']
         self.assertEqual(Decimal(str(b)), Decimal(str(d)))
+
+
+class Aud1OneActionOneAuditRow(TestCase):
+    """AUD-1: bitta "Saqlash" — audit ro'yxatida bitta satr.
+
+    Ilgari 14 ta turni birga tahrirlash 15+ alohida satr yozardi va
+    audit sahifasida nima qilinganini o'qib bo'lmasdi.
+    """
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial-AUD1')
+        self.admin = User.objects.create_user(
+            username='aud1admin', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+        cat = Category.objects.create(name='AUD1')
+        self.product = Product.objects.create(
+            code='AUD-0001', name='Tovar', category=cat)
+        self.variants = []
+        for i in range(4):
+            v = ProductVariant.objects.create(
+                product=self.product, size=str(i), color='Qora')
+            BranchStock.objects.create(
+                variant=v, branch=self.branch, stock_count=5,
+                cost_price=Decimal('1000'), sale_price=Decimal('1500'),
+                wholesale_price=Decimal('1100'))
+            self.variants.append(v)
+        self.c = Client()
+        self.c.force_login(self.admin)
+
+    def _post_variants(self, **over):
+        n = len(self.variants)
+        data = {
+            'branch': str(self.branch.pk),
+            'v_id': [str(v.pk) for v in self.variants],
+            'v_size': [v.size for v in self.variants],
+            'v_color': [v.color for v in self.variants],
+            'v_barcode': [v.barcode or '' for v in self.variants],
+            'v_cost': ['1000'] * n,
+            'v_sale': ['1500'] * n,
+            'v_wholesale': ['1200'] * n,   # HAMMASIGA yangi ulgurji narx
+            'v_stock': ['5'] * n,
+        }
+        data.update(over)
+        return self.c.post(
+            reverse('product_variants_edit', args=[self.product.code]), data)
+
+    def test_bulk_edit_writes_exactly_one_visible_row(self):
+        AuditLog.objects.all().delete()
+        resp = self._post_variants()
+        self.assertIn(resp.status_code, (200, 302))
+
+        heads = list(AuditLog.objects.filter(batch_count__gt=0))
+        self.assertEqual(len(heads), 1, 'bitta amal — bitta bosh qator')
+        head = heads[0]
+        self.assertTrue(head.batch_id)
+        self.assertEqual(head.model_name, 'ProductVariant')
+        self.assertIn('AUD-0001', head.object_repr)
+
+        kids = AuditLog.objects.filter(batch_id=head.batch_id, batch_count=0)
+        self.assertEqual(head.batch_count, kids.count())
+        self.assertGreaterEqual(kids.count(), 4,
+                                'har bir turning diffi SAQLANIB qolsin')
+
+    def test_audit_page_shows_one_row_and_expands(self):
+        AuditLog.objects.all().delete()
+        self._post_variants()
+        head = AuditLog.objects.get(batch_count__gt=0)
+
+        resp = self.c.get(reverse('audit_list'))
+        self.assertEqual(resp.status_code, 200)
+        shown = list(resp.context['page'])
+        # partiya ichidagi qatorlar YASHIRILGAN
+        self.assertEqual([l.pk for l in shown if l.batch_id],
+                         [head.pk])
+        row = [l for l in shown if l.pk == head.pk][0]
+        self.assertEqual(len(row.kids), head.batch_count)
+
+        # ?raw=1 — hammasi ko'rinadi
+        raw = self.c.get(reverse('audit_list') + '?raw=1')
+        self.assertGreater(len(list(raw.context['page'])), len(shown))
+
+    def test_head_row_carries_ip_and_user(self):
+        AuditLog.objects.all().delete()
+        self._post_variants()
+        head = AuditLog.objects.get(batch_count__gt=0)
+        self.assertEqual(head.username_snapshot, 'aud1admin')
+        self.assertTrue(head.ip, 'qo\'lda yozilgan audit qatorida IP bo\'lsin')
+
+    def test_price_history_still_sees_every_row(self):
+        """Guruhlash TARIXNI buzmasin — /prices/history/ bolalarni o'qiydi."""
+        AuditLog.objects.all().delete()
+        self._post_variants()
+        rows = (AuditLog.objects
+                .filter(model_name='BranchStock')
+                .filter(changes__has_any_keys=['cost_price', 'sale_price',
+                                               'wholesale_price']))
+        self.assertGreaterEqual(rows.count(), 4)
+        resp = self.c.get(reverse('price_history'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_no_change_writes_nothing(self):
+        AuditLog.objects.all().delete()
+        self._post_variants(v_wholesale=['1100'] * len(self.variants))
+        self.assertEqual(AuditLog.objects.count(), 0,
+                         "o'zgarish yo'q — audit ham yozilmasin")
+
+    def test_csv_export_includes_changes(self):
+        AuditLog.objects.all().delete()
+        self._post_variants()
+        resp = self.c.get(reverse('audit_list') + '?export=csv')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn("O'zgarishlar", body.split('\n')[0])
+
+    def test_pagination_keeps_the_date_filter(self):
+        resp = self.c.get(reverse('audit_list')
+                          + '?date_from=2020-01-01&date_to=2030-01-01')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('date_from=2020-01-01', resp.context['page_qs'])
+        self.assertIn('date_to=2030-01-01', resp.context['page_qs'])
+
+
+class Aud1DeletedSnapshotRenders(TestCase):
+    """O'chirish yozuvi "1 ta o'zgarish" deb yozilib, ichi BO'SH ko'rinardi."""
+
+    def test_snapshot_dict_is_rendered(self):
+        from inventory.templatetags.yurit_extras import audit_val
+        out = str(audit_val({'name': 'Koylak', 'code': 'KOY-0001'}))
+        self.assertIn('Koylak', out)
+        self.assertIn('KOY-0001', out)
+
+    def test_pair_still_renders_as_old_to_new(self):
+        from inventory.templatetags.yurit_extras import audit_val
+        out = str(audit_val(['1000', '1200']))
+        self.assertIn('1000', out)
+        self.assertIn('1200', out)
+        self.assertIn('rarr', out)
+
+    def test_html_in_a_value_is_escaped(self):
+        from inventory.templatetags.yurit_extras import audit_val
+        out = str(audit_val(['<script>x</script>', 'ok']))
+        self.assertNotIn('<script>', out)
+
+
+class Aud1PaymentFixIsOneRow(TestCase):
+    """PAY-1 ilgari IKKI qator yozardi: o'zimizniki + signal qatori."""
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial-AUD1P')
+        self.admin = User.objects.create_user(
+            username='aud1p', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+        self.shift = Shift.objects.create(
+            branch=self.branch, opened_by=self.admin,
+            status=Shift.Status.OPEN, opening_cash=Decimal('0'))
+        self.txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.admin, shift=self.shift,
+            payment_method=SaleTransaction.PaymentMethod.CASH)
+        self.c = Client()
+        self.c.force_login(self.admin)
+        session = self.c.session
+        session['pos_branch_id'] = self.branch.pk
+        session.save()
+
+    def test_one_head_row_with_reason(self):
+        AuditLog.objects.all().delete()
+        resp = self.c.post(
+            '/pos/payment/fix/',
+            data=json.dumps({'txn_id': self.txn.pk, 'method': 'card',
+                             'reason': 'kassir adashdi'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        heads = list(AuditLog.objects.filter(batch_count__gt=0))
+        self.assertEqual(len(heads), 1)
+        head = heads[0]
+        self.assertEqual(head.model_name, 'SaleTransaction')
+        self.assertEqual(head.object_id, str(self.txn.pk))
+        self.assertEqual(head.changes.get('sabab'), 'kassir adashdi')
+        self.assertEqual(head.changes.get('payment_method'), ['cash', 'card'])
+        # smena sahifasidagi so'rov (changes__has_key) hali ham topsin
+        found = (AuditLog.objects
+                 .filter(model_name='SaleTransaction',
+                         object_id=str(self.txn.pk))
+                 .filter(changes__has_key='payment_method')
+                 .filter(changes__has_key='sabab'))
+        self.assertEqual(found.count(), 1)
+
+
+class Aud2RenameDiffIsReadable(TestCase):
+    """AUD-2: uch fazali yozishning vaqtinchalik qiymati auditga tushmasin."""
+
+    def test_no_tmp_marker_in_the_log(self):
+        branch = Branch.objects.create(name='Filial-AUD2')
+        admin = User.objects.create_user(
+            username='aud2', password='x', role=User.Role.ADMIN, branch=branch)
+        cat = Category.objects.create(name='AUD2')
+        p = Product.objects.create(code='AU2-0001', name='T', category=cat)
+        vs = []
+        for c in ('Qora', 'Oq'):
+            v = ProductVariant.objects.create(product=p, size='M', color=c)
+            BranchStock.objects.create(variant=v, branch=branch, stock_count=1,
+                                       cost_price=Decimal('100'),
+                                       sale_price=Decimal('200'))
+            vs.append(v)
+        c = Client()
+        c.force_login(admin)
+        AuditLog.objects.all().delete()
+        # ranglarni ALMASHTIRAMIZ — aynan shu holat uch fazali yozishni
+        # ishga soladi (Qora -> Oq, Oq -> Qora).
+        resp = c.post(reverse('product_variants_edit', args=[p.code]), {
+            'branch': str(branch.pk),
+            'v_id': [str(vs[0].pk), str(vs[1].pk)],
+            'v_size': ['M', 'M'],
+            'v_color': ['Oq', 'Qora'],
+            'v_barcode': [vs[0].barcode or '', vs[1].barcode or ''],
+            'v_cost': ['100', '100'],
+            'v_sale': ['200', '200'],
+            'v_wholesale': ['', ''],
+            'v_stock': ['1', '1'],
+        })
+        self.assertIn(resp.status_code, (200, 302))
+        blob = ' '.join(str(l.changes) + str(l.object_repr)
+                        for l in AuditLog.objects.all())
+        self.assertNotIn('__tmp_', blob,
+                         "vaqtinchalik qiymat audit'ga tushib qolgan")
+        self.assertIn('Qora', blob)
+
+
+class Aud3SaleIsOneAuditRow(TestCase):
+    """AUD-3: bitta chek — bitta audit satri (ilgari ~11 ta edi)."""
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial-AUD3')
+        self.cashier = User.objects.create_user(
+            username='aud3', password='x', role=User.Role.SOTUVCHI,
+            branch=self.branch)
+        Shift.objects.create(branch=self.branch, opened_by=self.cashier,
+                             status=Shift.Status.OPEN,
+                             opening_cash=Decimal('0'))
+        cat = Category.objects.create(name='AUD3')
+        p = Product.objects.create(code='AU3-0001', name='Tovar', category=cat)
+        self.stocks = []
+        for i in range(3):
+            v = ProductVariant.objects.create(product=p, size=str(i), color='Q')
+            self.stocks.append(BranchStock.objects.create(
+                variant=v, branch=self.branch, stock_count=10,
+                cost_price=Decimal('1000'), sale_price=Decimal('2000')))
+        self.c = Client()
+        self.c.force_login(self.cashier)
+        sess = self.c.session
+        sess['pos_branch_id'] = self.branch.pk
+        sess.save()
+
+    def test_checkout_collapses_to_one_visible_row(self):
+        AuditLog.objects.all().delete()
+        resp = self.c.post(CHECKOUT_URL, data=json.dumps({
+            'lines': [{'stock_id': s.pk, 'qty': 1, 'sale_price': '2000'}
+                      for s in self.stocks],
+            'payment_method': 'cash',
+        }), content_type='application/json')
+        self.assertEqual(resp.status_code, 200, resp.content[:400])
+
+        heads = list(AuditLog.objects.filter(batch_count__gt=0))
+        self.assertEqual(len(heads), 1)
+        head = heads[0]
+        self.assertEqual(head.model_name, 'SaleTransaction')
+        self.assertIn('chek #', head.object_repr)
+        # sotuv qatorlari saqlanib qoldi — faqat ichkarida
+        self.assertGreaterEqual(head.batch_count, 4)
+
+        page = self.c.get(reverse('audit_list'))
+        # sotuvchi audit sahifasini ocholmasligi mumkin — admin bilan
+        admin = User.objects.create_user(username='aud3a', password='x',
+                                         role=User.Role.ADMIN,
+                                         branch=self.branch)
+        c2 = Client()
+        c2.force_login(admin)
+        page = c2.get(reverse('audit_list'))
+        self.assertEqual(page.status_code, 200)
+        rows = [l for l in page.context['page'] if l.batch_id]
+        self.assertEqual([l.pk for l in rows], [head.pk])
+
+
+class Aud1PruneDoesNotHideOrphans(TestCase):
+    """Bosh qator o'chsa, bolasi ko'rinmay qolmasin."""
+
+    def test_orphans_become_standalone(self):
+        from django.core.management import call_command
+        old = timezone.now() - timedelta(days=1000)
+        head = AuditLog.objects.create(
+            action=AuditLog.Action.UPDATE, model_name='BranchStock',
+            object_repr='Ombor tuzatildi', batch_id='b' * 32,
+            batch_count=1, created_at=old)
+        kid = AuditLog.objects.create(
+            action=AuditLog.Action.CREATE, model_name='Intake',
+            object_repr='Qabul', batch_id='b' * 32, created_at=old)
+        call_command('prune_audit_log', '--months', '1', verbosity=0)
+        self.assertFalse(AuditLog.objects.filter(pk=head.pk).exists(),
+                         'himoyalanmagan bosh qator o\'chishi kerak')
+        kid.refresh_from_db()
+        self.assertEqual(kid.batch_id, '',
+                         'boshsiz qolgan qator mustaqil bo\'lishi kerak')
+
+
+class Aud1BatchHandleIsUsedInsideItsBlock(unittest.TestCase):
+    """Men buni IKKI marta xato qildim — endi test ushlab tursin.
+
+    `audit_batch(...) as _batch` blokidan CHIQQANDAN keyin `_batch.describe()`
+    yoki `_batch.cancel()` chaqirish JIM ta'sirsiz qoladi: bosh qator
+    allaqachon yozilgan bo'ladi va sarlavha "Sotuv" bo'lib qolaveradi
+    (yoki bekor qilinmaydi). Bu xatoni ko'z bilan payqash qiyin.
+    """
+
+    FILES = ('inventory/views.py', 'inventory/views_pos.py')
+
+    def test_every_batch_call_is_inside_its_with_block(self):
+        import ast
+        import os
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        bad = []
+        for rel in self.FILES:
+            src = open(os.path.join(base, rel), encoding='utf-8').read()
+            tree = ast.parse(src)
+            # (a) `with ... audit_batch(...) as NAME:` bloklari
+            spans = []          # (name, start_line, end_line)
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.With, ast.AsyncWith)):
+                    continue
+                for item in node.items:
+                    call = item.context_expr
+                    if (isinstance(call, ast.Call)
+                            and getattr(call.func, 'id', '') == 'audit_batch'
+                            and isinstance(item.optional_vars, ast.Name)):
+                        spans.append((item.optional_vars.id,
+                                      node.lineno,
+                                      max(getattr(n, 'lineno', node.lineno)
+                                          for n in ast.walk(node))))
+            names = {n for n, _, _ in spans}
+            # (b) har bir `NAME.<method>()` chaqiruvi shu oraliqda bo'lsin
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                f = node.func
+                if not (isinstance(f, ast.Attribute)
+                        and isinstance(f.value, ast.Name)
+                        and f.value.id in names):
+                    continue
+                if not any(nm == f.value.id and lo <= node.lineno <= hi
+                           for nm, lo, hi in spans):
+                    bad.append(f'{rel}:{node.lineno} '
+                               f'{f.value.id}.{f.attr}() blokdan TASHQARIDA')
+                # (c) attribut yozuvi ham
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign):
+                    for t in node.targets:
+                        if (isinstance(t, ast.Attribute)
+                                and isinstance(t.value, ast.Name)
+                                and t.value.id in names
+                                and not any(nm == t.value.id
+                                            and lo <= node.lineno <= hi
+                                            for nm, lo, hi in spans)):
+                            bad.append(f'{rel}:{node.lineno} '
+                                       f'{t.value.id}.{t.attr} = ... TASHQARIDA')
+        self.assertEqual(bad, [], '\n'.join(bad))

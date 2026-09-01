@@ -19,6 +19,7 @@ from .models import (
     Return, CashPayout, Shift, Stocktake, EmployeeDebt, PaymentIntent,
 )
 from .middleware import get_current_user, get_current_ip
+from .audit import current_batch_id   # AUD-1
 
 # Models we audit. Order matters for the dispatcher.
 # SEC-14: ilgari faqat katalog (Product/Variant/...) kuzatilardi — ichki
@@ -90,12 +91,30 @@ def _write_log(action, instance=None, changes=None, model_name=None,
         object_repr=str(instance)[:300] if instance else object_repr,
         changes=changes or {},
         ip=get_current_ip(),
+        # AUD-1: ochiq partiya bo'lsa — bu qator o'sha amalning bir bo'lagi.
+        batch_id=current_batch_id(),
     )
 
 
 # ---- pre_save: capture "before" snapshot on the instance ----
 
+def pin_before(instance):
+    """AUD-2: keyingi save() da "oldingi holat" BAZADAN emas, SHU nusxadan.
+
+    Turlarni tahrirlashda uch fazali yozish bor: rang avval vaqtincha
+    `__tmp_7__` ga o'tkaziladi (unikal cheklov tufayli), keyin haqiqiy
+    qiymat yoziladi. Signal "oldingi" holatni bazadan o'qiganligi uchun
+    audit'da ma'nosiz `rang: __tmp_7__ -> Qora` diffi chiqardi. Bu
+    funksiya HAQIQIY eski holatni muhrlab qo'yadi (bir martalik).
+    """
+    instance._audit_before = _snapshot(instance)
+    instance._audit_pin = True
+
+
 def pre_save_handler(sender, instance, **kwargs):
+    if getattr(instance, '_audit_pin', False):
+        instance._audit_pin = False      # bir martalik muhr
+        return
     if instance.pk:
         try:
             old = sender.objects.get(pk=instance.pk)
@@ -164,11 +183,12 @@ def on_login_failed(sender, credentials, **kwargs):
     username = (credentials or {}).get('username', '')
     AuditLog.objects.create(
         user=None,
-        username_snapshot=username,
+        username_snapshot=username[:150],
         action=AuditLog.Action.LOGIN_FAILED,
         model_name='User',
-        object_repr=f'username={username}',
+        object_repr=f'username={username}'[:300],
         ip=get_current_ip(),
+        batch_id=current_batch_id(),
     )
 
 
