@@ -63,7 +63,17 @@
                             <th style="min-width:100px">Tannarx</th>
                             <th style="min-width:90px">Marja %</th>
                             <th style="min-width:100px">Sotuv narx</th>
-                            <th style="min-width:90px">Ulg. marja %</th>
+                            <th style="min-width:90px">
+                                <span class="d-inline-flex align-items-center gap-1">
+                                    Ulg. marja %
+                                    <button type="button" id="wsmAll"
+                                            class="btn btn-link p-0 border-0 lh-1 text-decoration-none"
+                                            title="Bitta foizni HAMMA qatorga qo'llash"
+                                            aria-label="Ulgurji marjani hammasiga qo'llash">
+                                        <i class="bi bi-arrow-down-square"></i>
+                                    </button>
+                                </span>
+                            </th>
                             <th style="min-width:100px">Ulgurji</th>
                             <th style="min-width:80px">Ombor</th>
                             <th style="width:40px"></th>
@@ -620,6 +630,52 @@ document.getElementById('editForm') && document.getElementById('editForm')
         syncWs(tr, false);
         t.select();
     });
+
+    // WSM-2: ustun sarlavhasidagi tugma — bitta foizni HAMMA qatorga.
+    //
+    // Pastdagi "Hammasiga:" qatori ham shuni qiladi, lekin u ekranning
+    // narigi chekkasida va bir necha maydondan iborat. Ulgurji marja
+    // odatda BITTA son (10%) bo'lgani uchun uni ustunning o'zidan
+    // qo'yish tabiiyroq.
+    //
+    // Oldindan to'ldirilgan so'rov chiqadi: tasodifan bosilganda 79 ta
+    // qator jimgina o'zgarib ketmasin. Baribir bu faqat KATAKLARNI
+    // to'ldiradi — Saqlash bosilmaguncha bazada hech narsa o'zgarmaydi.
+    const wsmAllBtn = document.getElementById('wsmAll');
+    if (wsmAllBtn) {
+        wsmAllBtn.addEventListener('click', function () {
+            const rows = Array.from(body.querySelectorAll('tr'));
+            if (!rows.length) return;
+            // Taklif: birinchi to'ldirilgan qiymat, bo'lmasa 10.
+            let suggest = '';
+            for (const tr of rows) {
+                const el = tr.querySelector('.v-wsmarja');
+                if (el && el.value.trim()) { suggest = el.value.trim(); break; }
+            }
+            if (!suggest) suggest = String(WS_DEFAULT);
+            const raw = window.prompt(
+                'Ulgurji marja (%) — ' + rows.length + ' ta qatorga qo\'llanadi:',
+                suggest);
+            if (raw === null) return;
+            const m = num(raw);
+            if (m === null) return;
+            let done = 0;
+            rows.forEach(function (tr) {
+                const c = tr.querySelector('.v-cost');
+                const wm = tr.querySelector('.v-wsmarja');
+                const w = tr.querySelector('.v-ws');
+                if (!c || !wm || !w) return;
+                wm.value = asMarja(m);
+                const cost = num(c.value);
+                if (cost !== null) w.value = asInt(cost * (1 + m / 100));
+                wm.dispatchEvent(new Event('input', { bubbles: true }));
+                done++;
+            });
+            const icon = wsmAllBtn.innerHTML;
+            wsmAllBtn.innerHTML = '<span class="small text-success">' + done + ' ✓</span>';
+            setTimeout(function () { wsmAllBtn.innerHTML = icon; }, 1600);
+        });
+    }
 
     body.addEventListener('input', function (e) {
         const t = e.target;

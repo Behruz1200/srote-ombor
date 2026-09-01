@@ -5341,3 +5341,28 @@ class Wsm1WholesaleMarginColumn(TestCase):
     def test_default_is_ten(self):
         src = self._tpl()
         self.assertIn('WS_DEFAULT = 10', src)
+
+    # ---- WSM-2: ustun sarlavhasidagi "hammasiga" tugmasi ----
+
+    def test_the_column_header_has_an_apply_to_all_button(self):
+        src = self._tpl()
+        self.assertIn('id="wsmAll"', src)
+        before = src.split('id="wsmAll"')[0][-220:]
+        self.assertIn('type="button"', before,
+                      "tugma type=button bo'lishi shart — aks holda "
+                      "forma yuborilib ketadi")
+
+    def test_apply_to_all_asks_first(self):
+        """Tasodifan bosilganda qatorlar jimgina o'zgarib ketmasin."""
+        src = self._tpl()
+        block = src.split("getElementById('wsmAll')")[1][:1500]
+        self.assertIn('window.prompt', block)
+        self.assertIn('if (raw === null) return;', block,
+                      "Bekor bosilganda hech narsa o'zgarmasligi kerak")
+
+    def test_apply_to_all_only_fills_the_inputs(self):
+        """Tugma bazaga yozmaydi — Saqlash bosilishi kerak."""
+        src = self._tpl()
+        block = src.split("getElementById('wsmAll')")[1][:1500]
+        self.assertNotIn('fetch(', block)
+        self.assertNotIn('.submit()', block)
