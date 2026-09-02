@@ -6124,6 +6124,49 @@ class Core3OneRequestShape(TestCase):
                               f'{url}: "{k}" sahifa havolasida yo\'q')
             self.assertNotIn('page=', qs, url)
 
+    def test_the_pagination_links_actually_render(self):
+        """Kontekstda page_qs bo'lishi YETARLI EMAS.
+
+        `{% firstof page_obj page as pg %}` qiymatni SATRGA aylantiradi va
+        `pg.has_other_pages` jimgina bo'sh chiqadi — sahifalash UMUMAN
+        chizilmay qoladi, lekin sahifa 200 qaytaraveradi. Shuning uchun
+        HAQIQIY HTML tekshiriladi.
+        """
+        import re
+        AuditLog.objects.all().delete()
+        for i in range(120):
+            AuditLog.objects.create(action=AuditLog.Action.LOGIN,
+                                    model_name='User', object_repr=f'u{i}')
+        r = self.c.get('/audit/', {'model': 'User'})
+        html = r.content.decode()
+        links = [x for x in
+                 re.findall(r'class="page-link"\s+href="([^"]+)"', html)
+                 if 'page=' in x]
+        self.assertTrue(links, 'sahifalash havolalari CHIZILMADI')
+        self.assertIn('model=User', links[0],
+                      'havolada filtr yo\'q: ' + links[0])
+
+    def test_firstof_as_is_never_used_for_an_object(self):
+        """`{% firstof a b as x %}` qiymatni SATRGA aylantiradi.
+
+        Bu jim xato: sahifa 200 qaytaradi, lekin blok chizilmaydi.
+        Aynan shu xatoni bir marta qildim — endi test ushlab tursin.
+        """
+        import glob
+        import os
+        import re
+        base = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'templates')
+        bad = []
+        for f in glob.glob(os.path.join(base, '**', '*.html'), recursive=True):
+            src = open(f, encoding='utf-8').read()
+            src = re.sub(r'\{#.*?#\}', '', src, flags=re.S)
+            src = re.sub(r'\{% comment %\}.*?\{% endcomment %\}', '', src,
+                         flags=re.S)
+            for m in re.finditer(r'\{%\s*firstof\b[^%]*\bas\s+\w+\s*%\}', src):
+                bad.append(f'{os.path.basename(f)}: {m.group(0)}')
+        self.assertEqual(bad, [], '; '.join(bad))
+
     def test_every_pagination_block_uses_the_shared_partial(self):
         import glob
         import os

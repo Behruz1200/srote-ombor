@@ -7685,7 +7685,9 @@ def audit_list(request):
     page_qs_nogroup = querystring(request, raw=None)   # CORE-3
 
     return render(request, 'inventory/audit_list.html', {
-        'page': page, 'actions': actions, 'users': users,
+        'page': page,
+        'page_obj': page,          # CORE-3 — _pagination.html shu nomni kutadi
+        'actions': actions, 'users': users,
         'models_list': models_list,
         'f_action': action, 'f_user': user_filter, 'f_model': model, 'q': q,
         'date_from': date_from, 'date_to': date_to,
