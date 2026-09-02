@@ -8,41 +8,34 @@
 <div class="container dash-page">
     <a href="{% url 'customer_list' %}" class="btn btn-link p-0 mb-2">← Mijozlar</a>
 
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Mijoz profili</span>
-                <h1 class="dash-hero__title">
-                    <i class="bi bi-person-circle"></i>
-                    {{ customer.name|default:"(ism kiritilmagan)" }}
-                    <span class="badge {{ segment_class }} ms-1" style="font-size: 0.55em; vertical-align: middle;">{{ segment_label }}</span>
-                </h1>
-                <p class="dash-hero__sub">
-                    {% if customer.phone %}
-                        <a href="tel:{{ customer.phone }}" class="text-decoration-none" style="color: inherit;">
-                            <i class="bi bi-telephone"></i> {{ customer.phone }}
-                        </a>
-                        <a href="sms:{{ customer.phone }}" class="text-decoration-none ms-2" style="color: inherit;">
-                            <i class="bi bi-chat-dots"></i> SMS
-                        </a>
-                    {% endif %}
-                    {% if customer.inn %}
-                        <span>·</span>
-                        <span>STIR: <code>{{ customer.inn }}</code></span>
-                    {% endif %}
-                </p>
-                {% if customer.tags %}
-                    <div style="margin-top: 0.5rem;">
-                        <span class="dash-pill">{{ customer.tags }}</span>
-                    </div>
-                {% endif %}
-                {% if customer.note %}
-                    <p class="mt-2 mb-0" style="color: var(--yrt-fg-muted); font-size: 0.85rem;">{{ customer.note }}</p>
-                {% endif %}
-            </div>
-        </div>
-    </header>
+    {% hero "" icon="bi-person-circle" eyebrow="Mijoz profili" %}
+        {% herotitle %}{{ customer.name|default:"(ism kiritilmagan)" }}
+            <span class="badge {{ segment_class }} ms-1" style="font-size: 0.55em; vertical-align: middle;">{{ segment_label }}</span>{% endherotitle %}
+        {% herosub %}
+            {% if customer.phone %}
+                <a href="tel:{{ customer.phone }}" class="text-decoration-none" style="color: inherit;">
+                    <i class="bi bi-telephone"></i> {{ customer.phone }}
+                </a>
+                <a href="sms:{{ customer.phone }}" class="text-decoration-none ms-2" style="color: inherit;">
+                    <i class="bi bi-chat-dots"></i> SMS
+                </a>
+            {% endif %}
+            {% if customer.inn %}
+                <span>·</span>
+                <span>STIR: <code>{{ customer.inn }}</code></span>
+            {% endif %}
+        {% endherosub %}
+        {% heroafter %}
+            {% if customer.tags %}
+                <div style="margin-top: 0.5rem;">
+                    <span class="dash-pill">{{ customer.tags }}</span>
+                </div>
+            {% endif %}
+            {% if customer.note %}
+                <p class="mt-2 mb-0" style="color: var(--yrt-fg-muted); font-size: 0.85rem;">{{ customer.note }}</p>
+            {% endif %}
+        {% endheroafter %}
+    {% endhero %}
 
     <!-- Mijoz KPI strip -->
     <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Mijoz xulosasi">

@@ -4332,7 +4332,11 @@ window.yuritScan = (function () {
 {% comment %} Markazlashgan ekran klaviaturasi (Latin US) — butun tizimda {% endcomment %}
 <style>
 #oskToggle {
-    position: fixed; right: 16px; bottom: 16px; z-index: 3000;
+    /* KBD-4: z-index klaviaturadan YUQORI bo'lishi shart. Ilgari 3000 edi,
+       klaviatura esa 3001 — ochilgach dumaloq tugma uning ORQASIDA qolar va
+       kassir klaviaturani o'sha tugma bilan yopa olmasdi. */
+    position: fixed; right: 16px; bottom: 16px; z-index: 3002;
+    transition: bottom .18s ease;
     width: 48px; height: 48px; border-radius: var(--yrt-radius-pill);
     border: none; background: var(--yrt-primary); color: #fff;
     box-shadow: var(--yrt-shadow-indigo); cursor: pointer;
@@ -4340,6 +4344,8 @@ window.yuritScan = (function () {
     font-size: 20px;
 }
 #oskToggle:hover { background: var(--yrt-primary-deep); }
+/* KBD-4: klaviatura ochilganda tugma uning TEPASIGA ko'chadi. */
+body.osk-is-open #oskToggle { bottom: calc(var(--osk-h, 0px) + 14px); }
 #osk {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 3001;
     background: var(--yrt-surface);
@@ -4369,6 +4375,23 @@ window.yuritScan = (function () {
     text-overflow: ellipsis; white-space: nowrap;
 }
 .osk-target b { color: var(--yrt-fg); }
+/* KBD-4: kassir yozayotgan MATNNI shu yerda ham ko'radi — katak
+   ro'yxatda pastda qolib ketsa ham nima yozilayotgani bilinadi. */
+.osk-value {
+    flex: 1 1 200px; min-width: 0; font-size: 15px; font-weight: 700;
+    color: var(--yrt-fg); background: var(--yrt-surface-3);
+    border: 1px solid var(--yrt-border); border-radius: var(--dash-radius-sm);
+    padding: 4px 10px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-variant-numeric: tabular-nums; min-height: 30px;
+}
+.osk-value:empty::before { content: '—'; color: var(--yrt-fg-muted); }
+.osk-close {
+    border: 1px solid var(--yrt-border); background: var(--yrt-surface-2);
+    color: var(--yrt-fg-muted); border-radius: var(--yrt-radius-pill);
+    width: 32px; height: 32px; font-size: 16px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.osk-close:hover { background: var(--yrt-danger); border-color: var(--yrt-danger); color: #fff; }
 .osk-mode { display: flex; gap: 6px; }
 .osk-mode button {
     border: 1px solid var(--yrt-border); background: var(--yrt-surface-2);
@@ -4434,11 +4457,15 @@ window.yuritScan = (function () {
 <div id="osk" aria-hidden="true">
     <div class="osk-head">
         <div class="osk-target" id="oskTarget">Katakni tanlang</div>
+        <div class="osk-value" id="oskValue"></div>
         <div class="osk-hint" id="oskHint"></div>
         <div class="osk-mode">
+            <button type="button" data-osk-mode="auto" title="Katak turiga qarab o'zi tanlaydi">AUTO</button>
             <button type="button" data-osk-mode="abc">ABC</button>
             <button type="button" data-osk-mode="123">123</button>
         </div>
+        <button type="button" class="osk-close" id="oskClose"
+                title="Yopish (Esc)" aria-label="Klaviaturani yopish">&times;</button>
     </div>
     <div class="osk-inner">
         <div class="osk-main" id="oskMain"></div>
@@ -4460,10 +4487,13 @@ window.yuritScan = (function () {
     // Layout: [base, shifted] juftliklar yoki maxsus tugmalar {k,label,w}
     const ROWS = [
         [['`','~'],['1','!'],['2','@'],['3','#'],['4','$'],['5','%'],['6','^'],['7','&'],['8','*'],['9','('],['0',')'],['-','_'],['=','+'],{k:'bksp',label:'⌫',w:1.7,sp:1}],
-        [['q','Q'],['w','W'],['e','E'],['r','R'],['t','T'],['y','Y'],['u','U'],['i','I'],['o','O'],['p','P'],['[','{'],[']','}'],['\\','|']],
+        [['q','Q'],['w','W'],['e','E'],['r','R'],['t','T'],['y','Y'],['u','U'],['i','I'],['o','O'],['p','P'],['ʻ','ʼ'],['[','{'],[']','}']],
         [{k:'caps',label:'Caps',w:1.7,sp:1},['a','A'],['s','S'],['d','D'],['f','F'],['g','G'],['h','H'],['j','J'],['k','K'],['l','L'],[';',':'],["'",'"'],{k:'enter',label:'⏎ Enter',w:2,sp:1}],
         [{k:'shift',label:'⇧ Shift',w:2.2,sp:1},['z','Z'],['x','X'],['c','C'],['v','V'],['b','B'],['n','N'],['m','M'],[',','<'],['.','>'],['/','?'],{k:'shift',label:'⇧ Shift',w:2.2,sp:1}],
-        [{k:'hide',label:'▼ Yashirish',w:2,sp:1},{k:'space',label:'Bo‘sh joy',w:6,sp:1},{k:'bksp',label:'⌫',w:1.7,sp:1}],
+        [{k:'prev',label:'⇤',w:1,sp:1},{k:'next',label:'⇥ Keyingi',w:2,sp:1},
+         {k:'space',label:'Bo‘sh joy',w:5,sp:1},
+         {k:'clear',label:'Tozalash',w:1.6,sp:1},
+         {k:'hide',label:'▼ Yashirish',w:1.8,sp:1}],
     ];
 
     // Raqamli blok (o'ng tomon) — grid, 3 ustun
@@ -4473,11 +4503,16 @@ window.yuritScan = (function () {
         {t:'7'},{t:'8'},{t:'9'},{k:'bksp',label:'⌫'},
         {t:'4'},{t:'5'},{t:'6'},{k:'clear',label:'C'},
         {t:'1'},{t:'2'},{t:'3'},{t:'000'},
-        {t:'0',span:2},{t:'.'},{k:'enter',label:'⏎',accent:1},
+        {t:'0'},{t:','},{t:'.'},{k:'enter',label:'⏎',accent:1},
         // KBD-3: 123 rejimida ham yopish tugmasi bo'lsin — ilgari u faqat
-        // ABC qatorida edi va raqamli rejimda klaviaturani yopib bo'lmasdi
-        // (faqat pastdagi dumaloq tugma orqali).
-        {k:'hide',label:'▼ Yashirish',span:4},
+        // ABC qatorida edi va raqamli rejimda klaviaturani yopib bo'lmasdi.
+        // KBD-4: keyingi katakka o'tish ham shu yerda — formani to'ldirishда
+        // kassir sichqonchaga qo'l uzatmasin.
+        // KBD-4: kataklar bo'ylab yurish IKKALA rejimda ham bo'lsin.
+        // Ilgari ular faqat ABC qatorida edi: raqamli katakka o'tish
+        // bilanoq rejim 123 ga almashib, ⇤/⇥ ko'zdan yo'qolardi.
+        {k:'prev',label:'⇤'},{k:'next',label:'⇥'},
+        {k:'hide',label:'▼ Yashirish',span:2},
     ];
 
     let shift = false, caps = false, lastField = null;
@@ -4487,6 +4522,8 @@ window.yuritScan = (function () {
     // Ilgari tanlov fokus o'zgarishi bilan yo'qolardi: kassir 123 ni tanlab,
     // keyingi katakka o'tganda yana QWERTY chiqib qolardi.
     let mode = sGet('yurit_osk_mode') || 'auto';
+    const VALUE = document.getElementById('oskValue');
+    const CLOSE = document.getElementById('oskClose');
     const TARGET = document.getElementById('oskTarget');
     const HINT = document.getElementById('oskHint');
 
@@ -4503,18 +4540,100 @@ window.yuritScan = (function () {
         return isNumericField(field()) ? '123' : 'abc';
     }
 
-    // Katakning insoniy nomi: label > placeholder > aria-label > id
+    // KBD-4: katakning insoniy NOMI.
+    //
+    // Ilgari birinchi navbatda PLACEHOLDER olinardi. Placeholder esa
+    // ko'pincha NOM emas, MISOL bo'ladi: skaner katagida u
+    // "OYO-0001, nike, ko'ylak..." — klaviatura tepasida shu yozilib
+    // turardi va hech narsa anglatmasdi. Endi tartib boshqacha:
+    //   1) data-osk-label  — sahifa o'zi aytgan nom (eng ishonchli);
+    //   2) <label for>     — formadagi haqiqiy yorliq;
+    //   3) aria-label / title;
+    //   4) name atributi   — "customer_phone" -> "Customer phone";
+    //   5) placeholder     — FAQAT qisqa va misolga o'xshamasa.
+    function tidy(t) {
+        t = (t || '').replace(/\s+/g, ' ').trim().replace(/[:*]\s*$/, '');
+        return t.length > 32 ? t.slice(0, 31) + '…' : t;
+    }
+    function looksLikeExample(t) {
+        // "a, b, c..." yoki "..." bilan tugagan matn — bu MISOL, nom emas
+        return /\.{2,}$/.test(t) || (t.match(/,/g) || []).length >= 1
+               || t.length > 32;
+    }
     function fieldName(el) {
         if (!el) return '';
+        const dl = (el.dataset && el.dataset.oskLabel || '').trim();
+        if (dl) return tidy(dl);
         if (el.id) {
-            const lab = document.querySelector('label[for="' + el.id + '"]');
-            if (lab && lab.textContent.trim()) return lab.textContent.trim();
+            const lab = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+            if (lab && lab.textContent.trim()) return tidy(lab.textContent);
         }
-        const ph = (el.getAttribute('placeholder') || '').trim();
-        if (ph) return ph;
+        const wrap = el.closest('label');
+        if (wrap) {
+            const t = wrap.textContent.replace(el.value || '', '').trim();
+            if (t) return tidy(t);
+        }
         const al = (el.getAttribute('aria-label') || '').trim();
-        if (al) return al;
-        return el.id || 'katak';
+        if (al) return tidy(al);
+        const ti = (el.getAttribute('title') || '').trim();
+        if (ti) return tidy(ti);
+        const nm = (el.getAttribute('name') || '').trim();
+        // Butun tizimda takrorlanadigan katak nomlari — har bir shablonga
+        // alohida yorliq yozib chiqmaslik uchun shu yerda tarjima qilamiz.
+        const KNOWN = {
+            q: 'Qidiruv', search: 'Qidiruv', date_from: 'Sanadan',
+            date_to: 'Sanagacha', branch: 'Filial', category: 'Kategoriya',
+            phone: 'Telefon', name: 'Nom', note: 'Izoh', reason: 'Sabab',
+            amount: 'Summa', qty: 'Miqdor', price: 'Narx',
+            barcode: 'Shtrix-kod', code: 'Kod', username: 'Foydalanuvchi',
+            password: 'Parol',
+        };
+        if (nm && KNOWN[nm.toLowerCase()]) return KNOWN[nm.toLowerCase()];
+        const ph = (el.getAttribute('placeholder') || '').trim();
+        // 1-2 harfli name ("q", "id") — hech narsa anglatmaydi, o'tkazamiz
+        if (nm && nm.length > 2 && !/^(csrf|_)/.test(nm)) {
+            return tidy(nm.replace(/[_\-]+/g, ' ')
+                          .replace(/^./, c => c.toUpperCase()));
+        }
+        if (ph && !looksLikeExample(ph)) return tidy(ph);
+        if (ph) return tidy(ph.split(',')[0].replace(/\.+$/, ''));
+        return 'katak';
+    }
+
+    // KBD-4: sahifadagi TARTIB bo'yicha keyingi/oldingi yoziladigan katak.
+    function editableFields() {
+        return [].slice.call(document.querySelectorAll('input, textarea'))
+            .filter(function (el) {
+                if (!isEditable(el)) return false;
+                if (el.closest('#osk')) return false;
+                if (el.type === 'hidden') return false;
+                return !!(el.offsetWidth || el.offsetHeight
+                          || el.getClientRects().length);
+            });
+    }
+    function step(dir) {
+        const list = editableFields();
+        if (!list.length) return;
+        const cur = field();
+        let i = cur ? list.indexOf(cur) : -1;
+        i = (i < 0) ? 0 : (i + dir + list.length) % list.length;
+        const nx = list[i];
+        nx.focus();
+        try { nx.setSelectionRange(nx.value.length, nx.value.length); } catch (e) {}
+        reveal(nx);
+        lastField = nx;
+        render(); updateTarget();
+    }
+
+    // KBD-4: katak klaviatura ostida qolib ketmasin.
+    function reveal(el) {
+        if (!el || !KB.classList.contains('osk-open')) return;
+        const top = KB.getBoundingClientRect().top;
+        const r = el.getBoundingClientRect();
+        if (r.bottom > top - 8 || r.top < 8) {
+            try { el.scrollIntoView({block: 'center', behavior: 'smooth'}); }
+            catch (e) { el.scrollIntoView(); }
+        }
     }
 
     function updateTarget() {
@@ -4525,16 +4644,24 @@ window.yuritScan = (function () {
         if (!TARGET) return;
         if (!el) {
             TARGET.innerHTML = 'Avval katakni bosing';
+            if (VALUE) VALUE.textContent = '';
         } else {
             el.classList.add('yrt-osk-field');
             const nm = fieldName(el);
             TARGET.innerHTML = 'Yozilyapti: <b>' + nm.replace(/[<>&]/g, '') + '</b>';
+            if (VALUE) VALUE.textContent = el.value || '';
         }
         const em = effectiveMode();
         KB.classList.toggle('osk-num', em === '123');
         KB.classList.toggle('osk-abc', em === 'abc');
+        // KBD-4: "AUTO" alohida tugma. Ilgari tanlangan rejim ABADIY
+        // yopishib qolardi: kassir bir marta ABC bossa, raqamli kataklarda
+        // ham QWERTY chiqaverardi. Endi AUTO — sukut bo'yicha holat, va
+        // uni istalgan vaqtda qaytarish mumkin.
         document.querySelectorAll('.osk-mode button').forEach(function (b) {
-            b.classList.toggle('is-on', b.dataset.oskMode === em);
+            const m = b.dataset.oskMode;
+            b.classList.toggle('is-on', m === mode
+                                        || (mode === 'auto' && m === 'auto'));
         });
         // KBD-1: POS sahifasida tezkor yorliqlarni KO'RSATAMIZ — ilgari ular
         // faqat yordam oynasida yashiringan edi va yangi sotuvchi bilmasdi.
@@ -4560,7 +4687,24 @@ window.yuritScan = (function () {
     document.addEventListener('focusin', function(e){
         if (!isEditable(e.target)) return;
         lastField = e.target;   // KBD-3: tanlangan rejim saqlanadi
-        if (KB.classList.contains('osk-open')) { render(); updateTarget(); }
+        if (KB.classList.contains('osk-open')) {
+            render(); updateTarget(); reveal(e.target);
+        }
+    });
+
+    // KBD-4: kassir haqiqiy klaviaturada yozsa ham tepadagi ko'rinish
+    // yangilanib tursin — aks holda u eskirgan qiymatni ko'rsatardi.
+    document.addEventListener('input', function (e) {
+        if (VALUE && KB.classList.contains('osk-open') && e.target === field()) {
+            VALUE.textContent = e.target.value || '';
+        }
+    });
+
+    // KBD-4: Esc — klaviaturani yopadi.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && KB.classList.contains('osk-open')) {
+            setOpen(false);
+        }
     });
 
     function field(){
@@ -4585,6 +4729,7 @@ window.yuritScan = (function () {
             } else { el.value = (el.value || '') + ch; }
         } catch (err) { el.value = (el.value || '') + ch; }
         el.dispatchEvent(new Event('input', {bubbles:true}));
+        if (VALUE) VALUE.textContent = el.value || '';
     }
 
     function backspace(){
@@ -4598,6 +4743,7 @@ window.yuritScan = (function () {
             } else { el.value = (el.value || '').slice(0, -1); }
         } catch (err) { el.value = (el.value || '').slice(0, -1); }
         el.dispatchEvent(new Event('input', {bubbles:true}));
+        if (VALUE) VALUE.textContent = el.value || '';
     }
 
     function enter(){
@@ -4657,6 +4803,24 @@ window.yuritScan = (function () {
     // Fokusni yo'qotmaslik uchun — bosishда default (blur) ni to'xtatamiz
     KB.addEventListener('mousedown', function(e){ e.preventDefault(); });
 
+    // KBD-4: ⌫ ni BOSIB TURGANDA takrorlanadi. Ilgari uzun matnni
+    // o'chirish uchun tugmani 20 marta bosish kerak edi.
+    (function () {
+        let t1 = null, t2 = null;
+        function stop(){ clearTimeout(t1); clearInterval(t2); t1 = t2 = null; }
+        KB.addEventListener('pointerdown', function (e) {
+            const b = e.target.closest('.osk-key');
+            if (!b || b.dataset.kind !== 'bksp') return;
+            t1 = setTimeout(function () {
+                t2 = setInterval(backspace, 60);
+            }, 420);
+        });
+        ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) {
+            KB.addEventListener(ev, stop);
+        });
+        window.addEventListener('blur', stop);
+    })();
+
     KB.addEventListener('click', function(e){
         const b = e.target.closest('.osk-key'); if (!b) return;
         const kind = b.dataset.kind;
@@ -4679,17 +4843,34 @@ window.yuritScan = (function () {
         if (kind === 'enter') { enter(); return; }
         if (kind === 'shift') { shift = !shift; render(); return; }
         if (kind === 'caps')  { caps = !caps; render(); return; }
+        if (kind === 'next')  { step(1); return; }   // KBD-4
+        if (kind === 'prev')  { step(-1); return; }  // KBD-4
         if (kind === 'hide')  { setOpen(false); return; }
     });
 
     function setOpen(open){
         KB.classList.toggle('osk-open', open);
         KB.setAttribute('aria-hidden', open ? 'false' : 'true');
+        document.body.classList.toggle('osk-is-open', open);
         TOGGLE.innerHTML = open ? '<i class="bi bi-keyboard-fill"></i>' : '<i class="bi bi-keyboard"></i>';
-        document.body.style.paddingBottom = open ? (KB.offsetHeight + 12) + 'px' : '';
+        TOGGLE.title = open ? 'Klaviaturani yopish' : 'Ekran klaviaturasi';
+        const h = open ? KB.offsetHeight : 0;
+        // KBD-4: balandlik CSS'ga uzatiladi — dumaloq tugma klaviatura
+        // tepasiga ko'chadi (ilgari uning ORQASIDA qolib ketardi).
+        document.documentElement.style.setProperty('--osk-h', h + 'px');
+        document.body.style.paddingBottom = open ? (h + 12) + 'px' : '';
         sSet('yurit_osk_open', open ? '1' : '0');
-        if (open) { updateTarget(); }
-        else {
+        if (open) {
+            // KBD-4: hech qaysi katak tanlanmagan bo'lsa — birinchisini
+            // O'ZI tanlaydi. Ilgari "Avval katakni bosing" deb turardi va
+            // klaviatura ochilgani bilan hech narsa qilmasdi.
+            if (!field()) {
+                const list = editableFields();
+                if (list.length) { list[0].focus(); lastField = list[0]; }
+            }
+            updateTarget();
+            reveal(field());
+        } else {
             document.querySelectorAll('.yrt-osk-field').forEach(function (n) {
                 n.classList.remove('yrt-osk-field');
             });
@@ -4703,13 +4884,33 @@ window.yuritScan = (function () {
             sSet('yurit_osk_mode', mode);
             render();
             updateTarget();
+            // rejim almashganda klaviatura balandligi o'zgaradi
+            if (KB.classList.contains('osk-open')) {
+                const h = KB.offsetHeight;
+                document.documentElement.style.setProperty('--osk-h', h + 'px');
+                document.body.style.paddingBottom = (h + 12) + 'px';
+                reveal(field());
+            }
         });
     });
 
+    TOGGLE.addEventListener('mousedown', function (e) { e.preventDefault(); });
     TOGGLE.addEventListener('click', function(){
         const willOpen = !KB.classList.contains('osk-open');
         if (willOpen && !MAIN.children.length) render();
         setOpen(willOpen);
+    });
+    if (CLOSE) {
+        CLOSE.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        CLOSE.addEventListener('click', function () { setOpen(false); });
+    }
+    // Oyna o'lchami o'zgarsa balandlik ham o'zgaradi
+    window.addEventListener('resize', function () {
+        if (KB.classList.contains('osk-open')) {
+            const h = KB.offsetHeight;
+            document.documentElement.style.setProperty('--osk-h', h + 'px');
+            document.body.style.paddingBottom = (h + 12) + 'px';
+        }
     });
 
     render();

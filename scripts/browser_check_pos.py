@@ -135,11 +135,20 @@ with sync_playwright() as pw:
     def wholesale():
         page.click('label[for="priceModeWholesale"]', force=True)
         page.wait_for_timeout(400)
+        # DIQQAT: katakni TARTIB RAQAMI bilan tanlamaymiz.
+        # Ilgari shu yerda `querySelectorAll("td")[2]` turardi va ROW-1
+        # jadvalga "#" ustunini qo'shgach indeks siljib, tekshiruv MIQDOR
+        # katagini o'qiy boshlagan edi ('−' qaytarardi) — testning o'zi
+        # sinib, mahsulotda xato bordek ko'rinardi.
+        # Endi katakning O'Z nomi bor: data-cell="price".
         cells = page.eval_on_selector_all(
             '#cartBody tr:not([id])',
-            'els => els.map(t => t.querySelectorAll("td")[2].textContent.trim())')
-        got = (cells or [''])[0].replace(' ', ' ')
-        return ('8' in got), f'ulgurji narx: {got[:20]}'
+            '''els => els.map(t => {
+                 const c = t.querySelector('[data-cell="price"]');
+                 return c ? c.textContent.trim() : '(narx katagi yo`q)';
+               })''')
+        got = (cells or [''])[0].replace('\u00a0', ' ')
+        return ('8' in got), f'ulgurji narx: {got[:24]}'
 
     check('"Boshqa summa" kalkulyatori', keypad)
     check('skaner savatga qo\'shadi', scan)

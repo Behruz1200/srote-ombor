@@ -16,12 +16,13 @@ Ishlatish (yurit_extras dagi {% templatetag openblock %} hero {% templatetag clo
     {% templatetag openblock %} endhero {% templatetag closeblock %}
 {% endcomment %}
 <header class="dash-hero">
-    <div class="dash-hero__glow"></div>
-    <div class="dash-hero__inner">
-        <div class="dash-hero__heading">
+    {% if glow != 0 %}<div class="dash-hero__glow"></div>{% endif %}
+    <div class="dash-hero__inner"{% if inner_style %} style="{{ inner_style }}"{% endif %}>
+        <div class="dash-hero__heading"{% if heading_style %} style="{{ heading_style }}"{% endif %}>
             {% if eyebrow %}<span class="dash-hero__eyebrow"><span class="dash-pulse"></span> {{ eyebrow }}</span>{% endif %}
             <h1 class="dash-hero__title">{% if icon %}<i class="bi {{ icon }}"></i> {% endif %}{{ title }}</h1>
             {% if sub %}<p class="dash-hero__sub">{{ sub }}</p>{% endif %}
+            {% if after %}{{ after }}{% endif %}
         </div>
         {% if extra %}{{ extra }}{% endif %}
         {% if actions %}<div class="dash-hero__actions">

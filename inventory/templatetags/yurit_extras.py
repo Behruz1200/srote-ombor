@@ -265,6 +265,9 @@ register.tag('herotitle', _slot_tag('herotitle', 'title'))
 # {% heroextra %} — sarlavha yonidagi standart bo'lmagan blok
 # (masalan "Jami ochiq qarz" ustuni). Amallar tugmasi EMAS.
 register.tag('heroextra', _slot_tag('heroextra', 'extra'))
+# {% heroafter %} — sarlavha BLOKI ichida, tavsifdan keyin turadigan
+# qo'shimcha (teglar, izoh, ichki tugmalar qatori).
+register.tag('heroafter', _slot_tag('heroafter', 'after'))
 
 
 @register.tag('hero')

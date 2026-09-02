@@ -5,23 +5,15 @@
 <div class="container dash-page">
     <a href="{% url 'shift_detail' shift.pk %}" class="btn btn-link p-0 mb-2">← Smen #{{ shift.pk }}</a>
 
-    <header class="dash-hero">
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Qaytarishlar</span>
-                <h1 class="dash-hero__title"><i class="bi bi-arrow-counterclockwise"></i>
-                    Smen #{{ shift.pk }} — qaytarishlar tafsiloti</h1>
-                <p class="dash-hero__sub">
-                    <span>{{ shift.branch.name }}</span> ·
-                    <span>{{ shift.opened_at|date:"d.m.Y H:i" }} — {% if shift.closed_at %}{{ shift.closed_at|date:"d.m.Y H:i" }}{% else %}ochiq{% endif %}</span>
-                </p>
-            </div>
-            <div class="dash-hero__actions">
-                <a href="{% url 'shift_receipt' shift.pk %}" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-receipt"></i> <span>Z-hisobot</span></a>
-            </div>
-        </div>
-    </header>
+    {% hero "" icon="bi-arrow-counterclockwise" eyebrow="Qaytarishlar" glow=0 %}
+        {% herotitle %}Smen #{{ shift.pk }} — qaytarishlar tafsiloti{% endherotitle %}
+        {% herosub %}
+            <span>{{ shift.branch.name }}</span> ·
+            <span>{{ shift.opened_at|date:"d.m.Y H:i" }} — {% if shift.closed_at %}{{ shift.closed_at|date:"d.m.Y H:i" }}{% else %}ochiq{% endif %}</span>
+        {% endherosub %}
+        <a href="{% url 'shift_receipt' shift.pk %}" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-receipt"></i> <span>Z-hisobot</span></a>
+    {% endhero %}
 
     <div class="alert alert-info small">
         <i class="bi bi-info-circle"></i>

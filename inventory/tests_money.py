@@ -3478,8 +3478,33 @@ class Kbd3ModesAreSeparateAndRemembered(MoneyTestBase):
         self.assertIn("[['`','~'],['1','!']", self.html)
 
     def test_hide_button_exists_in_both_modes(self):
-        self.assertIn("{k:'hide',label:'▼ Yashirish',w:2,sp:1}", self.html)   # ABC
-        self.assertIn("{k:'hide',label:'▼ Yashirish',span:4}", self.html)      # 123
+        """Ikkala rejimda ham yopish tugmasi bo'lsin.
+
+        Ilgari bu test tugmaning ANIQ ta'rifiga (kengligi bilan birga)
+        bog'langan edi va joylashuv o'zgarishi bilanoq sinar edi —
+        garchi tugmaning O'ZI joyida turgan bo'lsa ham. Endi NIYAT
+        tekshiriladi: har bir qatorlar to'plamida 'hide' tugmasi bor.
+        """
+        import re
+        for name, pat in (('ABC', r'const ROWS = \[(.*?)\n    \];'),
+                          ('123', r'const NUM = \[(.*?)\n    \];')):
+            m = re.search(pat, self.html, re.S)
+            self.assertIsNotNone(m, f'{name} joylashuvi topilmadi')
+            self.assertIn("k:'hide'", m.group(1),
+                          f'{name} rejimida yopish tugmasi yo\'q')
+
+    def test_field_navigation_exists_in_both_modes(self):
+        """KBD-4: kataklar bo'ylab yurish IKKALA rejimda ham bo'lsin.
+
+        Aks holda raqamli katakka o'tish bilanoq rejim 123 ga almashib,
+        ⇤/⇥ ko'zdan yo'qolardi va kassir sichqonchaga qo'l uzatardi.
+        """
+        import re
+        for name, pat in (('ABC', r'const ROWS = \[(.*?)\n    \];'),
+                          ('123', r'const NUM = \[(.*?)\n    \];')):
+            blk = re.search(pat, self.html, re.S).group(1)
+            self.assertIn("k:'next'", blk, f'{name}: keyingi katak tugmasi yo\'q')
+            self.assertIn("k:'prev'", blk, f'{name}: oldingi katak tugmasi yo\'q')
 
     def test_mode_is_read_from_storage_on_load(self):
         self.assertIn("sGet('yurit_osk_mode')", self.html)
@@ -6210,12 +6235,11 @@ class Core4SharedPageChrome(TestCase):
     faylda klass nomi noto'g'ri yozilsa hech kim sezmasdi.
     """
 
-    # Ataylab qoldirilgan uchta istisno — ularning ichi haqiqatan boshqa:
-    HERO_EXCEPTIONS = {
-        'product_detail.html',      # rasm bilan yonma-yon maxsus joylashuv
-        'customer_detail.html',     # sarlavha ichida teglar va izoh bloki
-        'shift_returns.html',       # tarixan `dash-hero__glow` siz
-    }
+    # Istisno YO'Q: 40 ta blokning HAMMASI umumiy tegdan o'tadi.
+    # Uchta "murakkab" sahifa ham ko'chirildi — ular uchun {% herotitle %},
+    # {% herosub %}, {% heroafter %}, {% heroextra %} slotlari va
+    # inner_style / heading_style / glow parametrlari qo'shildi.
+    HERO_EXCEPTIONS = set()
 
     def _templates(self):
         import glob
@@ -6275,6 +6299,44 @@ class Core4SharedPageChrome(TestCase):
         # slot amallar orasida IKKI MARTA chizilmasin
         self.assertEqual(html.count('Chek #7'), 1)
         self.assertEqual(html.count('HTML ham'), 1)
+
+    def test_glow_can_be_turned_off(self):
+        """Bitta sahifa (shift_returns) tarixan `glow` siz edi."""
+        from django.template import Context, Template
+        on = Template('{% load yurit_extras %}{% hero "A" %}{% endhero %}'
+                      ).render(Context({}))
+        off = Template('{% load yurit_extras %}{% hero "A" glow=0 %}{% endhero %}'
+                       ).render(Context({}))
+        self.assertIn('dash-hero__glow', on)
+        self.assertNotIn('dash-hero__glow', off)
+
+    def test_after_slot_lands_inside_the_heading(self):
+        from django.template import Context, Template
+        html = Template(
+            '{% load yurit_extras %}{% hero "A" sub="S" %}'
+            '{% heroafter %}<p id="x">qo\'shimcha</p>{% endheroafter %}'
+            '{% endhero %}').render(Context({}))
+        head = html[html.index('dash-hero__heading'):html.index('</header>')]
+        self.assertIn('id="x"', head.split('</div>')[0] + '</div>')
+        self.assertEqual(html.count('qo\'shimcha'), 1)
+
+    def test_multiline_hero_tags_are_never_used(self):
+        """Django lekseri QATOR UZILGAN {% ... %} ni teg deb bilmaydi.
+
+        `tag_re` da re.DOTALL yo'q — shu bois ko'p qatorli teg jimgina
+        oddiy MATN bo'lib chiqadi va sahifa "Invalid block tag" bilan
+        yiqiladi. Bu xatoni bir marta qildim; test qaytarmasin.
+        """
+        import re
+        bad = []
+        for f in self._templates():
+            src = open(f, encoding='utf-8').read()
+            for m in re.finditer(r'\{%[^%]*?\n', src):
+                frag = m.group(0)
+                if '%}' in frag:
+                    continue
+                bad.append(f'{f.split("/")[-1]}: {frag.strip()[:60]}')
+        self.assertEqual(bad, [], '; '.join(bad[:5]))
 
     def test_the_modal_tag_renders_the_expected_shell(self):
         from django.template import Context, Template

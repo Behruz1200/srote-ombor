@@ -42,6 +42,29 @@
 .pos-side .payment-btn:hover { transform: translateY(-1px); }
 .pos-side .payment-btn:active { transform: scale(0.97); transition-duration: 80ms; }
 .pos-side .payment-btn i { font-size: 1rem; }
+/* KEY-1: F-tugma yorliqlari BIR QATORDA tursin.
+   Ular savat ustunida (312-445px) turadi, matni esa ~500px joy talab
+   qilardi — shu bois ikki (tor ekranda hatto to'rt) qatorga o'ralib,
+   savat va "Yakunlash" tugmasi pastga siljirdi. Endi: o'ralmaydi,
+   zichroq yozuv, sig'masa gorizontal SURILADI (yorliq yo'qolmaydi).
+   O'ng chetdagi soyalanish yana yorliq borligini bildiradi. */
+#posKeyHints {
+    gap: .3rem .45rem;
+    font-size: .72rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* eski Edge */
+}
+#posKeyHints::-webkit-scrollbar { display: none; }
+#posKeyHints > span { white-space: nowrap; flex: 0 0 auto; }
+#posKeyHints.is-scrollable {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+#posKeyHints .pos-key { font-size: .68rem; }
+
 /* Patch 3: to'lov usuli tugmasidagi klaviatura yorlig'i */
 .pos-key {
     display: inline-block; min-width: 1.1em; padding: 0 .3em;
@@ -554,6 +577,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
                 </div>
                 <div class="d-flex gap-2">
                     <input type="text" id="scanInput" class="form-control form-control-lg"
+                           data-osk-label="Skaner / qidiruv"
                            placeholder="OYO-0001, nike, ko'ylak..."
                            autofocus autocomplete="off"
                            style="font-size: 1.35rem;">
@@ -716,6 +740,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
                 <div class="row g-1">
                     <div class="col-6">
                         <input type="number" id="orderDiscount" class="form-control form-control-sm"
+                               data-osk-label="Chek chegirmasi"
                                min="0" step="1000" placeholder="so'm" inputmode="numeric">
                     </div>
                     <div class="col-6">
@@ -733,7 +758,8 @@ body.pos-wholesale #wsBanner { display: flex !important; }
                 <div class="row g-1 mt-0" id="discReasonOtherWrap" style="display:none;">
                     <div class="col-12">
                         <input type="text" id="discountReasonOther" class="form-control form-control-sm mt-1"
-                               maxlength="120" placeholder="Sababni qisqacha yozing">
+                               maxlength="120" data-osk-label="Chegirma sababi"
+                               placeholder="Sababni qisqacha yozing">
                     </div>
                 </div>
             </div>
@@ -830,10 +856,12 @@ body.pos-wholesale #wsBanner { display: flex !important; }
                 <label class="form-label small text-uppercase mb-1">Mijoz (ixtiyoriy)</label>
                 <div class="row g-1 mb-1">
                     <div class="col-6">
-                        <input type="text" id="customerName" class="form-control form-control-sm" placeholder="Ism">
+                        <input type="text" id="customerName" class="form-control form-control-sm"
+                               data-osk-label="Mijoz ismi" placeholder="Ism">
                     </div>
                     <div class="col-6">
-                        <input type="tel" id="customerPhone" class="form-control form-control-sm" placeholder="+998 ...">
+                        <input type="tel" id="customerPhone" class="form-control form-control-sm"
+                               data-osk-label="Mijoz telefoni" placeholder="+998 ...">
                     </div>
                 </div>
                 <div class="form-check m-0">
@@ -848,12 +876,12 @@ body.pos-wholesale #wsBanner { display: flex !important; }
             yordam oynasida yozilgan — sotuvchilar "yorliqlar bilinmaydi"
             deyishgani shundan. Endi eng kerakli to'rttasi doim ko'rinadi.
             {% endcomment %}
-            <div class="d-flex gap-2 flex-wrap align-items-center mb-1 small text-muted"
+            <div class="d-flex flex-nowrap align-items-center mb-1 text-muted"
                  id="posKeyHints">
                 <span><kbd class="pos-key">F12</kbd> tez naqd</span>
                 <span><kbd class="pos-key">F4</kbd> yakunlash</span>
                 <span><kbd class="pos-key">F2</kbd> qidiruv</span>
-                <span><kbd class="pos-key">F6</kbd> oxirgi qatorni o'chirish</span>
+                <span><kbd class="pos-key">F6</kbd> oxirgi</span>
                 <span><kbd class="pos-key">F1</kbd> hammasi</span>
             </div>
 
@@ -1222,6 +1250,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
         </div>
         <label class="form-label small text-uppercase">Sabab (ixtiyoriy)</label>
         <input type="text" class="form-control" id="pfReason" maxlength="200"
+               data-osk-label="Tuzatish sababi"
                placeholder="masalan: karta o'tdi, naqd deb bosilib ketgan">
         <div class="small text-muted mt-2">
           Faqat to'lov turi o'zgaradi. Kassa hisobi, Z-hisobot va hisobotlar
@@ -1262,6 +1291,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
             </table>
             <label class="form-label small">Sabab (ixtiyoriy, hammasiga umumiy)</label>
             <input type="text" id="refundReason" class="form-control form-control-sm"
+                   data-osk-label="Qaytarish sababi"
                    placeholder="Nuqson, kichik o'lcham, mijoz fikri o'zgardi...">
 
             <!-- ALMASHTIRISH: yangi tovar (ixtiyoriy) -->
@@ -1275,7 +1305,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
             </div>
             <div class="input-group input-group-sm mb-2">
                 <input type="text" id="exNewInput" class="form-control"
-                       placeholder="Yangi tovar shtrix-kodi yoki nomi…"
+                       data-osk-label="Yangi tovar" placeholder="Yangi tovar shtrix-kodi yoki nomi…"
                        autocomplete="off">
                 <button type="button" class="btn btn-outline-primary" id="exNewAddBtn">
                     <i class="bi bi-plus-lg"></i> Qo'shish
@@ -1395,7 +1425,8 @@ body.pos-wholesale #wsBanner { display: flex !important; }
           <button type="button" class="btn btn-outline-danger co-cat" data-cat="other"><i class="bi bi-three-dots"></i> Boshqa</button>
         </div>
         <label class="form-label small mb-1 mt-3">Izoh (ixtiyoriy)</label>
-        <input type="text" id="coNote" class="form-control" maxlength="200" placeholder="masalan: tushlik uchun">
+        <input type="text" id="coNote" class="form-control" maxlength="200"
+               data-osk-label="Izoh" placeholder="masalan: tushlik uchun">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Bekor qilish</button>
@@ -2274,8 +2305,8 @@ function renderCart() {
                     <button class="btn btn-outline-secondary qty-inc" type="button">+</button>
                 </div>
             </td>
-            <td class="text-end">${(!it.open && Number(it.sale_price) === 0) ? `<span class="badge bg-danger" title="Narx 0 — narx qo'ying"><i class="bi bi-exclamation-triangle"></i> 0</span>` : fmt(it.sale_price)}${wsNote(it)}</td>
-            <td class="text-end"><strong>${fmt(sub)}</strong></td>
+            <td class="text-end" data-cell="price">${(!it.open && Number(it.sale_price) === 0) ? `<span class="badge bg-danger" title="Narx 0 — narx qo'ying"><i class="bi bi-exclamation-triangle"></i> 0</span>` : fmt(it.sale_price)}${wsNote(it)}</td>
+            <td class="text-end" data-cell="sum"><strong>${fmt(sub)}</strong></td>
             <td><button class="btn btn-sm btn-outline-danger remove-btn" type="button">
                 <i class="bi bi-trash"></i></button></td>
         `;
@@ -4741,5 +4772,19 @@ document.addEventListener('keydown', (e) => {
 <script>
 // stub continuation script (so previous script tag closes cleanly)
 console.log('yurit POS shortcuts ready');
+
+// KEY-1: yorliqlar qatori sig'masa — o'ng chetini soyalab qo'yamiz,
+// shunda kassir yana yorliq borligini (surish mumkinligini) biladi.
+(function () {
+    var el = document.getElementById('posKeyHints');
+    if (!el) return;
+    function sync() {
+        el.classList.toggle('is-scrollable',
+                            el.scrollWidth > el.clientWidth + 1);
+    }
+    sync();
+    window.addEventListener('resize', sync);
+    if (window.ResizeObserver) new ResizeObserver(sync).observe(el);
+})();
 </script>
 {% endblock %}
