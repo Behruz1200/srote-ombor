@@ -14,6 +14,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='employeedebt',
             name='paid_shift',
-            field=models.ForeignKey(blank=True, help_text="Qarz qaysi smen davomida to'landi — kassaga naqd tushishi shu smenning kutilgan naqdiга qo'shiladi.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='debt_payments', to='inventory.shift'),
+            field=models.ForeignKey(blank=True, help_text="Qarz qaysi smen davomida to'landi — kassaga naqd tushishi shu smenning kutilgan naqdiga qo'shiladi.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='debt_payments', to='inventory.shift'),
         ),
     ]

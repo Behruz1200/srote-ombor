@@ -12,10 +12,10 @@ urlpatterns = [
     # --- Onlayn do'kon (ochiq sayt) — SHOP-1/SHOP-2: KANAL YOPIQ ---
     # Uchinchi auditda ham ochiq turgan yagona kritik: /shop/order/<pk>/ har bir
     # mijozning ismi/telefoni/manzilini autentifikatsiyasiz ochib qo'yardi va
-    # /shop/checkout/ zaxira bron qilmasдан, pul olмасдан buyurtma qabul qilardi.
-    # Marshrutlarни BUTUNLAY olib tashlaymiz (ShopClosedMiddleware'ga qo'shimcha,
-    # ikki qavatli himoya). Kanal to'g'ri qurilганда (zaxira bron + to'lov + xabar)
-    # bu bloknи ochamiz.
+    # /shop/checkout/ zaxira bron qilmasdan, pul olmasdan buyurtma qabul qilardi.
+    # Marshrutlarni BUTUNLAY olib tashlaymiz (ShopClosedMiddleware'ga qo'shimcha,
+    # ikki qavatli himoya). Kanal to'g'ri qurilganda (zaxira bron + to'lov + xabar)
+    # bu blokni ochamiz.
     # path('shop/', views.shop_home, name='shop_home'),
     # path('shop/catalog/', views.shop_catalog, name='shop_catalog'),
     # path('shop/p/<str:code>/', views.shop_product, name='shop_product'),

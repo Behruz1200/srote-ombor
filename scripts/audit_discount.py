@@ -45,7 +45,7 @@ for i, t in enumerate(manual, 1):
     if run >= mt * D('0.8'):
         n80 = i
         break
-print(f"--- 1. JAMLANISH: summaning 80%i {n80} ta chekдан keladi "
+print(f"--- 1. JAMLANISH: summaning 80%i {n80} ta chekdan keladi "
       f"({len(manual)} tadan)")
 amts = [D(t.order_discount) for t in manual]
 if amts:

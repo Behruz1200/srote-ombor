@@ -36,7 +36,7 @@ def _valid_discount_reason(reason):
     keshida qolgan eski sahifa erkin matn yuboradi, qat'iy ro'yxat esa
     kassani ish o'rtasida to'xtatib qo'yardi. Shu bois faqat ma'nosizini
     rad etamiz: bitta-ikkita belgi ("s", "c") va faqat raqam ("3000" — bu
-    sabab emas, kassir summani qayta terган).
+    sabab emas, kassir summani qayta tergan).
     """
     head = (reason or '').split(';')[0].strip()
     if head in DISCOUNT_REASONS:
@@ -51,9 +51,9 @@ def _valid_discount_reason(reason):
 
 
 # DISC-6: "yaxlitlash" — kassir chekni butun songa tushirish uchun olib
-# tashlagan mayda qoldiq (2 000 so'mlik chekда 500 so'm). Bu chegirma emas,
-# maydalik: hisobotда uni ulgurji chegirma bilan bir songa qo'shish egani
-# chalg'itadi. Auditда ko'rilgani: 308 chekdan 264 tasi shu xil, medianasi
+# tashlagan mayda qoldiq (2 000 so'mlik chekda 500 so'm). Bu chegirma emas,
+# maydalik: hisobotda uni ulgurji chegirma bilan bir songa qo'shish egani
+# chalg'itadi. Auditda ko'rilgani: 308 chekdan 264 tasi shu xil, medianasi
 # 1 000 so'm, hammasi birga jamining atigi 20%i.
 ROUNDING_MAX = Decimal('5000')     # bundan kattasi yaxlitlash emas
 ROUNDING_STEP = Decimal('1000')    # mijoz to'lagani shu songa karrali bo'lsa
@@ -67,12 +67,12 @@ def _is_rounding(manual, gross, paid, reason=''):
       mayda            — 1 705 000 -> 1 535 000 (170 000) yaxlitlash emas,
                          bu ulgurji chegirma;
       jami butun bo'ldi — 19 500 -> 19 000;
-      jami butun EMAS EDI — 100 000 lik chekда 3 000 chegirma ham "butun"
+      jami butun EMAS EDI — 100 000 lik chekda 3 000 chegirma ham "butun"
                          qoldiradi (97 000), lekin u yaxlitlash emas: summa
                          allaqachon butun edi, kassir ataylab chegirma bergan.
                          Uchinchi shartsiz karta shu xil cheklarni yaxlitlash
                          deb yashirib qo'yardi — chegirmani KAM ko'rsatish esa
-                         ko'p ko'rsatishdан battar.
+                         ko'p ko'rsatishdan battar.
 
     DISC-7 dan keyin kassir sababni O'ZI "Yaxlitlash" deb belgilaydi va taxmin
     kerak bo'lmaydi. Taxmin faqat eski cheklar uchun qoladi. Belgilangan sabab
@@ -128,12 +128,12 @@ def _order_discount_share(sale_qs, *group_fields, split=False):
     `split=True` bo'lsa uchinchi qiymat ham qaytadi (DISC-1/DISC-6):
     {'promo', 'rounding', 'manual', 'exchange', 'total'} — chek chegirmasining
     qismlari.
-    Ular bitta songa yig'ilgan holда hisobotlar egasi sozlagan AKSIYAni kassir
+    Ular bitta songa yig'ilgan holda hisobotlar egasi sozlagan AKSIYAni kassir
     o'zi bergan chegirmadan ajrata olmasdi, almashtirish krediti esa umuman
     chegirma bo'lmasa ham "chegirma" bo'lib ko'rinardi.
     """
     rev = F('quantity') * F('sale_price') - F('line_discount')
-    # DISC-1: uchala qismni BIR so'rovда olamiz (qo'shimcha so'rov yo'q).
+    # DISC-1: uchala qismni BIR so'rovda olamiz (qo'shimcha so'rov yo'q).
     disc_rows = list(SaleTransaction.objects
                      .filter(id__in=sale_qs.order_by().values('transaction_id'),
                              order_discount__gt=0)
@@ -157,7 +157,7 @@ def _order_discount_share(sale_qs, *group_fields, split=False):
         _manual = _tot - _promo - _exch
         if _manual < 0:
             _manual = Decimal('0')
-        # DISC-6: mayda qoldiqni AJRATAMIZ. Bitta songa yig'ilganда karta
+        # DISC-6: mayda qoldiqni AJRATAMIZ. Bitta songa yig'ilganda karta
         # 1 000 so'mlik yaxlitlash bilan 186 500 so'mlik ulgurji chegirmani
         # o'rtachalab, egaga "biz bunchalik chegirma bermaganmiz" degan
         # tuyg'u berardi. Ular boshqa-boshqa hodisa — alohida ko'rsatiladi.
@@ -200,20 +200,20 @@ def _returns_adjustment(sale_qs, *group_fields):
     """Qaytarilgan tovarlar uchun TUSHUM va TANNARX tuzatmasi (RET-1).
 
     Muammo: `/sales/` dan boshqa HECH BIR sahifa qaytarishni hisobga
-    olmasdi — na tushumда, na tannarxда. 3 dona sotilib 1 dona qaytsa,
-    hamma joyда 3 donaning tushumi ham, tannarxi ham turaverardi.
+    olmasdi — na tushumda, na tannarxda. 3 dona sotilib 1 dona qaytsa,
+    hamma joyda 3 donaning tushumi ham, tannarxi ham turaverardi.
 
     Ikki tuzatma kerak, va ular BOSHQA-BOSHQA:
 
-      TUSHUM  — kassaдан HAQIQATDA chiqqan pul (effective_cash_refund).
-        Almashtirishда naqd chiqmaydi (0), demak tushum kamaymaydi —
-        to'g'ri, chunki mijoz pulni oldingi chekда to'lagan va u
-        do'kondа qoladi.
+      TUSHUM  — kassadan HAQIQATDA chiqqan pul (effective_cash_refund).
+        Almashtirishda naqd chiqmaydi (0), demak tushum kamaymaydi —
+        to'g'ri, chunki mijoz pulni oldingi chekda to'lagan va u
+        do'konda qoladi.
 
       TANNARX — tovar OMBORGA QAYTGAN bo'lsagina qaytariladi. Qaytgan
-        tovar endi sotilgan emas, u zaxira; tannarxi COGSда qolsa
+        tovar endi sotilgan emas, u zaxira; tannarxi COGSda qolsa
         ikki marta sanaladi. `pos_refund` ochiq narxli (is_open_price)
-        tovarni omborga TIKLAMAYDI — demak ularning tannarxi COGSда
+        tovarni omborga TIKLAMAYDI — demak ularning tannarxi COGSda
         qolishi KERAK (tovar ham ketdi, pul ham qaytdi: haqiqiy zarar).
 
     Shu ikki qoida almashtirishni ham, oddiy qaytarishni ham bir xil
@@ -223,8 +223,8 @@ def _returns_adjustment(sale_qs, *group_fields):
         ochiq narxli : tushum −80 500, tannarx −0       -> foyda −45 000
 
     O'lchovlar bo'yicha guruhlash ANIQ: har Return bitta Sale qatoriga
-    tegishli, u qatorда esa bitta filial/sotuvchi/mahsulot/kategoriya bor.
-    Shu bois chek chegirmasidan farqli o'laroq bu yerда taqsimlash yo'q.
+    tegishli, u qatorda esa bitta filial/sotuvchi/mahsulot/kategoriya bor.
+    Shu bois chek chegirmasidan farqli o'laroq bu yerda taqsimlash yo'q.
 
     Qaytaradi: (tushum_krediti, tannarx_krediti, {kalit: (tushum, tannarx)})
     """
@@ -238,7 +238,7 @@ def _returns_adjustment(sale_qs, *group_fields):
     for r in rets:
         sale = r.sale
         _rev = _dec(r.effective_cash_refund or 0)
-        # Omborga qaytmagan tovarning tannarxi COGSда qoladi.
+        # Omborga qaytmagan tovarning tannarxi COGSda qoladi.
         _cost = (Decimal('0') if sale.variant.product.is_open_price
                  else _dec(r.quantity) * _dec(sale.cost_at_sale))
         rev_credit += _rev
@@ -283,10 +283,10 @@ def _lock_stocks(qs):
     `Product.category` esa null=True — demak LEFT OUTER JOIN paydo bo'ladi va
     butun /prices/apply/ 500 beradi. SQLite select_for_update'ni UMUMAN
     e'tiborsiz qoldiradi, shuning uchun test bazasida chiqmaydi va faqat
-    prodda ko'rinadi. Aynan shu xato ilgari pos_refund'да ham bo'lgan
+    prodda ko'rinadi. Aynan shu xato ilgari pos_refund'da ham bo'lgan
     (REF-1 izohiga qarang) — ya'ni bu takrorlanuvchi tuzoq.
 
-    Yechim: qulflanadigan so'rovда JOIN umuman bo'lmasin. Avval PK'larni
+    Yechim: qulflanadigan so'rovda JOIN umuman bo'lmasin. Avval PK'larni
     o'qiymiz (bu FOR UPDATE emas, join zarar qilmaydi), keyin faqat PK
     bo'yicha qulflaymiz.
     """

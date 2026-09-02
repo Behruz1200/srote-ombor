@@ -17,9 +17,9 @@
 
     <div class="alert alert-info small">
         <i class="bi bi-info-circle"></i>
-        Bu ro'yxat smen <b>ichida amalga oshirilган barcha qaytarishlar</b> (sotuv qaysi kunда bo'lганидан qat'i nazar).
-        <b>Chegirma</b> — chek bo'yicha berilган chegirmaning shu tovarга tushган ulushi; shuning uchun
-        <b>qaytarilган summa</b> = yorliq narx − chegirma (mijoz haqiqатda to'laган summa).
+        Bu ro'yxat smen <b>ichida amalga oshirilgan barcha qaytarishlar</b> (sotuv qaysi kunda bo'lganidan qat'i nazar).
+        <b>Chegirma</b> — chek bo'yicha berilgan chegirmaning shu tovarga tushgan ulushi; shuning uchun
+        <b>qaytarilgan summa</b> = yorliq narx − chegirma (mijoz haqiqatda to'lagan summa).
     </div>
 
     <div class="card p-0">
@@ -34,7 +34,7 @@
                     <th class="text-end">Yorliq narx</th>
                     <th class="text-end">Chegirma</th>
                     <th class="text-end">%</th>
-                    <th class="text-end">Qaytarilган</th>
+                    <th class="text-end">Qaytarilgan</th>
                     <th class="text-end">Naqd chiqdi</th>
                 </tr>
             </thead>
@@ -58,7 +58,7 @@
                     <td class="text-end">{{ r.cash|som }}</td>
                 </tr>
             {% empty %}
-                <tr><td colspan="9" class="text-center text-muted py-4">Bu smenда qaytarish yo'q.</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-4">Bu smenda qaytarish yo'q.</td></tr>
             {% endfor %}
             </tbody>
             {% if rows %}
@@ -80,8 +80,8 @@
 
     {% if rows %}
     <p class="small text-muted mt-2">
-        Pastdaги <b>Naqd chiqdi</b> yig'indisi ({{ total_refund|som }} so'm) — Z-hisobotдаgi
-        «Qaytarilgan (naqd)» bilan bir xil. Kasrли raqam — chegirma yorliq narxни butun songа bo'lmaganда paydo bo'ladi.
+        Pastdagi <b>Naqd chiqdi</b> yig'indisi ({{ total_refund|som }} so'm) — Z-hisobotdagi
+        «Qaytarilgan (naqd)» bilan bir xil. Kasrli raqam — chegirma yorliq narxni butun songa bo'lmaganda paydo bo'ladi.
     </p>
     {% endif %}
 </div>

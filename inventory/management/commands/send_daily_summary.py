@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
         msg = daily_summary_text(d)
         # Kam qolgan / tugagan tovarlar — ALOHIDA xabar (do'kon egasi so'roviga
-        # ko'ra endi har sotuvда emas, faqat shu kunlik xulosa bilan birga).
+        # ko'ra endi har sotuvda emas, faqat shu kunlik xulosa bilan birga).
         low_msg = low_stock_report_text()
 
         if opts['dry_run']:

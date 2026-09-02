@@ -33,9 +33,9 @@ def verify_totp(secret_b32, code, window=1):
 
 
 def verify_totp_step(secret_b32, code, window=1, step=30):
-    """AUTH-3: mos kelган vaqt-qadamини (butun son) qaytaradi, yoki None.
+    """AUTH-3: mos kelgan vaqt-qadamini (butun son) qaytaradi, yoki None.
 
-    Chaqiruvchi bu qadamни saqlab, o'sha kodни QAYTA ishlatishни bloklaydi.
+    Chaqiruvchi bu qadamni saqlab, o'sha kodni QAYTA ishlatishni bloklaydi.
     """
     code = (code or '').strip().replace(' ', '')
     if not secret_b32 or not code.isdigit():
@@ -69,14 +69,14 @@ def qr_datauri(text):
 def gen_recovery_codes(n=8):
     """Return n human-friendly one-time codes (plaintext, shown once).
 
-    SEC-17: har kod ~72 bit entropiya (ilgari 32 bit edi — GPUда tez topilardi).
+    SEC-17: har kod ~72 bit entropiya (ilgari 32 bit edi — GPUda tez topilardi).
     """
     return ['-'.join(secrets.token_hex(3) for _ in range(3)) for _ in range(n)]
 
 
 def hash_code(code):
     """SEC-17: tuzlangan, ko'p-raundli PBKDF2 hash (Django hasher) — bir raundli
-    tuzsiz SHA-256 emas. Bazа sizib chiqса ham kodlar oson topilmaydi."""
+    tuzsiz SHA-256 emas. Baza sizib chiqsa ham kodlar oson topilmaydi."""
     from django.contrib.auth.hashers import make_password
     return make_password((code or '').strip().lower())
 
@@ -87,7 +87,7 @@ def _legacy_sha256(code):
 
 def use_recovery_code(user, code):
     """If `code` matches an unused recovery hash, consume it and return True.
-    Yangi (PBKDF2) va eski (SHA-256) formatларни ham qo'llab-quvvatlaydi."""
+    Yangi (PBKDF2) va eski (SHA-256) formatlarni ham qo'llab-quvvatlaydi."""
     from django.contrib.auth.hashers import check_password
     norm = (code or '').strip().lower()
     codes = list(user.recovery_codes or [])

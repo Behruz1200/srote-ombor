@@ -45,7 +45,7 @@ class AuditMiddleware:
 # SEC-3: Content-Security-Policy. Barcha kutubxonalar o'zimizda (SEC-2) bo'lgani
 # uchun tashqi skript/uslub/shrift YUKLASH TAQIQLANADI. Inline skriptlar hali
 # borligi uchun 'unsafe-inline' qoladi (uni olib tashlash = ARCH-1 refaktoring),
-# lekin tashqi in'ektsiya, plagin (object), base-uri, form hijack va freymга
+# lekin tashqi in'ektsiya, plagin (object), base-uri, form hijack va freymga
 # solish (clickjacking) bloklanadi. Kamera skaneri uchun blob/worker/wasm ruxsat.
 _CSP = "; ".join([
     "default-src 'self'",
@@ -69,7 +69,7 @@ _CSP = "; ".join([
 
 
 class ContentSecurityPolicyMiddleware:
-    """CSP sarlavhasini qo'shadi. Muammo bo'lsa env CSP_REPORT_ONLY=1 qo'yiб
+    """CSP sarlavhasini qo'shadi. Muammo bo'lsa env CSP_REPORT_ONLY=1 qo'yib
     faqat-hisobot rejimiga o'tkazish mumkin (hech narsa bloklamaydi)."""
     def __init__(self, get_response):
         self.get_response = get_response
@@ -92,7 +92,7 @@ class ShopClosedMiddleware:
     zaxirasini bloklamaydi, pul so'ramaydi, hech kimni xabardor qilmaydi
     (notify_web_order mavjud emas), va buyurtma sahifasi mijoz ma'lumotlarini
     (ism/telefon/manzil) ochib qo'yadi. Hozircha 0 ta buyurtma — shuning uchun
-    butun /shop/ kanalini YOPAMIZ (SHOP_ENABLED=False). To'g'ri qurilganда
+    butun /shop/ kanalini YOPAMIZ (SHOP_ENABLED=False). To'g'ri qurilganda
     (zaxira bron, to'lov, xabar) env'da SHOP_ENABLED=1 bilan ochiladi."""
     def __init__(self, get_response):
         self.get_response = get_response
@@ -108,9 +108,9 @@ class ShopClosedMiddleware:
 
 
 class RequireAdminTwoFactorMiddleware:
-    """SEC-1: yoqilganда (settings.REQUIRE_ADMIN_2FA=True) 2FA o'rnatmagan
+    """SEC-1: yoqilganda (settings.REQUIRE_ADMIN_2FA=True) 2FA o'rnatmagan
     adminni majburan 2FA sozlash sahifasiga yo'naltiradi. Standart — O'CHIQ
-    (hech kim qulflanib qolmasin). Egasi tayyor bo'lganда env'da yoqadi."""
+    (hech kim qulflanib qolmasin). Egasi tayyor bo'lganda env'da yoqadi."""
     _ALLOW = ('/security/2fa', '/logout', '/login', '/static', '/media')
 
     def __init__(self, get_response):
@@ -145,7 +145,7 @@ class SlowRequestLogMiddleware:
     so'rov usuli, manzili, davomiyligi va foydalanuvchisi bilan yoziladi.
     Chegara SLOW_REQUEST_MS (default 3000) orqali sozlanadi; 0 = o'chiq.
 
-    Ataylab O'ta yengil: bitta time.monotonic() juftligi, sekin so'rovдан
+    Ataylab O'ta yengil: bitta time.monotonic() juftligi, sekin so'rovdan
     boshqasiga hech narsa qilmaydi.
     """
 

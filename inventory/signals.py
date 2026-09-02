@@ -32,8 +32,8 @@ TRACKED_MODELS = [Product, ProductVariant, BranchStock, Intake, Sale,
                   PaymentIntent, SaleTransaction, Transfer]
 
 # Fields to skip in diff (noise, sensitive, or auto-managed)
-# SEC-12: totp_secret va recovery_codes 2FA yoqilganда AuditLog.changes'ga
-# tushib, audit sahifasida OCHIQ ko'rinardi — istalgan admin (yoki bazа
+# SEC-12: totp_secret va recovery_codes 2FA yoqilganda AuditLog.changes'ga
+# tushib, audit sahifasida OCHIQ ko'rinardi — istalgan admin (yoki baza
 # nusxasi) o'sha foydalanuvchi kodlarini abadiy yarata olardi. Skip qilamiz.
 SKIP_FIELDS = {
     'last_login', 'date_joined', 'password',
@@ -141,10 +141,10 @@ def post_save_handler(sender, instance, created, **kwargs):
         if changes:
             _write_log(AuditLog.Action.UPDATE, instance=instance, changes=changes)
 
-    # NOTE: har sotuvда "tovar tugab bormoqda" Telegram xabari YUBORILMAYDI —
+    # NOTE: har sotuvda "tovar tugab bormoqda" Telegram xabari YUBORILMAYDI —
     # do'kon egasi so'roviga ko'ra (2026), kam qolgan tovarlar RO'YXATI endi
     # faqat kunlik 22:00 xulosadan keyin ALOHIDA bitta xabar bo'lib keladi
-    # (inventory/notifications.py: low_stock_report_text). Har sotuvда spam yo'q.
+    # (inventory/notifications.py: low_stock_report_text). Har sotuvda spam yo'q.
 
     # Invalidate HQ dashboard cache on any sale-shaped activity so the next
     # admin hit recomputes immediately instead of waiting up to 60s.

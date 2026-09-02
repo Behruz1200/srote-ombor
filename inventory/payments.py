@@ -254,7 +254,7 @@ def available_providers() -> list[PaymentProvider]:
     """Faqat sozlamada ANIQ yoqilgan provider'lar.
 
     SEC-18: ilgari env yo'q bo'lsa 7 ta providerni HAMMASINI yoqar edi —
-    real ulanmagan to'lov usullari kassirга ko'rinardi. Endi yoqilmagan
+    real ulanmagan to'lov usullari kassirga ko'rinardi. Endi yoqilmagan
     bo'lsa — BO'SH (hech biri).
     """
     enabled = getattr(settings, 'PAYMENT_PROVIDERS_ENABLED', None)

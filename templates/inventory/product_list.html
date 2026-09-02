@@ -101,7 +101,7 @@
     <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2">
         <i class="bi bi-tags-fill"></i>
         <strong>Nom ziddiyati:</strong>
-        <span>{{ name_conflict_count }} ta mahsulotда bir shtrix-kodga 2 xil nom kelgan (nakladnoy boshqa nom bilan).</span>
+        <span>{{ name_conflict_count }} ta mahsulotda bir shtrix-kodga 2 xil nom kelgan (nakladnoy boshqa nom bilan).</span>
         <a href="?name_conflict=1" class="btn btn-sm btn-warning ms-auto">
             <i class="bi bi-list-check"></i> Ko'rish va tanlash
         </a>
@@ -586,7 +586,7 @@
         bulkCatWrap.classList.add('d-none');
         bulkDeleteWarn.style.display = 'none';
         bulkSubmit.className = 'btn btn-primary';
-        // N3: har amal uchun aqlли yuqori chegara — "×1000" kabi halokatli
+        // N3: har amal uchun aqlli yuqori chegara — "×1000" kabi halokatli
         // xatoni to'xtatadi (server ham tekshiradi).
         bulkValue.min = '0';
         if (op === 'set_price') {
@@ -637,14 +637,14 @@
                 e.preventDefault();
             }
         }
-        // D1: narxни ommaviy o'zgartirish — tasdiq + orqага qaytarib bo'lmasligi.
+        // D1: narxni ommaviy o'zgartirish — tasdiq + orqaga qaytarib bo'lmasligi.
         const _priceOps = {set_price: 1, multiply_price: 1, set_markup: 1};
         if (_priceOps[bulkOp.value]) {
             const n = document.querySelectorAll('.pick:checked').length;
             const labels = {set_price: 'narxni belgilash', multiply_price: 'narxni foizga ko\'paytirish',
-                            set_markup: 'markupни belgilash'};
+                            set_markup: 'markupni belgilash'};
             if (!confirm(`${n} ta mahsulotda "${labels[bulkOp.value]}" (${bulkValue.value}) `
-                        + `bajarilsinmi?\nBu ommaviy narx o'zgarishi — orqага qaytarish qo'lда bo'ladi.`)) {
+                        + `bajarilsinmi?\nBu ommaviy narx o'zgarishi — orqaga qaytarish qo'lda bo'ladi.`)) {
                 e.preventDefault();
             }
         }

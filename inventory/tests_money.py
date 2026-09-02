@@ -8,7 +8,7 @@ Yiqilgan test = bajariladigan bug hisoboti. Tuzatgandan keyin yashil bo'ladi.
 
 Guruhlar:
     ExpectedToPass* — hozir ishlaydigan to'g'ri xatti-harakat (regressiyadan qulf)
-    Bug*            — tasdiqlangan nuqson; tuzatilgunча yiqiladi
+    Bug*            — tasdiqlangan nuqson; tuzatilguncha yiqiladi
 """
 import json
 import time
@@ -63,8 +63,8 @@ class Sec17RecoveryCodes(TestCase):
 
 class Auth3TotpReplay(TestCase):
     """AUTH-3 — bir TOTP kodi ikki marta ishlamasin (replay). verify_totp_step
-    mos vaqt-qadamни qaytaradi; login_2fa oxirgi qabul qilinganдан katta
-    bo'lсагина qabul qiladi."""
+    mos vaqt-qadamni qaytaradi; login_2fa oxirgi qabul qilingandan katta
+    bo'lsagina qabul qiladi."""
 
     def test_step_is_returned_and_monotonic(self):
         from inventory.twofa import gen_secret, verify_totp_step, _totp_at
@@ -75,7 +75,7 @@ class Auth3TotpReplay(TestCase):
         step = verify_totp_step(secret, code)
         self.assertIsNotNone(step)
         self.assertEqual(step, int(now // 30))
-        # bir xil kod xuddi shu qadamни qaytaradi (chaqiruvchi replayни bloklaydi)
+        # bir xil kod xuddi shu qadamni qaytaradi (chaqiruvchi replayni bloklaydi)
         self.assertEqual(verify_totp_step(secret, code), step)
 
     def test_bad_code_returns_none(self):
@@ -85,7 +85,7 @@ class Auth3TotpReplay(TestCase):
 
 
 class Sec21OversizeImage(TestCase):
-    """SEC-21 — 20 MB'дан katta yuklama rad etiladi (ko'p-varaqli yo'l ham)."""
+    """SEC-21 — 20 MB'dan katta yuklama rad etiladi (ko'p-varaqli yo'l ham)."""
 
     class _F:
         def __init__(self, size, name='x.jpg'):
@@ -101,7 +101,7 @@ class Sec21OversizeImage(TestCase):
 
 
 class Sec20CsvSafe(TestCase):
-    """SEC-20 — formula in'ektsiyasi: =,+,-,@ bilan boshlanган matn apostrof
+    """SEC-20 — formula in'ektsiyasi: =,+,-,@ bilan boshlangan matn apostrof
     bilan zararsizlanadi; oddiy qiymatlar tegilmaydi."""
 
     def test_formula_prefixes_quoted(self):
@@ -131,7 +131,7 @@ class Sec20CsvSafe(TestCase):
 
 class Ops1BackupGuard(TestCase):
     """OPS-1 — bazada shaxsiy ma'lumot bor; shifrsiz zaxira YARATILMAYDI.
-    Parol (BACKUP_GPG_PASSPHRASE) bo'lmasa buyruq baland ovozда yiqiladi."""
+    Parol (BACKUP_GPG_PASSPHRASE) bo'lmasa buyruq baland ovozda yiqiladi."""
 
     def test_refuses_without_passphrase(self):
         from django.core.management import call_command
@@ -251,8 +251,8 @@ class MoneyTestBase(TestCase):
 
 
 class V5PromoServerClamp(MoneyTestBase):
-    """V5 — chegirма SERVERда tekshiriladi. Soxta aksiya rad etiladi; aksiyadan
-    tashqari qo'lда chegirма SABAB talab qiladi."""
+    """V5 — chegirma SERVERda tekshiriladi. Soxta aksiya rad etiladi; aksiyadan
+    tashqari qo'lda chegirma SABAB talab qiladi."""
 
     def test_fake_promo_discount_rejected(self):
         self.open_shift()
@@ -379,7 +379,7 @@ class ExpectedToPassInvariants(MoneyTestBase):
 
 
 # ===========================================================================
-#  FAILING — tasdiqlangan nuqsonlar. Tuzatilgunча qizil.
+#  FAILING — tasdiqlangan nuqsonlar. Tuzatilguncha qizil.
 # ===========================================================================
 
 class BugMon9SaleWithoutShift(MoneyTestBase):
@@ -399,12 +399,12 @@ class BugMon9SaleWithoutShift(MoneyTestBase):
         orphans = SaleTransaction.objects.filter(shift__isnull=True).count()
         self.assertEqual(
             orphans, 0,
-            'shift=None chek hech bir Z-hisobotда ko\'rinmaydi — pul yo\'qoladi',
+            'shift=None chek hech bir Z-hisobotda ko\'rinmaydi — pul yo\'qoladi',
         )
 
 
 class BugMon10MixedBreakdownUnvalidated(MoneyTestBase):
-    """MON-10 — aralash summasi serverда tekshirilmaydi (faqat brauzerда)."""
+    """MON-10 — aralash summasi serverda tekshirilmaydi (faqat brauzerda)."""
 
     def test_breakdown_must_sum_to_total(self):
         self.open_shift()
@@ -464,7 +464,7 @@ class BugMon11UnknownMethodBecomesCash(MoneyTestBase):
                          Decimal('100000'))
 
     def test_typo_method_does_not_silently_become_cash(self):
-        shift = self._mixed_with('naqd')  # uzbekcha kalit, kodда 'cash'
+        shift = self._mixed_with('naqd')  # uzbekcha kalit, kodda 'cash'
         self.assertEqual(shift.sales_by_method_split()['cash'], Decimal('0'))
 
 
@@ -487,7 +487,7 @@ class Mon8PriceOverrideAudited(MoneyTestBase):
         self.assertEqual(sale.sale_price, Decimal('1'),
                          'kiritilgan narx saqlanadi (buzilmaydi)')
         log = AuditLog.objects.filter(model_name='PriceOverride').first()
-        self.assertIsNotNone(log, 'sezilarli narx farqi audit logга tushishi kerak')
+        self.assertIsNotNone(log, 'sezilarli narx farqi audit logga tushishi kerak')
         self.assertTrue(log.changes.get('price_override', {}).get('below_cost'),
                         'tannarxdan past — below_cost bayrog\'i yoqilishi kerak')
 
@@ -495,7 +495,7 @@ class Mon8PriceOverrideAudited(MoneyTestBase):
         from inventory.models import AuditLog
         self.open_shift()
         self.checkout(lines=[{'stock_id': self.stock.pk, 'qty': 1,
-                              'sale_price': '100000'}])  # katalogга teng
+                              'sale_price': '100000'}])  # katalogga teng
         self.assertEqual(
             AuditLog.objects.filter(model_name='PriceOverride').count(), 0,
             'katalog narxida sotuv — audit yozuvi bo\'lmasligi kerak')
@@ -546,7 +546,7 @@ class ExpectedToPassBreakdownPrecision(MoneyTestBase):
 class ExpectedToPassPayoutGuard(MoneyTestBase):
     """MON-15 QAYTARIB OLINDI — auditda xato aytilgan edi.
 
-    CashPayout.Meta'да `cashpayout_amount_positive` CheckConstraint BOR,
+    CashPayout.Meta'da `cashpayout_amount_positive` CheckConstraint BOR,
     ya'ni manfiy chiqim DB darajasida imkonsiz. Bu testlar shu himoyani
     regressiyadan qulflaydi.
     """
@@ -615,7 +615,7 @@ class Stk8WeightedCost(TestCase):
 
 class Stk9StocktakeDelta(MoneyTestBase):
     """STK-9 — inventarizatsiya tasdiqi FARQni (delta) qo'llaydi, mutlaq
-    yozib sanashдan keyingi sotuvlarni bekor QILMAYDI."""
+    yozib sanashdan keyingi sotuvlarni bekor QILMAYDI."""
 
     def test_apply_uses_delta_not_absolute(self):
         from inventory.models import Stocktake, StocktakeCount
@@ -623,7 +623,7 @@ class Stk9StocktakeDelta(MoneyTestBase):
             username='boss2', password='x', role=User.Role.ADMIN, branch=self.branch)
         c = Client()
         c.force_login(admin)
-        # Snapshot: tizim 10, sanaб 8 topildi (2 kam). Keyin 3 dona sotildi → 7.
+        # Snapshot: tizim 10, sanab 8 topildi (2 kam). Keyin 3 dona sotildi → 7.
         st = Stocktake.objects.create(branch=self.branch, started_by=admin)
         StocktakeCount.objects.create(
             session=st, variant=self.variant, system_qty=10, counted_qty=8)
@@ -651,7 +651,7 @@ class Mon22ShiftSnapshot(MoneyTestBase):
         shift.closed_at = timezone.now()
         shift.save()
         self.assertEqual(shift.variance(), Decimal('0'))
-        # keyinchalik shu smenга yana sotuv qo'shilса ham farq o'zgarmasin
+        # keyinchalik shu smenga yana sotuv qo'shilsa ham farq o'zgarmasin
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=shift,
             payment_method='cash')
@@ -679,10 +679,10 @@ class RefundMoney(MoneyTestBase):
             cost_at_sale=Decimal('60000'), sold_by=self.cashier)
 
     def test_order_discount_not_split_into_refund(self):
-        """Egasining qarori (2026): butun-buyurtma chegirmasi qaytarishга
+        """Egasining qarori (2026): butun-buyurtma chegirmasi qaytarishga
         TAQSIMLANMAYDI — tovar O'Z narxida qaytadi.
 
-        3×100 000, chek chegirmasi 100 000. Bitta dona qaytганда — to'liq
+        3×100 000, chek chegirmasi 100 000. Bitta dona qaytganda — to'liq
         100 000 (33 333.33 EMAS). Bu ataylab REF-2 prorata'sini bekor qiladi
         (chalkash fraksiyalar va Z-hisobot 1 so'm siljishi shundan edi)."""
         txn = self._txn(order_discount='100000')
@@ -695,8 +695,8 @@ class RefundMoney(MoneyTestBase):
                          'bir dona qaytarish = to\'liq dona narxi (100 000)')
 
     def test_full_return_caps_at_check_total(self):
-        """REF-3: butun chek qaytганда — mijoz TO'LAGANI (200 000) qaytadi,
-        qatorlar jamisi (300 000) EMAS. Chegirма oxirgi qaytarishга singadi.
+        """REF-3: butun chek qaytganda — mijoz TO'LAGANI (200 000) qaytadi,
+        qatorlar jamisi (300 000) EMAS. Chegirma oxirgi qaytarishga singadi.
         (Egasining qoidasi: qisman → dona narxi, to'liq → chek jamisi.)"""
         txn = self._txn(order_discount='100000')   # 3×100 000 − 100 000 = 200 000
         sale = self._sale(txn, qty=3)
@@ -724,7 +724,7 @@ class RefundMoney(MoneyTestBase):
 
 
 class Mon4CashIn(MoneyTestBase):
-    """MON-4 — kassaga naqd qo'shish kutilgan naqdни OSHIRadi (payout aksi)."""
+    """MON-4 — kassaga naqd qo'shish kutilgan naqdni OSHIRadi (payout aksi)."""
 
     def test_cash_in_increases_expected_cash(self):
         shift = self.open_shift(opening_cash='100000')
@@ -764,7 +764,7 @@ class Stk1WriteOff(MoneyTestBase):
         })
         self.assertEqual(resp.status_code, 302)  # redirect back
         self.stock.refresh_from_db()
-        self.assertEqual(self.stock.stock_count, 7, 'zaxira 3 taга kamayishi kerak')
+        self.assertEqual(self.stock.stock_count, 7, 'zaxira 3 taga kamayishi kerak')
         wo = StockWriteOff.objects.get()
         self.assertEqual(wo.quantity, 3)
         self.assertEqual(wo.reason, 'damage')
@@ -791,8 +791,8 @@ class Stk1WriteOff(MoneyTestBase):
 
 
 class Off7ClientTimestamp(MoneyTestBase):
-    """OFF-7 — offline sotuv ASL vaqti bilan yoziladi va o'z (tarixiy) smenига
-    tushadi, sinxron vaqti/hozirgi smenга emas."""
+    """OFF-7 — offline sotuv ASL vaqti bilan yoziladi va o'z (tarixiy) smeniga
+    tushadi, sinxron vaqti/hozirgi smenga emas."""
 
     def test_offline_replay_lands_in_historical_shift_and_time(self):
         now = timezone.now()
@@ -810,7 +810,7 @@ class Off7ClientTimestamp(MoneyTestBase):
         self.assertEqual(resp.status_code, 200)
         txn = SaleTransaction.objects.latest('id')
         self.assertEqual(txn.shift_id, past.pk,
-                         'sotuv tarixiy (o\'z) smenига tushishi kerak')
+                         'sotuv tarixiy (o\'z) smeniga tushishi kerak')
         self.assertLess(abs((txn.sold_at - (now - timezone.timedelta(hours=3)))
                             .total_seconds()), 5,
                         'sold_at client vaqti bo\'lishi kerak')
@@ -912,9 +912,9 @@ class SalesPageRefundMatchesZReport(MoneyTestBase):
 
     def _discounted_sale_fully_returned(self):
         # 3 x 100 000, chek chegirmasi 60 000. Return TO'G'RIDAN-TO'G'RI ORM orqali
-        # yaratiladi (pos_refund cheklovини chetlab) — refund_cash yo'q, shu bois
+        # yaratiladi (pos_refund cheklovini chetlab) — refund_cash yo'q, shu bois
         # effective_cash_refund dona narxiga (fallback) qaytadi. Bu test faqat
-        # sahifa == Z-hisobot (yagona manba) ekanini tekshiradi, summа qiymatini emas.
+        # sahifa == Z-hisobot (yagona manba) ekanini tekshiradi, summa qiymatini emas.
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=self.shift,
             payment_method='cash', order_discount=Decimal('60000'))
@@ -947,7 +947,7 @@ class SalesPageRefundMatchesZReport(MoneyTestBase):
 def _printed(value):
     """`|som` filtri chop etadigan sonni int sifatida qaytaradi.
 
-    Test AYNAN chekда ko'ringan raqam bilan ishlashi uchun — kontekstдagi
+    Test AYNAN chekda ko'ringan raqam bilan ishlashi uchun — kontekstdagi
     xom Decimal bilan emas."""
     from inventory.templatetags.yurit_extras import som
     txt = som(value).replace(' ', '').replace(' ', '')
@@ -955,21 +955,21 @@ def _printed(value):
 
 
 class Mon24ZReportReconciles(MoneyTestBase):
-    """MON-24/MON-25 — Z-hisobotда CHOP ETILGAN qatorlar CHOP ETILGAN JAMIga
+    """MON-24/MON-25 — Z-hisobotda CHOP ETILGAN qatorlar CHOP ETILGAN JAMIga
     aynan qo'shilishi SHART.
 
-    Ishlab chiqarishда (Smena #46) chekда shunday chiqdi:
+    Ishlab chiqarishda (Smena #46) chekda shunday chiqdi:
 
         93 000 + 19 151 500 − 748 000 − 273 383 = 18 223 117
         chop etilgan "HOZIRGI QOLDIQ"          = 18 223 116   ← 1 so'm kam
 
     Sabablari:
-      1. `refund_total` view'да FLOAT yig'indi edi, `expected_cash()` ichида
+      1. `refund_total` view'da FLOAT yig'indi edi, `expected_cash()` ichida
          esa Decimal — ikkisi teskari tomonga yaxlitlandi.
       2. Yaxlitlashning O'ZI ikki xil edi: `som` filtri `round()` (bank
          yaxlitlashi) ishlatardi, chop qatorlari esa boshqa yo'ldan kelardi.
 
-    Bu testlar chekни BUTUN sifatida qulflaydi. Har biri fix'siz YIQILADI.
+    Bu testlar chekni BUTUN sifatida qulflaydi. Har biri fix'siz YIQILADI.
     """
 
     def _mixed_txn(self):
@@ -989,9 +989,9 @@ class Mon24ZReportReconciles(MoneyTestBase):
         """QATOR jami 3 donaga BO'LINMAYDI → qisman qaytarish KASR chiqadi.
 
         3×100 000, QATOR chegirmasi (line_discount) 1 000 → qator jami 299 000;
-        1 dona qaytганда 299 000/3 = 99 666.67 — kassa hisobiga kasr kiradi.
+        1 dona qaytganda 299 000/3 = 99 666.67 — kassa hisobiga kasr kiradi.
         (order_discount emas, line_discount ishlatamiz: butun-buyurtma chegirmasi
-        endi qaytarishга taqsimlanmaydi — egasining qarori. Kasr baribir qator
+        endi qaytarishga taqsimlanmaydi — egasining qarori. Kasr baribir qator
         chegirmasi yoki bo'linmaydigan jamidan kelib chiqadi.)
         """
         txn = SaleTransaction.objects.create(
@@ -1021,7 +1021,7 @@ class Mon24ZReportReconciles(MoneyTestBase):
         return r
 
     def _kassa_rows(self, c):
-        """Chekдagi KASSA qatorlari — chop etilgan ko'rinishда."""
+        """Chekdagi KASSA qatorlari — chop etilgan ko'rinishda."""
         return (_printed(c['opening_cash'] if 'opening_cash' in c
                          else c['shift'].opening_cash)
                 + _printed(c['cash_sales'])
@@ -1040,7 +1040,7 @@ class Mon24ZReportReconciles(MoneyTestBase):
             "chop etilgan KASSA qatorlari chop etilgan JAMIga qo'shilmadi")
 
     def test_setup_really_produces_a_fractional_refund(self):
-        """Sinov shartи: kasr bo'lmasa bu testlar hech nimani isbotlamaydi."""
+        """Sinov sharti: kasr bo'lmasa bu testlar hech nimani isbotlamaydi."""
         self.assertNotEqual(self.shift.refunds_total() % 1, Decimal('0'),
                             'test ma\'lumoti kasr qaytarish bermadi')
 
@@ -1094,13 +1094,13 @@ class Mon24ZReportReconciles(MoneyTestBase):
         c = self._resp().context
         self.assertEqual(
             _printed(c['expected']), frozen,
-            "yopilgan smenning JAMIsi keyingi qaytarishдan o'zgarmasligi kerak")
+            "yopilgan smenning JAMIsi keyingi qaytarishdan o'zgarmasligi kerak")
         self.assertNotEqual(
             _printed(c['post_close_delta']), 0,
-            "yopilgandan keyingi o'zgarish alohida qatorда ko'rinishi kerak")
+            "yopilgandan keyingi o'zgarish alohida qatorda ko'rinishi kerak")
         self.assertEqual(
             self._kassa_rows(c), _printed(c['expected']),
-            'snapshot ajralganда ham qatorlar JAMIga qo\'shilishi kerak')
+            'snapshot ajralganda ham qatorlar JAMIga qo\'shilishi kerak')
 
     def test_closed_shift_variance_is_frozen_on_the_receipt(self):
         self.shift.closing_expected_cash = self.shift.compute_expected_cash()
@@ -1118,8 +1118,8 @@ class Mon24ZReportReconciles(MoneyTestBase):
 class Mon24SomFilterRoundsHalfUp(TestCase):
     """MON-24 — pul yaxlitlashi YARMI YUQORIGA, bank yaxlitlashi EMAS.
 
-    `round(2.5)` → 2 (juftga). Kassir 3 kutadi; Z-hisobotда aynan shu 1 so'm
-    qatorlarни JAMIдan ajratib yuborardi.
+    `round(2.5)` → 2 (juftga). Kassir 3 kutadi; Z-hisobotda aynan shu 1 so'm
+    qatorlarni JAMIdan ajratib yuborardi.
     """
 
     NBSP = ' '
@@ -1147,12 +1147,12 @@ class Mon24SomFilterRoundsHalfUp(TestCase):
 
 
 class Ref3RefundCap(MoneyTestBase):
-    """REF-3 — egasining qoidasi: bir dona qaytганда o'z narxi; butun chek
-    qaytганда chek to'lovi (chegirма ayirilgan). Har qaytarish chek to'loviдan
-    oshmaydi, va haqiqiy naqд Return.refund_cash'да SAQLANADI (tarix qotadi)."""
+    """REF-3 — egasining qoidasi: bir dona qaytganda o'z narxi; butun chek
+    qaytganda chek to'lovi (chegirma ayirilgan). Har qaytarish chek to'lovidan
+    oshmaydi, va haqiqiy naqd Return.refund_cash'da SAQLANADI (tarix qotadi)."""
 
     def _discounted_check(self, order_discount='1000'):
-        # 12 000 + 9 000 = 21 000; chegirма 1 000 → mijoz 20 000 to'lagan.
+        # 12 000 + 9 000 = 21 000; chegirma 1 000 → mijoz 20 000 to'lagan.
         shift = self.open_shift()
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=shift,
@@ -1180,7 +1180,7 @@ class Ref3RefundCap(MoneyTestBase):
         r = self._refund([{'sale_id': s1.pk, 'qty': 1, 'reason': 'x'}])
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()['refunded_total'], 12000.0,
-                         'qisman qaytarish = dona narxi (12 000), chegirма tegmaydi')
+                         'qisman qaytarish = dona narxi (12 000), chegirma tegmaydi')
 
     def test_full_return_one_batch_caps_at_paid(self):
         _, s1, s2 = self._discounted_check()
@@ -1188,7 +1188,7 @@ class Ref3RefundCap(MoneyTestBase):
                           {'sale_id': s2.pk, 'qty': 1, 'reason': 'x'}])
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()['refunded_total'], 20000.0,
-                         'butun chek = to\'langan summа (20 000), 21 000 emas')
+                         'butun chek = to\'langan summa (20 000), 21 000 emas')
         self.assertEqual(self._all_refunded(), Decimal('20000'))
 
     def test_split_partial_then_completing_totals_paid(self):
@@ -1196,7 +1196,7 @@ class Ref3RefundCap(MoneyTestBase):
         self._refund([{'sale_id': s1.pk, 'qty': 1, 'reason': 'x'}])   # 12 000
         self._refund([{'sale_id': s2.pk, 'qty': 1, 'reason': 'x'}])   # min(9000, 8000)=8000
         self.assertEqual(self._all_refunded(), Decimal('20000'),
-                         'ikki bosqichда ham jami = chek to\'lovi')
+                         'ikki bosqichda ham jami = chek to\'lovi')
         self.assertEqual(Decimal(str(txn.total)), Decimal('20000'))
 
     def test_refund_cash_is_stored_not_recomputed(self):
@@ -1205,20 +1205,20 @@ class Ref3RefundCap(MoneyTestBase):
         self._refund([{'sale_id': s1.pk, 'qty': 1, 'reason': 'x'},
                       {'sale_id': s2.pk, 'qty': 1, 'reason': 'x'}])
         for r in Return.objects.all():
-            self.assertIsNotNone(r.refund_cash, 'har qaytarishда refund_cash yozilishi kerak')
+            self.assertIsNotNone(r.refund_cash, 'har qaytarishda refund_cash yozilishi kerak')
 
     def test_no_discount_check_refunds_item_price(self):
         shift = self.open_shift()
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=shift,
-            payment_method='cash')   # chegirмasiz
+            payment_method='cash')   # chegirmasiz
         s = Sale.objects.create(
             transaction=txn, variant=self.variant, branch=self.branch,
             quantity=2, sale_price=Decimal('10000'),
             cost_at_sale=Decimal('6000'), sold_by=self.cashier)
         r = self._refund([{'sale_id': s.pk, 'qty': 2, 'reason': 'x'}])
         self.assertEqual(r.json()['refunded_total'], 20000.0,
-                         'chegirмasiz chek — dona narxi (o\'zgarishsiz)')
+                         'chegirmasiz chek — dona narxi (o\'zgarishsiz)')
 
 
 class SalesPageVsZReport(MoneyTestBase):
@@ -1226,7 +1226,7 @@ class SalesPageVsZReport(MoneyTestBase):
     ma'lumotdan BIR XIL raqam chiqarishi kerak.
 
     Topilgani: KPI "Jami tushum" faqat `line_discount`ni ayirardi, CHEK
-    chegirmasini emas — ya'ni AYNI SAHIFA o'zi bilan ziddiyatда edi:
+    chegirmasini emas — ya'ni AYNI SAHIFA o'zi bilan ziddiyatda edi:
 
         3×100 000, chek chegirmasi 60 000 (mijoz 240 000 to'lagan)
           KPI "Jami tushum"        300 000   ← xato
@@ -1344,7 +1344,7 @@ class SalesPageVsZReport(MoneyTestBase):
         self.assertEqual(_dec(p['total']), _dec(z['total_rev']))
         self.assertEqual(_dec(p['order_discount_total']), Decimal('0'))
 
-    # ---- REF-3 siyosati ikkala hisobotда bir xil ishlasin -------------
+    # ---- REF-3 siyosati ikkala hisobotda bir xil ishlasin -------------
     def test_full_return_of_discounted_receipt_nets_to_zero_everywhere(self):
         """REF-3: to'liq qaytarish chek to'loviga cheklanadi → SOF 0."""
         shift = self.open_shift()
@@ -1357,7 +1357,7 @@ class SalesPageVsZReport(MoneyTestBase):
         self.assertEqual(_dec(p['checks'][0]['net_total']), Decimal('0'))
 
     def test_partial_return_uses_item_price_on_both_reports(self):
-        """REF-3: bir dona qaytганда — to'liq dona narxi (100 000),
+        """REF-3: bir dona qaytganda — to'liq dona narxi (100 000),
         proporsional 80 000 EMAS. Sahifa ham, Z-hisobot ham shu sonni bersin."""
         shift = self.open_shift()
         sale = self._sale(shift, qty=3, odisc='60000')
@@ -1387,7 +1387,7 @@ class SalesPageVsZReport(MoneyTestBase):
 
     # ---- SAL-2: ikki xil ta'rif, ikkalasi ham ko'rinsin ---------------
     def _cross_day_setup(self):
-        """Kecha sotildi, BUGUN (boshqa smenда) qaytarildi."""
+        """Kecha sotildi, BUGUN (boshqa smenda) qaytarildi."""
         yest = timezone.now() - timezone.timedelta(days=1)
         s_yest = self.open_shift()
         Shift.objects.filter(pk=s_yest.pk).update(opened_at=yest)
@@ -1422,7 +1422,7 @@ class SalesPageVsZReport(MoneyTestBase):
                          _dec(self._z(s_today)['refund_total']),
                          'BUGUN: davr qaytarishi Z-hisobot bilan mos emas')
         self.assertTrue(p_today['refunds_span_periods'],
-                        'ikki ta\'rif farq qilganда sahifa izoh ko\'rsatsin')
+                        'ikki ta\'rif farq qilganda sahifa izoh ko\'rsatsin')
 
     def test_same_day_return_needs_no_explanation(self):
         shift = self.open_shift()
@@ -1438,7 +1438,7 @@ class SalesPageEdgeRows(MoneyTestBase):
     """SAL-4 — sahifa buzilmasin: cheksiz (eski) sotuvlar, to'liq chegirmali
     chek, kunlik "qaytgan" belgisi.
 
-    Eski sotuvlarда `transaction` NULL bo'lishi mumkin — aynan shunday qatorlar
+    Eski sotuvlarda `transaction` NULL bo'lishi mumkin — aynan shunday qatorlar
     `sales_list`ni ilgari 500 qilgan edi, shuning uchun har bir yangi mantiq
     ular bilan sinaladi.
     """
@@ -1485,9 +1485,9 @@ class SalesPageEdgeRows(MoneyTestBase):
         self.assertEqual(_dec(self._page()['total']), Decimal('340000'))
 
     def test_daily_badge_shows_the_return_on_the_sale_day(self):
-        """Kunlik belgi Python tomonда (localtime), kunlik jami esa DB tomonда
+        """Kunlik belgi Python tomonda (localtime), kunlik jami esa DB tomonda
         (sold_at__date) guruhlanadi — ikkalasi BIR XIL kunga tushishi kerak,
-        aks holда "qaytgan" belgisi jimgina yo'qolardi."""
+        aks holda "qaytgan" belgisi jimgina yo'qolardi."""
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=self.shift,
             payment_method='cash')
@@ -1505,7 +1505,7 @@ class SalesPageEdgeRows(MoneyTestBase):
         self.assertEqual(_dec(str(day['net'])), Decimal('100000'))
 
     def test_receipt_fully_discounted_to_zero(self):
-        """Chegirma chek summasiga TENG → bo'linishда nol maxraj bo'lmasin."""
+        """Chegirma chek summasiga TENG → bo'linishda nol maxraj bo'lmasin."""
         txn = SaleTransaction.objects.create(
             branch=self.branch, sold_by=self.cashier, shift=self.shift,
             payment_method='cash', order_discount=Decimal('100000'))
@@ -1568,9 +1568,9 @@ class SalesPageQueryBudget(MoneyTestBase):
 class SalesPagePeriodRefundScope(MoneyTestBase):
     """SAL-5 — "shu davrda qaytarilgani" faqat sana+filial oynasida ma'noli.
 
-    Sotuvchi bo'yicha filtrlanганда `returned_total` filtrga bo'ysunadi, lekin
+    Sotuvchi bo'yicha filtrlanganda `returned_total` filtrga bo'ysunadi, lekin
     kassadan chiqqan pulni sotuvchiga bo'lib bo'lmaydi (qaytarishni boshqa
-    kassir rasmiylashtirgan bo'lishi mumkin). Ikki xil qamrovли sonni yonma-yon
+    kassir rasmiylashtirgan bo'lishi mumkin). Ikki xil qamrovli sonni yonma-yon
     ko'rsatish — noto'g'ri taqqoslashga taklif; shuning uchun umuman
     ko'rsatilmaydi.
     """
@@ -1594,7 +1594,7 @@ class SalesPagePeriodRefundScope(MoneyTestBase):
             transaction=txn, variant=self.variant, branch=self.branch,
             quantity=1, sale_price=Decimal('100000'),
             cost_at_sale=Decimal('60000'), sold_by=self.cashier)
-        # qaytarishни BOSHQA kassir rasmiylashtirdi
+        # qaytarishni BOSHQA kassir rasmiylashtirdi
         Return.objects.create(sale=sale, shift=self.shift, quantity=1,
                               refunded_by=self.other,
                               refund_cash=Decimal('100000'))
@@ -1613,7 +1613,7 @@ class SalesPagePeriodRefundScope(MoneyTestBase):
     def test_hidden_when_a_seller_filter_narrows_the_page(self):
         c = self._page(seller=self.other.pk)
         self.assertFalse(c['refunds_span_periods'],
-                         'tor filtrда taqqoslash soni ko\'rsatilmasin')
+                         'tor filtrda taqqoslash soni ko\'rsatilmasin')
         self.assertEqual(_dec(c['period_returned_total']), Decimal('0'))
 
     def test_hidden_when_a_search_narrows_the_page(self):
@@ -1777,7 +1777,7 @@ class Sal6EveryPageAgreesOnRevenue(TestCase):
             r = self.c.get(url, prm)
             self.assertEqual(r.status_code, 200, url)
             # DISC-1: endi bitta "Chek chegirmasi" o'rniga UCH qism bor.
-            # Bu fikstura sababsiz-emas, qo'lда chegirma (promo=0, exch=0).
+            # Bu fikstura sababsiz-emas, qo'lda chegirma (promo=0, exch=0).
             self.assertContains(r, "Qo'lda chegirma", msg_prefix=url,
                                 status_code=200)
 
@@ -1791,7 +1791,7 @@ class Sal6EveryPageAgreesOnRevenue(TestCase):
         self.assertEqual(Decimal(str(c['net_rev_total'])), SAL6_PAID)
 
     def test_no_discount_means_no_extra_row_and_same_numbers(self):
-        """Chegirmasiz chekда yangi mantiq hech nimani o'zgartirmasin."""
+        """Chegirmasiz chekda yangi mantiq hech nimani o'zgartirmasin."""
         SaleTransaction.objects.all().update(order_discount=Decimal('0'))
         c = self.c.get('/categories/').context
         c = c[0] if isinstance(c, list) else c
@@ -1807,7 +1807,7 @@ D = Decimal
 class RealDayPageEqualsSumOfZReports(TestCase):
     """SYNC — bitta REAL kun, sahifa == smenlarning Z-hisobotlari yig'indisi.
 
-    Alohida-alohida tekshirilgan holatlar birga kelganда ham yopilishi kerak:
+    Alohida-alohida tekshirilgan holatlar birga kelganda ham yopilishi kerak:
       - chek chegirmali sotuv (SAL-1)
       - ARALASH to'lov, payment_breakdown bo'yicha bo'linadi (ARCH-6)
       - qisman qaytarish, REF-3 siyosati bo'yicha dona narxida
@@ -1816,9 +1816,9 @@ class RealDayPageEqualsSumOfZReports(TestCase):
       - kassadan chiqim (payout)
       - kun ichida IKKI smen
 
-    Tekshiriladi: JAMI SAVDO, davr qaytarishi va chek soni ikkala tomonда bir
+    Tekshiriladi: JAMI SAVDO, davr qaytarishi va chek soni ikkala tomonda bir
     xil; har bir Z-hisobotning KASSA qatorlari o'z JAMIsiga qo'shiladi; va
-    almashtirishда kassadan pul chiqmaydi (aks holda kassir kamomadga tushardi).
+    almashtirishda kassadan pul chiqmaydi (aks holda kassir kamomadga tushardi).
     """
 
     def setUp(self):
@@ -1921,7 +1921,7 @@ class RealDayPageEqualsSumOfZReports(TestCase):
                      + _d(z['post_close_delta']) + _d(z['rounding_delta']))
             self.assertEqual(lines, _d(z['expected']), f'{name} kassa yopilmadi')
         self.assertEqual(_d(z2['refund_total']), D('0'),
-                         'almashtirishда kassadan naqd chiqmasligi kerak')
+                         'almashtirishda kassadan naqd chiqmasligi kerak')
 
         # SAL-2: kechagi tovar SOTUV kuniga yoziladi (100 000), lekin kassaga
         # BUGUN ta'sir qiladi — shu bois ikki ko'rsatkich ataylab farq qiladi.
@@ -1939,10 +1939,10 @@ class Disc1DiscountSplit(MoneyTestBase):
         QO'LDA (kassir bergan)                64 000    15 chek
         ALMASHTIRISH krediti (chegirma EMAS) 596 500    10 chek
 
-    Ya'ni qo'lда berilgani atigi 64 ming edi. Uchalasi boshqa-boshqa qaror:
-    aksiya — marketing, qo'lда — kassir ixtiyori (kamomad xavfi shu yerда),
+    Ya'ni qo'lda berilgani atigi 64 ming edi. Uchalasi boshqa-boshqa qaror:
+    aksiya — marketing, qo'lda — kassir ixtiyori (kamomad xavfi shu yerda),
     almashtirish — umuman chegirma emas, mijoz eski tovar bilan to'lagan.
-    Endi ular alohida maydonlarда saqlanadi va alohida ko'rsatiladi.
+    Endi ular alohida maydonlarda saqlanadi va alohida ko'rsatiladi.
     """
 
     def setUp(self):
@@ -1987,7 +1987,7 @@ class Disc1DiscountSplit(MoneyTestBase):
         self.assertEqual(t.manual_discount, Decimal('0'))
 
     def test_db_rejects_a_part_larger_than_the_total(self):
-        """Aks holда "qo'lда chegirma" manfiy chiqib, kassir auditi buzilardi."""
+        """Aks holda "qo'lda chegirma" manfiy chiqib, kassir auditi buzilardi."""
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 SaleTransaction.objects.create(
@@ -2021,8 +2021,8 @@ class Disc1DiscountSplit(MoneyTestBase):
                          split['total'], 'qismlar JAMIga qo\'shilishi SHART')
 
     def test_mixed_receipt_splits_promo_from_manual(self):
-        """Bitta chekда ham aksiya, ham qo'lда chegirma bo'lsa — ajratilsin.
-        Aynan shu holat eski ma'lumotда ajratib bo'lmas edi."""
+        """Bitta chekda ham aksiya, ham qo'lda chegirma bo'lsa — ajratilsin.
+        Aynan shu holat eski ma'lumotda ajratib bo'lmas edi."""
         self._txn(odisc='12000', promo='9000', reason='mijoz')
         split, _ = self._split()
         self.assertEqual(split['promo'], Decimal('9000'))
@@ -2096,7 +2096,7 @@ class Disc1CheckoutRecordsPromoSeparately(MoneyTestBase):
         self.assertEqual(t.order_discount, Decimal('7000'))
         self.assertEqual(t.promo_discount, Decimal('0'))
         self.assertEqual(t.manual_discount, Decimal('7000'),
-                         "qo'lда berilgan chegirma aksiya deb yozilmasin")
+                         "qo'lda berilgan chegirma aksiya deb yozilmasin")
 
     def test_exchange_credit_is_recorded_on_the_new_receipt(self):
         """pos_exchange krediti exchange_credit'ga yozilsin (chegirma emas)."""
@@ -2114,9 +2114,9 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
     """DISC-2 — sababsiz chegirma AKSIYA emas, QO'LDA berilgan chegirma.
 
     0060 backfill'i "sababsiz => aksiya" deb hisoblagan edi, chunki
-    pos_checkout qo'lда chegirma uchun sababni majburiy qiladi. Lekin o'sha
-    talab 2026-08-26 da qo'shilган (a2d1286), `order_discount` esa
-    2026-06-03 dan beri bor — oradagi uch oyда kassir sababsiz chegirma
+    pos_checkout qo'lda chegirma uchun sababni majburiy qiladi. Lekin o'sha
+    talab 2026-08-26 da qo'shilgan (a2d1286), `order_discount` esa
+    2026-06-03 dan beri bor — oradagi uch oyda kassir sababsiz chegirma
     bera olardi.
 
     Ishlab chiqarish buni tasdiqladi: Promotion jami = 0, ya'ni
@@ -2125,7 +2125,7 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
 
     Xato yo'nalishi muhim: kassir bergan pulni "egasining aksiyasi" qilib
     ko'rsatish kuzatilishi kerak bo'lgan signalni YASHIRADI. Aniqlab
-    bo'lmaganда MUAMMONI KO'RSATADIGAN tomonga og'ish kerak.
+    bo'lmaganda MUAMMONI KO'RSATADIGAN tomonga og'ish kerak.
     """
 
     def _fix(self):
@@ -2158,7 +2158,7 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
         t.refresh_from_db()
         self.assertEqual(t.promo_discount, Decimal('0'))
         self.assertEqual(t.manual_discount, Decimal('10000'),
-                         'kassir bergan chegirma qo\'lда deb ko\'rinsin')
+                         'kassir bergan chegirma qo\'lda deb ko\'rinsin')
 
     def test_money_is_untouched(self):
         """Faqat yorliq ustuni o'zgaradi — pul emas."""
@@ -2178,7 +2178,7 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
         t.refresh_from_db()
         self.assertEqual(t.exchange_credit, Decimal('50000'))
         self.assertEqual(t.manual_discount, Decimal('0'),
-                         'almashtirish krediti qo\'lда chegirmaga aylanmasin')
+                         'almashtirish krediti qo\'lda chegirmaga aylanmasin')
 
     def test_receipt_with_a_reason_is_left_alone(self):
         t = self._txn('7000', '0', reason='defect')
@@ -2212,9 +2212,9 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
         self._fix()
         old.refresh_from_db(); new.refresh_from_db()
         self.assertEqual(old.promo_discount, Decimal('0'),
-                         'aksiyaдан OLDINGI chek tuzatilsin')
+                         'aksiyadan OLDINGI chek tuzatilsin')
         self.assertEqual(new.promo_discount, Decimal('8000'),
-                         'aksiyaдан KEYINGI chek tegilmasin')
+                         'aksiyadan KEYINGI chek tegilmasin')
 
     def test_reported_split_after_the_fix(self):
         """Sahifa endi buni QO'LDA chegirma sifatida ko'rsatsin."""
@@ -2241,13 +2241,13 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
 class Disc3DiscountFilter(MoneyTestBase):
     """DISC-3 — "chegirma berilganmi?" filtri.
 
-    Egasi qo'lда berilgan chegirmani kuzatmoqchi. Buning uchun chegirmali
+    Egasi qo'lda berilgan chegirmani kuzatmoqchi. Buning uchun chegirmali
     cheklarni ajratib ko'ra olish kerak — ayniqsa QO'LDA berilganini
     (aksiya egasining o'z qarori, almashtirish krediti esa umuman chegirma
     emas).
 
     Filtr JAMIga ham ta'sir qilishi SHART: filtrlangan qatorlar bo'yicha
-    tushum va chegirma qayta hisoblanadi, aks holда "faqat qo'lда" tanlaб
+    tushum va chegirma qayta hisoblanadi, aks holda "faqat qo'lda" tanlab
     jami butun davrniki bo'lib qolardi.
     """
 
@@ -2351,7 +2351,7 @@ class Disc3DiscountFilter(MoneyTestBase):
         self.assertEqual(c['txn_count'], 6)
 
     def test_filter_suppresses_the_zreport_comparison(self):
-        """SAL-5: tor filtrда taqqoslash soni ko'rsatilmasin."""
+        """SAL-5: tor filtrda taqqoslash soni ko'rsatilmasin."""
         _, c = self._ids(discount='manual')
         self.assertFalse(c['refunds_span_periods'])
 
@@ -2363,7 +2363,7 @@ class Disc3DiscountFilter(MoneyTestBase):
         self.assertContains(r, 'value="manual" selected')
 
     def test_daily_totals_do_not_double_count(self):
-        """Filtr forward-FK bo'yicha — kunlik jamiда fanout bo'lmasin."""
+        """Filtr forward-FK bo'yicha — kunlik jamida fanout bo'lmasin."""
         _, c = self._ids(discount='any')
         day = c['daily_list'][0]
         # 5 chek × 100 000 − (5k + 9k + 20k + 12k qator-chegirmasiz) − 3k qator
@@ -2374,7 +2374,7 @@ class Ret1ReturnsAffectProfit(MoneyTestBase):
     """RET-1 — qaytarilgan tovar TUSHUMdan ham, TANNARXdan ham chiqsin.
 
     Topilgani: `/sales/` dan boshqa HECH BIR sahifa qaytarishni hisobga
-    olmasdi. 3 dona sotilib 1 dona qaytsa ham hamma joyда uchalasining
+    olmasdi. 3 dona sotilib 1 dona qaytsa ham hamma joyda uchalasining
     tushumi va tannarxi turaverardi:
 
         haqiqat     tushum 161 000  tannarx 90 000  foyda 71 000
@@ -2382,14 +2382,14 @@ class Ret1ReturnsAffectProfit(MoneyTestBase):
 
     Ikki tuzatma ALOHIDA qoidaga bo'ysunadi:
       TUSHUM  — kassadan HAQIQATDA chiqqan pul (effective_cash_refund).
-                Almashtirishда naqd chiqmaydi, demak tushum kamaymaydi.
+                Almashtirishda naqd chiqmaydi, demak tushum kamaymaydi.
       TANNARX — tovar OMBORGA QAYTGAN bo'lsagina qaytariladi. Ochiq narxli
                 tovar qaytmaydi (pos_refund uni tiklamaydi), demak uning
-                tannarxi COGSда qolishi KERAK.
+                tannarxi COGSda qolishi KERAK.
 
     Shu ikki qoida almashtirishni ham to'g'ri hisoblaydi: eski tovarning
-    tannarxi ikki marta sanalmaydi (bir marta asl chekда, ikkinchi marta
-    yangi chekда) — bu har almashtirishда foydani tannarx miqdorida
+    tannarxi ikki marta sanalmaydi (bir marta asl chekda, ikkinchi marta
+    yangi chekda) — bu har almashtirishda foydani tannarx miqdorida
     kamaytirib ko'rsatardi.
     """
 
@@ -2476,7 +2476,7 @@ class Ret1ReturnsAffectProfit(MoneyTestBase):
                             cost_at_sale=Decimal('70000'), sold_by=self.cashier)
         ins, _, _ = self._pages()
         self.assertEqual(_dec(ins['revenue']), Decimal('100000'),
-                         'almashtirishда naqd chiqmaydi — tushum kamaymasin')
+                         'almashtirishda naqd chiqmaydi — tushum kamaymasin')
         self.assertEqual(_dec(ins['total_cost']), Decimal('70000'),
                          'eski tovar tannarxi ikki marta sanalmasin')
         self.assertEqual(_dec(ins['profit']), Decimal('30000'))
@@ -2492,7 +2492,7 @@ class Ret1ReturnsAffectProfit(MoneyTestBase):
         ins, _, _ = self._pages()
         self.assertEqual(_dec(ins['revenue']), Decimal('0'))
         self.assertEqual(_dec(ins['total_cost']), Decimal('60000'),
-                         'omborga qaytmagan tovar tannarxi COGSда qolsin')
+                         'omborga qaytmagan tovar tannarxi COGSda qolsin')
         self.assertEqual(_dec(ins['profit']), Decimal('-60000'),
                          'bu HAQIQIY zarar: tovar ham ketdi, pul ham qaytdi')
 
@@ -2549,8 +2549,8 @@ class Disc4ExchangeCreditOnTheReceipt(MoneyTestBase):
 
     Chek #4706 da shunday chiqqan edi:
         Oraliq summa 80 500 · Chegirma −80 500 · JAMI 0 so'm
-    Mijoz o'sha 80 500 ni oldingi chekда to'lagan va eski tovarni qaytargan
-    edi — bu chegirma emas. Kassa oldiда bahsga sabab bo'ladigan yorliq.
+    Mijoz o'sha 80 500 ni oldingi chekda to'lagan va eski tovarni qaytargan
+    edi — bu chegirma emas. Kassa oldida bahsga sabab bo'ladigan yorliq.
     """
 
     def setUp(self):
@@ -2601,12 +2601,12 @@ class Disc4ExchangeCreditOnTheReceipt(MoneyTestBase):
 
 
 class Disc5ShiftReceiptShowsDiscount(MoneyTestBase):
-    """DISC-5 — Z-hisobotда smen davomida berilgan CHEGIRMA ko'rinsin.
+    """DISC-5 — Z-hisobotda smen davomida berilgan CHEGIRMA ko'rinsin.
 
     Z-hisobot smenning yagona rasmiy hujjati va kassir aynan shu bo'yicha
-    baholanadi, lekin chegirma unда UMUMAN ko'rinmasdi. JAMI SAVDO —
-    chegirma allaqachon ayirilgan summa, ya'ni kassir bir smenда million
-    so'm qo'lda chegirma bersa ham chekда hech qanday iz qolmasdi.
+    baholanadi, lekin chegirma unda UMUMAN ko'rinmasdi. JAMI SAVDO —
+    chegirma allaqachon ayirilgan summa, ya'ni kassir bir smenda million
+    so'm qo'lda chegirma bersa ham chekda hech qanday iz qolmasdi.
 
     Uch tur alohida: aksiya (egasining qarori), QO'LDA (kassir ixtiyori —
     kuzatiladigan son) va almashtirish krediti (chegirma emas).
@@ -2675,7 +2675,7 @@ class Disc5ShiftReceiptShowsDiscount(MoneyTestBase):
         self.assertNotContains(r, "Qo'lda chegirma")
 
     def test_jami_savdo_is_already_net_of_the_discount(self):
-        """Blok faqat MA'LUMOT — JAMI SAVDOдан yana ayirilmaydi."""
+        """Blok faqat MA'LUMOT — JAMI SAVDOdan yana ayirilmaydi."""
         self._sale(odisc='30000', promo='30000')
         c, _ = self._z()
         self.assertEqual(_dec(c['total_rev']), Decimal('70000'))
@@ -2697,23 +2697,23 @@ class Disc5ShiftReceiptShowsDiscount(MoneyTestBase):
 
 class Mon26ZReportEndToEnd(TestCase):
     """MON-26 — Z-hisobotning QAYTARISH / CHEGIRMA / ALMASHTIRISH mantig'i,
-    hammasi BIR smenда birga.
+    hammasi BIR smenda birga.
 
     Har biri alohida sinalgan edi; bu test ularning ARALASHMASINI qulflaydi,
     chunki ular bir-biriga ta'sir qiladi:
       - almashtirish YANGI chek yaratadi (Cheklar +1) lekin JAMIga 0 qo'shadi
         (order_discount = kredit), ya'ni sotuv soni oshsa ham pul oshmaydi;
-      - TENG almashtirishда kassadan naqd CHIQMAYDI (cash_refunded = 0), lekin
+      - TENG almashtirishda kassadan naqd CHIQMAYDI (cash_refunded = 0), lekin
         dona QAYTGAN deb sanaladi;
-      - ARZONROQQA almashtirishда farq HAQIQATAN kassadan chiqadi va
+      - ARZONROQQA almashtirishda farq HAQIQATAN kassadan chiqadi va
         kutilgan naqdni kamaytirishi SHART;
       - qo'lda chegirma va almashtirish krediti bitta `order_discount`
-        maydonида yashaydi — ajratilmasa kassir baholanmaydi.
+        maydonida yashaydi — ajratilmasa kassir baholanmaydi.
 
     Yana ARCH-5/MON-26: SOTUV bloki va KASSA bloki AYNAN bir xil cheklar
     to'plamini ko'rishi. Ilgari SOTUV `shift.transactions` (faqat FK), KASSA
     esa `_txn_qs()` (FK'siz eski cheklarni ham vaqt oynasi bo'yicha) o'qirdi —
-    bitta chekда "Naqd 310 000" va "+ Naqd savdo 340 000" chiqardi.
+    bitta chekda "Naqd 310 000" va "+ Naqd savdo 340 000" chiqardi.
     """
 
     def setUp(self):
@@ -2817,7 +2817,7 @@ class Disc6RoundingIsNotADiscount(MoneyTestBase):
        264 chek     ~614 000   medianasi 1 000 — chekni butun songa tushirish
 
     O'rtacha 9 961 so'm ikkalasini ham yashiradi. Egasi "biz bunchalik
-    chegirma bermaganmiz" deganда haq edi: bitta ham katta chegirma yo'q,
+    chegirma bermaganmiz" deganda haq edi: bitta ham katta chegirma yo'q,
     308 ta mayda qaror bor. Karta endi ularni ajratadi.
     """
 
@@ -2859,7 +2859,7 @@ class Disc6RoundingIsNotADiscount(MoneyTestBase):
         self.assertEqual(split['manual'], Decimal('0'))
 
     def test_small_amount_on_an_already_round_total_is_a_real_discount(self):
-        """100 000 lik chekда 3 000 — summa allaqachon butun edi.
+        """100 000 lik chekda 3 000 — summa allaqachon butun edi.
 
         Uchinchi shart (yalpi butun EMAS EDI) shu holat uchun. Usiz karta
         ataylab berilgan chegirmani yaxlitlash deb YASHIRIB qo'yardi — bu
@@ -2995,7 +2995,7 @@ class Ai1ExtractRespectsTimeBudget(TestCase):
     o'qigan edi — faqat aytishga ulgurmagan.
 
     Nozik joyi: bu invoice uchun ishonch 1.11 chiqadi, chunki "1 крб" li
-    qatorlarда qty QUTIда, narx esa DONAda — qty x narx = summa tengligi
+    qatorlarda qty QUTIda, narx esa DONAda — qty x narx = summa tengligi
     tabiiy ravishda buziladi. Ya'ni TO'G'RI o'qilgan faktura ham past baho
     oladi va behuda burishga tushadi.
     """
@@ -3058,7 +3058,7 @@ class Ai1ExtractRespectsTimeBudget(TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_per_call_timeout_never_exceeds_what_is_left(self):
-        """Har chaqiruvning time-out'i qolgan vaqtдан oshmasin."""
+        """Har chaqiruvning time-out'i qolgan vaqtdan oshmasin."""
         import inventory.invoice_ai as ai
         seen = []
 
@@ -3147,7 +3147,7 @@ class Ai2ConfidenceUnderstandsBoxRows(TestCase):
         self.assertLess(old, 1.4)
 
     def test_scrambled_read_still_scores_low(self):
-        """Haqiqiy burilgan o'qish PAST baho olishда davom etsin."""
+        """Haqiqiy burilgan o'qish PAST baho olishda davom etsin."""
         from inventory.invoice_ai import _confidence
         bad = self._invoice(boxes=0, pieces=2, scrambled=10)
         bad['total'] = 999999999      # jami ham mos kelmaydi
@@ -3172,13 +3172,13 @@ class Stk14LockingNeverJoinsNullableSide(MoneyTestBase):
     `Product.category` esa null=True -> LEFT OUTER JOIN. Postgres bunday
     so'rovni qulflashni rad etadi.
 
-    NEGA TESTDA CHIQMAGAN: bu to'plam SQLite'да ishlaydi, SQLite esa
+    NEGA TESTDA CHIQMAGAN: bu to'plam SQLite'da ishlaydi, SQLite esa
     select_for_update'ni umuman e'tiborsiz qoldiradi. Ya'ni xatoni QAYTA
     KELTIRIB bo'lmaydi — shuning uchun test XATONI emas, SO'ROV SHAKLINI
-    tekshiradi: qulflanadigan so'rovда LEFT OUTER JOIN BO'LMASIN. Bu shart
+    tekshiradi: qulflanadigan so'rovda LEFT OUTER JOIN BO'LMASIN. Bu shart
     ikkala bazada ham bir xil tekshiriladi.
 
-    Xuddi shu xato ilgari pos_refund'да ham bo'lgan — takrorlanuvchi tuzoq,
+    Xuddi shu xato ilgari pos_refund'da ham bo'lgan — takrorlanuvchi tuzoq,
     shuning uchun qulflash bitta yordamchiga (_lock_stocks) yig'ildi.
     """
 
@@ -3344,11 +3344,11 @@ class Ux10EmptyCartClearsDiscount(MoneyTestBase):
 
     Sababi: renderCart()ning "savat bo'sh" tarmog'i faqat jami va donani
     nolga qaytarardi. Chegirma summasi, foizi va sababi — hech biri
-    tozalanmasdi. "Oraliq" va "Chegirma" ko'rsatkichlari ham eski qiymatда
-    qolib ketardi (bo'sh savatда 15 000 ko'rsatardi).
+    tozalanmasdi. "Oraliq" va "Chegirma" ko'rsatkichlari ham eski qiymatda
+    qolib ketardi (bo'sh savatda 15 000 ko'rsatardi).
 
     Bu tarmoq — YAGONA choke point: oxirgi tovarni o'chirish ham, "savatni
-    tozalash" ham, sotuvdan keyingi tozalash ham shu yerдан o'tadi.
+    tozalash" ham, sotuvdan keyingi tozalash ham shu yerdan o'tadi.
     """
 
     def setUp(self):
@@ -3546,19 +3546,32 @@ class Scan1SingleScanAddsOnce(MoneyTestBase):
         self.open_shift()
         self.html = self.client.get('/pos/').content.decode()
 
+    # DIQQAT: bu testlar ilgari funksiya IMZOSINING aniq matniga
+    # bog'langan edi (`function doSearch()`), shu bois SCAN-3 da unga
+    # parametr qo'shilishi bilanoq sinib qoldi — garchi tekshirayotgan
+    # xatti-harakat joyida turgan bo'lsa ham. Endi imzoni regex topadi.
+    DOSEARCH = r'function doSearch\('
+
+    def _dosearch_block(self):
+        import re
+        m = re.search(self.DOSEARCH, self.html)
+        self.assertIsNotNone(m, 'doSearch() topilmadi')
+        return m.start(), self.html[m.start():m.start() + 1600]
+
     def test_search_cancels_the_pending_debounce(self):
-        block = self.html[self.html.index('function doSearch()'):][:1400]
+        _, block = self._dosearch_block()
         self.assertIn('clearTimeout(typeTimer);', block,
                       'Enter bilan qidirilganda kutayotgan taymer bekor bo`lsin')
 
     def test_timer_is_declared_before_use(self):
         """typeTimer doSearch'dan OLDIN e'lon qilinsin (TDZ bo'lmasin)."""
-        self.assertLess(self.html.index('let typeTimer = null;'),
-                        self.html.index('function doSearch()'))
+        start, _ = self._dosearch_block()
+        self.assertLess(self.html.index('let typeTimer = null;'), start)
 
     def test_lookup_is_still_async(self):
         """Poyga sababi shu — hujjat sifatida qoladi."""
-        self.assertIn('async function search(q)', self.html)
+        import re
+        self.assertRegex(self.html, r'async function search\(q')
 
 
 class Pos1CheckoutHasAClientTimeout(MoneyTestBase):
@@ -4272,7 +4285,7 @@ class Arch2ModulesStaySeparate(TestCase):
 
 
 class Rpt1SalesPageIsPaginated(MoneyTestBase):
-    """RPT-1: /sales/ endi jimgina 300-qatorда kesilmaydi.
+    """RPT-1: /sales/ endi jimgina 300-qatorda kesilmaydi.
 
     Avvalgi xatti-harakat: ro'yxat `qs[:300]` bilan kesilar, sahifa esa
     kichkina yozuv bilan "eng so'nggi 300 ko'rsatildi" derdi. Ya'ni egasi
@@ -4388,7 +4401,7 @@ class Ux11OnlyCustomerDisplayOpensANewTab(TestCase):
 
     Bu test shablonlarni matn sifatida o'qiydi. Sabab oddiy: yangi tab
     ochadigan narsa qayta-qayta, ko'pincha "shunchaki bitta havola" deb
-    qo'shiladi va uni ko'rib chiqishда payqash qiyin.
+    qo'shiladi va uni ko'rib chiqishda payqash qiyin.
     """
 
     EXCEPT_URL = 'pos_customer_display'
@@ -5443,10 +5456,17 @@ class Scan2SearchBoxAlwaysClears(TestCase):
         start = src.index('async function search(q)')
         return src[start:start + 9000]
 
+    def _do_search(self):
+        import re
+        src = self._pos()
+        m = re.search(r'async function search\(q', src)
+        self.assertIsNotNone(m, 'search() topilmadi')
+        return src[m.start():m.start() + 12000]
+
     def test_the_box_is_cleared_before_any_branch(self):
-        """Tozalash SHOXLANISHDAN OLDIN — hamma yo'l uchun bitta joyda."""
+        """Skaner yo'lida tozalash SHOXLANISHDAN OLDIN — bitta joyda."""
         body = self._do_search()
-        clear = body.index("scanInput.value = '';")
+        clear = body.index('clearBox(false);')
         notfound = body.index('if (!data.found)')
         self.assertLess(clear, notfound,
                         "katak 'topilmadi' shoxidan OLDIN tozalanishi kerak")
@@ -5460,8 +5480,106 @@ class Scan2SearchBoxAlwaysClears(TestCase):
     def test_network_errors_also_clear_and_name_the_code(self):
         body = self._do_search()
         tail = body[body.index('} catch (e) {'):][:400]
-        self.assertIn("scanInput.value = '';", tail)
+        self.assertIn('clearBox(false);', tail)
         self.assertIn('${q}', tail)
+
+
+class Scan3TypingIsNeverDestroyed(TestCase):
+    """SCAN-3 — yozilayotgan nom o'chib ketmasin.
+
+    SCAN-2 katakni javob kelishi bilan HAR DOIM tozalardi. Skaner uchun
+    to'g'ri, lekin QO'LDA YOZISHNI buzardi: qidiruv 350 ms tanaffusdan
+    keyin O'ZI ishga tushadi va javob sotuvchi hali yozayotganda keladi.
+    Sotuvchi "hermes 53 ss" deb yozmoqchi bo'lardi-yu, "hermes" dan
+    keyin katak bo'shab qolardi.
+
+    Undan ham yomoni: jonli qidiruv topilgan tovarni SAVATGA QO'SHARDI.
+    Ya'ni yarim so'z bo'yicha topilgan NOTO'G'RI tovar savatga tushardi.
+
+    Endi:
+      * yozish (jonli qidiruv) — faqat KO'RSATADI, katakka tegmaydi;
+      * Enter / qidiruv tugmasi / SKANER — qo'shadi va tozalaydi;
+      * javob kelguncha matn o'zgargan bo'lsa — javob e'tiborsiz.
+    """
+
+    def _pos(self):
+        import os
+        from django.conf import settings
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory', 'pos.html')
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail('pos.html topilmadi')
+
+    def test_search_knows_whether_it_was_committed(self):
+        self.assertIn('async function search(q, commit)', self._pos())
+
+    def test_typing_never_clears_the_box(self):
+        """clearBox() commit yoki savatga qo'shilganda ishlaydi, xolos."""
+        src = self._pos()
+        i = src.index('function clearBox(added)')
+        body = src[i:i + 400]
+        self.assertIn('if (commit || added) scanInput.value', body)
+
+    def test_a_stale_response_is_ignored(self):
+        src = self._pos()
+        self.assertIn("if (!commit && scanInput.value.trim() !== _typed) return;",
+                      src, 'eskirgan javob e\'tiborsiz qolsin')
+
+    def test_the_box_is_only_cleared_through_the_guarded_helper(self):
+        """search() katakni FAQAT ikki joyda tozalasin:
+
+        1. clearBox() — o'zi "kassir hali ham shu matnni yozgan" deb
+           tekshiradigan YAGONA yordamchi;
+        2. variant tanlash tugmasi — sichqoncha bilan ATAYLAB bosilgan amal
+           (yonida addToCart bor).
+
+        Boshqa har qanday to'g'ridan-to'g'ri `scanInput.value = ''` — bu
+        SCAN-3 regressiyasining qaytishi: kassir "hermes 53 ss" yozayotganda
+        "hermes" javobi kelib matnni o'chirib tashlaydi.
+        """
+        import re
+        src = self._pos()
+        m = re.search(r'async function search\(q', src)
+        body = src[m.start():src.index('function currentPriceMode', m.start())]
+
+        # 1) yordamchining o'zi — qo'riqchisi joyida bo'lsin
+        h = body.index('function clearBox(')
+        helper = body[h:body.index('\n    }', h)]
+        self.assertIn("if (scanInput.value.trim() !== _typed) return;", helper,
+                      'clearBox() kassir yozganini tekshirishi shart')
+        self.assertIn('if (commit || added) scanInput.value', helper,
+                      'clearBox() faqat commit yoki qo\'shilganda tozalasin')
+
+        # 2) yordamchidan TASHQARIdagi har bir tozalash — atayin bosilgan
+        #    amaldan keyin bo'lsin
+        rest = body[:h] + body[h + len(helper):]
+        hits = list(re.finditer(r"scanInput\.value = '';", rest))
+        self.assertTrue(hits, 'variant tanlash tugmasi katakni tozalashi kerak')
+        for x in hits:
+            around = rest[max(0, x.start() - 260):x.start()]
+            self.assertIn('addToCart', around,
+                          'search() ichida qo\'riqchisiz tozalash qoldi')
+
+    def test_clearing_happens_in_exactly_one_helper(self):
+        """Tozalash mantig'i ko'chirilib takrorlanmasin."""
+        src = self._pos()
+        self.assertEqual(src.count('function clearBox('), 1)
+        self.assertGreaterEqual(src.count('clearBox('), 4,
+                                'clearBox() barcha yo\'llarda chaqirilsin')
+
+    def test_enter_and_button_commit_but_typing_does_not(self):
+        src = self._pos()
+        self.assertIn("doSearch(true); }", src)          # Enter
+        self.assertIn('() => doSearch(true)', src)        # tugma
+        self.assertIn('doSearch(false);', src)            # jonli qidiruv
+
+    def test_typing_does_not_add_to_the_cart(self):
+        """Jonli qidiruv topsa ham savatga QO'SHMAYDI — Enter kerak."""
+        src = self._pos()
+        self.assertIn('function needEnter(', src)
+        self.assertIn("qo'shish uchun Enter", src)
 
 
 class Kpi9BranchTotalsAreNotMultipliedByStaff(TestCase):
@@ -6430,3 +6548,58 @@ class Core6SharedJsHelpers(TestCase):
         # Python tomoni ham xuddi shunday
         self.assertEqual(parse_money('50,5'), Decimal('50.5'))
         self.assertEqual(parse_money('12 345,50'), Decimal('12345.50'))
+
+
+class Txt1NoMixedScriptWords(TestCase):
+    """TXT-1 — bitta so'z ichida lotin va kirill harflari ARALASHMASIN.
+
+    Eski tahrirlardan qolgan qo'shtilli klaviatura izlari kodga va —
+    yomoni — EKRANGA sizib kirgan edi. Kassir POS'ning F1 yordamida
+    "Skanердан oldин miqdor" degan buzuq matnni ko'rardi; Z-hisobot
+    CHEKIDA "JAMI SAVDOдан ayirilgan" chop etilardi; smena qaytarishlari
+    sahifasida 17 ta shunday so'z bor edi.
+
+    Yaxlit kirill matni (til tanlash: «Ўзбекча», «Русский»; nakladnoy
+    fiksturalaridagi «Женский», «1 крб») — TO'G'RI va tegilmaydi.
+    Tekshiruv FAQAT bitta so'z ichida ikki alifbo aralashganini topadi,
+    ya'ni har doim tahrir xatosi.
+    """
+
+    LAT = r'A-Za-z'
+    CYR = 'Ѐ-ӿ'
+
+    def _mixed(self, text):
+        import re
+        pat = re.compile("[%s%s’'-]+" % (self.LAT, self.CYR))
+        return sorted({w for w in pat.findall(text)
+                       if re.search('[%s]' % self.LAT, w)
+                       and re.search('[%s]' % self.CYR, w)})
+
+    def _files(self):
+        import glob
+        import os
+        from django.conf import settings
+        root = str(settings.BASE_DIR)
+        out = []
+        for pat in ('templates/**/*.html', 'inventory/**/*.py',
+                    'static/js/*.js'):
+            out += glob.glob(os.path.join(root, pat), recursive=True)
+        return [f for f in sorted(set(out)) if 'tests_money' not in f]
+
+    def test_no_source_file_mixes_alphabets_inside_a_word(self):
+        bad = {}
+        for f in self._files():
+            with open(f, encoding='utf-8') as fh:
+                hits = self._mixed(fh.read())
+            if hits:
+                bad[f] = hits
+        self.assertFalse(
+            bad,
+            'bitta so\'zda ikki alifbo aralashgan (tahrir xatosi): %r' % bad)
+
+    def test_the_guard_actually_catches_a_broken_word(self):
+        """Tekshiruvning o'zi ishlashiga ishonch (aks holda u bo'sh qoida)."""
+        self.assertEqual(self._mixed('Skanерdan oldin'),
+                         ['Skanерdan'])
+        self.assertEqual(self._mixed("Ўзбекча / Русский"), [])
+        self.assertEqual(self._mixed('Skanerdan oldin miqdor'), [])

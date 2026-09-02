@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 
 def backfill_public_ids(apps, schema_editor):
-    # Mavjud cheklarга HAR BIRIGA alohida tasodifiy token beramiz (bitta
+    # Mavjud cheklarga HAR BIRIGA alohida tasodifiy token beramiz (bitta
     # umumiy default hammasiga tushib qolmasin — aks holda token takrorlanardi).
     SaleTransaction = apps.get_model('inventory', 'SaleTransaction')
     rows = SaleTransaction.objects.all().only('id', 'public_id')

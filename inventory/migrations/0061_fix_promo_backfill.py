@@ -1,7 +1,7 @@
 """DISC-2: 0060 backfill'ini tuzatish — sababsiz chegirma AKSIYA emas.
 
 0060 shunday deb o'ylagan edi: "sababsiz chegirma faqat AKSIYA bo'lishi
-mumkin, chunki pos_checkout qo'lда chegirma uchun sababni MAJBURIY qiladi".
+mumkin, chunki pos_checkout qo'lda chegirma uchun sababni MAJBURIY qiladi".
 Bu FAQAT 2026-08-26 dan keyingi ma'lumot uchun to'g'ri — sabab talabi aynan
 o'sha kuni qo'shilgan (a2d1286). `order_discount` esa 2026-06-03 dan beri
 bor. Ya'ni qariyb uch oy davomida kassir sababsiz chegirma bera olardi va
@@ -15,7 +15,7 @@ AKSIYA texnik jihatdan MUMKIN EMAS edi. Demak 0060 belgilagan 3 001 635 so'm
 
 Xato yo'nalishi xavfli edi: kassir bergan pulni egasining marketing qarori
 qilib ko'rsatardi, ya'ni kuzatilishi kerak bo'lgan signalni YASHIRARDI.
-Aniqlab bo'lmaganда har doim MUAMMONI KO'RSATADIGAN tomonga og'ish kerak.
+Aniqlab bo'lmaganda har doim MUAMMONI KO'RSATADIGAN tomonga og'ish kerak.
 
 Pul o'zgarmaydi: `order_discount` tegilmaydi, faqat yorliq ustuni.
 """
@@ -32,8 +32,8 @@ def fix_promo_backfill(apps, schema_editor):
     qs = Txn.objects.filter(order_discount__gt=0, discount_reason='',
                             promo_discount=models.F('order_discount'))
 
-    # Himoya: agar bu migratsiya ishlaganда aksiya allaqачон mavjud bo'lsa,
-    # faqat ENG ERTA aksiyaдан OLDINGI cheklarni tuzatamiz — o'shandan
+    # Himoya: agar bu migratsiya ishlaganda aksiya allaqachon mavjud bo'lsa,
+    # faqat ENG ERTA aksiyadan OLDINGI cheklarni tuzatamiz — o'shandan
     # keyingilari haqiqatan aksiya bo'lishi mumkin.
     first_promo = (Promotion.objects.order_by('valid_from')
                    .values_list('valid_from', flat=True).first())

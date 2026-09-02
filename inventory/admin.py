@@ -95,7 +95,7 @@ class PaymentIntentAdmin(admin.ModelAdmin):
     actions = ['mark_paid', 'mark_cancelled']
 
     def mark_paid(self, request, queryset):
-        # SEC-16: PRODUCTIONда to'lovni QO'LDA "paid" qilib bo'lmaydi — bu
+        # SEC-16: PRODUCTIONda to'lovni QO'LDA "paid" qilib bo'lmaydi — bu
         # pulsiz sotuvni tasdiqlash yo'li edi. Faqat DEBUG (test)да ishlaydi.
         from django.conf import settings
         if not settings.DEBUG:
@@ -154,8 +154,8 @@ class SaleInline(admin.TabularInline):
     model = Sale
     extra = 0
     readonly_fields = ('variant', 'quantity', 'sale_price', 'cost_at_sale')
-    # SEC-16: chek qatorini admin'дан qo'shib/o'chirib bo'lmaydi — bu daromad
-    # yozuvi, o'chirilса ombor QAYTMAY hisob buziladi. Faqat ko'rish.
+    # SEC-16: chek qatorini admin'dan qo'shib/o'chirib bo'lmaydi — bu daromad
+    # yozuvi, o'chirilsa ombor QAYTMAY hisob buziladi. Faqat ko'rish.
     can_delete = False
 
     def has_add_permission(self, request, obj=None):
@@ -170,8 +170,8 @@ class SaleTransactionAdmin(admin.ModelAdmin):
     search_fields = ('customer_name', 'customer_phone')
     inlines = [SaleInline]
 
-    # SEC-16: chekni admin'дан O'CHIRIB bo'lmaydi. Sale.transaction CASCADE
-    # bo'lgani uchun chek o'chirilса, uning daromad qatorlari ham o'chib,
+    # SEC-16: chekni admin'dan O'CHIRIB bo'lmaydi. Sale.transaction CASCADE
+    # bo'lgani uchun chek o'chirilsa, uning daromad qatorlari ham o'chib,
     # ombor esa QAYTMASdi. Chek — moliyaviy yozuv, qo'shib/o'chirmaymiz.
     def has_add_permission(self, request):
         return False
@@ -186,7 +186,7 @@ class ReturnAdmin(admin.ModelAdmin):
     list_filter = ('refunded_at',)
     search_fields = ('sale__variant__product__code', 'reason')
 
-    # SEC-16: qaytarish — moliyaviy yozuv. Admin'дан tahrirlab/o'chirib
+    # SEC-16: qaytarish — moliyaviy yozuv. Admin'dan tahrirlab/o'chirib
     # bo'lmaydi (POS orqali yaratiladi). Faqat ko'rish.
     def has_add_permission(self, request):
         return False
@@ -287,8 +287,8 @@ class SaleAdmin(admin.ModelAdmin):
     readonly_fields = ('variant', 'branch', 'quantity', 'sale_price',
                        'cost_at_sale', 'sold_by', 'sold_at', 'transaction')
 
-    # SEC-16: Sale — daromad qatori. Admin'да qo'shib/tahrirlab/o'chirib
-    # bo'lmaydi (POS orqali yaratiladi). O'chirilса ombor qaytmay hisob buziladi.
+    # SEC-16: Sale — daromad qatori. Admin'da qo'shib/tahrirlab/o'chirib
+    # bo'lmaydi (POS orqali yaratiladi). O'chirilsa ombor qaytmay hisob buziladi.
     def has_add_permission(self, request):
         return False
 

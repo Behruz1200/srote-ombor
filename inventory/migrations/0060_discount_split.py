@@ -11,13 +11,13 @@ def backfill(apps, schema_editor):
     `discount_reason` yagona ishonchli belgi:
       - 'Almashtirish...'  -> butun summa ALMASHTIRISH krediti (pos_exchange
         aynan shu sababni yozadi);
-      - sabab BO'SH        -> butun summa AKSIYA. Chunki pos_checkout qo'lда
-        chegirма uchun sababni MAJBURIY qiladi (sababsiz qo'lда chegirma
+      - sabab BO'SH        -> butun summa AKSIYA. Chunki pos_checkout qo'lda
+        chegirma uchun sababni MAJBURIY qiladi (sababsiz qo'lda chegirma
         umuman saqlanmagan), demak sababsiz summa faqat serverning aksiya
         hisobidan kelgan;
       - sabab BOR (almashtirish emas) -> QO'LDA (ikkalasi ham nol qoladi).
-        Aksiya + qo'lда aralash chek bo'lsa, tarixда ular bitta songa
-        qo'shilib ketgan — ajratib bo'lmaydi, shuning uchun butunlay qo'lда
+        Aksiya + qo'lda aralash chek bo'lsa, tarixda ular bitta songa
+        qo'shilib ketgan — ajratib bo'lmaydi, shuning uchun butunlay qo'lda
         deb qoldiramiz (kam sonli va kichik summa; YANGI cheklar aniq).
     """
     Txn = apps.get_model('inventory', 'SaleTransaction')
@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
             field=models.DecimalField(
                 decimal_places=2,
                 default=0,
-                help_text="order_discount ichидagi ALMASHTIRISH krediti — eski tovar qiymati. Chegirma emas: mijoz shu qismni tovar bilan to'lagan.",
+                help_text="order_discount ichidagi ALMASHTIRISH krediti — eski tovar qiymati. Chegirma emas: mijoz shu qismni tovar bilan to'lagan.",
                 max_digits=12,
             ),
         ),
@@ -56,7 +56,7 @@ class Migration(migrations.Migration):
             field=models.DecimalField(
                 decimal_places=2,
                 default=0,
-                help_text="order_discount ichидagi AKSIYA ulushi (server hisoblaydi)",
+                help_text="order_discount ichidagi AKSIYA ulushi (server hisoblaydi)",
                 max_digits=12,
             ),
         ),

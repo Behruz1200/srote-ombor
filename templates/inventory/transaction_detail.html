@@ -166,8 +166,8 @@
                     <td colspan="2" class="text-end">{{ txn.gross|som }}</td></tr>
                 {% comment %}
                 DISC-4: almashtirish krediti CHEGIRMA EMAS — mijoz o'sha
-                summani oldingi chekда to'lagan, endi eski tovarni qaytardi.
-                Bitta "Chegirma" qatoriда ko'rsatish mijozни ham, kassirni
+                summani oldingi chekda to'lagan, endi eski tovarni qaytardi.
+                Bitta "Chegirma" qatorida ko'rsatish mijozni ham, kassirni
                 ham chalkashtirardi.
                 {% endcomment %}
                 {% if txn.customer_discount %}
@@ -180,9 +180,9 @@
                 {% endif %}
                 {% endif %}
                 {% comment %}
-                Summaga UCHTA ustun: ikkita ustunда "462 000 so'm" 80mm
-                qog'ozда sig'masdan "so'" + "m" bo'lib ikki qatorга
-                o'ralardi. "JAMI:" yorlig'i bitta ustunда bemalol turadi.
+                Summaga UCHTA ustun: ikkita ustunda "462 000 so'm" 80mm
+                qog'ozda sig'masdan "so'" + "m" bo'lib ikki qatorga
+                o'ralardi. "JAMI:" yorlig'i bitta ustunda bemalol turadi.
                 {% endcomment %}
                 <tr><th class="text-start">JAMI:</th>
                     <th colspan="3" class="text-end fs-5">{{ txn.total|som }}&nbsp;so'm</th></tr>
@@ -403,7 +403,7 @@ POS terminal devices (Android):
     /* FE-8: visibility:hidden ink'ni yashiradi, lekin LAYOUT qutisini
        qoldiradi — har chek uchun app-shell balandligicha BO'SH qog'oz
        chiqardi (metrlab). display:none bilan shell butunlay olib tashlanadi
-       (bu elementlarда #receipt yo'q, shuning uchun xavfsiz). */
+       (bu elementlarda #receipt yo'q, shuning uchun xavfsiz). */
     nav.navbar, .yurit-nav, footer { display: none !important; }
     .container.dash-page > *:not(#receipt) { display: none !important; }
 
@@ -477,13 +477,13 @@ POS terminal devices (Android):
     #receipt tfoot th { border-top: 1px solid #000 !important; font-size: 11pt !important; }
     /* Sahifa bo'linib qolgan taqdirda ham sarlavha va JAMI TAKRORLANMASIN.
        Brauzer thead/tfoot ni har sahifada qayta chizadi — shu tufayli
-       ikkinchi varaqда "MAHSULOT ... JAMI: 462 000" yana chiqib, mijozga
+       ikkinchi varaqda "MAHSULOT ... JAMI: 462 000" yana chiqib, mijozga
        ikkita yarim chek berilardi. Oddiy qator-guruh bo'lsa — takrorlamaydi. */
     #receipt thead, #receipt tfoot { display: table-row-group; }
     /* Chekni sahifaga bo'lishga urinmasin */
     #receipt table, #receipt tr, #receipt tbody { break-inside: avoid-page; }
-    /* Summalar SO'Z O'RTASIДАН uzilmasin ("so'"+"m" bo'lib qolmasin) —
-       faqat bo'shliq joyидан o'ralsin. */
+    /* Summalar SO'Z O'RTASIDAN uzilmasin ("so'"+"m" bo'lib qolmasin) —
+       faqat bo'shliq joyidan o'ralsin. */
     #receipt tfoot th, #receipt tfoot td {
         overflow-wrap: break-word;
         word-break: normal;

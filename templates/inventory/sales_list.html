@@ -5,10 +5,10 @@
 
 {% block content %}
 <style>
-    /* UX-1: ilgari 5 ta karta bir qatorда turardi va 9-10 xonali pul raqamlari
+    /* UX-1: ilgari 5 ta karta bir qatorda turardi va 9-10 xonali pul raqamlari
        sig'masdi — shuning uchun clamp(1rem, 1.2vw, ...) bilan matn kattaligiga
        tushirib yuborilgan edi. Endi 3 + 3: har kartaga ikki barobar joy, raqam
-       to'liq o'lchamда qoladi. */
+       to'liq o'lchamda qoladi. */
     .sl-kpis { margin-bottom: 0.75rem; }
     .sl-kpis .dash-kpi__value { white-space: nowrap; font-size: 1.55rem; }
     .sl-kpis .dash-kpi--lead .dash-kpi__value { font-size: 1.9rem; }
@@ -19,7 +19,7 @@
 
     /* UX-2: chegirma tafsiloti KPI FOOTER'ida edi — footer flex/space-between
        bo'lgani uchun uzun yorliqlar so'z o'rtasidan ikki qatorga bo'linib
-       ketardi. Endi alohida kartaда, raqamlar o'ng chekkaда tekis ustun
+       ketardi. Endi alohida kartada, raqamlar o'ng chekkada tekis ustun
        bo'lib turadi. */
     .sl-break { display: grid; grid-template-columns: 1fr auto; gap: 0.3rem 0.75rem;
                 font-size: 0.82rem; margin-top: 0.15rem; }
@@ -78,7 +78,7 @@
                 <span data-countup="{{ net_total|default:0 }}">{{ net_total|som }}</span>
             </div>
             <div class="dash-kpi__footer">
-                <span class="dash-kpi__unit">so'm — do'kondа qolgan</span>
+                <span class="dash-kpi__unit">so'm — do'konda qolgan</span>
             </div>
         </article>
 
@@ -197,10 +197,10 @@
            2) tanlangan davr hech qayerda SO'Z bilan yozilmagan edi, va
               "Sana (gacha)" bo'sh bo'lsa u "bugungacha" degani — buni
               foydalanuvchi bilishi kerak edi;
-           3) oltita "— hammasi —" ochiladigan ro'yxat bir qatorда turardi;
+           3) oltita "— hammasi —" ochiladigan ro'yxat bir qatorda turardi;
               qaysi biri yoqilganini ko'rish uchun hammasini o'qib chiqish
-              kerak edi. Endi ular yig'iladigan bo'limда, va yoqilganlari
-              tepaда olib tashlanadigan yorliq bo'lib chiqadi.
+              kerak edi. Endi ular yig'iladigan bo'limda, va yoqilganlari
+              tepada olib tashlanadigan yorliq bo'lib chiqadi.
          ============================================================== -->
     <form method="get" class="card p-3 mb-3" id="salesFilter">
 
@@ -299,7 +299,7 @@
                 </div>
                 <!-- DISC-3: chegirma berilganmi? "Qo'lda" — kassir o'z
                      ixtiyori bilan bergani, kuzatishga arziydigan yagona tur.
-                     DISC-6: filtr SQL'да ishlaydi va yaxlitlashni ajratmaydi
+                     DISC-6: filtr SQL'da ishlaydi va yaxlitlashni ajratmaydi
                      (buning uchun chekning qator yig'indisi kerak). Shu bois
                      yorliq ikkalasini ham nomlaydi — karta ajratadi, filtr
                      yo'q. Yolg'on va'da bermaslik uchun ataylab shunday. -->
@@ -359,7 +359,7 @@
             if (t === today || !t) {
                 // Sahifa standarti −30 kun, tugma esa −29 (bugun ham kiradi).
                 // Ikkalasi ham "30 kun" deb qabul qilinadi, aks holda standart
-                // holatда hech qaysi tugma yonmasdi.
+                // holatda hech qaysi tugma yonmasdi.
                 if (f === shift(6) || f === shift(7)) return '6';
                 if (f === shift(29) || f === shift(30)) return '29';
             }
@@ -396,7 +396,7 @@
             if (!el || !el.value) return;
             var shown = el.tagName === 'SELECT'
                 ? el.options[el.selectedIndex].text.trim() : el.value;
-            // Ro'yxatда ichki bandlar "— " bilan chekinтirilgan; yorliqда bu
+            // Ro'yxatda ichki bandlar "— " bilan chekintirilgan; yorliqda bu
             // chiziqcha keraksiz.
             shown = shown.replace(/^[—-]\s*/, '');
             if (name !== 'q') n++;

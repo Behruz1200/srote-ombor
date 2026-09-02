@@ -1074,7 +1074,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
                     <tr><td><kbd>F9</kbd></td><td>Savatni saqlab qo'yish (park)</td></tr>
                     <tr><td><kbd>F10</kbd></td><td>Tovushni yoqish/o'chirish</td></tr>
                     <tr><td><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd></td><td>To'lov oynasida: Naqd / Karta / O'tkazma</td></tr>
-                    <tr><td><kbd>son</kbd> <kbd>*</kbd></td><td>Skanердан oldин miqdor (masalan 3 *)</td></tr>
+                    <tr><td><kbd>son</kbd> <kbd>*</kbd></td><td>Skanerdan oldin miqdor (masalan 3 *)</td></tr>
                     <tr><td><kbd>F1</kbd></td><td>Bu oynani ko'rsatish</td></tr>
                     <tr><td><kbd>Esc</kbd></td><td>Joriy modal'ni yopish</td></tr>
                     <tr><td><kbd>Cmd</kbd>+<kbd>K</kbd></td><td>Tezkor qidirish (global)</td></tr>
@@ -1586,7 +1586,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
 <script>
 // SW-4/CORE-6: JONLI sessiya cookie'sidan (keshlangan eski token emas).
 const CSRF = Y.csrf();
-// Patch 1: jonli prepend qilinган qator uchun kerak (kassir nomi + to'lov yorlig'i).
+// Patch 1: jonli prepend qilingan qator uchun kerak (kassir nomi + to'lov yorlig'i).
 // esc() orqali o'tadi (SEC-11).
 const CURRENT_USER = "{{ request.user.username|escapejs }}";
 const PAY_LABELS = {cash: "Naqd", card: "Karta",
@@ -1620,7 +1620,7 @@ const roundSuggestBtns = document.getElementById('roundSuggestBtns');
 
 // DISC-8: chekni pastki "chiroyli" songa tushiradigan yaxlitlash summalari.
 //
-// Qoida: chekni MINGGА tushiramiz, va shu zanjirni eng yaqin O'N MINGgacha
+// Qoida: chekni MINGGA tushiramiz, va shu zanjirni eng yaqin O'N MINGgacha
 // davom ettiramiz. Shuning uchun 83 000 -> 1000/2000/3000 (80 000 da to'xtaydi),
 // 36 500 esa -> 500..4500 (30 000 gacha 6 500 kerak, u 5 000 chegarasidan
 // oshadi, shuning uchun chegara to'xtatadi).
@@ -1684,7 +1684,7 @@ function resetDiscountReason() {
     discReasonOtherWrap.style.display = 'none';
 }
 
-// Saqlangan savat qaytarilganда: matn ro'yxatda bo'lsa — tanlaymiz, bo'lmasa
+// Saqlangan savat qaytarilganda: matn ro'yxatda bo'lsa — tanlaymiz, bo'lmasa
 // (eski erkin matn) "Boshqa…" ga tushiramiz, shunda sabab yo'qolmaydi.
 function setDiscountReason(text) {
     const t = (text || '').trim();
@@ -1704,7 +1704,7 @@ const clearCartBtn   = document.getElementById('clearCartBtn');
 const parkBtn        = document.getElementById('parkBtn');
 const openPayBtn     = document.getElementById('openPayBtn');
 
-// To'lov turi kartasini modal ichiga ko'chiramiz (bir marta, yuklanishда)
+// To'lov turi kartasini modal ichiga ko'chiramiz (bir marta, yuklanishda)
 (function(){
     const card = document.getElementById('payMethodCard');
     const mount = document.getElementById('payMethodMount');
@@ -1739,10 +1739,10 @@ function openPayModal() {
 }
 if (openPayBtn) openPayBtn.addEventListener('click', openPayModal);
 
-// Patch 3: to'lov modalида RAQAM tugmalari usulni tanlaydi (1=Naqd, 2=Karta,
-// 3=O'tkazma). Karta/o'tkazmада qaytim bo'lmaydi — darhol yakunlanadi; naqd esa
-// to'xtaydi (kassir xohласа "Naqd berildi" ni kiritадi). INPUT ichида terilса
-// tegmaymiz — aks holда "Naqd berildi"га 1/2/3 terish usulni jimgina almashtirardi.
+// Patch 3: to'lov modalida RAQAM tugmalari usulni tanlaydi (1=Naqd, 2=Karta,
+// 3=O'tkazma). Karta/o'tkazmada qaytim bo'lmaydi — darhol yakunlanadi; naqd esa
+// to'xtaydi (kassir xohlasa "Naqd berildi" ni kiritadi). INPUT ichida terilsa
+// tegmaymiz — aks holda "Naqd berildi"га 1/2/3 terish usulni jimgina almashtirardi.
 (function () {
     const pm = document.getElementById('payModal');
     if (!pm) return;
@@ -1789,8 +1789,8 @@ if (_displayChannel) {
 }
 function broadcastCart() {
     // FE-9: chegirmani ham yuboramiz — mijoz ekrani JAMIni to'g'ri (to'lanadigan)
-    // ko'rsatsin, aks holда qatorlar yig'indisi (chegirmasiz) chiqib, mijoz
-    // haqiqatда to'laydigandan KATTA raqam ko'rinardi.
+    // ko'rsatsin, aks holda qatorlar yig'indisi (chegirmasiz) chiqib, mijoz
+    // haqiqatda to'laydigandan KATTA raqam ko'rinardi.
     const _sub = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
     broadcastDisplay({
         action: 'cart',
@@ -1823,21 +1823,21 @@ function saveCart() {
 }
 let cart = loadCart();
 let promoDiscount = 0;
-// FE-6: foizli chegirma HAR renderCart'да qayta hisoblansin (savat o'zgarса ham
-// "−10%" 10% bo'lib qolsin, eskirgan qat'iy so'mга aylanib qolmasin).
+// FE-6: foizli chegirma HAR renderCart'da qayta hisoblansin (savat o'zgarsa ham
+// "−10%" 10% bo'lib qolsin, eskirgan qat'iy so'mga aylanib qolmasin).
 let discountPct = 0;
 let appliedPromos = [];
 // QR amounts paid as part of a mixed-payment cheque. Combined with the
 // cash/card inputs at checkout into the final payment_breakdown.
 let qrBreakdownExtra = [];
-// S1: OFF-2 idempotentlik kaliti SAVATГА bog'lanadi, bosishга emas. Bir savat
-// uchun bitta kalit — takroriy bosishда server takroriy chek ochmaydi.
-// checkoutInFlight: so'rov ketayotган paytда renderCart() tugmani QAYTA
-// yoqmasin (aks holда ikkinchi bosish yangi kalit bilan ikkinchi chek yasardi).
+// S1: OFF-2 idempotentlik kaliti SAVATGA bog'lanadi, bosishga emas. Bir savat
+// uchun bitta kalit — takroriy bosishda server takroriy chek ochmaydi.
+// checkoutInFlight: so'rov ketayotgan paytda renderCart() tugmani QAYTA
+// yoqmasin (aks holda ikkinchi bosish yangi kalit bilan ikkinchi chek yasardi).
 let cartIdemKey = null;
 let checkoutInFlight = false;
 // Patch 4: miqdor ko'paytirgich — "3 *" bosib, keyin skanerlansa 3 dona qo'shadi.
-// Bir martalik: har qo'shishдан keyin 1 ga qaytadi (keyingi mijozга yopishmasin).
+// Bir martalik: har qo'shishdan keyin 1 ga qaytadi (keyingi mijozga yopishmasin).
 let pendingQty = 1;
 
 function newIdemKey() {
@@ -1848,8 +1848,8 @@ function newIdemKey() {
 
 function fmt(n) { return Math.round(n).toLocaleString('en-US').replace(/,/g, ' '); }
 // SEC-11: mahsulot nomi/rangi/o'lchami — xodim yozadigan ERKIN matn. innerHTML'ga
-// to'g'ridan-to'g'ri qo'yilsa "<img onerror=...>" kabi XSS ishga tushardi (kassа,
-// mijoz ekrani va chekда). HTML belgilarini zararsizlantiramiz.
+// to'g'ridan-to'g'ri qo'yilsa "<img onerror=...>" kabi XSS ishga tushardi (kassa,
+// mijoz ekrani va chekda). HTML belgilarini zararsizlantiramiz.
 function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
         return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
@@ -1977,9 +1977,33 @@ function hideExtras() {
     suggestionList.innerHTML = '';
 }
 
-async function search(q) {
+async function search(q, commit) {
+    // SCAN-3 — KATAK QACHON TOZALANADI.
+    //
+    // SCAN-2 da katak javob kelishi bilan HAR DOIM tozalanardi. Skaner
+    // uchun bu to'g'ri, lekin QO'LDA YOZISHNI buzardi: qidiruv 350 ms
+    // tanaffusdan keyin O'ZI ishga tushadi, javob esa sotuvchi hali
+    // yozayotganda keladi va yozilganini o'chirib tashlaydi. Sotuvchilar
+    // "hermes 53 ss" deb yozmoqchi bo'lardi-yu, "hermes" dan keyin katak
+    // bo'shab qolardi.
+    //
+    // Endi ikki xil qidiruv bor:
+    //   commit=true  — Enter, qidiruv tugmasi yoki SKANER (u ham Enter
+    //                  yuboradi). Amal: topilsa savatga qo'shadi va
+    //                  katakni HAR DOIM tozalaydi (SCAN-2 saqlanadi).
+    //   commit=false — yozish paytidagi JONLI qidiruv. Faqat KO'RSATADI.
+    //                  Katakni tozalash uchun tovar savatga tushishi shart.
+    //
+    // Ustiga-ustak: javob kelguncha katak matni o'zgargan bo'lsa, javob
+    // ESKIRGAN — jonli qidiruvda umuman e'tiborsiz qoldiriladi.
     setStatus('Qidirilmoqda...', '');
     hideExtras();
+    const _typed = q;
+    function clearBox(added) {
+        // Kassir yozishda davom etgan bo'lsa — TEGMAYMIZ.
+        if (scanInput.value.trim() !== _typed) return;
+        if (commit || added) scanInput.value = '';
+    }
     try {
         // OFF-8: avval tarmoq (narx/qoldiq eng yangisi bo'lsin), bo'lmasa
         // mahalliy katalog. Service worker offline'da {offline:true} bilan
@@ -2005,18 +2029,17 @@ async function search(q) {
         if (data._local) {
             setStatus('Internet yo\'q — mahalliy katalogdan', '');
         }
-        // SCAN-2: javob kelishi bilan katak TOZALANADI — tovar topilgan
-        // yoki topilmaganidan qat'i nazar.
-        //
-        // Ilgari faqat muvaffaqiyatda tozalanardi. Topilmasa eski kod
-        // katakda qolib ketardi va kassir keyingi tovarni skanerlaganда
-        // yangi kod eskisining USTIGA yozilar edi — natijada aralashgan
-        // kod bilan qidiruv yana topilmasdi. Kassir buni sezmay ikki-uch
-        // marta skanerlab, oxiri qo'lda tozalashi kerak bo'lardi.
-        //
-        // Skanerlangan matn yo'qolmaydi: quyidagi xato xabarlarining
-        // hammasi nima izlanganini o'zi aytadi.
-        scanInput.value = '';
+        // SCAN-3: jonli qidiruv edi-yu, kassir yozishda davom etyapti —
+        // bu javob ESKIRGAN. Savatga ham qo'shmaymiz, xabar ham
+        // ko'rsatmaymiz: aks holda yarim so'z bo'yicha "topilmadi" chiqib,
+        // yoki umuman boshqa tovar savatga tushib ketardi.
+        if (!commit && scanInput.value.trim() !== _typed) return;
+
+        // SCAN-2: skaner/Enter bo'lsa katak DARHOL tozalanadi — tovar
+        // topilgan yoki topilmaganidan qat'i nazar. Ilgari faqat
+        // muvaffaqiyatda tozalanardi va topilmagan kod katakda qolib,
+        // keyingi skaner uning USTIGA yozilardi.
+        clearBox(false);
 
         if (!data.found) {
             // Tezkor sotuv toifasi yozilgan ("Paypoq", "Ich kiyim") — panelni
@@ -2042,7 +2065,7 @@ async function search(q) {
                     b.innerHTML = `<code class="bg-light text-dark px-1">${esc(s.code)}</code> ${esc(s.name)}`;
                     b.addEventListener('click', () => {
                         scanInput.value = s.code;
-                        search(s.code);
+                        search(s.code, true);   // SCAN-3: ataylab tanlandi
                     });
                     suggestionList.appendChild(b);
                 }
@@ -2066,11 +2089,29 @@ async function search(q) {
             setStatus(msg + '.', 'error');
             return;
         }
+        // SCAN-3: YOZISH paytidagi qidiruv savatga O'ZI QO'SHMAYDI.
+        //
+        // Ilgari qo'shardi — va qo'shgach katakni tozalardi. Sotuvchi
+        // "hermes 53 ss" deb yozayotganda "hermes" bo'yicha bitta tovar
+        // topilib qolsa, o'sha tovar savatga tushar va katak bo'shab
+        // qolardi: yozilgan so'z YO'QOLARDI, savatga esa NOTO'G'RI tovar
+        // tushardi. Endi yozish faqat KO'RSATADI — qo'shish uchun Enter
+        // (yoki skaner, u ham Enter yuboradi) kerak.
+        function needEnter(label) {
+            setStatus(`${label} — qo'shish uchun Enter`, '');
+            refocus();
+        }
+
         // Tur shtrix-kodi skanerlandi -> aynan shu turni savatga qo'shamiz
         if (data.matched_variant_id) {
             const mv = inStock.find(v => v.variant_id === data.matched_variant_id);
             if (mv) {
+                if (!commit) {
+                    needEnter(`${product.name} ${mv.size}/${mv.color}`);
+                    return;
+                }
                 addToCart(product, mv);
+                clearBox(true);          // SCAN-3
                 setStatus(`\u2713 Qo'shildi: ${product.name} ${mv.size}/${mv.color}`, 'success');
                 refocus();
                 return;
@@ -2080,8 +2121,14 @@ async function search(q) {
             return;
         }
         if (inStock.length === 1) {
+            if (!commit) {               // SCAN-3: yozish paytida — faqat ko'rsatamiz
+                needEnter(`${product.code} ${product.name} `
+                          + `${inStock[0].size}/${inStock[0].color}`);
+                return;
+            }
             // Single variant -> add directly
             addToCart(product, inStock[0]);
+            clearBox(true);              // SCAN-3
             setStatus(`✓ Qo'shildi: ${product.name} ${inStock[0].size}/${inStock[0].color}`, 'success');
         } else {
             // Show variant picker
@@ -2106,10 +2153,9 @@ async function search(q) {
             }
         }
     } catch (e) {
-        // SCAN-2: bu yerga yetib kelinsa, yuqoridagi tozalash bajarilmagan
-        // bo'lishi mumkin (xato javobdan OLDIN chiqqan) — tozalaymiz va
-        // qaysi kod ekanini xabarda ko'rsatamiz.
-        scanInput.value = '';
+        // SCAN-2/3: skaner yo'lida katakni tozalaymiz (kod xabarda qoladi);
+        // yozish paytida esa TEGMAYMIZ — yozilgani yo'qolmasin.
+        clearBox(false);
         setStatus(`"${q}" — xatolik: ${e.message}`, 'error');
     }
     refocus();
@@ -2130,7 +2176,7 @@ function priceForVariant(variant) {
 // WS-1 — ULGURJI REJIM. Ilgari bu tugma FAQAT izoh matnini ko'rsatardi:
 // savatdagi qatorlarni qayta narxlamasdi va rejim sahifa yangilanganda
 // jimgina chakanaga qaytardi (savat esa saqlanib qolardi). Ya'ni sotuvchi
-// tovarlarni skanerlab, keyin "Ulgurji" ni bosса — narx o'zgarmasdi va
+// tovarlarni skanerlab, keyin "Ulgurji" ni bossa — narx o'zgarmasdi va
 // ulgurji ishlamayaptidek ko'rinardi. Aynan shu shikoyat kelgan edi.
 const PRICE_MODE_LS = 'yurit_pos_price_mode';
 
@@ -2168,7 +2214,7 @@ function applyPriceMode() {
 
 function addToCart(product, variant) {
     // Patch 2: idempotentlik kaliti SAVAT bilan yashaydi — birinchi tovar
-    // qo'shilganда yaratiladi va sotuv tugagунча o'zgarmaydi.
+    // qo'shilganda yaratiladi va sotuv tugaguncha o'zgarmaydi.
     if (!cartIdemKey) cartIdemKey = newIdemKey();
     const key = variant.stock_id;
     // Patch 4: ko'paytirgichni qo'llaymiz va DARHOL 1 ga qaytaramiz (bir martalik).
@@ -2237,8 +2283,8 @@ function renderCart() {
         // ogohlantirish yo'q: chegirma qatori savat bo'sh bo'lgani uchun
         // ko'rinmaydi ham. Bu pul xatosi, ko'rinish xatosi emas.
         //
-        // "Oraliq" va "Chegirma" ham eski qiymatда qolib ketardi (bo'sh
-        // savatда 15 000 ko'rsatardi) — o'sha sababdan: bu tarmoq ularni
+        // "Oraliq" va "Chegirma" ham eski qiymatda qolib ketardi (bo'sh
+        // savatda 15 000 ko'rsatardi) — o'sha sababdan: bu tarmoq ularni
         // umuman yangilamasdi.
         cartSubtotalEl.textContent = '0';
         cartDiscountEl.textContent = '0';
@@ -2275,7 +2321,7 @@ function renderCart() {
     let subtotal = 0, count = 0;
     cartBody.innerHTML = '';
     // Turli yo'llar bilan qo'shilgan (tez-sotuv, qo'lda) elementlarga ham
-    // tartib raqami beramiz — aks holda ular _seq'siz qolib eski (asc) tartibда
+    // tartib raqami beramiz — aks holda ular _seq'siz qolib eski (asc) tartibda
     // chiqadi. Yangi qo'shilgani oxirgi kalit bo'lgani uchun eng katta raqamni
     // oladi va tepada turadi.
     for (const k of keys) {
@@ -2337,7 +2383,7 @@ function renderCart() {
     cartTotalEl.textContent = fmt(total);
     cartCountEl.textContent = count;
     renderAppliedPromos();
-    // S1: so'rov ketayotган bo'lса tugmalarni QAYTA yoqmaymiz — ikkinchi
+    // S1: so'rov ketayotgan bo'lsa tugmalarni QAYTA yoqmaymiz — ikkinchi
     // checkout (yangi kalit bilan) ketib ikki marta yozilmasin.
     checkoutBtn.disabled = checkoutInFlight;
     parkBtn.disabled = checkoutInFlight;
@@ -2352,8 +2398,8 @@ function renderCart() {
     saveCart();
 }
 
-// Patch 1c: sotuvдан keyin "Bugungi sotuvlar" ro'yxatiga qatorни MIJOZ tomonида
-// qo'shamiz — sahifани qayta yuklamаймиz. Django shabloni qatori bilan bir xil,
+// Patch 1c: sotuvdan keyin "Bugungi sotuvlar" ro'yxatiga qatorni MIJOZ tomonida
+// qo'shamiz — sahifani qayta yuklamaymiz. Django shabloni qatori bilan bir xil,
 // va SEC-11 sababi bilan kassir nomi/to'lov yorlig'i esc() dan o'tadi.
 function prependRecentSale(data, method) {
     const body = document.getElementById('recentBody');
@@ -2385,8 +2431,8 @@ function prependRecentSale(data, method) {
         `<i class="bi bi-arrow-counterclockwise"></i></button>` +
         `</div></td>`;
     body.prepend(tr);
-    // FIX (review #2): ro'yxatni cheklaymiz — till kun bo'yi ochiq turса,
-    // prepend cheksiz DOM to'plardi (300 sotuvдан keyin 300+ qator). Faqat
+    // FIX (review #2): ro'yxatni cheklaymiz — till kun bo'yi ochiq tursa,
+    // prepend cheksiz DOM to'plardi (300 sotuvdan keyin 300+ qator). Faqat
     // oxirgi 50 tasini saqlaymiz.
     while (body.children.length > 50) body.lastElementChild.remove();
     const badge = document.getElementById('recentCount');
@@ -2407,8 +2453,8 @@ function updateChange() {
     if (!(given > 0) || !(total > 0)) {
         row.style.display = 'none';
         // UX-9: MATNNI ham tozalaymiz. Ilgari faqat qator yashirilardi va
-        // eski summa spanда qolib ketardi — keyingi mijozда qator qayta
-        // ko'ringanда bir lahza OLDINGI sotuvning qaytimi ko'rinardi.
+        // eski summa spanda qolib ketardi — keyingi mijozda qator qayta
+        // ko'ringanda bir lahza OLDINGI sotuvning qaytimi ko'rinardi.
         if (amt) amt.textContent = '0';
         return;
     }
@@ -2557,7 +2603,7 @@ async function evaluatePromos() {
 // Re-render only totals + applied promos panel, without re-rendering whole cart
 function refreshTotalsFromPromo() {
     const subtotal = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
-    // FE-6: foizli chegirma tanlangan bo'lsa — joriy savatдан qayta hisoblaymiz.
+    // FE-6: foizli chegirma tanlangan bo'lsa — joriy savatdan qayta hisoblaymiz.
     if (discountPct > 0) {
         orderDiscountInput.value = Math.round(subtotal * discountPct / 100);
     }
@@ -2592,7 +2638,7 @@ discountReasonInput.addEventListener('change', () => {
     discReasonOtherWrap.style.display = other ? 'flex' : 'none';
     if (other) discReasonOther.focus();
 });
-// FE-6: qo'lda summa terilса — foizli rejimдан chiqamiz (aniq summa hukmron).
+// FE-6: qo'lda summa terilsa — foizli rejimdan chiqamiz (aniq summa hukmron).
 orderDiscountInput.addEventListener('input', () => { discountPct = 0; renderCart(); });
 
 clearCartBtn.addEventListener('click', () => {
@@ -2626,8 +2672,8 @@ const mixedHintEl  = document.getElementById('mixedHint');
 function currentTotalAmount() {
     // FE-1: AKSIYA chegirmasini (promoDiscount) ham ayirishimiz SHART. Ilgari
     // faqat qo'lda chegirma ayirilib, o'zgartirish/QR/aralash-bo'linish uchun
-    // JAMI savatда ko'rsatilgandan KATTA chiqardi — mijoz ko'proq to'lardi,
-    // serverда esa kamroq yozilardi. renderCart() bilan bir xil bo'lishi kerak.
+    // JAMI savatda ko'rsatilgandan KATTA chiqardi — mijoz ko'proq to'lardi,
+    // serverda esa kamroq yozilardi. renderCart() bilan bir xil bo'lishi kerak.
     const sub = Object.values(cart).reduce((a, it) => a + it.qty * it.sale_price, 0);
     const manualDisc = Math.max(0, parseFloat(orderDiscountInput.value || '0'));
     return Math.max(0, sub - manualDisc - promoDiscount);
@@ -2644,7 +2690,7 @@ function getMixedBreakdown() {
 
 // FE-7: aralash to'lov maydonlari sotuvlar orasida TOZALANMAsdi — keyingi
 // "Aralash" sotuv oldingi mijozning bo'linishini yuklab, soxta naqd/karta
-// yozib qo'yishi mumkin edi. Har savat tozalanganда bularni ham tozalaymiz.
+// yozib qo'yishi mumkin edi. Har savat tozalanganda bularni ham tozalaymiz.
 function clearMixedInputs() {
     document.querySelectorAll('.mixed-input').forEach(inp => { inp.value = ''; });
     qrBreakdownExtra = [];
@@ -2754,8 +2800,8 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
 
     async function openQR(provider, providerDisplay, isInstallment, staticQrId) {
         // FE-3: oldingi poll intervalini TO'XTATAMIZ. Ilgari ikkinchi provider
-        // bosilса, eski interval to'xtamay, ikkita interval bir vaqtда tekshirib,
-        // to'lov "paid" bo'lganда checkout IKKI marta bosilardi (ikki sotuv).
+        // bosilsa, eski interval to'xtamay, ikkita interval bir vaqtda tekshirib,
+        // to'lov "paid" bo'lganda checkout IKKI marta bosilardi (ikki sotuv).
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         finalized = false;
         const fullTotal = currentTotalAmount();
@@ -2866,7 +2912,7 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
     }
 
     async function pollStatus() {
-        // FE-3: qayta-kirish qulfi — ustma-ust tiklар (await davomida) checkout'ни
+        // FE-3: qayta-kirish qulfi — ustma-ust tiklar (await davomida) checkout'ni
         // ikki marta bosmasin.
         if (!current || !current.intentId || finalized || _pollBusy) return;
         _pollBusy = true;
@@ -2929,7 +2975,7 @@ document.querySelectorAll('.mixed-input').forEach(inp =>
 
 // Search trigger (Enter, button, or typing pause)
 let typeTimer = null;      // SCAN-1: doSearch() uni bekor qiladi
-function doSearch() {
+function doSearch(commit) {
     const q = scanInput.value.trim();
     if (!q) { hideExtras(); setStatus('', ''); return; }
     // SCAN-1: kutayotgan avto-qidiruvni BEKOR qilamiz.
@@ -2948,11 +2994,11 @@ function doSearch() {
     // keladi. Bir xil tovarni ataylab ikki marta skanerlash esa ishlayveradi —
     // har skaner o'zining Enter'i bilan keladi.
     clearTimeout(typeTimer);
-    search(q);
+    search(q, commit === true);
 }
 scanInput.addEventListener('keydown', (e) => {
-    // Patch 4: "3 *" — avval sonni terib, * bosilса, keyingi skanerlanган tovar
-    // shu miqdorда qo'shiladi. Har qanday dedikatsiya POS'да shu odat bor.
+    // Patch 4: "3 *" — avval sonni terib, * bosilsa, keyingi skanerlangan tovar
+    // shu miqdorda qo'shiladi. Har qanday dedikatsiya POS'da shu odat bor.
     if (e.key === '*') {
         e.preventDefault();
         const n = parseInt(scanInput.value.trim(), 10);
@@ -2964,9 +3010,10 @@ scanInput.addEventListener('keydown', (e) => {
         }
         return;
     }
-    if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+    // Skaner ham shu yo'ldan keladi — u kodni yozib, Enter yuboradi.
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(true); }
 });
-searchBtn.addEventListener('click', doSearch);
+searchBtn.addEventListener('click', () => doSearch(true));
 
 // POS-3: ko'rinadigan miqdor tugmalari. '3 *' bilan AYNI mantiq —
 // pendingQty o'rnatiladi va keyingi qo'shilgan tovarga bir marta qo'llanadi.
@@ -3000,11 +3047,12 @@ scanInput.addEventListener('input', () => {
     clearTimeout(typeTimer);
     const q = scanInput.value.trim();
     if (!q) { hideExtras(); setStatus('', ''); return; }
-    // Patch 5: bitta belgiга qidiruv yubormaymiz (deyarli hammasi mos keladi,
+    // Patch 5: bitta belgiga qidiruv yubormaymiz (deyarli hammasi mos keladi,
     // behuda lookup). Shtrix-kodlar Enter bilan keladi, ular baribir ishlaydi.
     if (q.length < 2) return;
     typeTimer = setTimeout(() => {
-        if (scanInput.value.trim() === q) doSearch();
+        // SCAN-3: JONLI qidiruv — faqat ko'rsatadi, katakka tegmaydi.
+        if (scanInput.value.trim() === q) doSearch(false);
     }, 350);
 });
 
@@ -3043,7 +3091,7 @@ async function catalogLoad() {
 //   * checkout ketayotgan bo'lsa boshlanmaydi,
 //   * brauzer bo'sh vaqtida (requestIdleCallback) ishlaydi,
 //   * xato bersa jimgina o'tib ketadi — kassirga hech narsa ko'rsatilmaydi.
-// Kechiktirilgan sinxron yo'qolmaydi: keyingi soatlik urinishда qayta
+// Kechiktirilgan sinxron yo'qolmaydi: keyingi soatlik urinishda qayta
 // ko'riladi va savat bo'shashi bilan ham darhol qayta uriniladi.
 let _syncWanted = false, _syncing = false;
 
@@ -3218,8 +3266,8 @@ async function queuePut(payload) {
         let newId = null;
         const req = tx.objectStore(QUEUE_STORE).add({payload, queued_at: Date.now()});
         req.onsuccess = () => { newId = req.result; };
-        // FE-4: onsuccess tranzaksiya COMMIT bo'lishдан OLDIN ishga tushadi.
-        // Kvota (quota) sababли abort bo'lsa, UI "navbatga olindi" deb, savatни
+        // FE-4: onsuccess tranzaksiya COMMIT bo'lishdan OLDIN ishga tushadi.
+        // Kvota (quota) sababli abort bo'lsa, UI "navbatga olindi" deb, savatni
         // tozalab, sotuv izsiz yo'qolardi. Endi FAQAT tx.oncomplete (durable
         // commit) da resolve, abort/error da reject qilamiz.
         tx.oncomplete = () => resolve(newId);
@@ -3325,7 +3373,7 @@ if (navigator.onLine) flushQueue();
 
 // OFF-6: sinxron bo'lmagan (rad etilgan) sotuvlar uchun DOIMIY banner.
 // Kassir smenni yopishdan oldin buni ko'rib, tozalashi kerak — status div
-// kabi yo'qolib ketmaydi. Payload localStorage'да (queueFail) saqlangan.
+// kabi yo'qolib ketmaydi. Payload localStorage'da (queueFail) saqlangan.
 function failedSales() {
     try { return JSON.parse(localStorage.getItem('yurit_failed_sales') || '[]'); }
     catch (e) { return []; }
@@ -3396,8 +3444,8 @@ function quickCash() {
 if (quickCashBtn) quickCashBtn.addEventListener('click', quickCash);
 
 checkoutBtn.addEventListener('click', async () => {
-    // S1: so'rov ketayotган bo'lса qayta kirishни bloklaymiz (skaner vedji yoki
-    // auto-trigger tugmani ikkinchi marta bossа ham ikkinchi chek ketmaydi).
+    // S1: so'rov ketayotgan bo'lsa qayta kirishni bloklaymiz (skaner vedji yoki
+    // auto-trigger tugmani ikkinchi marta bossa ham ikkinchi chek ketmaydi).
     if (checkoutInFlight) return;
     const lines = Object.values(cart).map(it => ({
         stock_id: it.stock_id, qty: it.qty, sale_price: it.sale_price,
@@ -3435,7 +3483,7 @@ checkoutBtn.addEventListener('click', async () => {
     const manualDisc = parseFloat(orderDiscountInput.value || '0');
     const totalDisc = manualDisc + promoDiscount;
     let reason = currentDiscountReason();
-    // DISC-7: server ham tekshiradi, lekin xatoni kassaга bormasдан aytamiz.
+    // DISC-7: server ham tekshiradi, lekin xatoni kassaga bormasdan aytamiz.
     if (manualDisc > 0.5 && !reason) {
         checkoutStatus.innerHTML = '<span class="text-danger">'
             + 'Chegirma uchun sababni tanlang.</span>';
@@ -3447,8 +3495,8 @@ checkoutBtn.addEventListener('click', async () => {
         const promoLabels = appliedPromos.map(p => p.name).join(', ');
         reason = reason ? `${reason}; ${promoLabels}` : `Aksiya: ${promoLabels}`;
     }
-    // OFF-2/S1: bir martalik kalit SAVATГА bog'lanadi — bosishга emas. Bir savat
-    // uchun bitta kalit; takroriy bosishда (yoki offline qayta yuborishда) AYNAN
+    // OFF-2/S1: bir martalik kalit SAVATGA bog'lanadi — bosishga emas. Bir savat
+    // uchun bitta kalit; takroriy bosishda (yoki offline qayta yuborishda) AYNAN
     // shu kalit ketadi, server takroriy chek yaratmaydi.
     if (!cartIdemKey) cartIdemKey = newIdemKey();
     const idemKey = cartIdemKey;
@@ -3479,11 +3527,11 @@ checkoutBtn.addEventListener('click', async () => {
             checkoutStatus.innerHTML = `<span class="text-warning">
                 <i class="bi bi-inbox"></i> Offline: sotuv navbatga olindi, onlayn'da yuboriladi (${reason})</span>`;
             try { getPayModal().hide(); } catch (e) {}
-            // S1: sotuv navbatга o'z kaliti bilan tushdi — keyingi savat yangi
+            // S1: sotuv navbatga o'z kaliti bilan tushdi — keyingi savat yangi
             // kalit olsin, tugmalar qayta yoqilsin.
             checkoutInFlight = false;
             cartIdemKey = null;
-            pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
+            pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozga yopishmasin
             cart = {};
             qrBreakdownExtra = [];
             resetPriceMode();   // WS-1: keyingi mijoz — chakana
@@ -3500,7 +3548,7 @@ checkoutBtn.addEventListener('click', async () => {
         } catch (e) {
             checkoutStatus.innerHTML = `<span class="text-danger">
                 Navbatga saqlab bo'lmadi: ${e.message}</span>`;
-            // Xato — o'sha savat/kalit qoladi, qayta urinса ayni kalit ketadi.
+            // Xato — o'sha savat/kalit qoladi, qayta urinsa ayni kalit ketadi.
             checkoutInFlight = false;
             checkoutBtn.disabled = false;
         }
@@ -3512,11 +3560,11 @@ checkoutBtn.addEventListener('click', async () => {
         return;
     }
 
-    // FIX (review #4): try FAQAT fetch + json'ni o'raydi. Ilgari butun sotuvдан
+    // FIX (review #4): try FAQAT fetch + json'ni o'raydi. Ilgari butun sotuvdan
     // keyingi UI (window.open, prependRecentSale) ham try ichida edi — ular xato
-    // bersа, catch queueOffline chaqirib, MUVAFFAQIYATLI sotuvni "offline" deб
-    // yolg'on aytar va navbatга arvoh yozuv qo'yardi. Endi tarmoq/parse xatosi
-    // aniq ajratilган.
+    // bersa, catch queueOffline chaqirib, MUVAFFAQIYATLI sotuvni "offline" deb
+    // yolg'on aytar va navbatga arvoh yozuv qo'yardi. Endi tarmoq/parse xatosi
+    // aniq ajratilgan.
     let resp, data;
     // POS-1: fetch'ning O'Z chegarasi YO'Q edi — server sekinlashsa tugma
     // cheksiz "Saqlanmoqda..." holatida qotib turardi va kassir mijoz oldida
@@ -3545,7 +3593,7 @@ checkoutBtn.addEventListener('click', async () => {
 
     if (!data.ok) {
         checkoutMsg(`<span class="text-danger">${data.error || 'Xatolik'}</span>`, 'error');
-        // Server rad etди — chek yaratilmadi. O'sha savat/kalit qoladi.
+        // Server rad etdi — chek yaratilmadi. O'sha savat/kalit qoladi.
         checkoutInFlight = false;
         checkoutBtn.disabled = false;
         refocus();
@@ -3554,17 +3602,17 @@ checkoutBtn.addEventListener('click', async () => {
 
     // --- Sotuv MUVAFFAQIYATLI (yoki takror). Bu nuqtadan keyin HECH QACHON
     //     qayta navbatga olinmaydi. Avval holatni tozalab tugmani yoqamiz
-    //     (kosmetik amaldан oldин — window.open xato bersа ham till qotmaydi).
+    //     (kosmetik amaldan oldin — window.open xato bersa ham till qotmaydi).
     checkoutInFlight = false;
     cartIdemKey = null;
-    pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozга yopishmasin
+    pendingQty = 1;   // Patch 4: ko'paytirgich keyingi mijozga yopishmasin
     cart = {};
     qrBreakdownExtra = [];
     resetPriceMode();   // WS-1: keyingi mijoz — chakana
     renderCart();
     document.getElementById('customerName').value = '';
     document.getElementById('customerPhone').value = '';
-    // FE-7: chegirma va aralash-to'lov maydonlarини ham tozalaymiz.
+    // FE-7: chegirma va aralash-to'lov maydonlarini ham tozalaymiz.
     discountPct = 0;
     clearMixedInputs();
     orderDiscountInput.value = '';
@@ -3576,16 +3624,16 @@ checkoutBtn.addEventListener('click', async () => {
         ✓ Sotuv #${data.txn_id} saqlandi (${fmt(data.total)} so'm)</span>`;
     try { getPayModal().hide(); } catch (e) {}
 
-    // Naqd ishlatilса — kassa qutisini ochamiz (sozlanmaган bo'lsa jim)
+    // Naqd ishlatilsa — kassa qutisini ochamiz (sozlanmagan bo'lsa jim)
     const usedCash = (paymentMethod === 'cash')
         || (paymentMethod === 'mixed' && breakdown.some(b => b.method === 'cash' && b.amount > 0));
     if (usedCash) { openCashDrawerAuto(); }
 
-    // Kosmetik: chek oynasi + ro'yxatга qator. Bularни alohида himoyalaymiz —
-    // xato bo'lса ham sotuv holati buzilmaydi va refocus() baribir ishlaydi.
+    // Kosmetik: chek oynasi + ro'yxatga qator. Bularni alohida himoyalaymiz —
+    // xato bo'lsa ham sotuv holati buzilmaydi va refocus() baribir ishlaydi.
     try {
-        // Qatorни AVVAL qo'shamiz — window.open (kamдан-kam) xato bersа ham
-        // sotuv ro'yxatда ko'rinadi. review #3: takror javob bo'lса qo'shmaymiz.
+        // Qatorni AVVAL qo'shamiz — window.open (kamdan-kam) xato bersa ham
+        // sotuv ro'yxatda ko'rinadi. review #3: takror javob bo'lsa qo'shmaymiz.
         if (!data.duplicate) prependRecentSale(data, paymentMethod);
         // UX-11: yangi tab emas — ko'rinmas iframe. Popup bloklovchi ham
         // to'sib qo'ymaydi, shuning uchun eski "popup bloklandi" tarmog'i
@@ -3956,8 +4004,8 @@ document.addEventListener('click', (e) => {
     const submitBtn  = document.getElementById('refundSubmitBtn');
     let currentLines = [];
     let currentTxnId = null;
-    // S3: bir qaytarish uchun bitta kalit (timeout/qayta bosishда ikki marta
-    // pul chiqmasin). So'rov ketayotган bo'lса qayta kirishни bloklaymiz.
+    // S3: bir qaytarish uchun bitta kalit (timeout/qayta bosishda ikki marta
+    // pul chiqmasin). So'rov ketayotgan bo'lsa qayta kirishni bloklaymiz.
     let refundInFlight = false;
     let refundIdemKey = null;
 
@@ -3979,9 +4027,9 @@ document.addEventListener('click', (e) => {
     let exItems  = [];      // [{stock_id, name, size, color, price, qty, max, open}]
     let exMethod = null;    // 'cash'|'card'|'transfer' — faqat farq>0 bo'lganda
 
-    // Patch 1a: DELEGATED tinglovchi — sahifa yuklanгандан keyin qo'shilган
-    // (jonli prepend qilinган) qatorlar tugmasi ham ishlaydi. Ilgari
-    // querySelectorAll faqat mavjud tugmalarга bog'lanardi.
+    // Patch 1a: DELEGATED tinglovchi — sahifa yuklangandan keyin qo'shilgan
+    // (jonli prepend qilingan) qatorlar tugmasi ham ishlaydi. Ilgari
+    // querySelectorAll faqat mavjud tugmalarga bog'lanardi.
     document.addEventListener('click', (e) => {
         const btn = e.target.closest('.refund-btn');
         if (btn) openRefund(btn.dataset.txnId);
@@ -4323,7 +4371,7 @@ document.addEventListener('click', (e) => {
         if (refundInFlight) return;   // S3: qayta kirishni bloklaymiz
 
         const isExchange = exItems.length > 0;
-        // S3: oddiy qaytarishда kassadan naqd chiqadi — tasdiqlaymiz.
+        // S3: oddiy qaytarishda kassadan naqd chiqadi — tasdiqlaymiz.
         if (!isExchange && !confirm('Qaytarishni tasdiqlaysizmi? Kassadan naqd chiqadi.')) {
             return;
         }
@@ -4363,7 +4411,7 @@ document.addEventListener('click', (e) => {
             const data = await resp.json();
             if (!data.ok) {
                 statusEl.innerHTML = `<span class="text-danger">${data.error || 'Xatolik'}</span>`;
-                refundInFlight = false;   // S3: xato — o'sha kalit bilan qayta urinса bo'ladi
+                refundInFlight = false;   // S3: xato — o'sha kalit bilan qayta urinsa bo'ladi
                 submitBtn.disabled = false;
                 return;
             }
@@ -4381,7 +4429,7 @@ document.addEventListener('click', (e) => {
         } catch (e) {
             statusEl.innerHTML = `<span class="text-danger">Tarmoq xatosi: ${e.message}</span>`;
             // Tarmoq xatosi — server yozgan bo'lishi mumkin. AYNI kalit bilan
-            // qayta urinса server takrorни bloklaydi (ikki marta pul chiqmaydi).
+            // qayta urinsa server takrorni bloklaydi (ikki marta pul chiqmaydi).
             refundInFlight = false;
             submitBtn.disabled = false;
         }
@@ -4664,11 +4712,11 @@ document.addEventListener('keydown', (e) => {
         const helpModal = document.getElementById('helpModal');
         if (helpModal) new bootstrap.Modal(helpModal).show();
     } else if (e.key === 'F3') {
-        // Patch 6: chegirма maydoniга o'tish (sichqonchасиз)
+        // Patch 6: chegirma maydoniga o'tish (sichqonchasiz)
         e.preventDefault();
         orderDiscountInput.focus(); orderDiscountInput.select();
     } else if (e.key === 'F6') {
-        // Patch 6: savatдаgi ENG YUQORI (oxirgi qo'shilган) qatorни olib tashlash
+        // Patch 6: savatdagi ENG YUQORI (oxirgi qo'shilgan) qatorni olib tashlash
         e.preventDefault();
         const first = Object.keys(cart)
             .sort((a, b) => (cart[b]._seq || 0) - (cart[a]._seq || 0))[0];
@@ -4679,8 +4727,8 @@ document.addEventListener('keydown', (e) => {
         const a = document.querySelector('#recentBody a[href*="/transaction/"]');
         if (a) printReceipt(a.href + '?autoprint=1');   // UX-11: tab ochilmaydi
     } else if (e.key === 'F8') {
-        // Patch 6: savatни tozalash. FIX (review #1): clearCartBtn O'ZI tasdiq
-        // so'raydi — bu yerда qo'shimcha confirm QO'YMAYMIZ (ikki marta so'ramasin).
+        // Patch 6: savatni tozalash. FIX (review #1): clearCartBtn O'ZI tasdiq
+        // so'raydi — bu yerda qo'shimcha confirm QO'YMAYMIZ (ikki marta so'ramasin).
         e.preventDefault();
         if (Object.keys(cart).length) clearCartBtn.click();
     }

@@ -35,11 +35,11 @@ def _norm_pay_method(method):
 def weighted_cost(old_qty, old_cost, add_qty, add_cost):
     """STK-8: o'rtacha-tortilgan (weighted-average) tannarx.
 
-    Do'kon bir tovarni turli vaqtда har xil narxда oladi. Ilgari yangi qabul
-    ESKI tannarxни butunlay almashtirar edi ('last cost') — javonда turgan eski
-    zaxira ham yangi narxда hisoblanib, marja noto'g'ri chiqardi. Endi:
+    Do'kon bir tovarni turli vaqtda har xil narxda oladi. Ilgari yangi qabul
+    ESKI tannarxni butunlay almashtirar edi ('last cost') — javonda turgan eski
+    zaxira ham yangi narxda hisoblanib, marja noto'g'ri chiqardi. Endi:
         yangi_tannarx = (eski_qoldiq×eski_tannarx + yangi×yangi) / jami
-    Butun so'mga yaxlitlanadi (kopek yo'q — so'mда mayda birlik ishlatilmaydi).
+    Butun so'mga yaxlitlanadi (kopek yo'q — so'mda mayda birlik ishlatilmaydi).
     Eski qoldiq <= 0 bo'lsa — shunchaki yangi tannarx.
     """
     oq = max(0, int(old_qty or 0))
@@ -47,7 +47,7 @@ def weighted_cost(old_qty, old_cost, add_qty, add_cost):
     oc = _dec(old_cost or 0)
     ac = _dec(add_cost or 0)
     # STK-10: yangi tannarx 0 yoki noaniq bo'lsa (faktura o'qilmadi) — ESKI
-    # tannarxни SAQLAYMIZ, 0 ga tushirmaymiz. Aks holda POS cost_at_sale=0
+    # tannarxni SAQLAYMIZ, 0 ga tushirmaymiz. Aks holda POS cost_at_sale=0
     # oladi va har sotuv 100% marja/nol tannarx bilan yozilardi.
     if ac <= 0:
         return oc
@@ -62,7 +62,7 @@ def weighted_cost(old_qty, old_cost, add_qty, add_cost):
 def split_breakdown(net, breakdown):
     """Aralash (mixed) chekning SOF summasini {cash, card, transfer} ga bo'ladi.
 
-    ARCH-6: bu YAGONA manba. Ilgari bu mantiq 4 joyда qayta yozilgan edi
+    ARCH-6: bu YAGONA manba. Ilgari bu mantiq 4 joyda qayta yozilgan edi
     (models: sales_by_method_split, returns_by_method; views: dashboard
     _by_method, _returns_by_method) — ular asta-sekin bir-biridan farq qilib,
     §3.2 regressiyalarining ildizi bo'lgan. Endi hammasi shuni chaqiradi.
@@ -73,7 +73,7 @@ def split_breakdown(net, breakdown):
       • Usullar _norm_pay_method orqali normallashtiriladi: 'payme'/'click'/
         noma'lum → 'transfer' (jimgina 'cash'ga aylanmaydi — MON-11).
       • Breakdown bo'sh/yaroqsiz bo'lsa — butun summa 'cash' (mavjud xatti-
-        harakat saqlanadi; bunday cheklar checkoutда 'cash'ga aylantiriladi).
+        harakat saqlanadi; bunday cheklar checkoutda 'cash'ga aylantiriladi).
     net va amount har xil turdan (int/float/str/Decimal) kelishi mumkin —
     hammasi Decimalga o'giriladi.
     """
@@ -435,8 +435,8 @@ class IntakeSession(models.Model):
                                       help_text="Faktura/dostavka fotografiyasi")
     note = models.TextField(blank=True)
     received_at = models.DateTimeField(default=timezone.now)
-    # S4: foto-qabulни ikki marta qabul qilishни bloklaydi (LocMemCache workerlar
-    # aro ishlamaydi — DB unikал kaliti ishonchli).
+    # S4: foto-qabulni ikki marta qabul qilishni bloklaydi (LocMemCache workerlar
+    # aro ishlamaydi — DB unikal kaliti ishonchli).
     idempotency_key = models.CharField(
         max_length=64, null=True, blank=True, unique=True, editable=False)
 
@@ -481,11 +481,11 @@ class Intake(models.Model):
         help_text="Yetkazib beruvchi (model). Eski yozuvlarda supplier matn'da."
     )
     # STK-12: qabul (xarid) tarixi CASCADE bilan o'chib ketmasin. Ilgari
-    # sotuvsiz mahsulot o'chirilса, uning variantlari → BranchStock → Intake
-    # zanjiri jimgina yo'q bo'lardi (tovar javonда, tizimда yo'q). PROTECT
+    # sotuvsiz mahsulot o'chirilsa, uning variantlari → BranchStock → Intake
+    # zanjiri jimgina yo'q bo'lardi (tovar javonda, tizimda yo'q). PROTECT
     # tarixli variantni o'chirishni bloklaydi (product_delete/variant_delete
     # allaqachon ProtectedError'ni ushlab, tushunarli xabar beradi). Merge
-    # Intake'ni avval targetга ko'chirgani uchun buzilmaydi.
+    # Intake'ni avval targetga ko'chirgani uchun buzilmaydi.
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name='intakes')
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='intakes')
     quantity = models.IntegerField(
@@ -613,8 +613,8 @@ class SaleTransaction(models.Model):
         TRANSFER = 'transfer', "O'tkazma"
         MIXED = 'mixed', 'Aralash'
 
-    # SEC-6: URL'да ketma-ket ID o'rniga tasodifiy token — chekни tashqi havolada
-    # ochganда umumiy savdo sonini oshkor qilmaydi va ID'larni "yurib" chiqib
+    # SEC-6: URL'da ketma-ket ID o'rniga tasodifiy token — chekni tashqi havolada
+    # ochganda umumiy savdo sonini oshkor qilmaydi va ID'larni "yurib" chiqib
     # bo'lmaydi. Ichki PK o'zgarmaydi.
     public_id = models.UUIDField(default=uuid.uuid4, editable=False,
                                  db_index=True, null=True)
@@ -663,22 +663,22 @@ class SaleTransaction(models.Model):
         help_text="Chegirma sababi (audit uchun)"
     )
     # DISC-1: `order_discount` UCH XIL narsani bitta songa yig'ib kelardi va
-    # hisobotlarда hammasi "chek chegirmasi" deb ko'rinardi:
+    # hisobotlarda hammasi "chek chegirmasi" deb ko'rinardi:
     #   1) AKSIYA — server hisoblagan (egasi sozlagan, avtomatik);
     #   2) QO'LDA — kassir o'zi bergan (sabab TALAB qilinadi, audit uchun);
     #   3) ALMASHTIRISH krediti — chegirma EMAS: mijoz eski tovar bilan to'lagan.
-    # Egasi "biz bunchalik chegirma bermaganmiz" deganда aynan shu edi: 3.6 mln
-    # ning 3.0 mln'i aksiya, 0.6 mln'i almashtirish, qo'lда atigi 64 ming.
+    # Egasi "biz bunchalik chegirma bermaganmiz" deganda aynan shu edi: 3.6 mln
+    # ning 3.0 mln'i aksiya, 0.6 mln'i almashtirish, qo'lda atigi 64 ming.
     # Ular BOSHQA-BOSHQA qarorlar (marketing / kassir ixtiyori / ayirboshlash),
     # shuning uchun alohida saqlanadi. Invariant (DISC-2 testi):
     #   promo_discount + exchange_credit + qo'lda = order_discount
     promo_discount = models.DecimalField(
         max_digits=12, decimal_places=2, default=0,
-        help_text="order_discount ichидagi AKSIYA ulushi (server hisoblaydi)"
+        help_text="order_discount ichidagi AKSIYA ulushi (server hisoblaydi)"
     )
     exchange_credit = models.DecimalField(
         max_digits=12, decimal_places=2, default=0,
-        help_text="order_discount ichидagi ALMASHTIRISH krediti — eski tovar "
+        help_text="order_discount ichidagi ALMASHTIRISH krediti — eski tovar "
                   "qiymati. Chegirma emas: mijoz shu qismni tovar bilan to'lagan."
     )
     # ----- Soliq / fiscal -----
@@ -714,7 +714,7 @@ class SaleTransaction(models.Model):
         constraints = [
             models.CheckConstraint(condition=models.Q(order_discount__gte=0), name='saletxn_orderdisc_nonneg'),
             # DISC-1: qismlar manfiy bo'lmasin va JAMIdan oshmasin — aks holda
-            # "qo'lда chegirma" manfiy chiqib, kassir auditi buzilardi.
+            # "qo'lda chegirma" manfiy chiqib, kassir auditi buzilardi.
             models.CheckConstraint(condition=models.Q(promo_discount__gte=0),
                                    name='saletxn_promodisc_nonneg'),
             models.CheckConstraint(condition=models.Q(exchange_credit__gte=0),
@@ -737,12 +737,12 @@ class SaleTransaction(models.Model):
 
     @property
     def customer_discount(self):
-        """Chekда mijozga CHEGIRMA deb ko'rsatiladigan summa (DISC-4).
+        """Chekda mijozga CHEGIRMA deb ko'rsatiladigan summa (DISC-4).
 
-        `discount_total` ichида almashtirish krediti ham bor edi, shu bois
-        mijozning qo'lidagi chekда "Chegirma −80 500" deb chiqardi — aslida
-        mijoz o'sha 80 500 ni oldingi chekда to'lagan va endi eski tovarni
-        qaytarib bergan edi. Bu chegirma emas; kassa oldiда bahsga sabab.
+        `discount_total` ichida almashtirish krediti ham bor edi, shu bois
+        mijozning qo'lidagi chekda "Chegirma −80 500" deb chiqardi — aslida
+        mijoz o'sha 80 500 ni oldingi chekda to'lagan va endi eski tovarni
+        qaytarib bergan edi. Bu chegirma emas; kassa oldida bahsga sabab.
         Kredit alohida qator bo'lib chiqadi.
         """
         v = _dec(self.discount_total) - _dec(self.exchange_credit)
@@ -752,7 +752,7 @@ class SaleTransaction(models.Model):
     def manual_discount(self):
         """Kassir O'Z ixtiyori bilan bergan chegirma (DISC-1).
 
-        Aksiya va almashtirish krediti ayirilganдан keyin qolgani. Aynan shu
+        Aksiya va almashtirish krediti ayirilgandan keyin qolgani. Aynan shu
         son kassir bo'yicha kuzatilishi kerak — aksiya egasining qarori,
         almashtirish esa umuman chegirma emas.
         """
@@ -898,7 +898,7 @@ class StockWriteOff(models.Model):
     """Tovarni hisobdan chiqarish (STK-1) — shikast, yo'qolish, buzilish,
     o'g'irlik, yetkazuvchiga qaytarish. MAJBURIY sabab kodi, faqat admin.
 
-    Zaxira shu miqdorда kamayadi va bu yozuv ombor tenglamasiga kiradi. Aks
+    Zaxira shu miqdorda kamayadi va bu yozuv ombor tenglamasiga kiradi. Aks
     holda haqiqiy yo'qotishlar 'nol narxli sotuv' yoki inventarizatsiya orqali
     yashirinib, o'g'irlik signalini yo'q qilardi.
     """
@@ -971,10 +971,10 @@ class Shift(models.Model):
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text="Smen oxirida sanab chiqilgan naqd"
     )
-    # MON-22: yopilishда KUTILGAN naqd SNAPSHOT'i. Ilgari variance() doim
-    # jonli hisoblanardi — keyinroq bir sotuv o'chirilса/qaytarilса, oylar
-    # oldingi smenning farqi jimgina qayta yozilib, aybni o'sha kassirга
-    # ag'darardi. Yopilgан smen uchun shu qotirilgan qiymat ishlatiladi.
+    # MON-22: yopilishda KUTILGAN naqd SNAPSHOT'i. Ilgari variance() doim
+    # jonli hisoblanardi — keyinroq bir sotuv o'chirilsa/qaytarilsa, oylar
+    # oldingi smenning farqi jimgina qayta yozilib, aybni o'sha kassirga
+    # ag'darardi. Yopilgan smen uchun shu qotirilgan qiymat ishlatiladi.
     closing_expected_cash = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
         help_text="Yopilish paytida hisoblangan kutilgan naqd (qotirilgan)"
@@ -1029,10 +1029,10 @@ class Shift(models.Model):
         """Smen davomida to'lov turi bo'yicha savdo: {'cash':.., 'card':.., ...}.
 
         DIQQAT (ARCH-8): bu funksiya `sales_by_method_split()` DAN FARQ qiladi!
-        Bu 'mixed' ni ALOHIDA ustunда qoldiradi (bo'lmaydi); split esa mixedни
+        Bu 'mixed' ni ALOHIDA ustunda qoldiradi (bo'lmaydi); split esa mixedni
         naqd/karta/o'tkazmaga bo'ladi. Kassa hisobiga DOIM split ishlatiladi.
-        Bu faqat `total_sales()` uchun (yig'indi ikkalasида ham bir xil).
-        Yangi joyда kerak bo'lsa — split'ni tanlang.
+        Bu faqat `total_sales()` uchun (yig'indi ikkalasida ham bir xil).
+        Yangi joyda kerak bo'lsa — split'ni tanlang.
         """
         rev_expr = models.ExpressionWrapper(
             models.F('quantity') * models.F('sale_price') - models.F('line_discount'),
@@ -1142,7 +1142,7 @@ class Shift(models.Model):
         """Smen davomida mijozga qaytarilgan pul (kassadan CHIQADI).
 
         Mahsulot qaytarilganda kassir pulni qaytaradi — demak kutilgan naqd
-        shu miqdorga KAMAYADI. Ilgari bu hisobga olinmasdi: qaytarishда dona
+        shu miqdorga KAMAYADI. Ilgari bu hisobga olinmasdi: qaytarishda dona
         soni tiklanardi, lekin pul aks etmasdi.
         """
         total = Decimal('0')
@@ -1231,14 +1231,14 @@ class Sale(models.Model):
         ayirilgan. Butun-buyurtma chegirmasi (order_discount) BU YERGA
         TAQSIMLANMAYDI.
 
-        Egasining qarori (2026): qaytarish/almashtirishда tovar O'Z narxida
+        Egasining qarori (2026): qaytarish/almashtirishda tovar O'Z narxida
         baholanadi. Butun-chek chegirmasi (masalan 1 000) yaxlitlash/xushmuomala
-        uchun — bitta tovarга tegishli emas; shuning uchun bir dona qaytганда
-        24 000 qaytadi, 23 883 emas. (Ilgari REF-2 order_discount'ni har qatorга
+        uchun — bitta tovarga tegishli emas; shuning uchun bir dona qaytganda
+        24 000 qaytadi, 23 883 emas. (Ilgari REF-2 order_discount'ni har qatorga
         proporsional ayirar, fraksiyali/chalkash summalar chiqarardi.)
 
-        CHEKLOV: agar chek TO'LIQ qaytarilса, mijoz to'laganidan order_discount
-        miqdorича ko'proq qaytishi mumkin. Egasi buni bilib qabul qildi —
+        CHEKLOV: agar chek TO'LIQ qaytarilsa, mijoz to'laganidan order_discount
+        miqdoricha ko'proq qaytishi mumkin. Egasi buni bilib qabul qildi —
         summa kichik va bunday holat kam."""
         t = _dec(self.total)
         return t if t > 0 else Decimal('0')
@@ -1456,7 +1456,7 @@ class Return(models.Model):
                                     related_name='returns')
     refunded_at = models.DateTimeField(default=timezone.now)
     # ----- Almashtirish (exchange) -----
-    # Oddiy qaytarishда mijozga to'liq summa naqd qaytariladi. Almashtirishда esa
+    # Oddiy qaytarishda mijozga to'liq summa naqd qaytariladi. Almashtirishda esa
     # eski tovar qiymati YANGI tovar hisobiga o'tadi — naqd chiqmaydi (yoki faqat
     # farq chiqadi). Shu sabab kassa hisobiga faqat HAQIQIY qaytarilgan naqd
     # (cash_refunded) ta'sir qilishi kerak, to'liq refund_amount emas.
@@ -1465,20 +1465,20 @@ class Return(models.Model):
         help_text='Bu qaytarish almashtirish qismimi (eski tovar yangisiga)')
     cash_refunded = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
-        help_text='Almashtirishда mijozga HAQIQIY qaytarilgan naqd (odatda 0 yoki '
+        help_text='Almashtirishda mijozga HAQIQIY qaytarilgan naqd (odatda 0 yoki '
                   'faqat farq). None bo\'lsa — oddiy qaytarish, refund_amount ishlatiladi.')
     # REF-3: qaytarish PAYTIDA hisoblangan HAQIQIY naqd (snapshot). Egasining
-    # qoidasi: bir dona qaytганда o'z narxi; butun chek qaytганда — chek JAMISi
-    # (chegirма ayirilgan). Ya'ni har qaytarish = min(dona narxi, chek to'lovi −
-    # shu chekда AVVAL qaytarilgan). Bu NUQTA-VAQT qarori (qaysi qaytarish chekni
+    # qoidasi: bir dona qaytganda o'z narxi; butun chek qaytganda — chek JAMISi
+    # (chegirma ayirilgan). Ya'ni har qaytarish = min(dona narxi, chek to'lovi −
+    # shu chekda AVVAL qaytarilgan). Bu NUQTA-VAQT qarori (qaysi qaytarish chekni
     # yopadi) — shuning uchun saqlanadi, qayta hisoblanmaydi (tarix qotadi,
-    # eski cheklar qayta chop etilganда o'zgarmaydi). None — eski (migratsiyaдan
-    # oldingi) yozuvlar; ularда refund_amount (dona narxi) ishlatiladi.
+    # eski cheklar qayta chop etilganda o'zgarmaydi). None — eski (migratsiyadan
+    # oldingi) yozuvlar; ularda refund_amount (dona narxi) ishlatiladi.
     refund_cash = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
-        help_text='Qaytarishда kassadan HAQIQIY chiqqan naqd (snapshot). '
-                  'Chek to\'loviдan oshmaydi.')
-    # S3: ikki marta qaytarishни bloklaydi (timeout/qayta bosishда bir xil kalit).
+        help_text='Qaytarishda kassadan HAQIQIY chiqqan naqd (snapshot). '
+                  'Chek to\'lovidan oshmaydi.')
+    # S3: ikki marta qaytarishni bloklaydi (timeout/qayta bosishda bir xil kalit).
     idempotency_key = models.CharField(
         max_length=64, null=True, blank=True, unique=True, editable=False,
         help_text='Takroriy qaytarishni bloklovchi bir martalik kalit')
@@ -1488,8 +1488,8 @@ class Return(models.Model):
         verbose_name_plural = 'Qaytarilishlar'
         ordering = ['-refunded_at']
         constraints = [
-            # MON-23: manfiy cash_refunded kutilgan naqdни OSHIRib, haqiqiy
-            # kamomadni "toza farq"ga aylantirardi — DB darajasида bloklaymiz.
+            # MON-23: manfiy cash_refunded kutilgan naqdni OSHIRib, haqiqiy
+            # kamomadni "toza farq"ga aylantirardi — DB darajasida bloklaymiz.
             models.CheckConstraint(
                 condition=models.Q(cash_refunded__isnull=True)
                           | models.Q(cash_refunded__gte=0),
@@ -1507,8 +1507,8 @@ class Return(models.Model):
     def refund_amount(self):
         """Qaytariladigan summa — tovar O'Z qatori narxi bo'yicha (o'zining
         line_discount'i ayirilgan). Butun-buyurtma chegirmasi (order_discount)
-        qaytarishга TAQSIMLANMAYDI — egasining qarori (net_line_total'ga qarang):
-        bir dona qaytганда to'liq dona narxi qaytadi, chalkash fraksiya emas.
+        qaytarishga TAQSIMLANMAYDI — egasining qarori (net_line_total'ga qarang):
+        bir dona qaytganda to'liq dona narxi qaytadi, chalkash fraksiya emas.
         """
         sale = self.sale
         if sale.quantity <= 0:
@@ -1520,14 +1520,14 @@ class Return(models.Model):
     def effective_cash_refund(self):
         """Kassadan HAQIQIY chiqqan naqd.
 
-        Almashtirishда eski tovar qiymati yangi tovar hisobiga o'tadi, shuning
+        Almashtirishda eski tovar qiymati yangi tovar hisobiga o'tadi, shuning
         uchun to'liq refund_amount emas, balki cash_refunded (odatda 0 yoki
-        faqat farq) kassaga ta'sir qiladi. Oddiy qaytarishда — to'liq summa.
+        faqat farq) kassaga ta'sir qiladi. Oddiy qaytarishda — to'liq summa.
         """
         if self.is_exchange:
             return self.cash_refunded or Decimal('0')
         # REF-3: qaytarish paytida qotirilgan haqiqiy naqd (chek to'loviga
-        # cheklangan). Eski yozuvlarда None — u holда dona narxiga qaytamiz.
+        # cheklangan). Eski yozuvlarda None — u holda dona narxiga qaytamiz.
         if self.refund_cash is not None:
             return self.refund_cash
         return self.refund_amount
@@ -1537,7 +1537,7 @@ class EmployeeDebt(models.Model):
     """Xodim do'kondan ojligacha QARZGA olgan tovar/pul.
 
     Sotuvga kiritilmaydi — bu alohida daftar. Olinganda ombor qoldig'i kamayadi.
-    Ojlik kuni "to'landi" deb belgilanганда naqd KASSAGA TUSHADI (o'zgartirilgan
+    Ojlik kuni "to'landi" deb belgilanganda naqd KASSAGA TUSHADI (o'zgartirilgan
     2026: debt_payments_total() -> expected_cash oshadi, paid_shift'ga bog'lanadi).
     Ochiq smen bo'lmasa — to'landi bo'ladi, lekin kassaga qo'shilmaydi.
     """
@@ -1567,7 +1567,7 @@ class EmployeeDebt(models.Model):
         'Shift', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='debt_payments',
         help_text="Qarz qaysi smen davomida to'landi — kassaga naqd tushishi "
-                  "shu smenning kutilgan naqdiга qo'shiladi.")
+                  "shu smenning kutilgan naqdiga qo'shiladi.")
 
     class Meta:
         verbose_name = 'Xodim qarzi'
@@ -1704,7 +1704,7 @@ class CashPayout(models.Model):
         related_name='cash_payouts'
     )
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
-    # S5: touchscreen'да ikki marta bosishни bloklaydi (bir martalik kalit).
+    # S5: touchscreen'da ikki marta bosishni bloklaydi (bir martalik kalit).
     idempotency_key = models.CharField(
         max_length=64, null=True, blank=True, unique=True, editable=False)
 
@@ -1733,9 +1733,9 @@ class CashPayout(models.Model):
 class CashIn(models.Model):
     """Kassaga qo'shilgan naqd pul (kirim) — MON-4.
 
-    Kassadan olish (CashPayout) bor edi, lekin qo'shishнинг yo'li yo'q edi:
+    Kassadan olish (CashPayout) bor edi, lekin qo'shishning yo'li yo'q edi:
     ertalabki maydalik (float), egasi qo'ygan pul, boshqa manbadan tushum —
-    hech qayerга yozilmasdi va kassa "ortiq" ko'rinardi. Bu yozuv kutilgan
+    hech qayerga yozilmasdi va kassa "ortiq" ko'rinardi. Bu yozuv kutilgan
     naqdga QO'SHILADI (payoutning aksi)."""
     class Category(models.TextChoices):
         FLOAT = 'float', 'Maydalik (float)'
@@ -1755,7 +1755,7 @@ class CashIn(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                    related_name='cash_ins')
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
-    # S5: touchscreen'да ikki marta bosishни bloklaydi (bir martalik kalit).
+    # S5: touchscreen'da ikki marta bosishni bloklaydi (bir martalik kalit).
     idempotency_key = models.CharField(
         max_length=64, null=True, blank=True, unique=True, editable=False)
 

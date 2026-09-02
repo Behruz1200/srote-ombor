@@ -5,7 +5,7 @@ from django.test import TestCase
 
 class PriceTagRegressionTest(TestCase):
     """Raqamli KODlar (masalan '1273') narx deb qabul qilinmasligini qulflaydi.
-    Aks holda turli tovarlar bir 'oila'ga qo'shilib, qabulда qoldiq noto'g'ri
+    Aks holda turli tovarlar bir 'oila'ga qo'shilib, qabulda qoldiq noto'g'ri
     turga tushib, kassada 'omborda yo'q' chiqardi."""
 
     def test_numeric_codes_are_not_price_tags(self):

@@ -2,11 +2,11 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    """REF-3: qaytarishда kassadan chiqqan haqiqiy naqд snapshot'i.
+    """REF-3: qaytarishda kassadan chiqqan haqiqiy naqd snapshot'i.
 
-    Bir dona qaytганда — o'z narxi; butun chek qaytганда — chek jamisi
-    (chegirма ayirilgan). Har qaytarish chek to'loviдan oshmaydi. Snapshot
-    bo'lgani uchun tarix qotadi (eski cheklar qayta chop etilганда o'zgarmaydi).
+    Bir dona qaytganda — o'z narxi; butun chek qaytganda — chek jamisi
+    (chegirma ayirilgan). Har qaytarish chek to'lovidan oshmaydi. Snapshot
+    bo'lgani uchun tarix qotadi (eski cheklar qayta chop etilganda o'zgarmaydi).
     """
 
     dependencies = [
@@ -19,8 +19,8 @@ class Migration(migrations.Migration):
             name='refund_cash',
             field=models.DecimalField(
                 blank=True, decimal_places=2, max_digits=12, null=True,
-                help_text='Qaytarishда kassadan HAQIQIY chiqqan naqd (snapshot). '
-                          'Chek to\'loviдan oshmaydi.'),
+                help_text='Qaytarishda kassadan HAQIQIY chiqqan naqd (snapshot). '
+                          'Chek to\'lovidan oshmaydi.'),
         ),
         migrations.AddConstraint(
             model_name='return',

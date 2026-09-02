@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='return',
             name='cash_refunded',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text="Almashtirishда mijozga HAQIQIY qaytarilgan naqd (odatda 0 yoki faqat farq). None bo'lsa — oddiy qaytarish, refund_amount ishlatiladi.", max_digits=12, null=True),
+            field=models.DecimalField(blank=True, decimal_places=2, help_text="Almashtirishda mijozga HAQIQIY qaytarilgan naqd (odatda 0 yoki faqat farq). None bo'lsa — oddiy qaytarish, refund_amount ishlatiladi.", max_digits=12, null=True),
         ),
         migrations.AddField(
             model_name='return',

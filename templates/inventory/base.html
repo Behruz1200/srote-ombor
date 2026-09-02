@@ -3853,11 +3853,11 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// FE-5: offline navbatдаgi sotuvlarni ISTALGAN sahifadan sinxronlaymiz. Ilgari
-// flush faqat /pos/ sahifasида ishlardi — kassir boshqa sahifага o'tса, sotuv
-// POSга qaytguncha yuborilmasdi. Bu minimal, mustaqil flush faqat MUVAFFAQIYATLI
+// FE-5: offline navbatdagi sotuvlarni ISTALGAN sahifadan sinxronlaymiz. Ilgari
+// flush faqat /pos/ sahifasida ishlardi — kassir boshqa sahifaga o'tsa, sotuv
+// POSga qaytguncha yuborilmasdi. Bu minimal, mustaqil flush faqat MUVAFFAQIYATLI
 // sotuvni yuboradi va o'chiradi; rad etilganini POS (failed-store bilan) hal
-// qiladi. Server idempotency_key takrorlanишни bloklaydi — POS bilan bir vaqtда
+// qiladi. Server idempotency_key takrorlanishni bloklaydi — POS bilan bir vaqtda
 // ishlasa ham ikki marta yozilmaydi.
 {% if user.is_authenticated %}
 (function () {
@@ -4355,7 +4355,7 @@ body.osk-is-open #oskToggle { bottom: calc(var(--osk-h, 0px) + 14px); }
     padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
     display: none; user-select: none;
 }
-/* Yon panel (sidebar) ustiga chiqmasin — kontent bilan bir chiziqда boshlansin */
+/* Yon panel (sidebar) ustiga chiqmasin — kontent bilan bir chiziqda boshlansin */
 @media (min-width: 992px) { #osk { left: var(--yrt-sidebar-current); } }
 #osk.osk-open { display: block; }
 .osk-inner { display: flex; gap: 16px; max-width: 1320px; margin: 0 auto; align-items: flex-start; }
@@ -4506,7 +4506,7 @@ body.osk-is-open #oskToggle { bottom: calc(var(--osk-h, 0px) + 14px); }
         {t:'0'},{t:','},{t:'.'},{k:'enter',label:'⏎',accent:1},
         // KBD-3: 123 rejimida ham yopish tugmasi bo'lsin — ilgari u faqat
         // ABC qatorida edi va raqamli rejimda klaviaturani yopib bo'lmasdi.
-        // KBD-4: keyingi katakka o'tish ham shu yerda — formani to'ldirishда
+        // KBD-4: keyingi katakka o'tish ham shu yerda — formani to'ldirishda
         // kassir sichqonchaga qo'l uzatmasin.
         // KBD-4: kataklar bo'ylab yurish IKKALA rejimda ham bo'lsin.
         // Ilgari ular faqat ABC qatorida edi: raqamli katakka o'tish
@@ -4800,7 +4800,7 @@ body.osk-is-open #oskToggle { bottom: calc(var(--osk-h, 0px) + 14px); }
         });
     }
 
-    // Fokusni yo'qotmaslik uchun — bosishда default (blur) ni to'xtatamiz
+    // Fokusni yo'qotmaslik uchun — bosishda default (blur) ni to'xtatamiz
     KB.addEventListener('mousedown', function(e){ e.preventDefault(); });
 
     // KBD-4: ⌫ ni BOSIB TURGANDA takrorlanadi. Ilgari uzun matnni
@@ -4955,7 +4955,7 @@ window.yuritDupBarcodes = function (scope, selector) {
     return { ok: false, dups: dups };
 };
 
-/* Takror shtrix-kod xabarini forma tepasида ko'rsatadi (sahifa yopilmaydi). */
+/* Takror shtrix-kod xabarini forma tepasida ko'rsatadi (sahifa yopilmaydi). */
 window.yuritShowDupMsg = function (anchorEl, dups) {
     if (!anchorEl) return;
     let box = anchorEl.querySelector(':scope > .yrt-dup-msg') || anchorEl.querySelector('.yrt-dup-msg');
@@ -4972,7 +4972,7 @@ window.yuritShowDupMsg = function (anchorEl, dups) {
     box.style.display = '';
     try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
 };
-/* Barcha qabul formasiga bitta qatorда ulash: takror bo'lsa yubormaydi. */
+/* Barcha qabul formasiga bitta qatorda ulash: takror bo'lsa yubormaydi. */
 window.yuritAttachDupGuard = function (form, rowsScope, selector) {
     if (!form) return;
     form.addEventListener('submit', function (e) {
@@ -4980,7 +4980,7 @@ window.yuritAttachDupGuard = function (form, rowsScope, selector) {
         if (r && !r.ok) { e.preventDefault(); window.yuritShowDupMsg(form, r.dups); }
     });
 };
-/* Foydalanuvchi tuzata boshlаsа — qizil belgini darrov olib tashlaymiz */
+/* Foydalanuvchi tuzata boshlasa — qizil belgini darrov olib tashlaymiz */
 document.addEventListener('input', function (e) {
     const t = e.target;
     if (t && t.classList && t.classList.contains('yrt-dup-bc')) {

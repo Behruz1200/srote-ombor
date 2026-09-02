@@ -224,8 +224,8 @@ def login_view(request):
             _u = form.get_user()
             if _u.totp_confirmed and _u.totp_secret:
                 # AUTH-2: parol to'g'ri, lekin 2FA hali qolgan — hisoblagichni
-                # TOZALAMAYMIZ. Aks holda parolni bilган hujumchi cheksiz TOTP
-                # taxmin qilardi. Faqat ikkala bosqich o'tганda tozalanadi.
+                # TOZALAMAYMIZ. Aks holda parolni bilgan hujumchi cheksiz TOTP
+                # taxmin qilardi. Faqat ikkala bosqich o'tganda tozalanadi.
                 request.session['2fa_pending_user'] = _u.id
                 return redirect('login_2fa')
             cache.delete(fail_key)  # 2FA yo'q — muvaffaqiyat, hisoblagich tozalanadi
@@ -263,8 +263,8 @@ def login_2fa(request):
         request.session.pop('2fa_pending_user', None)
         return redirect('login')
 
-    # AUTH-2: TOTP bosqichi parol bosqichi bilan BIR xil kalitда cheklanadi.
-    # Parolni bilган hujumchi ham 5 tadan ko'p taxmin qila olmaydi.
+    # AUTH-2: TOTP bosqichi parol bosqichi bilan BIR xil kalitda cheklanadi.
+    # Parolni bilgan hujumchi ham 5 tadan ko'p taxmin qila olmaydi.
     ip = _client_ip(request) or '0.0.0.0'
     fail_key = f'login_fail:{ip}'
     fail_count = cache.get(fail_key) or 0
@@ -275,8 +275,8 @@ def login_2fa(request):
 
     if request.method == 'POST':
         code = request.POST.get('code', '')
-        # AUTH-3: mos vaqt-qadamни olamiz; oxirgi qabul qilinganдан katta
-        # bo'lса qabul, aks holда replay — rad. Recovery kodlar bir martalik.
+        # AUTH-3: mos vaqt-qadamni olamiz; oxirgi qabul qilingandan katta
+        # bo'lsa qabul, aks holda replay — rad. Recovery kodlar bir martalik.
         step = verify_totp_step(user.totp_secret, code)
         totp_ok = (step is not None
                    and (user.last_totp_step is None or step > user.last_totp_step))
@@ -284,7 +284,7 @@ def login_2fa(request):
             if totp_ok:
                 user.last_totp_step = step
                 user.save(update_fields=['last_totp_step'])
-            cache.delete(fail_key)  # ikkala bosqich o'tди — hisoblagич tozalanadi
+            cache.delete(fail_key)  # ikkala bosqich o'tdi — hisoblagich tozalanadi
             request.session.pop('2fa_pending_user', None)
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, f'Xush kelibsiz, {user.username}!')
@@ -303,7 +303,7 @@ def security_2fa(request):
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'disable':
-            # AUTH-4: 2FA'ni o'chirish uchun joriy parol shart. Aks holда
+            # AUTH-4: 2FA'ni o'chirish uchun joriy parol shart. Aks holda
             # o'g'irlangan sessiya himoyani parolsiz olib tashlardi.
             if not user.check_password(request.POST.get('password', '')):
                 messages.error(request,
@@ -555,7 +555,7 @@ def _dashboard_aggregates():
     yesterday_stats = _agg(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
 
     # Bugungi pul oqimi — to'lov turi bo'yicha. "Aralash" (mixed) cheklar
-    # payment_breakdown bo'yicha naqd/karta/o'tkazma qismlarига BO'LINADI —
+    # payment_breakdown bo'yicha naqd/karta/o'tkazma qismlariga BO'LINADI —
     # alohida "Aralash" ustuni ko'rsatilmaydi. Har chekning sof summasi
     # qismlar nisbatiga qarab taqsimlanadi (oxirgi qism qoldiqni oladi —
     # yaxlitlash tufayli jami buzilmaydi).
@@ -716,10 +716,10 @@ def dashboard(request):
 
     today = date.fromisoformat(agg['today_iso'])
     yesterday = date.fromisoformat(agg['yesterday_iso'])
-    # Ko'rsatish uchun nusxa — sof foyda tannarx (kirim narxi) kasrли bo'lsa
+    # Ko'rsatish uchun nusxa — sof foyda tannarx (kirim narxi) kasrli bo'lsa
     # mayda raqamli chiqadi (masalan 5 704 775). Do'kon 1000dan mayda ishlatmaydi,
     # shuning uchun foyda va tushumni eng yaqin 1000 ga yaxlitlaymiz (marja aniq
-    # foizда qoladi).
+    # foizda qoladi).
     def _round1k(x):
         try:
             return int(round(float(x) / 1000.0)) * 1000
@@ -789,7 +789,7 @@ def dashboard(request):
     _tbm = dict(agg['today_by_method'])
     _ybm = dict(agg['yesterday_by_method'])
     # Noma'lum ("other") summa (eski/legacy sotuvlar) — naqdga qo'shamiz,
-    # shunда faqat 3 ustun ko'rinadi va jami buzilmaydi.
+    # shunda faqat 3 ustun ko'rinadi va jami buzilmaydi.
     _tbm['cash'] = _tbm.get('cash', 0) + _tbm.pop('other', 0)
     _ybm['cash'] = _ybm.get('cash', 0) + _ybm.pop('other', 0)
     flow_total = sum(_tbm.get(k, 0) for k in ('cash', 'card', 'transfer'))
@@ -799,11 +799,11 @@ def dashboard(request):
         ('transfer', "O'tkazma", 'bi-arrow-left-right', '#D97706'),
     ]
     _trbm = agg.get('today_returns_by_method', {}) or {}
-    # Qaytarish — bitta NAQD chiqim (usulларга bo'linmaydi). Karta brutto
+    # Qaytarish — bitta NAQD chiqim (usullarga bo'linmaydi). Karta brutto
     # qoladi (terminal hisoboti bilan mos).
     flow_returns_total = sum(_trbm.get(k, 0) for k in ('cash', 'card', 'transfer'))
 
-    # Do'kon 1000 so'mdan mayda summalar ishlatmaydi — ko'rsatishда eng yaqin
+    # Do'kon 1000 so'mdan mayda summalar ishlatmaydi — ko'rsatishda eng yaqin
     # 1000 ga yaxlitlaymiz (fraksiya/yuzlik "chiqindi" ko'rinmasin).
     def _r1k(x):
         try:
@@ -881,14 +881,14 @@ def product_bulk_update(request):
         messages.error(request, "Noto'g'ri qiymat.")
         return redirect('product_list')
 
-    # STK-19: narx amallari uchun qiymat 0 bo'lса — RAD etamiz. Ilgari bo'sh
+    # STK-19: narx amallari uchun qiymat 0 bo'lsa — RAD etamiz. Ilgari bo'sh
     # qiymat 0 ga tushib, `multiply_price` butun katalog narxini NOLGA
     # aylantirar (yoki `set_price` hammani 0 qilar) edi.
     if op in ('set_price', 'set_markup', 'multiply_price') and value <= 0:
         messages.error(request, "Qiymat 0 dan katta bo'lishi kerak.")
         return redirect('product_list')
 
-    # N3/V4: YUQORI chegara ham SERVERда — brauzer max faqat maslahat. "×1000"
+    # N3/V4: YUQORI chegara ham SERVERda — brauzer max faqat maslahat. "×1000"
     # yoki 13-xonali narx butun katalogni buzmasin.
     _caps = {'set_price': Decimal('100000000'),
              'multiply_price': Decimal('1000'),
@@ -1279,8 +1279,8 @@ def employee_debt_list(request):
             d = (EmployeeDebt.objects.filter(pk=request.POST.get('pk') or 0)
                  .prefetch_related('items__variant__product').first())
             if d:
-                # MON-24: TO'LANGAN qarzни o'chirib bo'lmaydi. Aks holda tovar
-                # ketgan, pul to'langan bo'lса ham — ombor tiklanib, to'langan
+                # MON-24: TO'LANGAN qarzni o'chirib bo'lmaydi. Aks holda tovar
+                # ketgan, pul to'langan bo'lsa ham — ombor tiklanib, to'langan
                 # naqd smen hisobidan yo'qolib, qarz izsiz g'oyib bo'lardi.
                 if d.is_paid:
                     messages.error(request,
@@ -1290,7 +1290,7 @@ def employee_debt_list(request):
                 with transaction.atomic():
                     for it in d.items.all():
                         # MON-25: FAQAT zaxira kamaytirilgan (ochiq narxsiz)
-                        # tovar tiklanadi. Ochiq narxli qarzда zaxira
+                        # tovar tiklanadi. Ochiq narxli qarzda zaxira
                         # kamaytirilmagan — tiklasak, yo'qdan zaxira "yaratilardi".
                         prod = it.variant.product if it.variant_id else None
                         if (it.variant_id and it.branch_id and prod
@@ -1896,7 +1896,7 @@ def product_detail(request, code):
     # SAL-6: MAHSULOT — qator darajasidagi o'lchov, chek chegirmasi bu tovarga
     # tegishli emas (egasining qoidasi), shuning uchun rev_30d O'Z narxida
     # qoladi. Chegirma alohida ko'rsatiladi — shunda sahifa "bu mahsulot
-    # 300 000 keltirdi" deganда, chekларида 60 000 chegirma borligi ham ko'rinadi.
+    # 300 000 keltirdi" deganda, cheklarida 60 000 chegirma borligi ham ko'rinadi.
     rev_30d = float(agg['rev'] or 0)
     _odisc_30d, _ = _order_discount_share(sales_30d)
     _, _, _disc_split = _order_discount_share(sales_30d, split=True)
@@ -2079,7 +2079,7 @@ def product_detail(request, code):
     _cur = {r['variant']: r['s'] for r in BranchStock.objects.filter(
         variant_id__in=_vids).values('variant').annotate(s=Sum('stock_count'))}
     # STK-1: ombor tenglamasiga hisobdan chiqarish, ishchi qarzi va YO'LDAGI
-    # ko'chirishlarни ham qo'shamiz. Aks holda ko'chirilgan/yo'qotilgan tovar
+    # ko'chirishlarni ham qo'shamiz. Aks holda ko'chirilgan/yo'qotilgan tovar
     # "farq" bo'lib ko'rinardi. (Ledger kompaniya bo'yicha — qabul qilingan
     # ko'chirish manba−/manzil+ o'zaro yo'qoladi; faqat YO'LDAGISI kamaytiradi.)
     _wo = {r['variant']: r['s'] for r in StockWriteOff.objects.filter(
@@ -2100,7 +2100,7 @@ def product_detail(request, code):
         rq = _retn.get(v.pk, 0) or 0
         cu = _cur.get(v.pk, 0) or 0
         wo = _wo.get(v.pk, 0) or 0
-        # ochiq narxli tovar sotuv/qarzда zaxira KAMAYTIRMAYDI — bu hadlarni 0
+        # ochiq narxli tovar sotuv/qarzda zaxira KAMAYTIRMAYDI — bu hadlarni 0
         db = 0 if _is_open else (_dbt.get(v.pk, 0) or 0)
         tin = _tin.get(v.pk, 0) or 0
         if not (ki or so or cu or rq or wo or db or tin):
@@ -2175,10 +2175,10 @@ def intake_for_product(request, code):
                 messages.error(request, "Filial tanlang.")
                 return redirect('intake_for_product', code=product.code)
 
-            # V3: min="0" faqat brauzerда — devtools orqali chetlab o'tilардi va
-            # MANFIY cost weighted_cost orqali cost_price'ni manfiyга tortib,
+            # V3: min="0" faqat brauzerda — devtools orqali chetlab o'tilardi va
+            # MANFIY cost weighted_cost orqali cost_price'ni manfiyga tortib,
             # o'sha variantning butun marja hisobini buzardi. Shu bois pul
-            # maydonlarини SERVERда tekshiramiz (IntakeForm bilan bir xil chegara:
+            # maydonlarini SERVERda tekshiramiz (IntakeForm bilan bir xil chegara:
             # min 0, max_digits 12/6). Noto'g'ri bo'lsa ValueError → pastda ushlanib
             # "Maydonlarni tekshiring" xabari chiqadi, hech narsa saqlanmaydi.
             def _money(field, max_int_digits=10):
@@ -2331,8 +2331,8 @@ def product_variants_edit(request, code):
 
         variants = {v.pk: v for v in product.variants.all()}
         # V2: bo'sh katak = "o'zgarmadi". Har bir mavjud tur uchun joriy
-        # BranchStock qiymatlarini oldindan olamiz — bo'sh maydon o'shанга
-        # tenglashadi, natijaда hech narsa o'zgarmaydi (0 ga tushmaydi).
+        # BranchStock qiymatlarini oldindan olamiz — bo'sh maydon o'shanga
+        # tenglashadi, natijada hech narsa o'zgarmaydi (0 ga tushmaydi).
         cur_stocks = {bs.variant_id: bs for bs in BranchStock.objects.filter(
             branch=branch, variant__product=product)}
         rows = []
@@ -2570,9 +2570,9 @@ def product_variants_edit(request, code):
                     messages.info(request, "O'zgarish yo'q.")
                 return redirect('product_detail', code=product.code)
 
-    # E1: POST xato bo'lса — submitlaган qatorlarni QAYTA ko'rsatamiz (bitta
-    # xato tufayli barcha qatorlar yo'qolmasin; intake_variants'даgi post_back
-    # namunasi). Aks holда joriy holatни DB'дан chizamiz.
+    # E1: POST xato bo'lsa — submitlagan qatorlarni QAYTA ko'rsatamiz (bitta
+    # xato tufayli barcha qatorlar yo'qolmasin; intake_variants'dagi post_back
+    # namunasi). Aks holda joriy holatni DB'dan chizamiz.
     _clean_num = clean_number_text          # CORE-1
     if request.method == 'POST' and errors:
         rows = []
@@ -2602,7 +2602,7 @@ def product_variants_edit(request, code):
         'product': product, 'branch': branch, 'branches': branches,
         'rows': rows,
         # Qatorlar 'v_id' kalitini ishlatadi ('variant' EMAS). Yangi (saqlanmagan)
-        # qatorlarда v_id bo'sh — ularни o'tkazib yuboramiz.
+        # qatorlarda v_id bo'sh — ularni o'tkazib yuboramiz.
         'variant_ids': ','.join(str(r['v_id']) for r in rows if r['v_id']),
     })
 
@@ -2773,7 +2773,7 @@ def _svg_scalable(svg):
     Kutubxona SVG'ni mm birliklarida, viewBox'siz chiqaradi. viewBox
     bo'lmasa CSS'dagi height SVG'ni KICHRAYTIRMAYDI — kesib tashlaydi.
     Shtrix-kod raqami pastda (y≈13.5mm) turgani uchun chop etishda
-    (height: 11mm) u qirqilib, ekранda ko'ringani bilan qog'ozga
+    (height: 11mm) u qirqilib, ekranda ko'ringani bilan qog'ozga
     tushmasdi.
 
     Shuning uchun: mm qo'shimchalarini olib tashlab, o'lchamlarni
@@ -3110,11 +3110,11 @@ def intake_variants(request):
                         supplier_text='' if supplier_obj else supplier_text,
                         received_by=request.user, note=note)
                 for r in rows:
-                    # HAQIQAT MANBAI = SHTRIX-KOD. Qatorда kod bo'lsa, qoldiq
-                    # AYNAN o'sha kodli turга tushadi va narx bo'yicha "birodar"га
-                    # KO'CHIRILMAYDI (narx-split yo'q). Aks holда skanerlanган
-                    # kod bir turда, qoldiq boshqa turда qolib, kassada "omborda
-                    # yo'q" chiqardi. Faqat kodsiz turlар uchun narx-split ishlaydi.
+                    # HAQIQAT MANBAI = SHTRIX-KOD. Qatorda kod bo'lsa, qoldiq
+                    # AYNAN o'sha kodli turga tushadi va narx bo'yicha "birodar"га
+                    # KO'CHIRILMAYDI (narx-split yo'q). Aks holda skanerlangan
+                    # kod bir turda, qoldiq boshqa turda qolib, kassada "omborda
+                    # yo'q" chiqardi. Faqat kodsiz turlar uchun narx-split ishlaydi.
                     if r['barcode']:
                         variant = (ProductVariant.objects
                                    .filter(barcode=r['barcode']).first())
@@ -3599,8 +3599,8 @@ _MAX_IMG_BYTES = 20 * 1024 * 1024  # SEC-21: yuklanadigan rasm uchun 20 MB shift
 def _oversize_image(files):
     """SEC-21: ro'yxatdagi biror rasm 20 MB'dan katta bo'lsa nomini qaytaradi.
 
-    Ko'p-varaqli yuklashда (getlist) har bir faylни tekshiradi — aks holда
-    ulkan fayl xotira/diskни to'ldirib DoS qilardi (dekompressiya bombасидан
+    Ko'p-varaqli yuklashda (getlist) har bir faylni tekshiradi — aks holda
+    ulkan fayl xotira/diskni to'ldirib DoS qilardi (dekompressiya bombasidan
     tashqari, oddiy hajm ham).
     """
     for f in (files or []):
@@ -3689,11 +3689,11 @@ def csv_import(request):
                                         f"barcode {ext_barcode} boshqa mahsulotda mavjud"
                                     )
                             if code:
-                                # STK-17: FAQAT CSV'да haqiqatan berilgan
+                                # STK-17: FAQAT CSV'da haqiqatan berilgan
                                 # ustunlarni yangilaymiz. Ilgari to'liq defaults
                                 # bloki tufayli, ikki ustunli (code+qty) eksport
                                 # mavjud mahsulotning nomi/kategoriya/narxini
-                                # bo'shatib, narxни 0 ga tushirardi.
+                                # bo'shatib, narxni 0 ga tushirardi.
                                 _defaults = {'name': name}
                                 if category is not None:
                                     _defaults['category'] = category
@@ -3905,8 +3905,8 @@ def cashier_stats(request, user_id):
 
     # D3: Anomaly detection — compare this seller to peer average
     _peer_qs = Sale.objects.filter(sold_at__gte=since_30d).exclude(sold_by=seller)
-    # D3 taqqoslash bir xil asosда bo'lsin — aks holда bu kassir sof, peer'lar
-    # brutto bo'lib, chegirма ko'p qilgan kassir "yomon" ko'rinardi.
+    # D3 taqqoslash bir xil asosda bo'lsin — aks holda bu kassir sof, peer'lar
+    # brutto bo'lib, chegirma ko'p qilgan kassir "yomon" ko'rinardi.
     _, _odisc_peer = _order_discount_share(_peer_qs, 'sold_by_id')
     peer_stats = (_peer_qs
                   .values('sold_by_id')
@@ -4420,7 +4420,7 @@ def intake_photo_save(request):
     if not branch:
         return JsonResponse({'ok': False, 'error': 'Filial tanlang.'}, status=400)
 
-    # STK-15: takroriy saqlash (telefonда ikki marta bosish yoki sekin AI
+    # STK-15: takroriy saqlash (telefonda ikki marta bosish yoki sekin AI
     # javobida qayta yuborish) ombor sonini IKKI marta oshirardi. Bir xil
     # payload'ni 5 daqiqa ichiga bir marta qabul qilamiz (atomik cache.add).
     import hashlib as _hl
@@ -4431,12 +4431,12 @@ def intake_photo_save(request):
     _idem_key = f'intake_save:{_idem}'
     _dup_resp = JsonResponse({'ok': True, 'duplicate': True, 'saved': 0,
                               'error': 'Bu qabul allaqachon saqlangan (takror bosildi).'})
-    # Tez yo'l: bir workerда takror bosish (LocMemCache).
+    # Tez yo'l: bir workerda takror bosish (LocMemCache).
     if not _cache.add(_idem_key, True, 300):
         return _dup_resp
-    # S4: ASOSIY himoya — DB unikал kaliti. LocMemCache har Gunicorn workerда
-    # alohида, shu bois turli workerlarга tushган ikki tegish ikkalasи ham
-    # cache'дан o'tar edi. IntakeSession.idempotency_key esa BUTUN bazada yagona.
+    # S4: ASOSIY himoya — DB unikal kaliti. LocMemCache har Gunicorn workerda
+    # alohida, shu bois turli workerlarga tushgan ikki tegish ikkalasi ham
+    # cache'dan o'tar edi. IntakeSession.idempotency_key esa BUTUN bazada yagona.
     if IntakeSession.objects.filter(idempotency_key=_idem).exists():
         return _dup_resp
 
@@ -4474,7 +4474,7 @@ def intake_photo_save(request):
         except (TypeError, ValueError):
             qty = 0
         if qty <= 0:
-            # STK-14: jimgina tashlamaymiz — xodim qatorни ko'rib chiqsin.
+            # STK-14: jimgina tashlamaymiz — xodim qatorni ko'rib chiqsin.
             errors.append(f"{idx}-qator: {name} — soni 0/noto'g'ri, o'tkazilmadi.")
             continue
         try:
@@ -4534,7 +4534,7 @@ def intake_photo_save(request):
     agent_name = (payload.get('agent') or '').strip()[:120]
     agent_phone = (payload.get('agent_phone') or '').strip()[:40]
 
-    # SEC-21: rasm hajmini atomik blokdan OLDIN tekshiramiz — aks holда
+    # SEC-21: rasm hajmini atomik blokdan OLDIN tekshiramiz — aks holda
     # blok ichida return commit qilib, ulkan fayl bilan sessiya saqlanardi.
     _big = _oversize_image(request.FILES.getlist('image'))
     if _big:
@@ -4552,7 +4552,7 @@ def intake_photo_save(request):
             agent_name=agent_name,
             agent_phone=agent_phone,
             note=(payload.get('note') or '').strip()[:500] or 'Faktura rasmidan (AI)',
-            idempotency_key=_idem,   # S4: DB unikал kaliti (cross-worker himoya)
+            idempotency_key=_idem,   # S4: DB unikal kaliti (cross-worker himoya)
         )
         # Yetkazib beruvchi kartochkasi bo'sh bo'lsa — agent ma'lumoti bilan
         # to'ldiramiz. Mavjud qiymatlar hech qachon ustidan yozilmaydi.
@@ -4755,8 +4755,8 @@ def stocktake_create(request):
         if not branch:
             messages.error(request, "Filial tanlang.")
             return redirect('stocktake_create')
-        # STK-9: bitta filialда bir vaqtда faqat BITTA ochiq inventarizatsiya.
-        # Aks holда ikkita ochiq sessiya bir-birining tuzatishini bekor qilardi.
+        # STK-9: bitta filialda bir vaqtda faqat BITTA ochiq inventarizatsiya.
+        # Aks holda ikkita ochiq sessiya bir-birining tuzatishini bekor qilardi.
         existing = Stocktake.objects.filter(
             branch=branch, status=Stocktake.Status.OPEN).first()
         if existing:
@@ -4825,8 +4825,8 @@ def stocktake_detail(request, pk):
                     return redirect('stocktake_detail', pk=session.pk)
                 # Re-fetch counts under the lock window
                 fresh_counts = list(locked.counts.select_related('variant__product'))
-                # D2: "Tasdiqlash" bosilганда ham formadagi HOZIRGI kataklarни
-                # saqlaymiz. Aks holда "Saqlash" bosilmagan bo'lса counted_qty ==
+                # D2: "Tasdiqlash" bosilganda ham formadagi HOZIRGI kataklarni
+                # saqlaymiz. Aks holda "Saqlash" bosilmagan bo'lsa counted_qty ==
                 # system_qty bo'lib, barcha delta 0 chiqar, sanoq yo'qolib
                 # "tasdiqlandi" degan yolg'on xabar chiqardi.
                 for c in fresh_counts:
@@ -4847,7 +4847,7 @@ def stocktake_detail(request, pk):
                     ).select_for_update().first()
                     if not bs:
                         continue
-                    # STK-9: MUTLAQ yozish EMAS — sanashда topilgan FARQ (counted −
+                    # STK-9: MUTLAQ yozish EMAS — sanashda topilgan FARQ (counted −
                     # system_qty) HOZIRGI qoldiqqa qo'shiladi. Ilgari counted_qty
                     # to'g'ridan-to'g'ri yozilib, sanash bilan tasdiq orasidagi
                     # BARCHA sotuvlar jimgina bekor bo'lardi (dushanba sanog'ini
@@ -5101,7 +5101,7 @@ def writeoff_list(request):
                 have = stock.stock_count if stock else 0
                 if qty > have:
                     messages.error(request,
-                        f"Omborда faqat {have} ta bor, so'rov {qty}.")
+                        f"Omborda faqat {have} ta bor, so'rov {qty}.")
                     return redirect('writeoff_list')
                 stock.stock_count = F('stock_count') - qty
                 stock.save(update_fields=['stock_count'])
@@ -5188,9 +5188,9 @@ def shift_close(request):
         return redirect('pos_terminal')
 
     if request.method == 'POST':
-        # N1: sanab chiqilган naqд MAJBURIY. Bo'sh bo'lса 0 yozib, kunlik
-        # tushumга teng SOXTA kamomad qotirib qo'yardi. Bo'shликни serverда rad
-        # etamiz va bo'shликка sabab bo'ladigan "1 200 000" (probel) formatни ham
+        # N1: sanab chiqilgan naqd MAJBURIY. Bo'sh bo'lsa 0 yozib, kunlik
+        # tushumga teng SOXTA kamomad qotirib qo'yardi. Bo'shlikni serverda rad
+        # etamiz va bo'shlikka sabab bo'ladigan "1 200 000" (probel) formatni ham
         # qabul qilamiz (type=number bo'sh qaytaradi).
         _cc = (request.POST.get('counted_cash') or '').strip()
         for ch in (' ', ' ', ' ', "'"):
@@ -5211,7 +5211,7 @@ def shift_close(request):
             shift.counted_cash = counted
             shift.closed_by = request.user
             shift.closed_at = timezone.now()
-            # MON-22: kutilgan naqdни YOPILISH paytida qotiramiz (keyingi
+            # MON-22: kutilgan naqdni YOPILISH paytida qotiramiz (keyingi
             # tahrirlar tarixiy farqni qayta yozmasin).
             shift.closing_expected_cash = shift.compute_expected_cash()
             shift.status = Shift.Status.CLOSED
@@ -5232,7 +5232,7 @@ def shift_close(request):
 
     # Aralash cheklar naqd/karta/o'tkazmaga bo'linadi (alohida "Aralash" yo'q).
     # BRUTTO ko'rsatiladi — karta terminal hisoboti bilan solishtirish uchun.
-    # Qaytarish alohida NAQD chiqim sifatida (usulларга bo'linmaydi).
+    # Qaytarish alohida NAQD chiqim sifatida (usullarga bo'linmaydi).
     by_method = shift.sales_by_method_split()
     from decimal import Decimal as _D
     _refund = shift.refunds_total()
@@ -5376,8 +5376,8 @@ def shift_receipt(request, pk):
     # Yagona manba: modelning o'z ta'rifi.
     txns = list(shift._txn_qs().select_related('sold_by').prefetch_related('lines'))
 
-    # MON-24: bu view'дagi HAMMA pul Decimal. Float yig'indi (0.1+0.2) `som`
-    # yaxlitlashida boshqa tomonga ketib, chop etilgan qatorlarни JAMIдan
+    # MON-24: bu view'dagi HAMMA pul Decimal. Float yig'indi (0.1+0.2) `som`
+    # yaxlitlashida boshqa tomonga ketib, chop etilgan qatorlarni JAMIdan
     # ajratib yuborardi.
     def _amt(x):
         try:
@@ -5408,9 +5408,9 @@ def shift_receipt(request, pk):
     mixed_money = Decimal('0')
     # DISC-5: smen davomida BERILGAN CHEGIRMA. Z-hisobot smenning yagona
     # rasmiy hujjati va kassir aynan shu bo'yicha baholanadi — lekin chegirma
-    # unда umuman ko'rinmasdi. JAMI SAVDO allaqachon chegirma AYIRILGAN
-    # summa, ya'ni kassir bir smenда million so'm qo'lда chegirma bersa ham
-    # chekда hech qanday iz qolmasdi. Taqsimlash kerak emas: chek butunlay
+    # unda umuman ko'rinmasdi. JAMI SAVDO allaqachon chegirma AYIRILGAN
+    # summa, ya'ni kassir bir smenda million so'm qo'lda chegirma bersa ham
+    # chekda hech qanday iz qolmasdi. Taqsimlash kerak emas: chek butunlay
     # shu smenga tegishli, shuning uchun to'g'ridan-to'g'ri yig'amiz.
     disc_line = Decimal('0')
     disc_promo = Decimal('0')
@@ -5457,7 +5457,7 @@ def shift_receipt(request, pk):
     pay_rows = [{'label': labels.get(k, k), 'amount': money[k], 'count': counts[k]}
                 for k in (PM.CASH, PM.CARD, PM.TRANSFER)]
 
-    # Qo'lда = chek chegirmasi − aksiya − almashtirish krediti (DISC-1).
+    # Qo'lda = chek chegirmasi − aksiya − almashtirish krediti (DISC-1).
     _disc_manual = disc_order - disc_promo - disc_exch
     if _disc_manual < 0:
         _disc_manual = Decimal('0')
@@ -5472,30 +5472,30 @@ def shift_receipt(request, pk):
     }
 
     payouts = list(shift.payouts.select_related('created_by').order_by('created_at'))
-    # R7: kassaga qo'shilган naqd (cash_in) ham Z-hisobotда ko'rinsin — u
-    # kutilган naqdни oshiradi; ko'rsatilmasa reconciliation shaffof bo'lmaydi.
+    # R7: kassaga qo'shilgan naqd (cash_in) ham Z-hisobotda ko'rinsin — u
+    # kutilgan naqdni oshiradi; ko'rsatilmasa reconciliation shaffof bo'lmaydi.
     cash_ins = list(shift.cash_ins.select_related('created_by').order_by('created_at'))
     cash_ins_total = shift.cash_ins_total()
 
     refunds = list(Return.objects.filter(shift=shift)
                    .select_related('sale__variant__product', 'refunded_by')
                    .order_by('refunded_at'))
-    # MON-24: qaytarilgan naqdни DECIMAL'да yig'amiz (float EMAS). Ilgari bu
-    # float yig'indi edi, expected_cash() esa Decimal yo'lда ayirar edi — REF-2
-    # fraksiyali refundни kiritgach ikki yo'l 1 so'mга farq qilib, chek qatorlari
+    # MON-24: qaytarilgan naqdni DECIMAL'da yig'amiz (float EMAS). Ilgari bu
+    # float yig'indi edi, expected_cash() esa Decimal yo'lda ayirar edi — REF-2
+    # fraksiyali refundni kiritgach ikki yo'l 1 so'mga farq qilib, chek qatorlari
     # JAMI bilan yopilmay qolardi. Endi bitta Decimal manba.
     refund_total = sum((r.effective_cash_refund for r in refunds), Decimal('0'))
     refund_qty = sum(r.quantity for r in refunds)
 
     # ---- KASSA bloki: chop etilgan qatorlar YIG'INDISI = chop etilgan JAMI.
-    # Har money qatori `|som` bilan butun so'mга yaxlitlanadi; JAMIni (= HOZIRGI
-    # QOLDIQ) AYNI shu yaxlitlangan qiymatlardан chiqaramiz — kassir qo'lда
-    # qayta hisoblaganда aynan bir xil son chiqsin (§4.4). expected_cash()/
-    # variance() modelда audit uchun o'zgarmasдан qoladi; bu faqat CHOP uchun.
+    # Har money qatori `|som` bilan butun so'mga yaxlitlanadi; JAMIni (= HOZIRGI
+    # QOLDIQ) AYNI shu yaxlitlangan qiymatlardan chiqaramiz — kassir qo'lda
+    # qayta hisoblaganda aynan bir xil son chiqsin (§4.4). expected_cash()/
+    # variance() modelda audit uchun o'zgarmasdan qoladi; bu faqat CHOP uchun.
     def _somi(v):
         # `som` filtri bilan AYNAN bir xil: butun so'm, YARMI YUQORIGA.
         # (`round()` bank yaxlitlashi qiladi — round(2.5)=2 — kassir esa 3
-        # kutadi; ikki joyда ikki xil yaxlitlash aynan 1 so'm farqni tug'dirardi.)
+        # kutadi; ikki joyda ikki xil yaxlitlash aynan 1 so'm farqni tug'dirardi.)
         return int(_amt(v).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     _opening_i = _somi(shift.opening_cash)
     _cash_i = _somi(shift.cash_sales())
@@ -5506,18 +5506,18 @@ def shift_receipt(request, pk):
     _live_i = (_opening_i + _cash_i + _debt_i + _cashins_i
                - _payouts_i - _refund_i)
 
-    # MON-22 (chop yo'lida ham): YOPILGAN smen uchun JAMI — yopilishда
+    # MON-22 (chop yo'lida ham): YOPILGAN smen uchun JAMI — yopilishda
     # QOTIRILGAN qiymat. Komponentlar esa HOZIR qayta hisoblanadi, shuning
-    # uchun smen yopilgandan keyin qaytarish/o'chirish bo'lса ikkisi ajraladi.
-    # Farqni JAMIга singdirib yubormaymiz (aks holda oylar oldingi smenning
-    # FARQi jimgina qayta yozilib, aybni o'sha kassirга ag'darardi) — alohida
-    # qatorда ko'rsatamiz, shunda qatorlar yig'indisi baribir JAMIga teng.
+    # uchun smen yopilgandan keyin qaytarish/o'chirish bo'lsa ikkisi ajraladi.
+    # Farqni JAMIga singdirib yubormaymiz (aks holda oylar oldingi smenning
+    # FARQi jimgina qayta yozilib, aybni o'sha kassirga ag'darardi) — alohida
+    # qatorda ko'rsatamiz, shunda qatorlar yig'indisi baribir JAMIga teng.
     expected_display = _somi(shift.expected_cash())
     _post_close_delta = _somi(_dec(shift.expected_cash())
                               - _dec(shift.compute_expected_cash()))
-    # Qolgani — sof yaxlitlash: har qator ALOHIDA butun so'mга keltirilgani
-    # uchun yig'indi 1-2 so'mга siljishi mumkin. Uni ham ochiq ko'rsatamiz,
-    # chunki chekда "yig'ilmayotgan" raqamdan yomoni yo'q.
+    # Qolgani — sof yaxlitlash: har qator ALOHIDA butun so'mga keltirilgani
+    # uchun yig'indi 1-2 so'mga siljishi mumkin. Uni ham ochiq ko'rsatamiz,
+    # chunki chekda "yig'ilmayotgan" raqamdan yomoni yo'q.
     _rounding_delta = expected_display - _live_i - _post_close_delta
     if shift.counted_cash is not None:
         variance_display = _somi(shift.counted_cash) - expected_display
@@ -5556,8 +5556,8 @@ def shift_receipt(request, pk):
 
 @login_required
 def shift_returns(request, pk):
-    """Smen davomidagi QAYTARISHLAR tafsiloti — har qator: chek #, sotilган
-    narx, chegirma (va %), qaytarilган summa. Jami qaytarilган = Z-hisobotдаgi
+    """Smen davomidagi QAYTARISHLAR tafsiloti — har qator: chek #, sotilgan
+    narx, chegirma (va %), qaytarilgan summa. Jami qaytarilgan = Z-hisobotdagi
     'Qaytarilgan (naqd)' bilan bir xil. 'Fraksiya qayerdan?' savoliga aniq javob.
     """
     from decimal import Decimal
@@ -5575,10 +5575,10 @@ def shift_returns(request, pk):
                .order_by('refunded_at'))
     for r in returns:
         sale = r.sale
-        # sale_price / refund_amount / effective_cash_refund allaqачон Decimal.
+        # sale_price / refund_amount / effective_cash_refund allaqachon Decimal.
         sticker = Decimal(r.quantity) * sale.sale_price   # yorliq narx × dona
         refund = r.refund_amount            # qatorning o'z narxi (order_discount taqsimlanmaydi)
-        cash = r.effective_cash_refund      # kassaдан HAQIQIY chiqqan
+        cash = r.effective_cash_refund      # kassadan HAQIQIY chiqqan
         disc = sticker - refund
         pct = (disc / sticker * 100) if sticker > 0 else Decimal('0')
         rows.append({
@@ -5612,8 +5612,8 @@ def shift_returns(request, pk):
     })
 
 
-# MON-17: bitta kassa harakati uchun aqlли yuqori chegara (1 milliard so'm).
-# Bundan katta summa — deyarli har doim kiritishда xato yoki suiiste'mol.
+# MON-17: bitta kassa harakati uchun aqlli yuqori chegara (1 milliard so'm).
+# Bundan katta summa — deyarli har doim kiritishda xato yoki suiiste'mol.
 _MAX_CASH_MOVE = 1_000_000_000
 
 
@@ -5669,7 +5669,7 @@ def cash_payout(request):
         category = 'other'
     note = (data.get('note') or '').strip()[:200]
 
-    # S5: takroriy yuborishни (double-tap / timeout) bloklaymiz — bir martalik
+    # S5: takroriy yuborishni (double-tap / timeout) bloklaymiz — bir martalik
     # kalit bilan. Mavjud kalit bo'lsa yangi yozuv YARATMAYMIZ.
     _idem = (data.get('idempotency_key') or '').strip()[:64] or None
 
@@ -5702,9 +5702,9 @@ def cash_payout(request):
             return _payout_result(_dupe, dup=True)
         raise
 
-    # MON-17: har bir kassa chiqimini AUDIT LOGGA yozamiz + katta summада
-    # Telegram ogohlantirish. Ilgari chiqim hech qayerда qayd etilmasdi —
-    # kassir 500 000 olib, "chiqim" yozib, smenни nol farq bilan yopardi.
+    # MON-17: har bir kassa chiqimini AUDIT LOGGA yozamiz + katta summada
+    # Telegram ogohlantirish. Ilgari chiqim hech qayerda qayd etilmasdi —
+    # kassir 500 000 olib, "chiqim" yozib, smenni nol farq bilan yopardi.
     try:
         log_action(action=AuditLog.Action.CREATE, model_name='CashPayout',
             object_id=str(payout.id),
@@ -5745,7 +5745,7 @@ def cash_payout(request):
 
 @login_required
 def cash_in(request):
-    """Kassaga naqd qo'shishни qayd etish (MON-4) — cash_payout'ning aksi.
+    """Kassaga naqd qo'shishni qayd etish (MON-4) — cash_payout'ning aksi.
     POS (JSON) yoki smen sahifasi (form) dan chaqiriladi."""
     if request.method != 'POST':
         return redirect('pos_terminal')
@@ -5775,7 +5775,7 @@ def cash_in(request):
     if not shift:
         return _fail("Ochiq smen yo'q — avval smen oching.", 400)
 
-    # R6: OverflowError'ни ham ushlaymiz (inf/1e400).
+    # R6: OverflowError'ni ham ushlaymiz (inf/1e400).
     try:
         amount = round(float(data.get('amount') or 0))
     except (ValueError, TypeError, OverflowError):
@@ -5822,9 +5822,9 @@ def cash_in(request):
             return _cashin_result(_dupe, dup=True)
         raise
 
-    # MON-4/17: kassaga naqd qo'shishни ham AUDIT LOGGA yozamiz + katta summада
-    # ogohlantirish (chiqim bilan bir xil nazorat — aks holда qo'shimchalar
-    # hech qayerда qayd etilmай, kutilган naqdни shishirar edi).
+    # MON-4/17: kassaga naqd qo'shishni ham AUDIT LOGGA yozamiz + katta summada
+    # ogohlantirish (chiqim bilan bir xil nazorat — aks holda qo'shimchalar
+    # hech qayerda qayd etilmay, kutilgan naqdni shishirar edi).
     try:
         log_action(action=AuditLog.Action.CREATE, model_name='CashIn',
             object_id=str(ci.id),
@@ -5954,7 +5954,7 @@ def sale_create(request, stock_id):
             cd = form.cleaned_data
             qty = cd['quantity']
             # MON-21: smensiz sotuv YO'Q — aks holda shift=None bilan yozilib,
-            # Z-hisobotга tushmaydi.
+            # Z-hisobotga tushmaydi.
             open_shift = _open_shift_for(stock.branch)
             if not open_shift:
                 messages.error(request, "Smen ochilmagan. Avval smen oching.")
@@ -6308,7 +6308,7 @@ def category_list(request):
     elif group_slug:
         categories = categories.filter(group__slug=group_slug)
 
-    # Bo'lim tugmalari uchun: har bo'limда nechta kategoriya + bo'limsizlar soni
+    # Bo'lim tugmalari uchun: har bo'limda nechta kategoriya + bo'limsizlar soni
     _gc = dict(Category.objects.filter(group__isnull=False)
                .values_list('group__slug').annotate(n=Count('pk')))
     groups = list(Group.objects.all())
@@ -6394,8 +6394,8 @@ def category_list(request):
 
 # ---------- SALES LIST ----------
 
-# DISC-7: chegirma sababi endi RO'YXATDAN tanlanadi. Erkin matn amalда
-# ishlamadi — auditда yig'ilgani: "s", "c", "raz", "3000", "1500". Kassir
+# DISC-7: chegirma sababi endi RO'YXATDAN tanlanadi. Erkin matn amalda
+# ishlamadi — auditda yig'ilgani: "s", "c", "raz", "3000", "1500". Kassir
 # maydonni tezroq yopish uchun bitta belgi teradi va sabab ma'nosini
 # yo'qotadi. Ro'yxat guruhlanadigan ma'lumot beradi.
 
@@ -6420,7 +6420,7 @@ def sales_list(request):
     payment_method = request.GET.get('payment_method') or ''
     returned = request.GET.get('returned') or ''   # '', 'yes', 'no'
     # DISC-3: chegirma bo'yicha filtr. Egasi "kim qancha chegirma berdi?"
-    # savolini bermoqда — javob berish uchun chegirmali cheklarni ajratib
+    # savolini bermoqda — javob berish uchun chegirmali cheklarni ajratib
     # ko'ra olish kerak. Qiymatlar: '' | any | none | manual | promo | exchange
     discount = (request.GET.get('discount') or '').strip()
     if discount not in ('', 'any', 'none', 'manual', 'promo', 'exchange'):
@@ -6437,13 +6437,13 @@ def sales_list(request):
     if not date_from_raw and not date_to_raw:
         date_from_raw = (timezone.localdate() - timedelta(days=30)).strftime('%Y-%m-%d')
 
-    # DIQQAT: _returned annotatsiyasini BAZAVIY qs'ga QO'YMAYMIZ — u returns'га
+    # DIQQAT: _returned annotatsiyasini BAZAVIY qs'ga QO'YMAYMIZ — u returns'ga
     # JOIN qilib qatorlarni ko'paytiradi va aggregate (jami) IKKI barobar
-    # sanardi. Annotatsiya faqat ko'rsatiladigan 300 qatorга qo'shiladi (pastда).
+    # sanardi. Annotatsiya faqat ko'rsatiladigan 300 qatorga qo'shiladi (pastda).
     qs = Sale.objects.select_related(
         'variant__product', 'branch', 'sold_by', 'transaction')
 
-    # Sana filtri — sold_at'ni date()'ga O'RAMAYMIZ (aks holда sale_soldat_idx
+    # Sana filtri — sold_at'ni date()'ga O'RAMAYMIZ (aks holda sale_soldat_idx
     # indeksi ishlamay jadval to'liq skanerlanardi). Aware datetime oralig'i.
     tz = timezone.get_current_timezone()
     # CORE-3: aynan shu 14 qator yana uch joyda takrorlangan edi.
@@ -6469,9 +6469,9 @@ def sales_list(request):
         qs = qs.filter(~Exists(_has_ret))   # umuman qaytarilmagan
     # DISC-3: chegirma filtri. DIQQAT — annotatsiya QO'YMAYMIZ: `transaction`
     # oldinga qarab FK (1:1 join), lekin bazaviy qs'ga annotate qo'shilsa
-    # pastдagi values().annotate() (kunlik jami) o'ralmay qolib fanout xavfi
+    # pastdagi values().annotate() (kunlik jami) o'ralmay qolib fanout xavfi
     # tug'ilardi (yuqoridagi izohga qarang). Shu bois F() to'g'ridan-to'g'ri
-    # filtr ichида ishlatiladi:
+    # filtr ichida ishlatiladi:
     #   qo'lda = order_discount − promo_discount − exchange_credit
     if discount == 'any':
         qs = qs.filter(Q(transaction__order_discount__gt=0) | Q(line_discount__gt=0))
@@ -6537,9 +6537,9 @@ def sales_list(request):
 
     from decimal import Decimal
     # Jami — BUTUN filtr bo'yicha DB'da (faqat 300 emas). aggregate() Django 6'да
-    # annotatsiyali so'rovni SUBQUERY'ga o'raydi (fanout xavfsiz), AMMO pastдаgi
-    # KUNLIK values().annotate() o'ralmaydi — shu bois returns'ни bazaviy qs'ga
-    # umuman qo'shmaymiz, alohida so'rovда olamiz. 'txns' — HAQIQIY chek soni.
+    # annotatsiyali so'rovni SUBQUERY'ga o'raydi (fanout xavfsiz), AMMO pastdagi
+    # KUNLIK values().annotate() o'ralmaydi — shu bois returns'ni bazaviy qs'ga
+    # umuman qo'shmaymiz, alohida so'rovda olamiz. 'txns' — HAQIQIY chek soni.
     _rev_expr = line_revenue_expr()         # CORE-2
     agg = qs.aggregate(
         total=Sum(_rev_expr),
@@ -6596,10 +6596,10 @@ def sales_list(request):
     # Endi davr ichida AMALGA OSHIRILGAN qaytarishlar ham chiqadi: bu son
     # o'sha davr smenlarining Z-hisobotlari yig'indisiga TENG.
     # DIQQAT: bu son FAQAT sana+filial oynasi uchun ma'noli. Sotuvchi/to'lov
-    # turi/qidiruv filtri yoqilganда yuqoridagi `returned_total` filtrga
+    # turi/qidiruv filtri yoqilganda yuqoridagi `returned_total` filtrga
     # bo'ysunadi, kassadan chiqqan pulni esa sotuvchi bo'yicha bo'lib
     # bo'lmaydi (qaytarishni BOSHQA kassir rasmiylashtirgan bo'lishi mumkin).
-    # Shu bois tor filtrда umuman ko'rsatmaymiz — noto'g'ri taqqoslashдan
+    # Shu bois tor filtrda umuman ko'rsatmaymiz — noto'g'ri taqqoslashdan
     # ko'ra yo'qligi yaxshi.
     _comparable = not (seller_id or payment_method or q or returned or discount)
     period_ret_qs = (Return.objects
@@ -6620,7 +6620,7 @@ def sales_list(request):
     refunds_span_periods = (_comparable
                             and period_returned_total != returned_total)
 
-    # RPT-1: sahifalash. Avval ro'yxat jimgina 300-qatorда kesilardi —
+    # RPT-1: sahifalash. Avval ro'yxat jimgina 300-qatorda kesilardi —
     # foydalanuvchi so'ragan qatorlarning bir qismi ko'rinmasdi va sahifa
     # buni faqat kichkina "eng so'nggi 300" yozuvi bilan aytardi. Endi
     # hamma qatorga yetib borish mumkin. Yuqoridagi JAMILAR o'zgarmadi —
@@ -6657,10 +6657,10 @@ def sales_list(request):
             'net': _rtotal - _rmoney,
         })
 
-    # ---- CHEK KO'RINISHI: bir qator = butun chek. Filtrlangan qs'даgi
-    # tranzaksiyalarни guruhlab, har biriга chek jamisi (t.total = to'langan),
-    # dona soni, va (agar bo'lsa) qaytarilган summani biriktiramiz. Eng so'nggi
-    # 300 chek ko'rsatiladi. (Chek'siz eski sotuvlar faqat 'items' ko'rinishда.)
+    # ---- CHEK KO'RINISHI: bir qator = butun chek. Filtrlangan qs'dagi
+    # tranzaksiyalarni guruhlab, har biriga chek jamisi (t.total = to'langan),
+    # dona soni, va (agar bo'lsa) qaytarilgan summani biriktiramiz. Eng so'nggi
+    # 300 chek ko'rsatiladi. (Chek'siz eski sotuvlar faqat 'items' ko'rinishda.)
     checks = []
     checks_page = None
     if view_mode == 'checks':
@@ -7432,13 +7432,13 @@ def checkout(request):
     if request.method == 'POST':
         branch = lines[0]['stock'].branch
         # MON-21: smensiz sotuv YO'Q (pos_checkout kabi) — aks holda shift=None
-        # bilan yozilib, Z-hisobotга tushmaydi.
+        # bilan yozilib, Z-hisobotga tushmaydi.
         open_shift = _open_shift_for(branch)
         if not open_shift:
             messages.error(request, "Smen ochilmagan. Avval smen oching.")
             return redirect('cart_view')
         # MON-20: to'lov turini normallashtiramiz + tekshiramiz (xom qiymat
-        # DB constraint'ga urилиб 500 bermasin, va soxta bucket'га tushmasin).
+        # DB constraint'ga urilib 500 bermasin, va soxta bucket'ga tushmasin).
         _pm = _norm_pay_method(request.POST.get('payment_method') or 'cash')
         if _pm not in ('cash', 'card', 'transfer'):
             messages.error(request, "To'lov turi noto'g'ri.")
@@ -7483,7 +7483,7 @@ def checkout(request):
 
 
 # UX-11: chek POS'da KO'RINMAS IFRAME ichida chop etiladi (yangi tab emas).
-# Prodda X_FRAME_OPTIONS = 'DENY' — ya'ni bu sahifa HECH QANDAY freymда
+# Prodda X_FRAME_OPTIONS = 'DENY' — ya'ni bu sahifa HECH QANDAY freymda
 # ochilmaydi va chek umuman chop etilmasdi. Butun sayt uchun DENY'ni
 # bo'shatmaymiz: faqat SHU sahifaga O'Z SAYTIMIZ ichida freymga tushish
 # ruxsati beriladi. Boshqa saytlar baribir freymga ola olmaydi.
@@ -7896,8 +7896,8 @@ def _serve_static_file(rel_path, content_type):
     path = os.path.join(settings.BASE_DIR, 'static', rel_path)
     if not os.path.exists(path):
         return HttpResponse(status=404)
-    # OPS-11: fayl huquqi buzuq bo'lsa (masalan deploy'дан keyin sw.js o'qilmasa)
-    # 500 emas, 404 qaytaramiz — brauzer eski SW'ни saqlaydi, sayt ochiq qoladi.
+    # OPS-11: fayl huquqi buzuq bo'lsa (masalan deploy'dan keyin sw.js o'qilmasa)
+    # 500 emas, 404 qaytaramiz — brauzer eski SW'ni saqlaydi, sayt ochiq qoladi.
     try:
         with open(path, 'rb') as f:
             data = f.read()
@@ -8054,7 +8054,7 @@ def _insights_context(request):
     branch_id = request.GET.get('branch') or ''
 
     today = timezone.localdate()
-    end_date = today   # davr oxirgi (kiritilган) kuni; odatda bugun
+    end_date = today   # davr oxirgi (kiritilgan) kuni; odatda bugun
     if period == 'week':
         d_start = today - timedelta(days=7)
         days = 7
@@ -8065,11 +8065,11 @@ def _insights_context(request):
         d_start = today - timedelta(days=90)
         days = 90
     elif period == 'this_month':
-        # Kalendar oy: shu oyning 1-kunidan BUGUNГА qadar (rolling 30 kun EMAS).
+        # Kalendar oy: shu oyning 1-kunidan BUGUNGA qadar (rolling 30 kun EMAS).
         d_start = today.replace(day=1)
         days = (today - d_start).days + 1
     elif period == 'last_month':
-        # To'liq o'tgan oy: 1-kunidan oxirgi kunigача.
+        # To'liq o'tgan oy: 1-kunidan oxirgi kunigacha.
         end_date = today.replace(day=1) - timedelta(days=1)   # o'tgan oy oxiri
         d_start = end_date.replace(day=1)                      # o'tgan oy boshi
         days = (end_date - d_start).days + 1
@@ -9278,7 +9278,7 @@ PRICE_ISSUES = [
 
 def _price_qs(request, params=None):
     """Filtrlangan BranchStock queryset. STK-9: `params` — GET yoki POST.
-    price_apply POST bo'lgani uchun filtrlar GET'да YO'Q edi; natijada
+    price_apply POST bo'lgani uchun filtrlar GET'da YO'Q edi; natijada
     `_price_qs` BUTUN katalogni qaytarib, hammani qayta narxlardi."""
     from decimal import Decimal
     if params is None:
@@ -9412,8 +9412,8 @@ def price_apply(request):
                 new_cost = dec(rc)
                 new_sale = dec(rs)
                 new_ws = dec(rw)
-                # E2: bo'sh EMAS, lekin rad etilган (manfiy/noto'g'ri/juda katta)
-                # qiymatlarни sanaymiz — jim "muvaffaqiyat" o'rniga ogohlantiramiz.
+                # E2: bo'sh EMAS, lekin rad etilgan (manfiy/noto'g'ri/juda katta)
+                # qiymatlarni sanaymiz — jim "muvaffaqiyat" o'rniga ogohlantiramiz.
                 for _rv, _pv in ((rc, new_cost), (rs, new_sale), (rw, new_ws)):
                     if (_rv or '').strip() != '' and _pv is None:
                         skipped += 1
@@ -9456,14 +9456,14 @@ def price_apply(request):
             return redirect(back)
         targets = BranchStock.objects.filter(pk__in=sel)
     else:
-        # STK-9: filtrlarni POST'дан o'qiymiz (GET bo'sh). Va agar HECH QANDAY
+        # STK-9: filtrlarni POST'dan o'qiymiz (GET bo'sh). Va agar HECH QANDAY
         # filtr bo'lmasa — bu BUTUN katalogni qamrab oladi. Tasodifan hammani
         # qayta narxlamaslik uchun aniq filtr yoki tasdiq talab qilamiz.
         _has_filter = any((request.POST.get(k) or '').strip()
                           for k in ('branch', 'q', 'category', 'issue'))
         if not _has_filter and request.POST.get('confirm_all') != '1':
             messages.error(request,
-                "Filtr tanlanmagan — bu BUTUN katalogга ta'sir qiladi. "
+                "Filtr tanlanmagan — bu BUTUN katalogga ta'sir qiladi. "
                 "Avval filtrlang yoki qatorlarni belgilab tanlang.")
             return redirect(back)
         targets = _price_qs(request, request.POST)      # POST filtridagi qatorlar
@@ -9655,7 +9655,7 @@ def promotion_save(request):
     percent = num(request.POST.get('percent'))
     percent = max(Decimal('0'), min(Decimal('100'), percent))
     # V7: foizli aksiya turlari uchun foiz 0 bo'lsa — bu foydasiz "0% chegirma"
-    # bo'lardi (lekin muvaffaqiyat deб ko'rsatilardi). Rad etamiz.
+    # bo'lardi (lekin muvaffaqiyat deb ko'rsatilardi). Rad etamiz.
     if ptype in (Promotion.Type.PERCENT_OFF, Promotion.Type.NTH_PERCENT) and percent <= 0:
         messages.error(request, "Foizli aksiya uchun foiz 0 dan katta bo'lishi kerak.")
         return redirect('promotion_list')
@@ -9693,8 +9693,8 @@ def promotion_save(request):
                 datetime.strptime(vu, '%Y-%m-%d').replace(hour=23, minute=59), tz)
         except (ValueError, TypeError):
             pass
-    # V7: tugash sanasi boshlanish sanasidан oldин bo'lmasин — aks holда aksiya
-    # hech qachon ishlamaydi (lekin "saqlandi" deб ko'rsatilardi).
+    # V7: tugash sanasi boshlanish sanasidan oldin bo'lmasin — aks holda aksiya
+    # hech qachon ishlamaydi (lekin "saqlandi" deb ko'rsatilardi).
     if (promo.valid_from and promo.valid_until
             and promo.valid_until < promo.valid_from):
         messages.error(request,
@@ -9818,7 +9818,7 @@ PRICE_TAG_SEP = ' · '
 # Sof narx belgisi: "115 000" yoki "115 000 (2)".
 # MUHIM: faqat MING-AJRATGICHLI (probelli) sonlar narx deb qaraladi. Ilgari
 # HAR QANDAY raqam ("1273", "3027", "545") ham narx deb belgilanardi — bu
-# raqamli RANG/KOD'larni bir "oila"ga qo'shib yuborardi va qabulда qoldiq
+# raqamli RANG/KOD'larni bir "oila"ga qo'shib yuborardi va qabulda qoldiq
 # NOTO'G'RI turga tushib, kassada "omborda yo'q" chiqardi. Tizim yaratadigan
 # narx belgisi doim probelli (masalan 115 000), shuning uchun probelni talab
 # qilamiz — "1273" kabi kodlar endi o'z rangi bo'lib qoladi.
@@ -10427,7 +10427,7 @@ def warehouse(request):
     sales_q = Sale.objects.filter(sold_at__gte=d90)
     if branch:
         sales_q = sales_q.filter(branch=branch)
-    # SAL-6: bu yerда na qator chegirmasi, na chek chegirmasi ayirilardi —
+    # SAL-6: bu yerda na qator chegirmasi, na chek chegirmasi ayirilardi —
     # 90 kunlik "sotilgan qiymat" ikki karra shishgan bo'lishi mumkin edi.
     # line_discount endi ayiriladi (bu shubhasiz xato edi); chek chegirmasi
     # esa MAHSULOT — qator darajasidagi o'lchov bo'lgani uchun alohida
@@ -10698,7 +10698,7 @@ def warehouse_adjust(request):
     with transaction.atomic(), audit_batch(
             'Ombor tuzatildi', model_name='BranchStock') as _batch:
         # STK-9: qatorni QULFLAB, HOZIRGI (yangi) qoldiqni o'qiymiz — delta va
-        # Intake yozuvi eskirgan o'qishга emas, jonli qiymatga nisbatan.
+        # Intake yozuvi eskirgan o'qishga emas, jonli qiymatga nisbatan.
         st = (BranchStock.objects.select_for_update()
               .select_related('variant__product', 'branch').filter(pk=st.pk).first())
         if st is None:

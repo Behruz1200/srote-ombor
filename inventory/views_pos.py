@@ -208,7 +208,7 @@ def pos_terminal(request):
     # Patch 1e: yangi qatorlar jonli kelib turgani uchun boshlang'ich ro'yxat
     # qisqa (12 ta) bo'lsa yetadi — 200 ta chek + har chekning barcha `lines`
     # prefetch'i (item_count hisoblash uchun) POS yuklanishini sekinlashtirardi.
-    # To'liq tarix "Hammasi →" (sales_list) orqali bir bosishда ochiladi.
+    # To'liq tarix "Hammasi →" (sales_list) orqali bir bosishda ochiladi.
     recent_txns = (SaleTransaction.objects.filter(
                        branch=branch, sold_at__date=timezone.localdate())
                    .select_related('sold_by')
@@ -510,9 +510,9 @@ def pos_lookup(request):
     } for s in stocks]
 
     # Skanerlangan barcode turi BO'SH (0), lekin AYNAN SHU RANG+O'LCHAMDAGI
-    # (ya'ni bir xil tovar, boshqa barcode bilan qayta qabul qilingan) birodарда
+    # (ya'ni bir xil tovar, boshqa barcode bilan qayta qabul qilingan) birodarda
     # qoldiq bor bo'lsa — o'shanga yo'naltiramiz. Shunda skaner "omborda yo'q"
-    # deб dead-end bo'lmaydi. Faqat rang BO'SH BO'LMAGANда (aniq bir xil kod).
+    # deb dead-end bo'lmaydi. Faqat rang BO'SH BO'LMAGANda (aniq bir xil kod).
     if matched_variant_id and _matched_variant is not None:
         mv_row = next((v for v in variants if v['variant_id'] == matched_variant_id), None)
         if (mv_row is None or mv_row['stock_count'] <= 0):
@@ -596,7 +596,7 @@ def pos_checkout(request):
 
     # PAY-2 / MON-11: QR provider nomlari ('payme','click'...) 'transfer'ga
     # moslashtiriladi; NOMA'LUM usul RAD etiladi (jimgina 'cash'ga aylantirilmaydi
-    # — aks holda karta/QR pul kassaga tushган kabi ko'rinib, kamomad bo'lardi).
+    # — aks holda karta/QR pul kassaga tushgan kabi ko'rinib, kamomad bo'lardi).
     _VALID_METHODS = {'cash', 'card', 'transfer'}
     _QR_PROVIDERS = {'payme', 'click', 'uzum', 'humo', 'anor', 'alif',
                      'iman', 'zoodpay', 'other', 'noop'}
@@ -626,7 +626,7 @@ def pos_checkout(request):
 
     # Pul maydonlari DB'da Decimal(12,2) — mutlaq qiymati 10^10 dan kichik
     # bo'lishi SHART, aks holda "numeric field overflow" (500). Xato terilgan
-    # ulkan raqam (masalan numpad'дa qo'shimcha nol) 500 emas, tushunarli
+    # ulkan raqam (masalan numpad'da qo'shimcha nol) 500 emas, tushunarli
     # ogohlantirish berishi kerak.
     MAX_MONEY = Decimal('9999999999.99')
 
@@ -665,17 +665,17 @@ def pos_checkout(request):
         parsed_lines.append({'sid': sid, 'qty': qty, 'price': price, 'ld': line_discount})
 
     # STK-16 / R1: bir xil stock_id li qatorlarni BIRLASHTIRMAYMIZ (ochiq
-    # narxli tovarlar bitta stock_id ostida, ammo HAR XIL qo'lда kiritilgan
-    # narxда bo'ladi — birlashtirish oxirgi narxда IKKALASINI yozib, kam pul
+    # narxli tovarlar bitta stock_id ostida, ammo HAR XIL qo'lda kiritilgan
+    # narxda bo'ladi — birlashtirish oxirgi narxda IKKALASINI yozib, kam pul
     # olardi). Buning o'rniga QOLDIQ tekshiruvini stock_id bo'yicha JAMLAB
-    # bajaramiz (quyida), narx esa har qatorда o'ziniki bo'lib qoladi.
+    # bajaramiz (quyida), narx esa har qatorda o'ziniki bo'lib qoladi.
     _qty_by_sid = {}
     for _l in parsed_lines:
         _qty_by_sid[_l['sid']] = _qty_by_sid.get(_l['sid'], 0) + _l['qty']
 
     # MON-18: chegirma savat summasidan OSHMASLIGI kerak. Ilgari chegirma faqat
-    # MAX_MONEY ga tekshirilardi — 1 000 000 chegirma 1 000 so'mlik sotuvга
-    # qo'yilsa, jami −999 000 bo'lib, cash_sales()/expected_cash() minusга
+    # MAX_MONEY ga tekshirilardi — 1 000 000 chegirma 1 000 so'mlik sotuvga
+    # qo'yilsa, jami −999 000 bo'lib, cash_sales()/expected_cash() minusga
     # tushib, kassadan yashirin pul olish yo'li ochilardi. Endi cheklaymiz.
     _subtotal = Decimal('0')
     for _l in parsed_lines:
@@ -686,10 +686,10 @@ def pos_checkout(request):
     if order_discount > _subtotal:      # chek chegirmasi savatdan oshmasin
         order_discount = _subtotal
 
-    # V5/S2: aksiya chegirmasini SERVERда qayta hisoblaymiz — mijoz yuborган
-    # applied_promos ga ishonmaymiz (aks holда soxta aksiya nomi bilan butun
-    # savatni 0 ga tushirish mumkin edi). Aksiyадан tashqari qo'lда chegirма
-    # esa SABAB talab qiladi (auditда ko'rinsin).
+    # V5/S2: aksiya chegirmasini SERVERda qayta hisoblaymiz — mijoz yuborgan
+    # applied_promos ga ishonmaymiz (aks holda soxta aksiya nomi bilan butun
+    # savatni 0 ga tushirish mumkin edi). Aksiyadan tashqari qo'lda chegirma
+    # esa SABAB talab qiladi (auditda ko'rinsin).
     _promo_stocks = {s.id: s for s in BranchStock.objects
                      .filter(id__in=list(_qty_by_sid.keys()))
                      .select_related('variant__product')}
@@ -730,16 +730,16 @@ def pos_checkout(request):
             return JsonResponse({'ok': False,
                 'error': "Sababni ro'yxatdan tanlang yoki qisqacha yozing "
                          "(kamida 3 harf)."}, status=400)
-    # Klient sonига emas, SERVER hisoblаган aksiyaga + qo'lда qismga ishonamiz.
+    # Klient soniga emas, SERVER hisoblagan aksiyaga + qo'lda qismga ishonamiz.
     order_discount = _server_promo + _manual_disc
     # DISC-1: aksiya ulushini ALOHIDA saqlaymiz. Ilgari ikkalasi bitta songa
-    # qo'shilib ketardi va hisobotlarда kassir bergan chegirma bilan egasi
+    # qo'shilib ketardi va hisobotlarda kassir bergan chegirma bilan egasi
     # sozlagan aksiya farqlanmasdi. Kassir ixtiyoridagi qism =
     # order_discount − promo.
     # DISC-2 tuzatishi: bu yerda ilgari "sababsiz 289 chek — aslida aksiya"
     # deb yozilgan edi. NOTO'G'RI: Promotion jadvali bo'sh, sabab majburiyati
-    # esa 2026-08-26 da qo'shilgan. O'sha cheklar QO'LDA berilган chegirma —
-    # shunчaki sababi yozilmagan davrdan qolgan (0061 migratsiyasi tuzatdi).
+    # esa 2026-08-26 da qo'shilgan. O'sha cheklar QO'LDA berilgan chegirma —
+    # shunchaki sababi yozilmagan davrdan qolgan (0061 migratsiyasi tuzatdi).
     _promo_part = _server_promo
     if order_discount > _subtotal:
         order_discount = _subtotal
@@ -753,7 +753,7 @@ def pos_checkout(request):
         _digits = sum(c.isdigit() for c in cleaned_phone)
         if cleaned_phone:
             customer = Customer.objects.filter(phone=cleaned_phone).first()
-            # SEC-8: juda qisqa/soxta raqamдан YANGI mijoz yaratmaymiz (baza
+            # SEC-8: juda qisqa/soxta raqamdan YANGI mijoz yaratmaymiz (baza
             # ifloslanishi va enumeratsiya oldini oladi). O'zbek raqami kamida
             # 9 raqam. Mavjud mijozni topsak bog'laymiz; aks holda mijozsiz sotuv.
             if not customer and _digits >= 9:
@@ -766,14 +766,14 @@ def pos_checkout(request):
 
     open_shift = _open_shift_for(branch)
 
-    # OFF-7: sotuvning ASL vaqti (client_ts). Offline navbatдan kech kelsa ham
-    # chek shu vaqtни ko'rsatadi va smen shu vaqt bo'yicha aniqlanadi — sinxron
-    # vaqti bo'yicha emas (aks holda ertalabki savdo kechki smenга tushardi).
+    # OFF-7: sotuvning ASL vaqti (client_ts). Offline navbatdan kech kelsa ham
+    # chek shu vaqtni ko'rsatadi va smen shu vaqt bo'yicha aniqlanadi — sinxron
+    # vaqti bo'yicha emas (aks holda ertalabki savdo kechki smenga tushardi).
     target_sold_at = None
     target_shift = open_shift
-    # R4: client_ts'ga FAQAT offline replayда ishonamiz. Oddiy onlayn sotuvда
-    # pos.html client_ts yuborса ham, sotuv vaqti = SERVER vaqti bo'lsin (qurilma
-    # soati adashса ertalabki savdo kechki smenга tushib ketmasin). Backdating
+    # R4: client_ts'ga FAQAT offline replayda ishonamiz. Oddiy onlayn sotuvda
+    # pos.html client_ts yuborsa ham, sotuv vaqti = SERVER vaqti bo'lsin (qurilma
+    # soati adashsa ertalabki savdo kechki smenga tushib ketmasin). Backdating
     # faqat haqiqiy navbat-replay uchun.
     _client_ts = (data.get('client_ts') or '').strip()
     if _client_ts and data.get('is_offline_replay'):
@@ -793,10 +793,10 @@ def pos_checkout(request):
                          .order_by('-opened_at').first())
                 if _hist:
                     target_shift = _hist
-                    # R3: agar bu smen ALLAQACHON yopilган bo'lса, uning
-                    # closing_expected_cash'i (MON-22) QOTIRILган — kech kelган
-                    # bu sotuv o'sha raqamга kirmaydi. Jimgina buzмaslik uchun
-                    # egaга ko'rinadigan qilib belgilaymiz (audit + xabar).
+                    # R3: agar bu smen ALLAQACHON yopilgan bo'lsa, uning
+                    # closing_expected_cash'i (MON-22) QOTIRILgan — kech kelgan
+                    # bu sotuv o'sha raqamga kirmaydi. Jimgina buzmaslik uchun
+                    # egaga ko'rinadigan qilib belgilaymiz (audit + xabar).
                     if _hist.closed_at is not None:
                         try:
                             log_action(action=AuditLog.Action.CREATE,
@@ -811,8 +811,8 @@ def pos_checkout(request):
                             logger.exception('late-replay flag failed (shift %s)', _hist.id)
 
     # MON-9: smensiz sotuv YO'Q. Aks holda shift=None bilan yozilib, hech qaysi
-    # Z-hisobotга tushmaydi — kassa "ortiq" chiqadi. (Offline replay o'zining
-    # tarixiy smenига tushishi mumkin; oddiy sotuv hozirgi ochiq smenга.)
+    # Z-hisobotga tushmaydi — kassa "ortiq" chiqadi. (Offline replay o'zining
+    # tarixiy smeniga tushishi mumkin; oddiy sotuv hozirgi ochiq smenga.)
     if not target_shift:
         return JsonResponse({'ok': False,
             'error': "Smen ochilmagan. Sotuv faqat ochiq smen davomida amalga oshiriladi."},
@@ -858,7 +858,7 @@ def pos_checkout(request):
 
     # MON-10: ARALASH to'lov summasi chekdan KAM bo'lmasin. Brauzer buni
     # tekshiradi, lekin devtools yoki offline-replay chetlab o'tishi mumkin —
-    # shuning uchun serverда ham tekshiramiz.
+    # shuning uchun serverda ham tekshiramiz.
     if payment_method == 'mixed':
         _order_total = Decimal('0')
         for _l in parsed_lines:
@@ -868,15 +868,15 @@ def pos_checkout(request):
             _order_total = Decimal('0')
         _paid = sum((Decimal(str(e['amount'])) for e in clean_breakdown), Decimal('0'))
         # MON-16: IKKI TOMONLAMA tekshiruv. Ilgari faqat KAM to'lov rad etilardi;
-        # ORTIQ to'lov ham xuddi shu nolinchi-farq ekspluatatsiyasига olib
+        # ORTIQ to'lov ham xuddi shu nolinchi-farq ekspluatatsiyasiga olib
         # kelardi (split_breakdown qoldiqni oxirgi usulga tashlab, kutilgan
-        # naqdни shishiradi). Aralashда summa chekка AYNAN teng bo'lishi kerak
+        # naqdni shishiradi). Aralashda summa chekka AYNAN teng bo'lishi kerak
         # (ortiqcha naqd = qaytim, u alohida maydon — to'lov legi emas).
         if abs(_paid - _order_total) > Decimal('0.5'):
             _diff = _order_total - _paid
             _msg = (f"Aralash to'lov yetishmaydi: {int(_diff)} so'm kam."
                     if _diff > 0 else
-                    f"Aralash to'lov ortiqcha: {int(-_diff)} so'm. Summa chekка teng bo'lsin.")
+                    f"Aralash to'lov ortiqcha: {int(-_diff)} so'm. Summa chekka teng bo'lsin.")
             return JsonResponse({'ok': False, 'error': _msg}, status=400)
 
     class _CheckoutAbort(Exception):
@@ -912,7 +912,7 @@ def pos_checkout(request):
             for _sid in sids:
                 stock = locked[_sid]
                 # R1/STK-16: shu stock_id bo'yicha JAMI soni (bir nechta qator
-                # bir tovarga tegishli bo'lса) qoldiqдан oshmasin.
+                # bir tovarga tegishli bo'lsa) qoldiqdan oshmasin.
                 _need = _qty_by_sid.get(_sid, 0)
                 if (not stock.variant.product.is_open_price
                         and _need > stock.stock_count):
@@ -943,8 +943,8 @@ def pos_checkout(request):
                     raise _CheckoutAbort({'ok': False, 'error': err})
 
             # MON-5: smen checkout davomida yopilib qolmasin (poyga —
-            # _open_shift_for atomic blokдан oldin chaqirilgan). Offline replay
-            # tarixiy yopiq smenга ATAYLAB tushadi, uni tekshirmaymiz.
+            # _open_shift_for atomic blokdan oldin chaqirilgan). Offline replay
+            # tarixiy yopiq smenga ATAYLAB tushadi, uni tekshirmaymiz.
             if not data.get('is_offline_replay'):
                 _st = (Shift.objects.filter(pk=target_shift.pk)
                        .values_list('status', flat=True).first())
@@ -970,7 +970,7 @@ def pos_checkout(request):
             )
             _batch.object_id = str(txn.pk)                       # AUD-3
             _batch.describe(f"Sotuv: chek #{txn.pk} — {len(parsed_lines)} qator")
-            price_overrides = []  # MON-8: qo'lda kiritilgan narx auditи
+            price_overrides = []  # MON-8: qo'lda kiritilgan narx auditi
             for ln in parsed_lines:
                 stock = locked[ln['sid']]
                 prod = stock.variant.product
@@ -1017,7 +1017,7 @@ def pos_checkout(request):
         return JsonResponse(e.payload, status=e.status)
     except IntegrityError:
         # OFF-2 poyga: bir vaqtning o'zida ikki replay bir xil kalit bilan
-        # kelsa, ikkinchi create unique cheklovга urилadi. Mavjud chekни
+        # kelsa, ikkinchi create unique cheklovga uriladi. Mavjud chekni
         # qaytaramiz — sotuv baribir bir marta yozilgan.
         if idem_key:
             dup = SaleTransaction.objects.filter(idempotency_key=idem_key).first()
@@ -1027,7 +1027,7 @@ def pos_checkout(request):
 
     # OFF-2: chek ALLAQACHON saqlangan (atomic commit bo'ldi). Bundan keyingi
     # "best-effort" chaqiruvlar (fiskal, SMS) XATO bersa ham 500 qaytmasligi
-    # kerak — aks holda offline navbat chekни ikkinchi marta yuborib, sotuv
+    # kerak — aks holda offline navbat chekni ikkinchi marta yuborib, sotuv
     # ikki marta yozilardi (ikki barobar tushum, ombor ikki marta kamayadi).
     # MON-8: narx o'zgartirishlarini audit logga yozamiz (best-effort).
     if price_overrides:
@@ -1049,7 +1049,7 @@ def pos_checkout(request):
         # OPS-15: fiskal chek va SMS endi FON ishlari. Ilgari ikkalasi ham
         # sotuv so'rovi ichida sinxron ketardi — tashqi xizmat sekinlashsa
         # kassir mijoz oldida kutib qolardi. Chek allaqachon yozilgan;
-        # ular kechiksa ham sotuvga ta'sir qilmaydi va navbat qayta uriniб
+        # ular kechiksa ham sotuvga ta'sir qilmaydi va navbat qayta urinib
         # ko'radi (5 martagacha, o'suvchi kechikish bilan).
         from .jobs import enqueue
         enqueue('fiscal_submit', txn_id=txn.pk)
@@ -1288,17 +1288,17 @@ def payments_webhook(request, provider):
 
     PAY-1 XAVFSIZLIK: bu endpoint IMZO (signature) bilan himoyalangan.
       1. PAYMENTS_WEBHOOK_SECRET sozlanmagan bo'lsa — HAMMA chaqiruv RAD etiladi
-         (hech qanday to'lov 'paid' bo'lmaydi). Hozir shунday — QR real ulanмaган.
-      2. Sozlanган bo'lsa — 'X-Signature' sarlavhasi tananing HMAC-SHA256 imzosiga
+         (hech qanday to'lov 'paid' bo'lmaydi). Hozir shunday — QR real ulanmagan.
+      2. Sozlangan bo'lsa — 'X-Signature' sarlavhasi tananing HMAC-SHA256 imzosiga
          AYNAN mos kelishi shart (hmac.compare_digest).
       3. Faqat ANIQ ref_code bo'yicha topiladi — 'summa + oxirgi 30 daqiqa'
-         fallback OLIB TASHLANDI (mijoz summani bilса, boshqa chekни paid
-         qilиб qo'ymasin).
+         fallback OLIB TASHLANDI (mijoz summani bilsa, boshqa chekni paid
+         qilib qo'ymasin).
     """
 
     body_raw = request.body
 
-    # 1) Imzo tekshiruvi — sirsiz endpoint hech narsani paid qilмaydi
+    # 1) Imzo tekshiruvi — sirsiz endpoint hech narsani paid qilmaydi
     import hmac as _hmac, hashlib as _hashlib
     sig = (request.headers.get('X-Signature') or request.headers.get('X-Signature-Sha256') or '').strip()
     secret = getattr(settings, 'PAYMENTS_WEBHOOK_SECRET', '') or ''
@@ -1388,11 +1388,11 @@ def pos_promo_eval(request):
         'total_discount': round(total_discount, 2),
     })
 def _evaluate_promotions(cart_lines):
-    """V5: aktiv aksiyalardan kelib chiqadigan chegirmani SERVERда hisoblaydi.
+    """V5: aktiv aksiyalardan kelib chiqadigan chegirmani SERVERda hisoblaydi.
 
     cart_lines: [{stock_id, qty, price, product_id, category_id}]. Bu yagona
     manba — pos_promo_eval (ko'rsatish) ham, pos_checkout (tekshirish) ham shuni
-    chaqiradi, shunда mijoz o'ylab topган aksiya chegirmasi qabul qilinmaydi.
+    chaqiradi, shunda mijoz o'ylab topgan aksiya chegirmasi qabul qilinmaydi.
     (applied_list, total_discount_float) qaytaradi.
     """
     now = timezone.now()
@@ -1505,8 +1505,8 @@ def pos_payment_status(request):
     intent_id = request.GET.get('intent_id') or ''
     from .payments import get_provider, available_providers
     # SEC-19: mijoz tanlagan provider'ga ISHONMAYMIZ. Faqat ANIQ yoqilgan
-    # provider'lar. Aks holда ?provider=noop&intent_id=har-narsa → 'paid'
-    # qaytarib, istalgan kirgan foydalanuvchи to'lovni "tasdiqlab" olardi.
+    # provider'lar. Aks holda ?provider=noop&intent_id=har-narsa → 'paid'
+    # qaytarib, istalgan kirgan foydalanuvchi to'lovni "tasdiqlab" olardi.
     _enabled = {p.name for p in available_providers()}
     if provider_name not in _enabled:
         return JsonResponse({'ok': False, 'error': 'provider yoqilmagan'}, status=400)
@@ -1706,16 +1706,16 @@ def pos_refund(request):
     if not items:
         return JsonResponse({'ok': False, 'error': 'qator yo\'q'}, status=400)
 
-    # S3: takroriy qaytarishни (timeout/qayta bosish) bloklaymiz. Bir martalik
-    # kalit butun qaytarish partiyasига tegishli — birinchi Return qatoriga
-    # yoziladi. O'sha kalit bilan qaytarish bo'lган bo'lса — takror emas.
+    # S3: takroriy qaytarishni (timeout/qayta bosish) bloklaymiz. Bir martalik
+    # kalit butun qaytarish partiyasiga tegishli — birinchi Return qatoriga
+    # yoziladi. O'sha kalit bilan qaytarish bo'lgan bo'lsa — takror emas.
     _idem = (data.get('idempotency_key') or '').strip()[:64] or None
     if _idem and Return.objects.filter(idempotency_key=_idem).exists():
         return JsonResponse({'ok': True, 'refunded_qty': 0,
                              'refunded_total': 0, 'duplicate': True})
 
-    # REF-1: HAMMA qatorni atomic blokдан OLDIN tekshiramiz. Ilgari tekshiruv
-    # atomic ichida `return` qilardi — bitta qator o'tib, keyingisi yiqilса,
+    # REF-1: HAMMA qatorni atomic blokdan OLDIN tekshiramiz. Ilgari tekshiruv
+    # atomic ichida `return` qilardi — bitta qator o'tib, keyingisi yiqilsa,
     # o'tgani COMMIT bo'lib, 400 qaytardi. Kassir tuzatib qayta yuborsa —
     # birinchi qator IKKINCHI marta qaytarilardi (ikki barobar naqd/ombor).
     parsed = []
@@ -1745,19 +1745,19 @@ def pos_refund(request):
     refunded_total = Decimal('0')
     refunded_qty = 0
     _first_row = True
-    _txn_refunded = {}   # REF-3: chek pk -> shu chekда jami qaytarilgan naqd
+    _txn_refunded = {}   # REF-3: chek pk -> shu chekda jami qaytarilgan naqd
     try:
         with transaction.atomic(), audit_batch(
                 'Qaytarish', model_name='Return') as _batch:      # AUD-3
             for p in parsed:
-                # REF-1: qatorni QULFLAB qayta tekshiramiz — bir vaqtда ikki
+                # REF-1: qatorni QULFLAB qayta tekshiramiz — bir vaqtda ikki
                 # refund bir xil qatorga o'tmasin (pos_exchange kabi).
                 # DIQQAT: 'transaction' NULLABLE FK — uni select_related qilsak
                 # LEFT OUTER JOIN bo'ladi va Postgres select_for_update (FOR UPDATE)
                 # ни nullable outer join'ga qo'llay olmaydi (SQLite bunga e'tibor
-                # bermaydi — shu bois test'да chiqmagan, prod'да 500 bergan).
+                # bermaydi — shu bois test'da chiqmagan, prod'da 500 bergan).
                 # variant/branch — NOT NULL (inner join), FOR UPDATE ular bilan
-                # ishlaydi. transaction'ni keyin kerak bo'lganда lazy o'qiymiz.
+                # ishlaydi. transaction'ni keyin kerak bo'lganda lazy o'qiymiz.
                 sale = (Sale.objects.select_for_update()
                         .select_related('variant', 'branch')
                         .filter(pk=p['sid'], branch=branch).first())
@@ -1770,15 +1770,15 @@ def pos_refund(request):
                         'error': f"{p['code']}: faqat {remaining} dona qaytarish mumkin"})
                 stock = (BranchStock.objects.select_for_update()
                          .filter(variant=sale.variant, branch=sale.branch).first())
-                # R2: ochiq narxli tovar sotuvда zaxira KAMAYTIRILMAGAN — shuning
-                # uchun qaytarishда ham tiklamaymiz (aks holda yo'qdan zaxira).
+                # R2: ochiq narxli tovar sotuvda zaxira KAMAYTIRILMAGAN — shuning
+                # uchun qaytarishda ham tiklamaymiz (aks holda yo'qdan zaxira).
                 if stock and not sale.variant.product.is_open_price:
                     stock.stock_count = F('stock_count') + p['qty']
                     stock.save(update_fields=['stock_count'])
-                # REF-3: qaytariladigan HAQIQIY naqд. Dona O'Z narxida (order_discount
+                # REF-3: qaytariladigan HAQIQIY naqd. Dona O'Z narxida (order_discount
                 # taqsimlanmaydi). AMMO bir chek bo'yicha jami qaytarish chek
-                # TO'LOVIdan oshmaydi — shu bois butun chek qaytганда chegirма
-                # oxirgi qaytarishга singib, jami = to'langan summа bo'ladi
+                # TO'LOVIdan oshmaydi — shu bois butun chek qaytganda chegirma
+                # oxirgi qaytarishga singib, jami = to'langan summa bo'ladi
                 # (egasining qoidasi: qisman → dona narxi, to'liq → chek jamisi).
                 _per_unit = (sale.net_line_total() / sale.quantity
                              if sale.quantity > 0 else Decimal(sale.sale_price))
@@ -1806,7 +1806,7 @@ def pos_refund(request):
                 try:
                     ret = Return.objects.create(**_rk)
                 except IntegrityError:
-                    # Poyga: boshqa so'rov ayni kalitни yozib ulgurdi — takror.
+                    # Poyga: boshqa so'rov ayni kalitni yozib ulgurdi — takror.
                     raise _RefundAbort({'ok': True, 'refunded_qty': 0,
                         'refunded_total': 0, 'duplicate': True}, status=200)
                 refunded_qty += p['qty']
@@ -1958,7 +1958,7 @@ def pos_exchange(request):
                 note=(reason or 'Almashtirish')[:200],
                 order_discount=credit,
                 # DISC-1: bu CHEGIRMA EMAS — mijoz eski tovar bilan to'lagan.
-                # Alohida maydonда saqlanadi, shunda hisobotlar uni kassir
+                # Alohida maydonda saqlanadi, shunda hisobotlar uni kassir
                 # bergan chegirma sifatida ko'rsatmaydi.
                 exchange_credit=credit,
                 discount_reason='Almashtirish: eski tovar hisobiga',

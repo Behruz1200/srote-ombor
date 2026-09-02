@@ -27,14 +27,14 @@ ANTHROPIC_VERSION = '2023-06-01'
 MAX_EDGE = 1568
 JPEG_QUALITY = 82
 # SEC-21: "decompression bomb" — kichik fayl, ammo ulkan o'lcham (masalan
-# 50000×50000) PIL uni ochganда gigabaytlab xotira egallaydi. Piksel sonini
+# 50000×50000) PIL uni ochganda gigabaytlab xotira egallaydi. Piksel sonini
 # cheklaymiz (telefon surati uchun 40 MP yetarlicha katta).
 MAX_PIXELS = 40_000_000
 
 
 def _open_guarded(source):
-    """PIL bilan ochadi, ammo avval e'lon qilingan o'lchamни tekshiradi
-    (pikselni to'liq dekodlashдан OLDIN — .size lazy)."""
+    """PIL bilan ochadi, ammo avval e'lon qilingan o'lchamni tekshiradi
+    (pikselni to'liq dekodlashdan OLDIN — .size lazy)."""
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS   # PIL o'zi ham DecompressionBombError bersin
     img = Image.open(source)
@@ -383,7 +383,7 @@ def _confidence(data):
     rows = data.get('rows') or []
     if not rows:
         return -1.0
-    # Eski payload'да arith_ok yo'q — o'shanda avvalgi xatti-harakat qoladi.
+    # Eski payload'da arith_ok yo'q — o'shanda avvalgi xatti-harakat qoladi.
     if any('arith_ok' in r for r in rows):
         pool = [r for r in rows if r.get('arith_ok') is not None]
         ok = sum(1 for r in pool if r.get('arith_ok'))
@@ -413,7 +413,7 @@ def extract_invoice(django_file, timeout=120, budget=None):
     bo'sh javob olardi va sahifa "Rasmni aniqroq oling" deb yozardi, holbuki
     model rasmni to'g'ri o'qigan, faqat javobni yetkazishga ulgurmagan.
 
-    Endi umumiy budjet bor: har chaqiruvдан oldin "yana bittasiga vaqt
+    Endi umumiy budjet bor: har chaqiruvdan oldin "yana bittasiga vaqt
     yetadimi?" deb so'raymiz — birinchi chaqiruv qancha davom etganiga
     qarab. Yetmasa, BOR natijani qaytaramiz. Budjet HTTP time-out'idan
     kichik bo'lishi SHART (AI_INVOICE_BUDGET), aks holda hech narsa

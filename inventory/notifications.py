@@ -51,7 +51,7 @@ def _chat_ids():
 
 def send_telegram(text, chat_id=None, parse_mode='HTML'):
     """Send a message. If chat_id is None, broadcast to all TELEGRAM_CHAT_IDS."""
-    # Test paytida hech narsa yuborilmaydi (soxta sotuvlar kanalни spam qilmasin).
+    # Test paytida hech narsa yuborilmaydi (soxta sotuvlar kanalni spam qilmasin).
     if getattr(settings, 'TESTING', False):
         return False
     token = getattr(settings, 'TELEGRAM_BOT_TOKEN', None)
@@ -340,7 +340,7 @@ PRODUCT_LOW_TOTAL = 3
 
 def low_stock_report_text(threshold=None, limit_per_section=40):
     """Kam qolgan / tugagan tovarlar RO'YXATI — MAHSULOT darajasida (kunlik
-    22:00 xulosaga ALOHIDA qo'shimcha xabar; har sotuvда emas).
+    22:00 xulosaga ALOHIDA qo'shimcha xabar; har sotuvda emas).
 
     Har bir mahsulotning barcha o'lchamlari bo'yicha JAMI qoldiq hisoblanadi:
       ⛔ Butunlay tugagan — jami 0 dona (hech bir o'lcham qolmagan)
