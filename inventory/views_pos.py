@@ -43,6 +43,7 @@ from .access import (
     POS_BRANCH_SESSION_KEY, _open_shift_for, _user_branch_or_403,
     admin_required, get_user_branch, normalize_code,
 )
+from .money import parse_money, parse_percent, parse_qty   # CORE-1
 from .audit import audit_batch, log_action   # AUD-1
 from .money import (
     DISCOUNT_REASONS, ROUNDING_MAX, ROUNDING_STEP, _is_rounding,
@@ -635,13 +636,9 @@ def pos_checkout(request):
     MAX_MONEY = Decimal('9999999999.99')
 
     def _money(v, allow_zero=True):
-        try:
-            d = Decimal(str(v if v not in (None, '') else 0))
-        except (InvalidOperation, ValueError, TypeError):
-            d = Decimal('0')
-        if d < 0:
-            d = Decimal('0')
-        return d
+        # CORE-1: tahlil money.parse_money() da. Ilgari bu nusxa 'inf' ni
+        # ham, 10 xonadan katta sonni ham o'tkazib yuborardi.
+        return parse_money(v, default=Decimal('0')) or Decimal('0')
 
     order_discount = _money(data.get('order_discount'))
     if order_discount > MAX_MONEY:

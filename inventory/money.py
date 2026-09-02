@@ -302,3 +302,151 @@ PRICE_CHUNK = 200
 def _chunked(seq, n=PRICE_CHUNK):
     for i in range(0, len(seq), n):
         yield seq[i:i + n]
+
+
+# ===========================================================================
+# CORE-1 — SON VA PUL KIRITMASI: BITTA JOY
+# ===========================================================================
+# Ilgari views.py da YETTITA alohida son tahlilchisi bor edi (dec(), num(),
+# _money(), _clean_num() — turli joylarda, turli nom bilan). Ular BIR XIL
+# ISHLAMAS edi:
+#   * biri 10 xonadan katta sonni rad etardi, boshqasi bazaga o'tkazib
+#     yuborardi (u yerda InvalidOperation bo'lib 500 berardi);
+#   * biri 'inf'/'nan' ni tekshirardi, ikkitasi tekshirmasdi;
+#   * biri bo'sh katakni None ("tegilmasin"), boshqasi 0 ("tekin") qilardi.
+# Ya'ni bir formada rad etilgan qiymat boshqasida qabul qilinardi.
+#
+# Endi hammasi shu yerdan o'tadi. Farq FUNKSIYA EMAS, PARAMETR bo'ldi:
+#   default=None       -> bo'sh katak "o'zgarmadi" degani (narx tahriri)
+#   default=Decimal(0) -> bo'sh katak nol (yangi yozuv)
+#   strict=True        -> noto'g'ri qiymatda ValueError (forma xatosi)
+
+# Foydalanuvchi kiritadigan "bo'sh" belgilar: oddiy probel, uzilmas probel,
+# tor probel va apostrof (1'234 — ba'zi klaviaturalarda shunday chiqadi).
+NUMBER_JUNK = (' ', ' ', ' ', "'", '’', ' ')
+
+# BranchStock.cost_price/sale_price = DecimalField(max_digits=12,
+# decimal_places=2) -> 10 ta butun xona. Bundan kattasi saqlashda
+# InvalidOperation berib butun tranzaksiyani orqaga qaytaradi, shuning
+# uchun uni KIRISHDA to'xtatamiz.
+MAX_INT_DIGITS = 10
+
+
+def clean_number_text(raw, strip_percent=False):
+    """'12 345,50' -> '12345.50'. Faqat matnni tozalaydi, tekshirmaydi."""
+    s = '' if raw is None else str(raw)
+    for ch in NUMBER_JUNK:
+        s = s.replace(ch, '')
+    if strip_percent:
+        s = s.replace('%', '')
+    return s.replace(',', '.').strip()
+
+
+def parse_money(value, *, default=None, allow_negative=False,
+                max_int_digits=MAX_INT_DIGITS, strip_percent=False,
+                strict=False, field=''):
+    """Foydalanuvchi kiritgan pul/son -> Decimal.
+
+    default        bo'sh yoki noto'g'ri qiymatda nima qaytsin.
+                   None = "qiymat berilmadi" (chaqiruvchi o'zi hal qiladi).
+    allow_negative manfiy son ruxsatmi (foiz uchun ha, narx uchun yo'q).
+    strict         True bo'lsa noto'g'ri qiymatda ValueError otiladi —
+                   forma xatosini foydalanuvchiga ko'rsatish uchun.
+    field          strict xatosida ko'rsatiladigan katak nomi.
+    """
+    s = clean_number_text(value, strip_percent=strip_percent)
+    if s == '':
+        return default
+    try:
+        d = Decimal(s)
+    except (ArithmeticError, ValueError, TypeError):
+        if strict:
+            raise ValueError(f"{field or 'Qiymat'} — raqam emas")
+        return default
+    # 'inf'/'nan' Decimal uchun HAQIQIY qiymat: tekshirmasak bazaga
+    # yetib boradi va o'sha yerda portlaydi.
+    if not d.is_finite():
+        if strict:
+            raise ValueError(f"{field or 'Qiymat'} — noto'g'ri qiymat")
+        return default
+    if not allow_negative and d < 0:
+        if strict:
+            raise ValueError(f"{field or 'Qiymat'} — manfiy bo'lmaydi")
+        return default
+    if max_int_digits and abs(d) >= (Decimal(10) ** max_int_digits):
+        if strict:
+            raise ValueError(f"{field or 'Qiymat'} — juda katta son")
+        return default
+    return d
+
+
+def parse_percent(value, *, default=Decimal('0'), lo=None, hi=None):
+    """Foiz: '50%', '50 ', '-5' — hammasi ishlaydi. lo/hi bilan chegaralanadi."""
+    d = parse_money(value, default=default, allow_negative=True,
+                    strip_percent=True)
+    if d is None:
+        d = default
+    if lo is not None:
+        d = max(_dec(lo), d)
+    if hi is not None:
+        d = min(_dec(hi), d)
+    return d
+
+
+def parse_qty(value, *, default=0, minimum=None, maximum=None):
+    """Dona soni -> int. '3.0' va '3 dona' ham ishlaydi."""
+    d = parse_money(value, default=None, allow_negative=True)
+    if d is None:
+        n = default
+    else:
+        try:
+            n = int(d)
+        except (ValueError, OverflowError):
+            n = default
+    if minimum is not None:
+        n = max(minimum, n)
+    if maximum is not None:
+        n = min(maximum, n)
+    return n
+
+
+# ===========================================================================
+# CORE-2 — TUSHUM / TANNARX / FOYDA FORMULASI: BITTA JOY
+# ===========================================================================
+# Bu uchta ifoda views.py da 11 marta qayta yozilgan edi (aynan bir xil).
+# Formula bir marta o'zgarganda (chek chegirmasi qo'shilganda) hammasini
+# topib tuzatish kerak bo'lgan va aynan shu yerda xato chiqqan: ba'zi
+# sahifalar chegirmani ayirar, ba'zilari ayirmasdi.
+
+def line_revenue_expr():
+    """Qator tushumi: soni × narx − qator chegirmasi.
+
+    DIQQAT: bu CHEK chegirmasini (order_discount) va QAYTARISHNI hisobga
+    OLMAYDI — ular alohida so'rov talab qiladi. Ularni qo'shish uchun
+    _order_discount_share() va _returns_adjustment() ishlatiladi.
+    """
+    from django.db.models import DecimalField, ExpressionWrapper
+    return ExpressionWrapper(
+        F('quantity') * F('sale_price') - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2))
+
+
+def line_cost_expr():
+    """Qator tannarxi: soni × SOTUV PAYTIDAGI tannarx (cost_at_sale).
+
+    cost_at_sale — sotuv paytida muzlatilgan qiymat, shuning uchun keyin
+    tannarx o'zgarsa ham o'tmishdagi foyda o'zgarmaydi.
+    """
+    from django.db.models import DecimalField, ExpressionWrapper
+    return ExpressionWrapper(
+        F('quantity') * F('cost_at_sale'),
+        output_field=DecimalField(max_digits=14, decimal_places=2))
+
+
+def line_profit_expr():
+    """Qator foydasi: (narx − tannarx) × soni − qator chegirmasi."""
+    from django.db.models import DecimalField, ExpressionWrapper
+    return ExpressionWrapper(
+        (F('sale_price') - F('cost_at_sale')) * F('quantity')
+        - F('line_discount'),
+        output_field=DecimalField(max_digits=14, decimal_places=2))

@@ -51,6 +51,10 @@ from .models import (
     _dec,  # MON-24: pul hisobi FAQAT Decimal'da
     weighted_cost,  # STK-8: o'rtacha-tortilgan tannarx
 )
+from .money import (            # CORE-1 / CORE-2
+    clean_number_text, line_cost_expr, line_profit_expr, line_revenue_expr,
+    parse_money, parse_percent, parse_qty,
+)
 from .money import (            # ARCH-1
     DISCOUNT_REASONS, PRICE_CHUNK, ROUNDING_MAX, ROUNDING_STEP,
     _chunked, _is_rounding, _lock_stocks, _order_discount_share,
@@ -515,14 +519,8 @@ def _dashboard_aggregates():
     today_start, today_end = _day_range(today)
     yesterday_start, yesterday_end = _day_range(yesterday)
 
-    revenue_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
-    cost_expr = ExpressionWrapper(
-        F('quantity') * F('cost_at_sale'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    revenue_expr = line_revenue_expr()      # CORE-2
+    cost_expr = line_cost_expr()            # CORE-2
 
     def _agg(qs):
         a = qs.aggregate(
@@ -1881,10 +1879,7 @@ def product_detail(request, code):
 
     # 30-day sales chart + KPIs
     since_30d = timezone.now() - timedelta(days=30)
-    rev_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    rev_expr = line_revenue_expr()          # CORE-2
     sales_30d = Sale.objects.filter(variant__product=product, sold_at__gte=since_30d)
     agg = sales_30d.aggregate(
         qty=Sum('quantity'),
@@ -2181,21 +2176,11 @@ def intake_for_product(request, code):
             # min 0, max_digits 12/6). Noto'g'ri bo'lsa ValueError → pastda ushlanib
             # "Maydonlarni tekshiring" xabari chiqadi, hech narsa saqlanmaydi.
             def _money(field, max_int_digits=10):
-                raw = (request.POST.get(field) or '').strip()
-                for ch in (' ', ' ', ' ', "'"):
-                    raw = raw.replace(ch, '')
-                raw = raw.replace(',', '.')
-                if raw == '':
-                    return Decimal('0')
-                try:
-                    d = Decimal(raw)
-                except InvalidOperation:
-                    raise ValueError(f"{field} — raqam emas")
-                if (not d.is_finite() or d < 0
-                        or abs(d) >= (Decimal(10) ** max_int_digits)):
-                    raise ValueError(f"{field} — noto'g'ri qiymat")
-                return d
-
+                # CORE-1: tahlil money.parse_money() da — bitta joyda. Ilgari bu
+                # yerda o'z nusxasi turardi va boshqa formalardagidan farq qilardi.
+                return parse_money(request.POST.get(field), default=Decimal('0'),
+                                   max_int_digits=max_int_digits,
+                                   strict=True, field=field)
             cost = _money('cost_per_unit')
             markup = _money('markup_percent', max_int_digits=4)
             sale_price_raw = (request.POST.get('sale_price') or '').strip()
@@ -2582,12 +2567,7 @@ def product_variants_edit(request, code):
     # E1: POST xato bo'lса — submitlaган qatorlarni QAYTA ko'rsatamiz (bitta
     # xato tufayli barcha qatorlar yo'qolmasin; intake_variants'даgi post_back
     # namunasi). Aks holда joriy holatни DB'дан chizamiz.
-    def _clean_num(s):
-        s = (s or '')
-        for ch in (' ', ' ', ' ', "'"):
-            s = s.replace(ch, '')
-        return s.replace(',', '.')
-
+    _clean_num = clean_number_text          # CORE-1
     if request.method == 'POST' and errors:
         rows = []
         for i in range(len(ids)):
@@ -3855,14 +3835,8 @@ def cashier_stats(request, user_id):
     seller = get_object_or_404(User, pk=user_id)
 
     since_30d = timezone.now() - timedelta(days=30)
-    rev_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
-    cost_expr = ExpressionWrapper(
-        F('quantity') * F('cost_at_sale'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    rev_expr = line_revenue_expr()          # CORE-2
+    cost_expr = line_cost_expr()            # CORE-2
 
     sales_30d = Sale.objects.filter(sold_by=seller, sold_at__gte=since_30d)
     agg = sales_30d.aggregate(
@@ -6048,14 +6022,8 @@ def sale_create(request, stock_id):
 def branch_list(request):
     """Filiallar ro'yxati: 30 kunlik tushum + P&L + xodimlar."""
     since_30d = timezone.now() - timedelta(days=30)
-    rev_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
-    cost_expr = ExpressionWrapper(
-        F('quantity') * F('cost_at_sale'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    rev_expr = line_revenue_expr()          # CORE-2
+    cost_expr = line_cost_expr()            # CORE-2
 
     # KPI-9: ilgari `stocks__` (ombor) va `staff` (xodimlar) BITTA annotate
     # ichida yig'ilardi. Ikkalasi ham "ko'p qatorli" bog'lanish — SQL ularni
@@ -6196,10 +6164,7 @@ def user_list(request):
 
     # 30-kunlik sotuv stat'lari
     since = timezone.now() - timedelta(days=30)
-    rev_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    rev_expr = line_revenue_expr()          # CORE-2
     _sales_30d = Sale.objects.filter(sold_at__gte=since)
     # SAL-6: chek chegirmasi sotuvchiga ANIQ tushadi (bitta chek — bitta
     # sotuvchi). Bu muhim: s_commission aynan shu summadan hisoblanadi, ya'ni
@@ -6370,14 +6335,8 @@ def category_list(request):
 
     # 30-kunlik sotuvlar va revenue agregati
     since_30d = timezone.now() - timedelta(days=30)
-    rev_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
-    cost_expr = ExpressionWrapper(
-        F('quantity') * F('cost_at_sale'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    rev_expr = line_revenue_expr()          # CORE-2
+    cost_expr = line_cost_expr()            # CORE-2
 
     # SAL-6: KATEGORIYA — qator darajasidagi o'lchov. Bitta chek bir nechta
     # kategoriyani qamraydi va egasining qoidasi bo'yicha chek chegirmasi
@@ -6612,7 +6571,7 @@ def sales_list(request):
     # annotatsiyali so'rovni SUBQUERY'ga o'raydi (fanout xavfsiz), AMMO pastдаgi
     # KUNLIK values().annotate() o'ralmaydi — shu bois returns'ни bazaviy qs'ga
     # umuman qo'shmaymiz, alohida so'rovда olamiz. 'txns' — HAQIQIY chek soni.
-    _rev_expr = F('quantity') * F('sale_price') - F('line_discount')
+    _rev_expr = line_revenue_expr()         # CORE-2
     agg = qs.aggregate(
         total=Sum(_rev_expr),
         qty=Sum('quantity'),
@@ -6943,12 +6902,8 @@ def _build_pivot(sale_qs, rows_dims, cols_dim, metric):
       mode '2d'  → headers (row + col), matrix rows w/ keys+cells+total,
                    col_totals, grand_total
     """
-    rev_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2))
-    profit_expr = ExpressionWrapper(
-        (F('sale_price') - F('cost_at_sale')) * F('quantity') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2))
+    rev_expr = line_revenue_expr()          # CORE-2
+    profit_expr = line_profit_expr()        # CORE-2
     annot = {
         'revenue': Sum(rev_expr),
         'qty':     Sum('quantity'),
@@ -7174,9 +7129,7 @@ def reports(request):
             ).annotate(
                 qty=Sum('quantity'),
                 # SAL-6: line_discount umuman ayirilmasdi — bu shubhasiz xato.
-                revenue=Sum(ExpressionWrapper(
-                    F('quantity') * F('sale_price') - F('line_discount'),
-                    output_field=DecimalField(max_digits=14, decimal_places=2))),
+                revenue=Sum(line_revenue_expr()),      # CORE-2
                 count=Count('id'),
             ).order_by('-revenue')
             headers = ['Kod', 'Mahsulot', 'Sotuvlar soni', 'Sotilgan dona', "Daromad (so'm)"]
@@ -7331,10 +7284,11 @@ def reports(request):
                 sale_qs = sale_qs.filter(branch=branch)
             agg = sale_qs.values('variant__product__category__name').annotate(
                 qty=Sum('quantity'),
-                rev=Sum(ExpressionWrapper(F('quantity') * F('sale_price'),
-                        output_field=DecimalField(max_digits=14, decimal_places=2))),
-                cost=Sum(ExpressionWrapper(F('quantity') * F('cost_at_sale'),
-                        output_field=DecimalField(max_digits=14, decimal_places=2))),
+                # SAL-6/CORE-2: bu yerda line_discount AYIRILMAS edi —
+                # kategoriya eksporti daromadni chegirma miqdorida OSHIRIB
+                # ko'rsatardi (boshqa sahifalar to'g'ri hisoblardi).
+                rev=Sum(line_revenue_expr()),
+                cost=Sum(line_cost_expr()),
             ).order_by('-rev')
             headers = ['Kategoriya', 'Sotilgan dona', "Daromad (so'm)",
                        "Tannarx (so'm)", "Foyda (so'm)", 'Marja %']
@@ -7945,10 +7899,7 @@ def customer_detail(request, pk):
                       'variant__product__code',
                       'variant__product__name')
               .annotate(qty=Sum('quantity'),
-                        revenue=Sum(F('quantity') * F('sale_price')
-                                    - F('line_discount'),
-                                    output_field=DecimalField(max_digits=14,
-                                                              decimal_places=2)))
+                        revenue=Sum(line_revenue_expr()))   # CORE-2
               .order_by('-qty')[:5])
     favorites = list(fav_qs)
     # Attach product image URL where available
@@ -8217,10 +8168,7 @@ def _insights_context(request):
 
     # Net revenue = qty*price - line_discount. Whole-order discount is
     # attached to SaleTransaction so we subtract it at the txn-id aggregate.
-    revenue_expr = ExpressionWrapper(
-        F('quantity') * F('sale_price') - F('line_discount'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    revenue_expr = line_revenue_expr()      # CORE-2
 
     totals = sales.aggregate(
         revenue=Sum(revenue_expr),
@@ -8269,10 +8217,7 @@ def _insights_context(request):
     # Aniqroq bo'lishi uchun har sotuv pay'tida cost_price'ni Sale'da saqlash kerak edi;
     # hozircha BranchStock.cost_price'dan foydalanamiz.
     # Cost is snapshotted on the Sale itself (cost_at_sale), so we can aggregate in SQL.
-    cost_expr = ExpressionWrapper(
-        F('quantity') * F('cost_at_sale'),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
+    cost_expr = line_cost_expr()            # CORE-2
     total_cost = _dec(sales.aggregate(c=Sum(cost_expr))['c'] or 0) - _ret_cost
 
     profit_by_product_qs = sales.values(
@@ -8311,9 +8256,7 @@ def _insights_context(request):
     largest_sale = sales.annotate(
         # SAL-6: line_discount ayirilmasdi — chegirmali qator "eng katta
         # sotuv" bo'lib chiqib qolishi mumkin edi.
-        line=ExpressionWrapper(F('quantity') * F('sale_price')
-                               - F('line_discount'),
-                               output_field=DecimalField(max_digits=14, decimal_places=2))
+        line=line_revenue_expr()            # CORE-2
     ).order_by('-line').first()
 
     # O'tgan davr taqqoslash (week-over-week / period-over-period)
@@ -9513,30 +9456,12 @@ def price_apply(request):
     back = request.POST.get('back') or reverse('price_list')
 
     def dec(v, allow_negative=False):
-        """Narxlar manfiy bo'lmaydi; foiz esa manfiy bo'lishi mumkin (-5%).
-
-        V1: BO'SH katak = "o'zgarmadi" (None), NOL emas — aks holда katakни
-        tozalab qayta yozmoqchi bo'lган kassir narxni 0 ga tushirib, tovar
-        tekinга sotilar edi.
-        V4: 10 xonaдан katta son (max_digits=12, decimal_places=2) saqlashда
-        InvalidOperation berib butun atomik blokни orqага qaytarardi — shu yerда
-        rad etamiz.
-        """
-        s = str(v).replace(' ', '').replace(',', '.').strip()
-        if s == '':
-            return None
-        try:
-            d = Decimal(s)
-        except (InvalidOperation, ValueError, TypeError):
-            return None
-        if not d.is_finite():          # 'inf' / 'nan' — N2
-            return None
-        if not allow_negative and d < 0:
-            return None
-        if abs(d) >= Decimal('10000000000'):   # 10 butun xona chegarasi
-            return None
-        return d
-
+        # V1: BO'SH katak = "o'zgarmadi" (None), NOL emas — aks holda katakni
+        # tozalab qayta yozmoqchi bo'lgan kassir narxni 0 ga tushirib, tovar
+        # tekinga sotilar edi.
+        # V4/N2: 10 xonadan katta son va 'inf'/'nan' tekshiruvi endi
+        # parse_money() ichida — CORE-1.
+        return parse_money(v, default=None, allow_negative=allow_negative)
     mode = request.POST.get('mode') or 'rows'
     changed = 0
 
@@ -9792,18 +9717,8 @@ def promotion_save(request):
 
     def num(v, default=0):
         # V7: "50%", "50 " kabi kiritishlar ham ishlasin — ilgari '%' belgisi
-        # InvalidOperation berib, num() 0 qaytarар va "50%" JIM 0% aksiyaга
-        # aylanardi.
-        s = str(v if v is not None else '').strip()
-        for ch in (' ', ' ', ' ', '%', "'"):
-            s = s.replace(ch, '')
-        s = s.replace(',', '.')
-        try:
-            d = Decimal(s or default)
-            return d if d.is_finite() else Decimal(default)
-        except (InvalidOperation, ValueError, TypeError):
-            return Decimal(default)
-
+        # "50%" ni JIM 0% aksiyaga aylantirardi. CORE-1: parse_percent().
+        return parse_percent(v, default=_dec(default))
     percent = num(request.POST.get('percent'))
     percent = max(Decimal('0'), min(Decimal('100'), percent))
     # V7: foizli aksiya turlari uchun foiz 0 bo'lsa — bu foydasiz "0% chegirma"
@@ -10136,11 +10051,9 @@ def variant_split_batch(request):
         return redirect(back)
 
     def dec(v, default='0'):
-        try:
-            return Decimal(str(v).replace(' ', '').replace(',', '.') or default)
-        except (InvalidOperation, ValueError, TypeError):
-            return Decimal(default)
-
+        # CORE-1: ilgari bu nusxa 'inf' ni ham, 10 xonadan katta sonni ham
+        # o'tkazib yuborardi — ular bazada InvalidOperation berib 500 qilardi.
+        return parse_money(v, default=_dec(default))
     try:
         qty = int(float(request.POST.get('qty') or 0))
     except (TypeError, ValueError):
@@ -10243,11 +10156,9 @@ def intake_mixed_save(request):
         return JsonResponse({'ok': False, 'error': "So'rov noto'g'ri"}, status=400)
 
     def dec(v, default='0'):
-        try:
-            return Decimal(str(v).replace(' ', '').replace(',', '.') or default)
-        except (InvalidOperation, ValueError, TypeError):
-            return Decimal(default)
-
+        # CORE-1: ilgari bu nusxa 'inf' ni ham, 10 xonadan katta sonni ham
+        # o'tkazib yuborardi — ular bazada InvalidOperation berib 500 qilardi.
+        return parse_money(v, default=_dec(default))
     branch = Branch.objects.filter(pk=data.get('branch') or 0,
                                    is_active=True).first()
     if branch is None:
@@ -10595,8 +10506,7 @@ def warehouse(request):
     sold_map = {r['variant__product_id']: r for r in (
         sales_q.values('variant__product_id')
         .annotate(qty=Sum('quantity'),
-                  revenue=Sum(money(F('quantity') * F('sale_price')
-                                    - F('line_discount'))),
+                  revenue=Sum(line_revenue_expr()),     # CORE-2
                   last=Max('sold_at')))}
     _odisc_90d, _ = _order_discount_share(sales_q)
     _, _, _disc_split = _order_discount_share(sales_q, split=True)

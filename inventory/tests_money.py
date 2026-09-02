@@ -5841,3 +5841,172 @@ class Aud1BatchHandleIsUsedInsideItsBlock(unittest.TestCase):
                             bad.append(f'{rel}:{node.lineno} '
                                        f'{t.value.id}.{t.attr} = ... TASHQARIDA')
         self.assertEqual(bad, [], '\n'.join(bad))
+
+
+class Core1OneNumberParser(TestCase):
+    """CORE-1: views.py da YETTITA turlicha son tahlilchisi bor edi.
+
+    Ular bir xil kiritmaga har xil javob berardi — bir formada rad
+    etilgan qiymat boshqasida bazaga yetib borar va u yerda 500 qilardi.
+    Endi hammasi money.parse_money() dan o'tadi.
+    """
+
+    def test_separators_and_commas(self):
+        from inventory.money import parse_money
+        for raw in ('12 345,50', '12 345.50', '12 345,50',
+                    "12'345.50", '12 345,50 '):
+            self.assertEqual(parse_money(raw), Decimal('12345.50'), raw)
+
+    def test_blank_returns_the_default_the_caller_asked_for(self):
+        from inventory.money import parse_money
+        # narx tahriri: bo'sh = "tegilmasin"
+        self.assertIsNone(parse_money(''))
+        self.assertIsNone(parse_money(None))
+        # yangi yozuv: bo'sh = nol
+        self.assertEqual(parse_money('', default=Decimal('0')), Decimal('0'))
+
+    def test_infinity_and_nan_never_pass(self):
+        """Ikkita eski nusxa bularni o'tkazib yuborardi -> bazada 500."""
+        from inventory.money import parse_money
+        for bad in ('inf', 'Infinity', '-inf', 'nan', 'NaN'):
+            self.assertEqual(parse_money(bad, default=Decimal('0')),
+                             Decimal('0'), bad)
+
+    def test_too_many_digits_is_rejected(self):
+        """max_digits=12, decimal_places=2 -> 10 butun xona."""
+        from inventory.money import parse_money
+        self.assertEqual(parse_money('9999999999'), Decimal('9999999999'))
+        self.assertIsNone(parse_money('10000000000'))
+        self.assertIsNone(parse_money('12345678901234'))
+
+    def test_negative_only_when_asked(self):
+        from inventory.money import parse_money
+        self.assertIsNone(parse_money('-5'))
+        self.assertEqual(parse_money('-5', allow_negative=True), Decimal('-5'))
+
+    def test_strict_mode_raises_for_forms(self):
+        from inventory.money import parse_money
+        with self.assertRaises(ValueError):
+            parse_money('abc', strict=True, field='tannarx')
+        with self.assertRaises(ValueError):
+            parse_money('-1', strict=True, field='tannarx')
+        with self.assertRaises(ValueError):
+            parse_money('99999999999', strict=True, field='tannarx')
+
+    def test_percent_accepts_the_percent_sign(self):
+        from inventory.money import parse_percent
+        self.assertEqual(parse_percent('50%'), Decimal('50'))
+        self.assertEqual(parse_percent('-5'), Decimal('-5'))
+        self.assertEqual(parse_percent('abc'), Decimal('0'))
+        self.assertEqual(parse_percent('150', hi=100), Decimal('100'))
+        self.assertEqual(parse_percent('-9', lo=0), Decimal('0'))
+
+    def test_qty(self):
+        from inventory.money import parse_qty
+        self.assertEqual(parse_qty('3'), 3)
+        self.assertEqual(parse_qty('3.9'), 3)
+        self.assertEqual(parse_qty(''), 0)
+        self.assertEqual(parse_qty('-4', minimum=0), 0)
+        self.assertEqual(parse_qty('99', maximum=10), 10)
+
+    def test_no_local_number_parser_is_left_in_views(self):
+        """Yangi view yozganda yana o'z nusxasini yasamaslik uchun."""
+        import inspect
+        import re
+        from inventory import views, views_pos
+        bad = []
+        for mod in (views, views_pos):
+            src = inspect.getsource(mod)
+            for m in re.finditer(
+                    r'\n\s+def (dec|num|_money|_clean_num|_num)\(([^)]*)\):'
+                    r'((?:\n(?:\s{8,}.*)?)+)', src):
+                body = m.group(3)
+                if 'parse_money' in body or 'parse_percent' in body:
+                    continue
+                bad.append(f'{mod.__name__}: def {m.group(1)}({m.group(2)})')
+        self.assertEqual(bad, [], 'mustaqil son tahlilchisi qaytib keldi: '
+                                  + '; '.join(bad))
+
+
+class Core2OneRevenueFormula(TestCase):
+    """CORE-2: tushum/tannarx/foyda ifodasi 11 marta qayta yozilgan edi."""
+
+    def test_no_inline_revenue_expression_is_left(self):
+        import inspect
+        import re
+        from inventory import views, views_pos
+        bad = []
+        for mod in (views, views_pos):
+            src = inspect.getsource(mod)
+            for pat, label in (
+                    (r"F\('quantity'\)\s*\*\s*F\('sale_price'\)", 'tushum'),
+                    (r"F\('quantity'\)\s*\*\s*F\('cost_at_sale'\)", 'tannarx')):
+                n = len(re.findall(pat, src))
+                if n:
+                    bad.append(f'{mod.__name__}: {label} ifodasi {n} marta '
+                               'qo\'lda yozilgan — line_*_expr() ishlating')
+        self.assertEqual(bad, [], '; '.join(bad))
+
+    def test_the_three_expressions_agree_with_hand_arithmetic(self):
+        from django.db.models import Sum
+        from inventory.money import (line_cost_expr, line_profit_expr,
+                                     line_revenue_expr)
+        branch = Branch.objects.create(name='CORE2')
+        u = User.objects.create_user(username='core2', password='x',
+                                     role=User.Role.ADMIN, branch=branch)
+        cat = Category.objects.create(name='C2')
+        p = Product.objects.create(code='C2-0001', name='T', category=cat)
+        v = ProductVariant.objects.create(product=p, size='M', color='Q')
+        txn = SaleTransaction.objects.create(
+            branch=branch, sold_by=u,
+            payment_method=SaleTransaction.PaymentMethod.CASH)
+        Sale.objects.create(transaction=txn, variant=v, branch=branch,
+                            quantity=3, sale_price=Decimal('10000'),
+                            cost_at_sale=Decimal('6000'),
+                            line_discount=Decimal('1500'), sold_by=u)
+        agg = Sale.objects.aggregate(r=Sum(line_revenue_expr()),
+                                     c=Sum(line_cost_expr()),
+                                     p=Sum(line_profit_expr()))
+        self.assertEqual(agg['r'], Decimal('28500'))   # 3*10000 - 1500
+        self.assertEqual(agg['c'], Decimal('18000'))   # 3*6000
+        self.assertEqual(agg['p'], Decimal('10500'))   # 28500 - 18000
+
+
+class Core2CategoryExportSubtractsLineDiscount(TestCase):
+    """CORE-2 markazlashtirish paytida topilgan XATO.
+
+    /reports/?export=csv&type=category eksportida qator chegirmasi
+    AYIRILMAS edi — boshqa hamma sahifa to'g'ri hisoblardi, faqat shu
+    eksport daromadni chegirma miqdorida oshirib ko'rsatardi.
+    """
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial-C2X')
+        self.admin = User.objects.create_user(
+            username='c2x', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+        cat = Category.objects.create(name='Koylak')
+        p = Product.objects.create(code='C2X-0001', name='Koylak',
+                                   category=cat)
+        v = ProductVariant.objects.create(product=p, size='M', color='Q')
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.admin,
+            payment_method=SaleTransaction.PaymentMethod.CASH)
+        Sale.objects.create(transaction=txn, variant=v, branch=self.branch,
+                            quantity=2, sale_price=Decimal('50000'),
+                            cost_at_sale=Decimal('30000'),
+                            line_discount=Decimal('20000'),
+                            sold_by=self.admin)
+
+    def test_export_matches_what_the_customer_actually_paid(self):
+        c = Client()
+        c.force_login(self.admin)
+        resp = c.get(reverse('reports'),
+                     {'report_type': 'margin', 'period': 'month',
+                      'export': 'csv'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('csv', resp['Content-Type'])
+        body = resp.content.decode('utf-8-sig')
+        # 2 x 50 000 - 20 000 = 80 000 (ilgari 100 000 chiqardi)
+        self.assertIn('80000', body.replace(' ', '').replace('.00', ''))
+        self.assertNotIn('100000', body.replace(' ', '').replace('.00', ''))
