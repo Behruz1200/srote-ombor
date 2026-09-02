@@ -154,6 +154,35 @@
     border-color: var(--yrt-primary);
     box-shadow: 0 0 0 4px rgba(91,91,214,0.15);
 }
+/* SCAN-4: katakni tozalash tugmasi. Topilmagan shtrix-kod ("99999999999999")
+   katakda qolib ketsa, kassir uni o'chirish uchun uzoq bosib turmasin. */
+.pos-scan-wrap { position: relative; }
+.pos-scan-wrap #scanInput { padding-right: 3rem; }
+.pos-scan-clear {
+    position: absolute;
+    top: 50%;
+    right: .5rem;
+    transform: translateY(-50%);
+    width: 2.1rem;
+    height: 2.1rem;
+    line-height: 1;
+    font-size: 1.5rem;
+    border: 0;
+    border-radius: 50%;
+    color: var(--yrt-text-muted, #6c757d);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--yrt-trans-fast), color var(--yrt-trans-fast);
+}
+.pos-scan-clear:hover,
+.pos-scan-clear:focus-visible {
+    background: var(--yrt-surface-2, rgba(0,0,0,.06));
+    color: var(--yrt-danger, #dc3545);
+}
+.pos-scan-clear[hidden] { display: none; }
 
 /* Cart line items — denser, hover row */
 .cart-items .cart-row {
@@ -576,11 +605,16 @@ body.pos-wholesale #wsBanner { display: flex !important; }
                     <span class="small text-muted ms-1" id="qtyQuickHint"></span>
                 </div>
                 <div class="d-flex gap-2">
-                    <input type="text" id="scanInput" class="form-control form-control-lg"
-                           data-osk-label="Skaner / qidiruv"
-                           placeholder="OYO-0001, nike, ko'ylak..."
-                           autofocus autocomplete="off"
-                           style="font-size: 1.35rem;">
+                    <div class="pos-scan-wrap flex-grow-1">
+                        <input type="text" id="scanInput" class="form-control form-control-lg"
+                               data-osk-label="Skaner / qidiruv"
+                               placeholder="OYO-0001, nike, ko'ylak..."
+                               autofocus autocomplete="off"
+                               style="font-size: 1.35rem;">
+                        <button type="button" id="scanClearBtn" class="pos-scan-clear"
+                                title="Katakni tozalash (Esc)"
+                                aria-label="Katakni tozalash" hidden>&times;</button>
+                    </div>
                     <button type="button" class="btn btn-primary btn-lg" id="searchBtn">
                         <i class="bi bi-search"></i>
                     </button>
@@ -1076,7 +1110,7 @@ body.pos-wholesale #wsBanner { display: flex !important; }
                     <tr><td><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd></td><td>To'lov oynasida: Naqd / Karta / O'tkazma</td></tr>
                     <tr><td><kbd>son</kbd> <kbd>*</kbd></td><td>Skanerdan oldin miqdor (masalan 3 *)</td></tr>
                     <tr><td><kbd>F1</kbd></td><td>Bu oynani ko'rsatish</td></tr>
-                    <tr><td><kbd>Esc</kbd></td><td>Joriy modal'ni yopish</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Qidiruv katagini tozalash (modal ochiq bo'lsa — modalni yopish)</td></tr>
                     <tr><td><kbd>Cmd</kbd>+<kbd>K</kbd></td><td>Tezkor qidirish (global)</td></tr>
                   </tbody>
                 </table>
@@ -2003,6 +2037,7 @@ async function search(q, commit) {
         // Kassir yozishda davom etgan bo'lsa — TEGMAYMIZ.
         if (scanInput.value.trim() !== _typed) return;
         if (commit || added) scanInput.value = '';
+        if (typeof paintScanClear === 'function') paintScanClear();
     }
     try {
         // OFF-8: avval tarmoq (narx/qoldiq eng yangisi bo'lsin), bo'lmasa
@@ -2147,6 +2182,7 @@ async function search(q, commit) {
                     setStatus(`✓ Qo'shildi: ${product.name} ${v.size}/${v.color}`, 'success');
                     hideExtras();
                     scanInput.value = '';
+                    if (typeof paintScanClear === 'function') paintScanClear();
                     refocus();
                 });
                 variantList.appendChild(b);
@@ -3005,6 +3041,7 @@ scanInput.addEventListener('keydown', (e) => {
         if (n > 0 && n <= 999) {
             pendingQty = n;
             scanInput.value = '';
+            if (typeof paintScanClear === 'function') paintScanClear();
             if (typeof window.__qtyQuickPaint === 'function') window.__qtyQuickPaint();
             setStatus(`× ${n} — endi tovarni skanerlang`, 'success');
         }
@@ -3012,6 +3049,14 @@ scanInput.addEventListener('keydown', (e) => {
     }
     // Skaner ham shu yo'ldan keladi — u kodni yozib, Enter yuboradi.
     if (e.key === 'Enter') { e.preventDefault(); doSearch(true); }
+    // SCAN-4: Esc — katakni tozalash. Modal ochiq bo'lsa tegmaymiz:
+    // u yerda Esc modalni yopishi kerak (Bootstrap o'zi qiladi).
+    if (e.key === 'Escape' && scanInput.value
+        && !document.querySelector('.modal.show')) {
+        e.preventDefault();
+        e.stopPropagation();
+        clearScanBox(true);
+    }
 });
 searchBtn.addEventListener('click', () => doSearch(true));
 
@@ -3041,20 +3086,95 @@ searchBtn.addEventListener('click', () => doSearch(true));
     paint();
 })();
 
-// Debounced auto-search: as user types (or scanner pastes), search
-// after 350ms idle. Helps when user types a name without hitting Enter.
+// ---- SCAN-4: SKANER ENTER YUBORMASA HAM ISHLASIN --------------------
+//
+// SCAN-3 dan keyin qo'lda yozish faqat KO'RSATADI (savatga qo'shmaydi) —
+// bu "hermes 53 ss" yozganda matn o'chib ketishini to'xtatdi. Lekin
+// do'kondagi skanerlarning hammasi ham oxirida Enter yubormaydi: shunday
+// skaner kodni yozadi-yu, hech nima bo'lmaydi — kod katakda qolib ketadi
+// ("3020320203203203", "99999999999999" — kassirlar aynan shuni aytdi).
+//
+// Yechim: skanerni TEZLIGI bo'yicha ajratamiz. Skaner belgilarni
+// 35 ms dan tez teradi (~28 belgi/sek — odam uchun 340 so'z/daq, ya'ni
+// yetib bo'lmas tezlik), va kodda bo'sh joy bo'lmaydi. Shunday kirish —
+// SKANER: darhol (80 ms) va COMMIT sifatida qidiriladi, ya'ni topilsa
+// savatga qo'shiladi, topilmasa katak tozalanadi. Qo'lda yozish esa
+// avvalgidek 350 ms kutadi va faqat ko'rsatadi.
+//
+// Nusxa ko'chirib qo'yish (Ctrl+V) ham bir hodisada 6+ belgi keltiradi —
+// u ham skaner deb hisoblanadi.
+const SCAN_MAX_GAP_MS = 35;   // belgilar orasidagi eng katta "skaner" tanaffusi
+const SCAN_MIN_LEN    = 6;    // shundan qisqa kirish skaner deb qaralmaydi
+let scanRunStart = 0;         // joriy tez-terish seriyasi boshlangan vaqt
+let scanRunKeys  = 0;         // seriyadagi belgilar soni
+let scanLastAt   = 0;
+let scanPasted   = false;     // bitta hodisada 6+ belgi keldi (nusxa/skaner)
+let scanPrevLen  = 0;
+
+function looksScanned(q) {
+    // Bo'sh joy bo'lmasin, kamida bitta RAQAM bo'lsin va yetarlicha uzun
+    // bo'lsin. Raqam sharti muhim: shtrix-kod ham, ichki kod ham
+    // ("OYO-0001") raqamli; qo'lda teriladigan NOM esa ("hermes") sof
+    // harf — demak tez terilgan nom hech qachon skaner deb qaralmaydi.
+    if (q.length < SCAN_MIN_LEN || /\s/.test(q) || !/[0-9]/.test(q)) return false;
+    if (scanPasted) return true;
+    if (scanRunKeys < SCAN_MIN_LEN) return false;
+    const span = scanLastAt - scanRunStart;
+    return span >= 0 && (span / Math.max(1, scanRunKeys - 1)) <= SCAN_MAX_GAP_MS;
+}
+
 scanInput.addEventListener('input', () => {
     clearTimeout(typeTimer);
-    const q = scanInput.value.trim();
+    const now = Date.now();
+    const raw = scanInput.value;
+    const q = raw.trim();
+
+    // tezlik hisobi — tanaffus uzun bo'lsa seriya qaytadan boshlanadi
+    scanPasted = (raw.length - scanPrevLen) >= SCAN_MIN_LEN;
+    scanPrevLen = raw.length;
+    if (!q || (now - scanLastAt) > 300) { scanRunStart = now; scanRunKeys = 0; }
+    scanRunKeys++;
+    scanLastAt = now;
+
+    paintScanClear();
     if (!q) { hideExtras(); setStatus('', ''); return; }
     // Patch 5: bitta belgiga qidiruv yubormaymiz (deyarli hammasi mos keladi,
     // behuda lookup). Shtrix-kodlar Enter bilan keladi, ular baribir ishlaydi.
     if (q.length < 2) return;
+
+    const scanned = looksScanned(q);
     typeTimer = setTimeout(() => {
-        // SCAN-3: JONLI qidiruv — faqat ko'rsatadi, katakka tegmaydi.
-        if (scanInput.value.trim() === q) doSearch(false);
-    }, 350);
+        // SCAN-3: QO'LDA yozish — faqat ko'rsatadi, katakka tegmaydi.
+        // SCAN-4: SKANER — Enter'siz ham qo'shadi va katakni tozalaydi.
+        if (scanInput.value.trim() !== q) return;
+        if (scanned && !looksScanned(q)) return;   // orada yozib ketdi
+        doSearch(scanned);
+    }, scanned ? 80 : 350);
 });
+
+// ---- SCAN-4: tozalash tugmasi ---------------------------------------
+// Topilmagan kod katakda qolganda kassir uni bir bosishda o'chiradi.
+// Esc ham shu ishni qiladi (modal ochiq bo'lmaganda).
+const scanClearBtn = document.getElementById('scanClearBtn');
+function paintScanClear() {
+    if (scanClearBtn) scanClearBtn.hidden = !scanInput.value;
+}
+function clearScanBox(focus) {
+    clearTimeout(typeTimer);
+    scanInput.value = '';
+    scanPrevLen = 0;
+    scanRunKeys = 0;
+    hideExtras();
+    setStatus('', '');
+    paintScanClear();
+    if (focus !== false) refocus();
+}
+if (scanClearBtn) {
+    // mousedown'da default'ni to'xtatamiz — katak fokusni yo'qotmasin
+    scanClearBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    scanClearBtn.addEventListener('click', () => clearScanBox(true));
+}
+paintScanClear();
 
 // ---- OFF-8: offline katalog ----
 // Service worker /pos/lookup/ ni TO'LIQ URL bo'yicha keshlaydi, ya'ni offline
@@ -3543,6 +3663,7 @@ checkoutBtn.addEventListener('click', async () => {
             orderDiscountInput.value = '';
             resetDiscountReason();
             scanInput.value = '';
+            if (typeof paintScanClear === 'function') paintScanClear();
             setStatus('', '');
             hideExtras();
         } catch (e) {
@@ -3618,6 +3739,7 @@ checkoutBtn.addEventListener('click', async () => {
     orderDiscountInput.value = '';
     resetDiscountReason();
     scanInput.value = '';
+    if (typeof paintScanClear === 'function') paintScanClear();
     setStatus('', '');
     hideExtras();
     checkoutStatus.innerHTML = `<span class="text-success">

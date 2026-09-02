@@ -5570,10 +5570,14 @@ class Scan3TypingIsNeverDestroyed(TestCase):
                                 'clearBox() barcha yo\'llarda chaqirilsin')
 
     def test_enter_and_button_commit_but_typing_does_not(self):
+        """Enter va tugma — commit; kechiktirilgan qidiruv esa faqat SKANER
+        bo'lganda commit qiladi (SCAN-4), qo'lda yozishda emas."""
         src = self._pos()
         self.assertIn("doSearch(true); }", src)          # Enter
         self.assertIn('() => doSearch(true)', src)        # tugma
-        self.assertIn('doSearch(false);', src)            # jonli qidiruv
+        self.assertIn('doSearch(scanned);', src)          # kechiktirilgan qidiruv
+        self.assertIn('function looksScanned(', src,
+                      "commit qarori skaner tezligiga bog'liq bo'lsin")
 
     def test_typing_does_not_add_to_the_cart(self):
         """Jonli qidiruv topsa ham savatga QO'SHMAYDI — Enter kerak."""
@@ -6603,3 +6607,100 @@ class Txt1NoMixedScriptWords(TestCase):
                          ['Skanерdan'])
         self.assertEqual(self._mixed("Ўзбекча / Русский"), [])
         self.assertEqual(self._mixed('Skanerdan oldin miqdor'), [])
+
+
+class Scan4ScannerWithoutEnterAndClearButton(TestCase):
+    """SCAN-4 — Enter'siz skaner + tozalash tugmasi.
+
+    SCAN-3 qo'lda yozishni himoya qildi (jonli qidiruv endi faqat
+    KO'RSATADI), lekin do'kondagi skanerlarning hammasi ham oxirida Enter
+    yubormaydi. Shunday skanerda kod katakka yozilardi-yu, hech nima
+    bo'lmasdi — "3020320203203203", "99999999999999" kabi kodlar katakda
+    qolib ketardi va kassir ularni qo'lda o'chirishga majbur edi.
+
+    Yechim ikki qismli:
+      * skaner TEZLIGI bo'yicha ajratiladi (belgilar orasi <= 35 ms,
+        bo'sh joysiz, kamida bitta raqamli) — bunday kirish Enter'siz ham
+        qo'shiladi va katak tozalanadi;
+      * qo'lda yozilgan har qanday matn uchun katak yonida × tugmasi
+        (va Esc) bir bosishda tozalaydi.
+
+    Raqam sharti muhim: "hermes" kabi sof harfli NOM qanchalik tez
+    terilmasin, hech qachon skaner deb qaralmaydi — SCAN-3 himoyasi
+    buzilmaydi.
+    """
+
+    def _pos(self):
+        import os
+        from django.conf import settings
+        for d in settings.TEMPLATES[0]['DIRS']:
+            p = os.path.join(str(d), 'inventory', 'pos.html')
+            if os.path.exists(p):
+                with open(p, encoding='utf-8') as f:
+                    return f.read()
+        self.fail('pos.html topilmadi')
+
+    # ---- skaner aniqlash --------------------------------------------
+    def test_scanner_is_detected_by_speed(self):
+        src = self._pos()
+        self.assertIn('function looksScanned(', src)
+        self.assertIn('SCAN_MAX_GAP_MS', src)
+        self.assertIn('SCAN_MIN_LEN', src)
+
+    def test_a_typed_name_can_never_be_mistaken_for_a_scan(self):
+        """Sof harfli so'z (raqamsiz) skaner deb qaralmasin — SCAN-3 himoyasi."""
+        import re
+        src = self._pos()
+        m = re.search(r'function looksScanned\(q\) \{(.+?)\n\}', src, re.S)
+        self.assertIsNotNone(m, 'looksScanned() topilmadi')
+        guard = m.group(1)
+        self.assertRegex(guard, r'/\[0-9\]/\.test\(q\)',
+                         'kamida bitta RAQAM sharti bo\'lishi kerak')
+        self.assertIn(r'/\s/.test(q)', guard,
+                      'bo\'sh joyli matn skaner bo\'la olmaydi')
+
+    def test_the_scanner_path_commits_and_the_typed_path_does_not(self):
+        """doSearch(scanned) — skaner uchun commit, qo'lda yozishda emas."""
+        src = self._pos()
+        self.assertIn('doSearch(scanned);', src)
+        self.assertIn('scanned ? 80 : 350', src,
+                      'skaner kutmasin, qo\'lda yozish 350 ms kutsin')
+
+    # ---- tozalash tugmasi -------------------------------------------
+    def test_the_clear_button_exists_and_is_reachable(self):
+        src = self._pos()
+        self.assertIn('id="scanClearBtn"', src)
+        self.assertIn('aria-label="Katakni tozalash"', src)
+        self.assertIn('function clearScanBox(', src)
+
+    def test_clearing_also_clears_the_message_and_suggestions(self):
+        """Kod bilan birga "topilmadi" xabari ham ketsin."""
+        import re
+        src = self._pos()
+        m = re.search(r'function clearScanBox\(focus\) \{(.+?)\n\}', src, re.S)
+        self.assertIsNotNone(m)
+        body = m.group(1)
+        for need in ("scanInput.value = '';", 'hideExtras();', "setStatus('', '');",
+                     'paintScanClear();'):
+            self.assertIn(need, body, 'clearScanBox() to\'liq tozalamayapti')
+
+    def test_the_button_hides_itself_when_the_box_is_empty(self):
+        import re
+        src = self._pos()
+        m = re.search(r'function paintScanClear\(\) \{(.+?)\n\}', src, re.S)
+        self.assertIsNotNone(m)
+        self.assertIn('hidden = !scanInput.value', m.group(1))
+
+    def test_escape_clears_the_box_but_not_over_a_modal(self):
+        src = self._pos()
+        self.assertIn("e.key === 'Escape'", src)
+        self.assertIn(".querySelector('.modal.show')", src,
+                      'modal ochiq bo\'lsa Esc modalni yopsin')
+
+    def test_every_clearing_site_repaints_the_button(self):
+        """Katak boshqa yo'l bilan tozalansa ham × tugmasi yashirinsin."""
+        src = self._pos()
+        self.assertGreaterEqual(src.count('paintScanClear()'), 6)
+
+    def test_the_help_table_tells_the_cashier_about_esc(self):
+        self.assertIn('Qidiruv katagini tozalash', self._pos())

@@ -4,7 +4,7 @@
 //   - HTML pages: network-first, fallback to cache for offline mode
 //   - API/POST: always network (don't cache mutations)
 
-const CACHE_NAME = 'yurit-v224';   // SCAN-3 + TXT-1: POS qidiruvi va matn tuzatishlari
+const CACHE_NAME = 'yurit-v225';   // SCAN-4: Enter'siz skaner + tozalash tugmasi
 // SEC-2: kutubxonalar endi o'zimizda (static/vendor/) — CDN emas. Bu yerда
 // oldindan keshlamaymiz (WhiteNoise hash'li nom beradi); /static/ so'rovlari
 // runtime'да cache-first bo'lib avtomat keshlanadi (pastдаgi handler).
