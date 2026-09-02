@@ -43,6 +43,12 @@ from .access import (
     POS_BRANCH_SESSION_KEY, _open_shift_for, _user_branch_or_403,
     admin_required, get_user_branch, normalize_code,
 )
+from .access import pos_api                  # CORE-3
+from .web import (                           # CORE-3
+    api_err, api_ok, csv_response, csv_safe, csv_writer,
+    filter_by_day_range,
+    paginate, parse_day, querystring, read_form_json, read_json,
+)
 from .money import parse_money, parse_percent, parse_qty   # CORE-1
 from .audit import audit_batch, log_action   # AUD-1
 from .money import (
@@ -299,6 +305,7 @@ def pos_terminal(request):
 
 
 @login_required
+@pos_api(need_branch=False)
 def pos_device_sync(request):
     """POST /pos/device-sync/ — OFF-10: qurilmaning katalog holati.
 
@@ -306,12 +313,7 @@ def pos_device_sync(request):
     tomonda ham bo'sh vaqtda va "yuborib unutamiz" tarzda chaqiriladi —
     SOTUVGA hech qachon xalaqit bermasligi kerak.
     """
-    if request.method != 'POST':
-        return JsonResponse({'ok': False}, status=405)
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False}, status=400)
+    data = request.json
     did = str(data.get('device_id') or '').strip()[:64]
     if not did:
         return JsonResponse({'ok': False, 'error': 'device_id kerak'}, status=400)
@@ -557,6 +559,7 @@ PRICE_OVERRIDE_MIN_ABS = Decimal('1000')  # 1000 so'm
 
 
 @login_required
+@pos_api
 def pos_checkout(request):
     """POST /pos/checkout/ with JSON body:
       { lines: [{stock_id, qty, sale_price}],
@@ -576,17 +579,9 @@ def pos_checkout(request):
     # tarmoq sekinlashsa BranchStock qatorlari qulfda turib, boshqa kassirning
     # sotuvi ham kutib qolardi. Sotuv yo'lida tashqi chaqiruv qolmadi.
 
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
+    branch = request.branch
 
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
-
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    data = request.json
 
     lines = data.get('lines') or []
     if not lines:
@@ -1082,19 +1077,13 @@ def pos_checkout(request):
 
 
 @login_required
+@pos_api
 def pos_park(request):
     """POST /pos/park/ — savatni vaqtincha saqlash.
     Body JSON: {label, lines, customer_name, customer_phone, order_discount, discount_reason}
     """
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    branch = request.branch
+    data = request.json
 
     label = (data.get('label') or '').strip()[:80]
     if not label:
@@ -1122,13 +1111,10 @@ def pos_park(request):
 
 
 @login_required
+@pos_api(need_body=False)
 def pos_parked_resume(request, pk):
     """POST /pos/parked/<pk>/resume/ — saqlangan savatni qaytarish va o'chirish."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    branch = request.branch
     parked = ParkedSale.objects.filter(pk=pk, branch=branch).first()
     if not parked:
         return JsonResponse({'ok': False, 'error': 'topilmadi'}, status=404)
@@ -1233,19 +1219,13 @@ def pos_static_qr(request, pk):
 
 
 @login_required
+@pos_api
 def pos_payment_create(request):
     """POST /pos/payment/create/ JSON: {provider, amount, lines}
     PaymentIntent yaratadi va ref_code qaytaradi. POS modal'i shu ref_code'ni
     mijozga ko'rsatadi (mijoz to'lov izohi sifatida kiritadi)."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    branch = request.branch
+    data = request.json
     provider = (data.get('provider') or '').strip()
     try:
         amount = float(data.get('amount') or 0)
@@ -1302,6 +1282,7 @@ def pos_payment_check(request, pk):
 
 
 @csrf_exempt
+@pos_api(need_body=False, need_branch=False)
 def payments_webhook(request, provider):
     """POST /payments/webhook/<provider>/ — real merchant API callback.
 
@@ -1314,8 +1295,6 @@ def payments_webhook(request, provider):
          fallback OLIB TASHLANDI (mijoz summani bilса, boshqa chekни paid
          qilиб qo'ymasin).
     """
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
 
     body_raw = request.body
 
@@ -1365,16 +1344,12 @@ def payments_webhook(request, provider):
 
 
 @login_required
+@pos_api(need_branch=False)
 def pos_promo_eval(request):
     """POST /pos/promo-eval/ {lines: [{stock_id, qty, sale_price}]}
     Aktiv aksiyalarni tekshiradi va qo'llab bo'ladigan chegirmalar
     ro'yxatini qaytaradi. Hech narsa o'zgartirmaydi — faqat ko'rsatish."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    data = request.json
 
     lines_raw = data.get('lines') or []
     if not lines_raw:
@@ -1412,8 +1387,6 @@ def pos_promo_eval(request):
         'promotions': applied,
         'total_discount': round(total_discount, 2),
     })
-
-
 def _evaluate_promotions(cart_lines):
     """V5: aktiv aksiyalardan kelib chiqadigan chegirmani SERVERда hisoblaydi.
 
@@ -1493,16 +1466,12 @@ def _evaluate_promotions(cart_lines):
 
 
 @login_required
+@pos_api(need_branch=False)
 def pos_payment_intent(request):
     """POST /pos/payment/intent/ {provider, amount, txn_ref}
     Provider'dan QR/deeplink oladi. Sotuv hali yakunlanmagan — bu faqat
     intent yaratish. Mijoz to'laganidan keyin POS pos_checkout'ni chaqiradi."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    data = request.json
     from .payments import get_provider
     provider_name = (data.get('provider') or '').strip()
     provider = get_provider(provider_name)
@@ -1553,15 +1522,11 @@ def pos_payment_status(request):
 
 
 @login_required
+@pos_api(need_branch=False)
 def pos_unlock(request):
     """POST /pos/unlock/ {password} — joriy foydalanuvchining paroli to'g'ri
     bo'lsa, idle lock ochiladi. AJAX'dan chaqiriladi."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    data = request.json
     password = (data.get('password') or '').strip()
     if not password:
         return JsonResponse({'ok': False, 'error': 'parol kerak'}, status=400)
@@ -1633,16 +1598,11 @@ PAYMENT_FIX_METHODS = ('cash', 'card', 'transfer')
 
 
 @login_required
-@require_POST
+@pos_api
 def pos_payment_fix(request):
     """POST /pos/payment/fix/ — chekning FAQAT to'lov turini almashtiradi."""
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'filial yo\'q'}, status=403)
-    try:
-        payload = _json.loads(request.body or '{}')
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'json xato'}, status=400)
+    branch = request.branch
+    payload = request.json
 
     txn_id = payload.get('txn_id')
     method = (payload.get('method') or '').strip()
@@ -1723,17 +1683,14 @@ def pos_payment_fix(request):
 
 
 @login_required
+@pos_api
 def pos_refund(request):
     """POST /pos/refund/ JSON body: {lines: [{sale_id, qty, reason}]}.
     Processes refunds atomically; restores stock; returns total refunded.
 
     Requires an OPEN shift: refund returns cash from the drawer, so it must
     be attributed to the current shift for cash reconciliation."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    branch = request.branch
 
     # C1 fix: require open shift
     open_shift = _open_shift_for(branch)
@@ -1743,10 +1700,7 @@ def pos_refund(request):
             'error': "Smen ochilmagan. Qaytarish faqat ochiq smen davomida amalga oshiriladi.",
         }, status=400)
 
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    data = request.json
 
     items = data.get('lines') or []
     if not items:
@@ -1872,6 +1826,7 @@ def pos_refund(request):
 
 
 @login_required
+@pos_api
 def pos_exchange(request):
     """POST /pos/exchange/ — ALMASHTIRISH: eski tovar(lar) qaytadi, yangi
     tovar(lar) beriladi, faqat NARX FARQI hisoblanadi.
@@ -1892,11 +1847,7 @@ def pos_exchange(request):
     Yangi chek net'i (= max(0,extra)) tanlangan usul bo'yicha kassaga tushadi;
     almashtirish qaytarishlari kassaga faqat cash_refunded miqdorida ta'sir qiladi.
     """
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    branch = request.branch
 
     open_shift = _open_shift_for(branch)
     if not open_shift:
@@ -1904,10 +1855,7 @@ def pos_exchange(request):
             'error': "Smen ochilmagan. Almashtirish faqat ochiq smen davomida amalga oshiriladi."},
             status=400)
 
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    data = request.json
 
     from decimal import Decimal, InvalidOperation
 
@@ -2064,17 +2012,12 @@ def pos_exchange(request):
 
 
 @login_required
+@pos_api(need_body=False)
 def pos_parked_delete(request, pk):
     """POST /pos/parked/<pk>/delete/ — saqlangan savatni o'chirish."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    branch = _user_branch_or_403(request)
-    if branch is None:
-        return JsonResponse({'ok': False, 'error': 'no branch'}, status=403)
+    branch = request.branch
     deleted, _ = ParkedSale.objects.filter(pk=pk, branch=branch).delete()
     return JsonResponse({'ok': bool(deleted)})
-
-
 def _cart_lines(cart):
     """Resolve cart {stock_id: qty} → list of {stock, qty, available, ok}."""
     if not cart:

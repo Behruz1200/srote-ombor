@@ -1,0 +1,51 @@
+{% comment %}
+CORE-3 — sahifalash BITTA joyda.
+
+Ilgari har sahifa havolani o'zi qurardi:
+    href="?page=2&{% if q %}q={{ q }}&{% endif %}..."
+va yangi filtr qo'shilganda uni havolaga qo'shish UNUTILARDI.
+Natijada /audit/ da sana filtri, /prices/history/ da esa `q` dan
+boshqa hamma narsa 2-sahifada yo'qolardi.
+
+Endi `page_qs` (views.web.paginate() beradi) BARCHA joriy filtrlarni
+saqlaydi — yangi filtr qo'shilsa u ham avtomatik saqlanadi.
+
+Ishlatish:   {% include 'inventory/_pagination.html' %}
+Kerak:       page_obj (yoki page) + page_qs
+{% endcomment %}
+{% firstof page_obj page as pg %}
+{% if pg and pg.has_other_pages %}
+<nav class="mt-3" aria-label="Sahifalar">
+    <ul class="pagination pagination-sm justify-content-center flex-wrap mb-0">
+        {% if pg.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1&amp;{{ page_qs }}"
+                   title="Birinchi sahifa" aria-label="Birinchi sahifa">«</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ pg.previous_page_number }}&amp;{{ page_qs }}"
+                   aria-label="Oldingi sahifa">←</a>
+            </li>
+        {% endif %}
+        <li class="page-item disabled">
+            <span class="page-link">
+                {{ pg.number }} / {{ pg.paginator.num_pages }}
+                <span class="text-muted">({{ pg.paginator.count }} ta)</span>
+            </span>
+        </li>
+        {% if pg.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ pg.next_page_number }}&amp;{{ page_qs }}"
+                   aria-label="Keyingi sahifa">→</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ pg.paginator.num_pages }}&amp;{{ page_qs }}"
+                   title="Oxirgi sahifa" aria-label="Oxirgi sahifa">»</a>
+            </li>
+        {% endif %}
+    </ul>
+    {% if pagination_note %}
+    <div class="text-center small text-muted mt-1">{{ pagination_note }}</div>
+    {% endif %}
+</nav>
+{% endif %}

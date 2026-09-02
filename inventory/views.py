@@ -60,6 +60,12 @@ from .money import (            # ARCH-1
     _chunked, _is_rounding, _lock_stocks, _order_discount_share,
     _ret_group_value, _returns_adjustment, _valid_discount_reason,
 )
+from .access import pos_api                  # CORE-3
+from .web import (                           # CORE-3
+    api_err, api_ok, csv_response, csv_safe, csv_writer,
+    filter_by_day_range,
+    paginate, parse_day, querystring, read_form_json, read_json,
+)
 from .audit import BATCH_PREVIEW, audit_batch, log_action   # AUD-1
 from .signals import pin_before                             # AUD-2
 from .access import (          # ARCH-2
@@ -3584,16 +3590,7 @@ def send_daily_summary_now(request):
     return redirect('dashboard')
 
 
-def _csv_safe(v):
-    """SEC-20: elektron jadval FORMULA IN'EKTSIYASINI zararsizlantiradi.
-
-    Excel/Sheets `=`, `+`, `-`, `@` (yoki tab/CR) bilan boshlangan katakni
-    FORMULA deb bajaradi — masalan `=HYPERLINK(...)` fayl ochilganда ishga
-    tushardi. Bunday matn oldiga apostrof qo'yamiz (ko'rinishга ta'sir qilmaydi).
-    """
-    if isinstance(v, str) and v and v[0] in ('=', '+', '-', '@', '\t', '\r'):
-        return "'" + v
-    return v
+_csv_safe = csv_safe        # CORE-3 — ta'rif web.py da (SEC-20)
 
 
 _MAX_IMG_BYTES = 20 * 1024 * 1024  # SEC-21: yuklanadigan rasm uchun 20 MB shift
@@ -4279,14 +4276,12 @@ def _draft_payload(payload):
 
 
 @admin_required
+@pos_api(need_body=False, need_branch=False)
 def intake_photo_draft(request):
     """Yarim ishni saqlash — telefonda boshlab, kompyuterda davom ettirish."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    try:
-        payload = _json.loads(request.POST.get('payload') or '{}')
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    payload = read_form_json(request, 'payload')     # CORE-3
+    if payload is None:
+        return api_err('bad JSON', 400)
     data = _draft_payload(payload)
     if not data['rows']:
         return JsonResponse({'ok': False, 'error': "Saqlash uchun qator yo'q."},
@@ -4388,10 +4383,9 @@ def _match_catalog(rows):
 
 
 @admin_required
+@pos_api(need_body=False, need_branch=False)
 def intake_photo_extract(request):
     """POST rasm -> AI o'qigan qatorlar (JSON). Hech narsa saqlanmaydi."""
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
     f = request.FILES.get('image')
     if not f:
         return JsonResponse({'ok': False, 'error': 'Rasm yuborilmadi.'}, status=400)
@@ -4413,15 +4407,13 @@ def intake_photo_extract(request):
 
 
 @admin_required
+@pos_api(need_body=False, need_branch=False)
 def intake_photo_save(request):
     """Tekshirilgan qatorlarni omborga yozamiz (bitta qabul sessiyasi)."""
     from decimal import Decimal, InvalidOperation
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'POST only'}, status=405)
-    try:
-        payload = _json.loads(request.POST.get('payload') or '{}')
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+    payload = read_form_json(request, 'payload')     # CORE-3
+    if payload is None:
+        return api_err('bad JSON', 400)
 
     branch = Branch.objects.filter(
         pk=payload.get('branch') or 0, is_active=True).first()
@@ -5641,10 +5633,9 @@ def cash_payout(request):
     wants_json = 'application/json' in ctype or \
         request.headers.get('x-requested-with') == 'XMLHttpRequest'
     if 'application/json' in ctype:
-        try:
-            data = _json.loads(request.body.decode('utf-8'))
-        except ValueError:
-            return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+        data = read_json(request)                    # CORE-3
+        if data is None:
+            return api_err('bad JSON', 400)
     else:
         data = request.POST
 
@@ -5763,10 +5754,9 @@ def cash_in(request):
     wants_json = 'application/json' in ctype or \
         request.headers.get('x-requested-with') == 'XMLHttpRequest'
     if 'application/json' in ctype:
-        try:
-            data = _json.loads(request.body.decode('utf-8'))
-        except ValueError:
-            return JsonResponse({'ok': False, 'error': 'bad JSON'}, status=400)
+        data = read_json(request)                    # CORE-3
+        if data is None:
+            return api_err('bad JSON', 400)
     else:
         data = request.POST
 
@@ -5896,16 +5886,9 @@ def shift_list(request):
             qs = qs.filter(opened_by_id=int(seller_id))
         except ValueError:
             seller_id = ''
-    try:
-        if date_from:
-            qs = qs.filter(opened_at__date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
-    except ValueError:
-        date_from = ''
-    try:
-        if date_to:
-            qs = qs.filter(opened_at__date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
-    except ValueError:
-        date_to = ''
+    # CORE-3: tahlil web.filter_by_day_range() da — bitta joyda.
+    qs, date_from, date_to = filter_by_day_range(
+        qs, 'opened_at', date_from, date_to)
 
     shifts = list(qs.order_by('-opened_at')[:100])
 
@@ -6463,20 +6446,9 @@ def sales_list(request):
     # Sana filtri — sold_at'ni date()'ga O'RAMAYMIZ (aks holда sale_soldat_idx
     # indeksi ishlamay jadval to'liq skanerlanardi). Aware datetime oralig'i.
     tz = timezone.get_current_timezone()
-    try:
-        if date_from_raw:
-            df = datetime.strptime(date_from_raw, '%Y-%m-%d').date()
-            qs = qs.filter(sold_at__gte=timezone.make_aware(
-                datetime.combine(df, datetime.min.time()), tz))
-    except ValueError:
-        date_from_raw = ''
-    try:
-        if date_to_raw:
-            dt = datetime.strptime(date_to_raw, '%Y-%m-%d').date()
-            qs = qs.filter(sold_at__lt=timezone.make_aware(
-                datetime.combine(dt + timedelta(days=1), datetime.min.time()), tz))
-    except ValueError:
-        date_to_raw = ''
+    # CORE-3: aynan shu 14 qator yana uch joyda takrorlangan edi.
+    qs, date_from_raw, date_to_raw = filter_by_day_range(
+        qs, 'sold_at', date_from_raw, date_to_raw)
     if branch_id:
         try:
             qs = qs.filter(branch_id=int(branch_id))
@@ -6540,10 +6512,7 @@ def sales_list(request):
     qs = qs.order_by('-sold_at')
 
     if export:
-        resp = HttpResponse(content_type='text/csv; charset=utf-8')
-        resp['Content-Disposition'] = 'attachment; filename="sales.csv"'
-        resp.write('﻿')  # BOM for Excel
-        w = csv.writer(resp)
+        resp, w = csv_writer('sales.csv')          # CORE-3
         w.writerow(['Sana', 'Vaqt', 'Kod', 'Mahsulot', 'Variant', 'Filial',
                     'Sotuvchi', 'Soni', 'Narx', 'Chegirma', 'Jami',
                     'To\'lov turi', 'Mijoz'])
@@ -6636,14 +6605,8 @@ def sales_list(request):
     period_ret_qs = (Return.objects
                      .select_related('sale__transaction')
                      .prefetch_related('sale__transaction__lines')) if _comparable else Return.objects.none()
-    if date_from_raw:
-        period_ret_qs = period_ret_qs.filter(refunded_at__gte=timezone.make_aware(
-            datetime.combine(datetime.strptime(date_from_raw, '%Y-%m-%d').date(),
-                             datetime.min.time()), tz))
-    if date_to_raw:
-        period_ret_qs = period_ret_qs.filter(refunded_at__lt=timezone.make_aware(
-            datetime.combine(datetime.strptime(date_to_raw, '%Y-%m-%d').date()
-                             + timedelta(days=1), datetime.min.time()), tz))
+    period_ret_qs, _, _ = filter_by_day_range(      # CORE-3
+        period_ret_qs, 'refunded_at', date_from_raw, date_to_raw)
     if branch_id:
         period_ret_qs = period_ret_qs.filter(sale__branch_id=int(branch_id))
     period_returned_total = Decimal('0')
@@ -6664,8 +6627,7 @@ def sales_list(request):
     # ular hamon BUTUN filtr bo'yicha bazada hisoblanadi, sahifa bo'yicha
     # emas (aks holda har sahifada boshqa jami chiqib, hisobot buzilardi).
     page_no = request.GET.get('page') or 1
-    paginator = Paginator(qs, SALES_PER_PAGE)
-    page_obj = paginator.get_page(page_no)
+    page_obj, page_qs = paginate(request, qs, SALES_PER_PAGE)   # CORE-3
     sales = list(page_obj.object_list)
     for s in sales:
         r = _ret_by_sale.get(s.pk)
@@ -6746,17 +6708,9 @@ def sales_list(request):
             })
 
     # Ko'rinish tugmalari uchun: joriy filtrlar (view/export'siz) querystring.
-    _gc = request.GET.copy()
-    _gc.pop('view', None)
-    _gc.pop('export', None)
-    _gc.pop('page', None)          # RPT-1: ko'rinish almashsa 1-sahifadan
-    qs_base = _gc.urlencode()
+    # RPT-1: ko'rinish almashsa 1-sahifadan boshlansin.
+    qs_base = querystring(request, drop=('view', 'export', 'page'))  # CORE-3
     # RPT-1: sahifa havolalari uchun — 'view' saqlanadi, 'page' olib tashlanadi.
-    _pg = request.GET.copy()
-    _pg.pop('page', None)
-    _pg.pop('export', None)
-    page_qs = _pg.urlencode()
-
     return render(request, 'inventory/sales_list.html', {
         'view_mode': view_mode,
         'qs_base': qs_base,
@@ -7667,24 +7621,14 @@ def audit_list(request):
             Q(model_name__icontains=q) |
             Q(object_id=q)
         )
-    try:
-        if date_from:
-            logs = logs.filter(created_at__date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
-    except ValueError:
-        date_from = ''
-    try:
-        if date_to:
-            logs = logs.filter(created_at__date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
-    except ValueError:
-        date_to = ''
+    # CORE-3
+    logs, date_from, date_to = filter_by_day_range(
+        logs, 'created_at', date_from, date_to)
 
     logs = logs.order_by('-created_at')
 
     if export:
-        resp = HttpResponse(content_type='text/csv; charset=utf-8')
-        resp['Content-Disposition'] = 'attachment; filename="audit_log.csv"'
-        resp.write('﻿')
-        w = csv.writer(resp)
+        resp, w = csv_writer('audit_log.csv')      # CORE-3
         # AUD-1: "O'zgarishlar" ustuni ilgari CSV'da UMUMAN yo'q edi —
         # eksport qilingan fayl kim-nima-qachon deb aytardi-yu, NIMA
         # o'zgarganini aytmasdi. Endi maydon: eski -> yangi ko'rinishida.
@@ -7713,9 +7657,7 @@ def audit_list(request):
         return resp
 
     # Pagination
-    from django.core.paginator import Paginator
-    paginator = Paginator(logs, 50)
-    page = paginator.get_page(request.GET.get('page'))
+    page, page_qs = paginate(request, logs, 50)     # CORE-3
 
     actions = AuditLog.Action.choices
     users = (AuditLog.objects.values_list('username_snapshot', flat=True)
@@ -7740,13 +7682,7 @@ def audit_list(request):
 
     # AUD-1: sahifalash havolalari SANA filtrini yo'qotardi — 2-sahifaga
     # o'tganda oraliq tushib qolib, butun tarix qaytadan chiqardi.
-    _qs = request.GET.copy()
-    _qs.pop('page', None)
-    _qs.pop('export', None)
-    page_qs = _qs.urlencode()
-    _qs2 = _qs.copy()
-    _qs2.pop('raw', None)
-    page_qs_nogroup = _qs2.urlencode()
+    page_qs_nogroup = querystring(request, raw=None)   # CORE-3
 
     return render(request, 'inventory/audit_list.html', {
         'page': page, 'actions': actions, 'users': users,
@@ -7797,10 +7733,7 @@ def customer_list(request):
     customers = customers[:300]
 
     if export:
-        resp = HttpResponse(content_type='text/csv; charset=utf-8')
-        resp['Content-Disposition'] = 'attachment; filename="customers.csv"'
-        resp.write('﻿')
-        w = csv.writer(resp)
+        resp, w = csv_writer('customers.csv')      # CORE-3
         w.writerow(['Ism', 'Telefon', 'Tag', 'Cheklar', 'Jami sarf',
                     "O'rtacha chek", 'Oxirgi tashrif'])
         for c in customers:
@@ -8833,11 +8766,8 @@ def insights(request):
 
 
 def _insights_csv(ctx):
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    fn = f"Biznes_tahlili_{ctx['d_start']}_{ctx['d_end']}.csv"
-    response['Content-Disposition'] = f'attachment; filename="{fn}"'
-    response.write('﻿')
-    w = csv.writer(response)
+    response, w = csv_writer(                      # CORE-3
+        f"Biznes_tahlili_{ctx['d_start']}_{ctx['d_end']}.csv")
     branch_str = ctx['selected_branch'].name if ctx['selected_branch'] else 'Barcha filiallar'
     w.writerow([f"yurit — Biznes tahlili"])
     w.writerow([f"Davr: {ctx['d_start']} — {ctx['d_end']}  ({ctx['days']} kun)"])
@@ -9061,11 +8991,8 @@ def _insights_pdf(ctx):
 
 
 def _csv_response(title, headers, rows, summary, d_start, d_end, branch):
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    fn = f"{title.replace(' ', '_')}_{d_start}_{d_end}.csv"
-    response['Content-Disposition'] = f'attachment; filename="{fn}"'
-    response.write('﻿')  # BOM for Excel
-    writer = csv.writer(response)
+    response, writer = csv_writer(                 # CORE-3
+        f"{title.replace(' ', '_')}_{d_start}_{d_end}.csv")
     writer.writerow([title])
     writer.writerow([f"Davr: {d_start} — {d_end}"])
     if branch:
@@ -9419,7 +9346,7 @@ def price_list(request):
     issue_cards = [(k, label, hint, counts.get(k, 0))
                    for k, label, hint in PRICE_ISSUES]
 
-    paginator = Paginator(qs, PRICE_PAGE_SIZE)
+    paginator = Paginator(qs, PRICE_PAGE_SIZE)   # (jami uchun kerak)
     page = paginator.get_page(request.GET.get('page'))
 
     params = request.GET.copy()
@@ -9439,6 +9366,7 @@ def price_list(request):
             'issue': request.GET.get('issue', ''),
         },
         'querystring': params.urlencode(),
+        'page_qs': params.urlencode(),     # CORE-3 — _pagination.html uchun
     })
 
 
@@ -9661,7 +9589,9 @@ def price_history(request):
                    .values_list('pk', flat=True)[:5000])
         logs = logs.filter(Q(object_repr__icontains=q)
                            | Q(object_id__in=[str(i) for i in ids]))
-    page = Paginator(logs, 80).get_page(request.GET.get('page'))
+    # CORE-3: ilgari sahifalash havolasi shablonda qo'lda qurilardi va
+    # faqat ?q= ni saqlardi — boshqa hamma filtr 2-sahifada yo'qolardi.
+    page, page_qs = paginate(request, logs, 80)
 
     # object_id -> BranchStock: nomni chiroyli ko'rsatish uchun
     oids = [l.object_id for l in page.object_list if (l.object_id or '').isdigit()]
@@ -9673,6 +9603,7 @@ def price_history(request):
 
     return render(request, 'inventory/price_history.html', {
         'page_obj': page, 'logs': page.object_list, 'q': q,
+        'page_qs': page_qs,
     })
 
 
@@ -10136,6 +10067,7 @@ def intake_mixed(request):
 
 
 @admin_required
+@pos_api(need_branch=False)
 def intake_mixed_save(request):
     """POST JSON — bir nechta mahsulotni bitta qabulda saqlaydi.
 
@@ -10148,12 +10080,7 @@ def intake_mixed_save(request):
     farq faqat ko'rinishda, shuning uchun bu yerda bitta yo'l yetadi.
     """
     from decimal import Decimal, InvalidOperation
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'Faqat POST'}, status=405)
-    try:
-        data = _json.loads(request.body.decode('utf-8'))
-    except (ValueError, UnicodeDecodeError):
-        return JsonResponse({'ok': False, 'error': "So'rov noto'g'ri"}, status=400)
+    data = request.json                              # CORE-3
 
     def dec(v, default='0'):
         # CORE-1: ilgari bu nusxa 'inf' ni ham, 10 xonadan katta sonni ham

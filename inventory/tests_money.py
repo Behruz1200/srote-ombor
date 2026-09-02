@@ -110,7 +110,23 @@ class Sec20CsvSafe(TestCase):
         self.assertEqual(_csv_safe('+1'), "'+1")
         self.assertEqual(_csv_safe('@cmd'), "'@cmd")
         self.assertEqual(_csv_safe('Chanel'), 'Chanel')
-        self.assertEqual(_csv_safe(1000), 1000)
+        # CORE-3: qiymat endi doim SATR bo'lib qaytadi (csv.writer baribir
+        # str() qiladi, ya'ni faylga yoziladigan natija bir xil).
+        self.assertEqual(_csv_safe(1000), '1000')
+        self.assertEqual(_csv_safe(None), '')
+
+    def test_the_written_csv_is_unchanged(self):
+        """Muhimi TUR emas — faylga NIMA yozilishi."""
+        import csv
+        import io
+        from decimal import Decimal
+        from inventory.views import _csv_safe
+        buf = io.StringIO()
+        csv.writer(buf).writerow(
+            [_csv_safe(v) for v in (1000, Decimal('1234.50'), None,
+                                    'Chanel', '=cmd')])
+        self.assertEqual(buf.getvalue().strip(),
+                         '1000,1234.50,,Chanel,\'=cmd')
 
 
 class Ops1BackupGuard(TestCase):
@@ -6010,3 +6026,134 @@ class Core2CategoryExportSubtractsLineDiscount(TestCase):
         # 2 x 50 000 - 20 000 = 80 000 (ilgari 100 000 chiqardi)
         self.assertIn('80000', body.replace(' ', '').replace('.00', ''))
         self.assertNotIn('100000', body.replace(' ', '').replace('.00', ''))
+
+
+class Core3OneRequestShape(TestCase):
+    """CORE-3: JSON API qolipi, sana filtri, CSV va sahifalash — bitta joyda."""
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name='Filial-C3')
+        self.admin = User.objects.create_user(
+            username='c3admin', password='x', role=User.Role.ADMIN,
+            branch=self.branch)
+        self.c = Client()
+        self.c.force_login(self.admin)
+        s = self.c.session
+        s['pos_branch_id'] = self.branch.pk
+        s.save()
+
+    # ---- JSON API ----
+    def test_get_on_a_json_endpoint_is_405_everywhere(self):
+        for url in (CHECKOUT_URL, '/pos/park/', '/pos/refund/',
+                    '/pos/payment/fix/'):
+            r = self.c.get(url)
+            self.assertEqual(r.status_code, 405, url)
+            self.assertEqual(r.json(), {'ok': False, 'error': 'POST only'}, url)
+
+    def test_broken_json_is_400_everywhere(self):
+        for url in (CHECKOUT_URL, '/pos/park/', '/pos/refund/',
+                    '/pos/payment/fix/'):
+            r = self.c.post(url, data='{not json',
+                            content_type='application/json')
+            self.assertEqual(r.status_code, 400, url)
+            self.assertEqual(r.json()['error'], 'bad JSON', url)
+
+    def test_a_json_list_body_does_not_crash(self):
+        """`data.get(...)` ro'yxatda AttributeError berardi — endi 400."""
+        r = self.c.post(CHECKOUT_URL, data='[1,2,3]',
+                        content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_no_endpoint_hand_rolls_the_prologue_any_more(self):
+        import inspect
+        import re
+        from inventory import views, views_pos
+        bad = []
+        for mod in (views, views_pos):
+            src = inspect.getsource(mod)
+            for pat in (r"'error': 'POST only'", r"'error': 'bad JSON'",
+                        r"_json\.loads\(request\.body"):
+                n = len(re.findall(pat, src))
+                if n:
+                    bad.append(f'{mod.__name__}: {pat} — {n} marta')
+        self.assertEqual(bad, [], '; '.join(bad))
+
+    # ---- sana filtri ----
+    def test_a_broken_date_is_ignored_not_500(self):
+        for url in ('/audit/', '/shifts/', '/sales/'):
+            r = self.c.get(url, {'date_from': 'shanba', 'date_to': '99-99-99'})
+            self.assertEqual(r.status_code, 200, url)
+
+    def test_date_range_helper_uses_an_index_friendly_filter(self):
+        from inventory.web import filter_by_day_range
+        qs, f, t = filter_by_day_range(
+            Sale.objects.all(), 'sold_at', '2026-01-01', '2026-01-31')
+        sql = str(qs.query)
+        self.assertNotIn('DATE(', sql.upper().replace('"', ''))
+        self.assertEqual((f, t), ('2026-01-01', '2026-01-31'))
+
+    def test_date_range_end_is_inclusive(self):
+        from inventory.web import filter_by_day_range
+        cat = Category.objects.create(name='C3')
+        p = Product.objects.create(code='C3-0001', name='T', category=cat)
+        v = ProductVariant.objects.create(product=p, size='M', color='Q')
+        txn = SaleTransaction.objects.create(
+            branch=self.branch, sold_by=self.admin,
+            payment_method=SaleTransaction.PaymentMethod.CASH)
+        s = Sale.objects.create(transaction=txn, variant=v, branch=self.branch,
+                                quantity=1, sale_price=Decimal('100'),
+                                cost_at_sale=Decimal('50'), sold_by=self.admin)
+        day = timezone.localtime(s.sold_at).strftime('%Y-%m-%d')
+        qs, _, _ = filter_by_day_range(Sale.objects.all(), 'sold_at', day, day)
+        self.assertEqual(qs.count(), 1, 'oxirgi kun ham kirsin')
+
+    # ---- sahifalash ----
+    def test_pagination_never_loses_a_filter(self):
+        """/prices/history/ da 2-sahifaga o'tsangiz FAQAT ?q= saqlanardi."""
+        for url, params in (
+                ('/prices/history/', {'q': 'koylak'}),
+                ('/audit/', {'q': 'a', 'date_from': '2020-01-01',
+                             'model': 'BranchStock'}),
+                ('/sales/', {'q': 'a', 'date_from': '2020-01-01'}),
+                ('/prices/', {'q': 'a', 'issue': 'no_cost'})):
+            r = self.c.get(url, params)
+            self.assertEqual(r.status_code, 200, url)
+            qs = r.context['page_qs']
+            for k, v in params.items():
+                self.assertIn(f'{k}={v}'.replace(' ', '+'), qs,
+                              f'{url}: "{k}" sahifa havolasida yo\'q')
+            self.assertNotIn('page=', qs, url)
+
+    def test_every_pagination_block_uses_the_shared_partial(self):
+        import glob
+        import os
+        import re
+        base = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'templates', 'inventory')
+        bad = []
+        for f in glob.glob(os.path.join(base, '*.html')):
+            if os.path.basename(f) == '_pagination.html':
+                continue
+            src = open(f, encoding='utf-8').read()
+            if re.search(r'class="pagination', src):
+                bad.append(os.path.basename(f))
+        self.assertEqual(bad, [], "qo'lda yozilgan sahifalash: " + ', '.join(bad))
+
+    # ---- CSV ----
+    def test_every_export_has_the_bom_and_a_filename(self):
+        for url, params in (('/sales/', {'export': 'csv'}),
+                            ('/audit/', {'export': 'csv'}),
+                            ('/customers/', {'export': 'csv'})):
+            r = self.c.get(url, params)
+            self.assertEqual(r.status_code, 200, url)
+            self.assertIn('text/csv', r['Content-Type'], url)
+            self.assertIn('attachment; filename=', r['Content-Disposition'], url)
+            self.assertTrue(r.content.startswith(b'\xef\xbb\xbf'),
+                            f'{url}: BOM yo\'q — Excel harflarni buzadi')
+
+    def test_csv_injection_is_neutralised(self):
+        from inventory.web import csv_safe
+        for bad in ('=cmd|calc', '+1', '-1+2', '@SUM(1)', '\tx'):
+            self.assertTrue(str(csv_safe(bad)).startswith("'"), bad)
+        self.assertEqual(csv_safe('Koylak'), 'Koylak')
+        self.assertEqual(csv_safe(None), '')

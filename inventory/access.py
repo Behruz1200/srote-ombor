@@ -95,3 +95,24 @@ def _user_branch_or_403(request):
         return any_shift.branch
 
     return Branch.objects.filter(is_active=True).first()
+
+
+# ---------------------------------------------------------------- CORE-3
+# POS endpoint'larining boshlanishi 17 marta bir xil yozilgan edi:
+#   POST tekshiruvi -> JSON o'qish -> filialni aniqlash -> 403.
+# Endi bitta dekorator. `request.branch` va `request.json` tayyor keladi.
+
+def _resolve_branch(request):
+    from .web import api_err
+    branch = _user_branch_or_403(request)
+    if branch is None:
+        return api_err('no branch', 403)
+    request.branch = branch
+    return None
+
+
+def pos_api(view=None, *, need_body=True, need_branch=True):
+    """POST + JSON + (ixtiyoriy) filial. request.json / request.branch."""
+    from .web import json_post
+    return json_post(view, need_body=need_body,
+                     resolve=_resolve_branch if need_branch else None)
