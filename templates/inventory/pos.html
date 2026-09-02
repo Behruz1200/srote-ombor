@@ -1417,14 +1417,9 @@ body.pos-wholesale #wsBanner { display: flex !important; }
   const catWrap = document.getElementById('coCats');
   let cat = 'lunch';
 
-  function csrf() {
-    // SW-4: keshlangan sahifadagi ESKI token emas — JONLI sessiya cookie'sini
-    // o'qiymiz. Umumiy kassada B kassir A ning tokeni bilan 403 olmasin.
-    const m = document.cookie.match(/(?:^|;)\s*csrftoken\s*=\s*([^;]+)/);
-    if (m) return decodeURIComponent(m[1]);
-    const el = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]');
-    return el ? el.value : '';
-  }
+  // SW-4/CORE-6: keshlangan sahifadagi ESKI token emas — JONLI sessiya
+  // cookie'si. Ta'rif static/js/yurit-common.js da (Y.csrf).
+  const csrf = Y.csrf;
   function notify(msg, type) {
     if (typeof setStatus === 'function') setStatus(msg, type);
   }
@@ -1480,27 +1475,17 @@ body.pos-wholesale #wsBanner { display: flex !important; }
 </script>
 
 <!-- Kamera bilan skanerlash (telefon) — savatga to'g'ridan-to'g'ri qo'shadi -->
-<div class="modal fade" id="posScanModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-camera"></i> Kamera bilan skanerlash</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="posScanStatus" class="alert alert-info py-2 mb-2">Kamerani yuklayapti...</div>
-        <div id="posScanReader" style="width:100%;"></div>
-        <div class="small text-muted mt-2">
-          Skanerlangan mahsulot avtomatik savatga qo'shiladi — ketma-ket skanerlayvering.
-        </div>
-        <div class="small mt-1">Skanlar: <strong id="posScanCount">0</strong></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tugatish</button>
-      </div>
+{% modal "posScanModal" title="Kamera bilan skanerlash" icon="bi-camera" aria_hidden=1 %}
+    <div id="posScanStatus" class="alert alert-info py-2 mb-2">Kamerani yuklayapti...</div>
+    <div id="posScanReader" style="width:100%;"></div>
+    <div class="small text-muted mt-2">
+      Skanerlangan mahsulot avtomatik savatga qo'shiladi — ketma-ket skanerlayvering.
     </div>
-  </div>
-</div>
+    <div class="small mt-1">Skanlar: <strong id="posScanCount">0</strong></div>
+    {% modalfooter %}
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tugatish</button>
+    {% endmodalfooter %}
+{% endmodal %}
 
 <script src="{% static "vendor/html5-qrcode.min.js" %}"></script>
 <script>
@@ -1568,13 +1553,8 @@ body.pos-wholesale #wsBanner { display: flex !important; }
 
 <form id="posCsrfForm" style="display:none">{% csrf_token %}</form>
 <script>
-// SW-4: JONLI sessiya cookie'sidan (keshlangan sahifadagi eski token emas).
-const CSRF = (function () {
-    const m = document.cookie.match(/(?:^|;)\s*csrftoken\s*=\s*([^;]+)/);
-    if (m) return decodeURIComponent(m[1]);
-    const el = document.querySelector('#posCsrfForm input[name=csrfmiddlewaretoken]');
-    return el ? el.value : '';
-})();
+// SW-4/CORE-6: JONLI sessiya cookie'sidan (keshlangan eski token emas).
+const CSRF = Y.csrf();
 // Patch 1: jonli prepend qilinган qator uchun kerak (kassir nomi + to'lov yorlig'i).
 // esc() orqali o'tadi (SEC-11).
 const CURRENT_USER = "{{ request.user.username|escapejs }}";

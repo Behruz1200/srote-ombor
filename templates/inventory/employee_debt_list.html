@@ -4,21 +4,14 @@
 
 {% block content %}
 <div class="container dash-page">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Qarz daftari</span>
-                <h1 class="dash-hero__title"><i class="bi bi-person-badge"></i> Xodim qarzlari</h1>
-                <p class="dash-hero__sub">Xodimlar do'kondan ojligacha qarzga olgan tovarlar.
-                    Sotuvga kiritilmaydi — kassa to'g'ri qoladi.</p>
-            </div>
+    {% hero "Xodim qarzlari" icon="bi-person-badge" eyebrow="Qarz daftari" sub="Xodimlar do'kondan ojligacha qarzga olgan tovarlar. Sotuvga kiritilmaydi — kassa to'g'ri qoladi." %}
+        {% heroextra %}
             <div class="text-end">
-                <div class="small text-uppercase" style="color:var(--yrt-fg-muted)">Jami ochiq qarz</div>
-                <div style="font-size:1.8rem;font-weight:800;color:var(--yrt-danger)">{{ total_open|som }} <span class="small">so'm</span></div>
-            </div>
-        </div>
-    </header>
+                            <div class="small text-uppercase" style="color:var(--yrt-fg-muted)">Jami ochiq qarz</div>
+                            <div style="font-size:1.8rem;font-weight:800;color:var(--yrt-danger)">{{ total_open|som }} <span class="small">so'm</span></div>
+                        </div>
+        {% endheroextra %}
+    {% endhero %}
 
     <div class="row g-3">
         <!-- Yangi qarz qo'shish -->

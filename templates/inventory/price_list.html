@@ -257,12 +257,7 @@
     if (!table) return;
     const body = table.querySelector('tbody');
 
-    function num(s) {
-        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
-        if (s === '' || s === '-' || s === '.') return null;
-        const v = parseFloat(s);
-        return isNaN(v) ? null : v;
-    }
+    const num = Y.num;      // CORE-6: ta'rif static/js/yurit-common.js da
     const asInt = v => String(Math.round(v));
     function asMarja(v) {
         const r = Math.round(v * 10) / 10;

@@ -8,25 +8,19 @@
 <div class="container dash-page">
     <a href="{% url 'stocktake_list' %}" class="btn btn-link p-0 mb-2">← Ro'yxat</a>
 
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Inventarizatsiya sessiyasi</span>
-                <h1 class="dash-hero__title"><i class="bi bi-clipboard-check"></i> Sessiya #{{ session.pk }}</h1>
-                <p class="dash-hero__sub">
-                    <span><i class="bi bi-building"></i> {{ session.branch.name }}</span>
-                    <span>·</span>
-                    <span><i class="bi bi-person"></i> {{ session.started_by.username }}</span>
-                </p>
-            </div>
-            <div class="dash-hero__actions">
-                <span class="dash-pill dash-pill--{% if session.status == 'applied' %}success{% elif session.status == 'open' %}warn{% else %}muted{% endif %}">
-                    {{ session.get_status_display }}
-                </span>
-            </div>
-        </div>
-    </header>
+    {% hero "" icon="bi-clipboard-check" eyebrow="Inventarizatsiya sessiyasi" %}
+        {% herotitle %}
+            Sessiya #{{ session.pk }}
+        {% endherotitle %}
+        {% herosub %}
+            <span><i class="bi bi-building"></i> {{ session.branch.name }}</span>
+            <span>·</span>
+            <span><i class="bi bi-person"></i> {{ session.started_by.username }}</span>
+        {% endherosub %}
+        <span class="dash-pill dash-pill--{% if session.status == 'applied' %}success{% elif session.status == 'open' %}warn{% else %}muted{% endif %}">
+            {{ session.get_status_display }}
+        </span>
+    {% endhero %}
 
     <!-- Sessiya xulosasi — KPI strip -->
     <section class="dash-kpis dash-kpis--four yrt-stagger" aria-label="Sessiya xulosasi">
@@ -176,28 +170,18 @@
 </div>
 
 <!-- Scanner modal -->
-<div class="modal fade" id="scannerModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-qr-code-scan"></i> Skaner</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="scannerStatus" class="alert alert-info py-2 mb-2">
-                    Kamerani yuklayapti...
-                </div>
-                <div id="scannerReader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
-                <div class="text-center small text-muted mt-2">
-                    Kodni o'qigach, mos qator avtomatik focus qilinadi va +1 ga oshiriladi.
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Yopish</button>
-            </div>
-        </div>
+{% modal "scannerModal" title="Skaner" icon="bi-qr-code-scan" dialog_class="modal-lg modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable" %}
+    <div id="scannerStatus" class="alert alert-info py-2 mb-2">
+        Kamerani yuklayapti...
     </div>
-</div>
+    <div id="scannerReader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+    <div class="text-center small text-muted mt-2">
+        Kodni o'qigach, mos qator avtomatik focus qilinadi va +1 ga oshiriladi.
+    </div>
+    {% modalfooter %}
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Yopish</button>
+    {% endmodalfooter %}
+{% endmodal %}
 
 <script>
 (function() {

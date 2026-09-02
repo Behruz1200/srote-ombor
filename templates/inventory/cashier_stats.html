@@ -190,14 +190,7 @@
 (function() {
     if (window.ChartDataLabels) Chart.register(ChartDataLabels);
     /* Uzbek-friendly compact: 2 412 000 -> "2.4mln" */
-    function shortNum(v) {
-        if (v == null || v === 0) return v === 0 ? '0' : '';
-        const a = Math.abs(v);
-        if (a >= 1000000000) return (v/1000000000).toFixed(1).replace('.0','') + 'mlrd';
-        if (a >= 1000000)    return (v/1000000).toFixed(1).replace('.0','') + 'mln';
-        if (a >= 1000)       return (v/1000).toFixed(a >= 10000 ? 0 : 1).replace('.0','') + 'k';
-        return Math.round(v);
-    }
+    const shortNum = Y.fmtShort;   // CORE-6: ta'rif static/js/yurit-common.js da
     function css(name, fb) {
         return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
     }

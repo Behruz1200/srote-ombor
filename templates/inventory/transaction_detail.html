@@ -1,31 +1,26 @@
 {% extends 'inventory/base.html' %}
+{% load yurit_extras %}
 {% load yurit_extras static %}
 
 {% block title %}Chek #{{ txn.pk }} — yurit{% endblock %}
 
 {% block content %}
 <div class="container dash-page">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Chek tafsiloti</span>
-                <h1 class="dash-hero__title"><i class="bi bi-receipt"></i> Chek #{{ txn.pk }}</h1>
-                <p class="dash-hero__sub">
-                    <span><i class="bi bi-building"></i> {{ txn.branch.name }}</span>
-                    <span><i class="bi bi-clock"></i> {{ txn.sold_at|date:"d.m.Y H:i" }}</span>
-                </p>
-            </div>
-            <div class="dash-hero__actions">
-                <button onclick="window.print()" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-printer"></i> <span>Chop etish</span>
-                </button>
-                <a href="{% url 'lookup' %}" class="dash-btn dash-btn--primary">
-                    <i class="bi bi-plus-lg"></i> <span>Yangi sotuv</span>
-                </a>
-            </div>
-        </div>
-    </header>
+    {% hero "" icon="bi-receipt" eyebrow="Chek tafsiloti" %}
+        {% herotitle %}
+            Chek #{{ txn.pk }}
+        {% endherotitle %}
+        {% herosub %}
+            <span><i class="bi bi-building"></i> {{ txn.branch.name }}</span>
+            <span><i class="bi bi-clock"></i> {{ txn.sold_at|date:"d.m.Y H:i" }}</span>
+        {% endherosub %}
+        <button onclick="window.print()" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-printer"></i> <span>Chop etish</span>
+        </button>
+        <a href="{% url 'lookup' %}" class="dash-btn dash-btn--primary">
+            <i class="bi bi-plus-lg"></i> <span>Yangi sotuv</span>
+        </a>
+    {% endhero %}
 
     <!-- Tezkor xulosa (chop etishda yashiriladi) -->
     <section class="dash-kpis dash-kpis--four yrt-stagger d-print-none" aria-label="Chek xulosasi">

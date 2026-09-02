@@ -1,0 +1,31 @@
+{% comment %}
+CORE-5 — Bootstrap modal QOBIG'I bitta joyda.
+
+Modalning tashqi 8 qatori (modal / modal-dialog / modal-content /
+modal-header / btn-close / modal-body / modal-footer) 20 dan ortiq
+marta qo'lda yozilgan edi. Ichi har xil — u yerda takror yo'q, shu
+bois faqat QOBIQ umumiylashtirildi.
+
+Ishlatish:
+    {% templatetag openblock %} modal "posScanModal" title="Kamera bilan skanerlash"
+        icon="bi-camera" {% templatetag closeblock %}
+        ...tana...
+        {% templatetag openblock %} modalfooter {% templatetag closeblock %}...{% templatetag openblock %} endmodalfooter {% templatetag closeblock %}
+    {% templatetag openblock %} endmodal {% templatetag closeblock %}
+{% endcomment %}
+<div class="modal fade" id="{{ id }}" tabindex="-1"{% if aria_hidden %} aria-hidden="true"{% endif %}>
+  <div class="modal-dialog {{ dialog_class|default:"modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable" }}">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{% if icon %}<i class="bi {{ icon }}"></i> {% endif %}{{ title }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+{{ body }}
+      </div>
+      {% if footer %}<div class="modal-footer">
+{{ footer }}
+      </div>{% endif %}
+    </div>
+  </div>
+</div>

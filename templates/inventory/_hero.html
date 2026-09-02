@@ -1,0 +1,31 @@
+{% comment %}
+CORE-4 — sahifa sarlavhasi (dash-hero) BITTA joyda.
+
+Bu blok 40 marta, 33 faylda AYNAN bir xil yozilgan edi: 7 qatorlik
+skelet (glow / inner / heading / eyebrow / title / sub) va faqat matn
+bilan ikonka farq qilardi. Bittasida klass nomi noto'g'ri yozilsa ham
+hech kim sezmasdi, dizaynni o'zgartirish esa 33 faylni tahrirlashni
+talab qilardi.
+
+Ishlatish (yurit_extras dagi {% templatetag openblock %} hero {% templatetag closeblock %} tegi orqali):
+
+    {% templatetag openblock %} hero "Audit log" icon="bi-clipboard-data"
+        eyebrow="Compliance &amp; nazorat"
+        sub="Tizimda kim, qachon, nima qildi." {% templatetag closeblock %}
+        <a href="..." class="dash-btn">...</a>      {# ixtiyoriy amallar #}
+    {% templatetag openblock %} endhero {% templatetag closeblock %}
+{% endcomment %}
+<header class="dash-hero">
+    <div class="dash-hero__glow"></div>
+    <div class="dash-hero__inner">
+        <div class="dash-hero__heading">
+            {% if eyebrow %}<span class="dash-hero__eyebrow"><span class="dash-pulse"></span> {{ eyebrow }}</span>{% endif %}
+            <h1 class="dash-hero__title">{% if icon %}<i class="bi {{ icon }}"></i> {% endif %}{{ title }}</h1>
+            {% if sub %}<p class="dash-hero__sub">{{ sub }}</p>{% endif %}
+        </div>
+        {% if extra %}{{ extra }}{% endif %}
+        {% if actions %}<div class="dash-hero__actions">
+            {{ actions }}
+        </div>{% endif %}
+    </div>
+</header>

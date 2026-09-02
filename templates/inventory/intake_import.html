@@ -6,23 +6,14 @@
 
 {% block content %}
 <div class="dash-page">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Excel import</span>
-                <h1 class="dash-hero__title"><i class="bi bi-file-earmark-spreadsheet"></i> Ommaviy qabul (xlsx)</h1>
-                <p class="dash-hero__sub">
-                    <span>Shablonni to'ldiring — mahsulot, turlar, shtrix-kodlar bir yuklashda kiradi</span>
-                </p>
-            </div>
-            <div class="dash-hero__actions">
-                <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-arrow-left"></i> <span>Qabulga qaytish</span>
-                </a>
-            </div>
-        </div>
-    </header>
+    {% hero "Ommaviy qabul (xlsx)" icon="bi-file-earmark-spreadsheet" eyebrow="Excel import" %}
+        {% herosub %}
+            <span>Shablonni to'ldiring — mahsulot, turlar, shtrix-kodlar bir yuklashda kiradi</span>
+        {% endherosub %}
+        <a href="{% url 'intake_new' %}" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-arrow-left"></i> <span>Qabulga qaytish</span>
+        </a>
+    {% endhero %}
 
     <div class="card p-3 mb-3">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">

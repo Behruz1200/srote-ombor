@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load yurit_extras %}
 {% load static %}
 {% load yurit_extras l10n %}
 
@@ -9,25 +10,16 @@
 <div class="container-fluid px-3 dash-page">
 
     <!-- ── Aurora hero header + filter row ──────────────────────────── -->
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow">
-                    <span class="dash-pulse"></span>
-                    Biznes tahlili · {{ period_label|default:"7 kun" }}
-                </span>
-                <h1 class="dash-hero__title">
-                    <i class="bi bi-graph-up-arrow"></i> Tahlil
-                </h1>
-                <p class="dash-hero__sub">
-                    <span><i class="bi bi-calendar3"></i> {{ d_start }} — {{ d_end }} ({{ days }} kun)</span>
-                    {% if selected_branch %}
-                        <span><i class="bi bi-building"></i> {{ selected_branch.name }}</span>
-                    {% endif %}
-                </p>
-            </div>
-            <div class="dash-hero__actions">
+    {% hero "Tahlil" icon="bi-graph-up-arrow" %}
+        {% heroeyebrow %}
+            Biznes tahlili · {{ period_label|default:"7 kun" }}
+        {% endheroeyebrow %}
+        {% herosub %}
+            <span><i class="bi bi-calendar3"></i> {{ d_start }} — {{ d_end }} ({{ days }} kun)</span>
+            {% if selected_branch %}
+                <span><i class="bi bi-building"></i> {{ selected_branch.name }}</span>
+            {% endif %}
+        {% endherosub %}
                 <div class="dropdown">
                     <button type="button"
                             class="dash-btn dash-btn--ghost dropdown-toggle"
@@ -100,9 +92,7 @@
                         {% endfor %}
                     </select>
                 </form>
-            </div>
-        </div>
-    </header>
+    {% endhero %}
 
     <!-- ── KPI hero strip (lead + 3 satellites) ─────────────────────── -->
     <section class="dash-kpis" role="group" aria-label="Davr ko'rsatkichlari">
@@ -1115,14 +1105,7 @@
         }, opts || {});
     }
     /* Compact number formatter (Uzbek-friendly: 2 412 000 -> "2.4mln") */
-    function shortNum(v) {
-        if (v == null || v === 0) return v === 0 ? '0' : '';
-        const a = Math.abs(v);
-        if (a >= 1000000000) return (v/1000000000).toFixed(1).replace('.0','') + 'mlrd';
-        if (a >= 1000000)    return (v/1000000).toFixed(1).replace('.0','') + 'mln';
-        if (a >= 1000)       return (v/1000).toFixed(a >= 10000 ? 0 : 1).replace('.0','') + 'k';
-        return Math.round(v);
-    }
+    const shortNum = Y.fmtShort;   // CORE-6: ta'rif static/js/yurit-common.js da
     const somTickCb = shortNum;       // alias for axis ticks
     function fmtSom(n) {
         return Math.round(n || 0).toLocaleString('en-US').replace(/,/g," ") + " so'm";

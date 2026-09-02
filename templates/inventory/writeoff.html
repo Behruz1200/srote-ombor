@@ -5,16 +5,7 @@
 
 {% block content %}
 <div class="container dash-page">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Ombor</span>
-                <h1 class="dash-hero__title"><i class="bi bi-trash3"></i> Tovarni hisobdan chiqarish</h1>
-                <p class="dash-hero__sub">Shikast, yo'qolish, buzilish yoki yetkazuvchiga qaytarilgan tovarni qoldiqdan chiqaring — bu yozuv ombor tenglamasiga kiradi.</p>
-            </div>
-        </div>
-    </header>
+    {% hero "Tovarni hisobdan chiqarish" icon="bi-trash3" eyebrow="Ombor" sub="Shikast, yo'qolish, buzilish yoki yetkazuvchiga qaytarilgan tovarni qoldiqdan chiqaring — bu yozuv ombor tenglamasiga kiradi." %}{% endhero %}
 
     <div class="row justify-content-center align-items-start g-3">
         <div class="col-lg-5">

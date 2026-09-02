@@ -348,31 +348,21 @@
 </div>
 
 <!-- Kamera skaner modali (telefon uchun) -->
-<div class="modal fade" id="invScanModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-camera"></i> Kamera bilan skanerlash</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="invScanTarget" class="alert alert-secondary py-2 mb-2" style="display:none;"></div>
-        <div id="invScanStatus" class="alert alert-info py-2 mb-2">
-          <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
-        </div>
-        <div id="invScanReader" style="width:100%; max-width:480px; margin:0 auto;"></div>
-        <div class="text-center mt-2 small text-muted">
-          Har bir kod ro'yxatdagi keyingi bo'sh katakka tushadi — tepadan pastga.
-        </div>
-        <div id="invScanList" class="d-flex flex-wrap gap-1 mt-2"></div>
-      </div>
-      <div class="modal-footer">
+{% modal "invScanModal" title="Kamera bilan skanerlash" icon="bi-camera" %}
+    <div id="invScanTarget" class="alert alert-secondary py-2 mb-2" style="display:none;"></div>
+    <div id="invScanStatus" class="alert alert-info py-2 mb-2">
+      <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
+    </div>
+    <div id="invScanReader" style="width:100%; max-width:480px; margin:0 auto;"></div>
+    <div class="text-center mt-2 small text-muted">
+      Har bir kod ro'yxatdagi keyingi bo'sh katakka tushadi — tepadan pastga.
+    </div>
+    <div id="invScanList" class="d-flex flex-wrap gap-1 mt-2"></div>
+    {% modalfooter %}
         <span class="me-auto small text-muted"><strong id="invScanCount">0</strong> ta skanerlandi</span>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tugatish</button>
-      </div>
-    </div>
-  </div>
-</div>
+    {% endmodalfooter %}
+{% endmodal %}
 
 <style>
 /* Bir mahsulotning bir nechta turi — chap chekka bilan bog'lab ko'rsatamiz */
@@ -395,7 +385,7 @@
 <script src="{% static "vendor/html5-qrcode.min.js" %}"></script>
 <script>
 (function () {
-    const CSRF = document.querySelector('#csrfForm input[name=csrfmiddlewaretoken]').value;
+    const CSRF = Y.csrf();   // CORE-6: keshlangan ESKI token emas, jonli cookie
     const imgEl = document.getElementById('invImage');
     const previewWrap = document.getElementById('invPreviewWrap');
     const chipsEl = document.getElementById('pageChips');
@@ -420,12 +410,7 @@
         [...document.querySelectorAll('#catOptions option')]
             .map(o => o.value.trim().toLowerCase()));
 
-    function num(s) {
-        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
-        if (s === '' || s === '-' || s === '.') return null;
-        const v = parseFloat(s);
-        return isNaN(v) ? null : v;
-    }
+    const num = Y.num;      // CORE-6: ta'rif static/js/yurit-common.js da
     function fmt(n) {
         return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
     }

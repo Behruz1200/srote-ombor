@@ -6200,3 +6200,171 @@ class Core3OneRequestShape(TestCase):
             self.assertTrue(str(csv_safe(bad)).startswith("'"), bad)
         self.assertEqual(csv_safe('Koylak'), 'Koylak')
         self.assertEqual(csv_safe(None), '')
+
+
+class Core4SharedPageChrome(TestCase):
+    """CORE-4/5: sahifa sarlavhasi va modal qobig'i — bitta joyda.
+
+    `dash-hero` bloki 40 marta, 33 faylda AYNAN bir xil yozilgan edi.
+    Dizaynni o'zgartirish 33 faylni tahrirlashni talab qilardi va bitta
+    faylda klass nomi noto'g'ri yozilsa hech kim sezmasdi.
+    """
+
+    # Ataylab qoldirilgan uchta istisno — ularning ichi haqiqatan boshqa:
+    HERO_EXCEPTIONS = {
+        'product_detail.html',      # rasm bilan yonma-yon maxsus joylashuv
+        'customer_detail.html',     # sarlavha ichida teglar va izoh bloki
+        'shift_returns.html',       # tarixan `dash-hero__glow` siz
+    }
+
+    def _templates(self):
+        import glob
+        import os
+        base = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'templates')
+        return glob.glob(os.path.join(base, '**', '*.html'), recursive=True)
+
+    def test_page_headers_use_the_shared_hero(self):
+        import os
+        bad = []
+        for f in self._templates():
+            name = os.path.basename(f)
+            if name in self.HERO_EXCEPTIONS or name == '_hero.html':
+                continue
+            if '<header class="dash-hero">' in open(f, encoding='utf-8').read():
+                bad.append(name)
+        self.assertEqual(bad, [], "qo'lda yozilgan sarlavha: " + ', '.join(bad))
+
+    def test_the_hero_tag_renders_the_expected_markup(self):
+        from django.template import Context, Template
+        html = Template(
+            '{% load yurit_extras %}'
+            '{% hero "Sarlavha" icon="bi-x" eyebrow="Ko\'z" sub="Izoh" %}'
+            '<a href="#">Tugma</a>{% endhero %}'
+        ).render(Context({}))
+        for piece in ('dash-hero__glow', 'dash-hero__inner',
+                      'dash-hero__heading', 'dash-hero__eyebrow',
+                      'dash-pulse', 'dash-hero__title', 'bi bi-x',
+                      'Sarlavha', 'dash-hero__sub', 'Izoh',
+                      'dash-hero__actions', '>Tugma<'):
+            self.assertIn(piece, html, piece)
+
+    def test_the_hero_tag_skips_empty_parts(self):
+        from django.template import Context, Template
+        html = Template('{% load yurit_extras %}'
+                        '{% hero "Faqat sarlavha" %}{% endhero %}'
+                        ).render(Context({}))
+        self.assertNotIn('dash-hero__eyebrow', html)
+        self.assertNotIn('dash-hero__sub', html)
+        self.assertNotIn('dash-hero__actions', html)
+        self.assertIn('Faqat sarlavha', html)
+
+    def test_rich_slots_work(self):
+        from django.template import Context, Template
+        html = Template(
+            '{% load yurit_extras %}'
+            '{% hero "" icon="bi-y" %}'
+            '{% herotitle %}Chek #{{ n }}{% endherotitle %}'
+            '{% herosub %}<span>HTML ham</span>{% endherosub %}'
+            '<button>Amal</button>'
+            '{% endhero %}'
+        ).render(Context({'n': 7}))
+        self.assertIn('Chek #7', html)
+        self.assertIn('<span>HTML ham</span>', html)
+        self.assertIn('<button>Amal</button>', html)
+        # slot amallar orasida IKKI MARTA chizilmasin
+        self.assertEqual(html.count('Chek #7'), 1)
+        self.assertEqual(html.count('HTML ham'), 1)
+
+    def test_the_modal_tag_renders_the_expected_shell(self):
+        from django.template import Context, Template
+        html = Template(
+            '{% load yurit_extras %}'
+            '{% modal "testModal" title="Sarlavha" icon="bi-camera" %}'
+            '<p>Tana</p>'
+            '{% modalfooter %}<button>Yopish</button>{% endmodalfooter %}'
+            '{% endmodal %}'
+        ).render(Context({}))
+        for piece in ('id="testModal"', 'modal-dialog-centered',
+                      'modal-content', 'modal-header', 'btn-close',
+                      'modal-body', '<p>Tana</p>', 'modal-footer',
+                      '<button>Yopish</button>', 'bi bi-camera'):
+            self.assertIn(piece, html, piece)
+        self.assertEqual(html.count('Tana'), 1)
+
+
+class Core6SharedJsHelpers(TestCase):
+    """CORE-6: shablon ichidagi takrorlangan JS yordamchilari.
+
+    `function num(s)` 5 faylda AYNAN bir xil, qisqa son formati 4 faylda
+    aynan bir xil edi; CSRF tokenni olish esa UCH XIL usulda, ulardan
+    ikkitasi NOTO'G'RI (keshlangan eski tokenni o'qiydi).
+    """
+
+    def _templates(self):
+        import glob
+        import os
+        base = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'templates')
+        return glob.glob(os.path.join(base, '**', '*.html'), recursive=True)
+
+    def test_common_js_is_loaded_before_page_scripts(self):
+        import os
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = open(os.path.join(base, 'templates', 'inventory', 'base.html'),
+                   encoding='utf-8').read()
+        self.assertIn('js/yurit-common.js', src)
+        # <head> ichida — sahifa skriptlaridan OLDIN
+        self.assertLess(src.index('js/yurit-common.js'), src.index('</head>'))
+
+    def test_no_template_redefines_the_shared_helpers(self):
+        import os
+        import re
+        bad = []
+        for f in self._templates():
+            src = open(f, encoding='utf-8').read()
+            name = os.path.basename(f)
+            if re.search(r'function num\(s\)\s*\{', src):
+                bad.append(f'{name}: o\'z num() nusxasi')
+            if re.search(r"toFixed\(1\)\.replace\('\.0',\s*''\)\s*\+\s*'mlrd'",
+                         src):
+                bad.append(f'{name}: o\'z qisqa son formati')
+        self.assertEqual(bad, [], '; '.join(bad))
+
+    def test_no_template_reads_a_stale_csrf_token(self):
+        """Keshlangan sahifada `{{ csrf_token }}` ESKI bo'ladi.
+
+        Umumiy kassada A kassir chiqib B kirsa, B ning so'rovi 403
+        bo'lardi. To'g'ri manba — jonli `csrftoken` cookie'si (Y.csrf()).
+        """
+        import os
+        import re
+        bad = []
+        for f in self._templates():
+            src = open(f, encoding='utf-8').read()
+            name = os.path.basename(f)
+            for m in re.finditer(r"(const|let|var)\s+CSRF\s*=\s*(.+)", src):
+                val = m.group(2)
+                if 'Y.csrf()' in val or 'document.cookie' in val:
+                    continue
+                bad.append(f'{name}: CSRF = {val.strip()[:60]}')
+        self.assertEqual(bad, [], '; '.join(bad))
+
+    def test_the_js_and_python_number_parsers_agree(self):
+        """Brauzer ko'rsatgan narx bazadagi narx bilan bir xil bo'lsin.
+
+        Eski JS nusxasi vergulni shunchaki O'CHIRARDI ("50,5" -> 505),
+        server esa o'nlik ajratgich deb o'qirdi (50.5). Ya'ni kassir
+        ko'rgan raqam bilan saqlangan raqam BOSHQA edi.
+        """
+        import os
+        import re
+        from inventory.money import parse_money
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        js = open(os.path.join(base, 'static', 'js', 'yurit-common.js'),
+                  encoding='utf-8').read()
+        self.assertIn("replace(/,/g, '.')", js,
+                      'JS vergulni o\'nlik ajratgich deb qabul qilsin')
+        # Python tomoni ham xuddi shunday
+        self.assertEqual(parse_money('50,5'), Decimal('50.5'))
+        self.assertEqual(parse_money('12 345,50'), Decimal('12345.50'))

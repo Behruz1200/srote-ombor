@@ -1,25 +1,19 @@
 {% extends 'inventory/base.html' %}
+{% load yurit_extras %}
 {% load yurit_extras static %}
 {% block title %}Etiketkalar — yurit{% endblock %}
 {% block backbar %}{% endblock %}
 
 {% block content %}
 <div class="dash-page no-print">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Etiketka</span>
-                <h1 class="dash-hero__title"><i class="bi bi-tag"></i> Termal etiketkalar</h1>
-                <p class="dash-hero__sub"><span>{{ labels|length }} ta yorliq · har biri: barcode + QR + narx</span></p>
-            </div>
-            <div class="dash-hero__actions">
-                <button onclick="window.print()" class="dash-btn dash-btn--primary"><i class="bi bi-printer"></i> <span>Chop etish (dialog)</span></button>
-                <a href="{% url 'price_labels' %}?ids={{ ids }}&size=58x40&back={{ back_url|urlencode }}" class="dash-btn dash-btn--ghost"><i class="bi bi-tag"></i> <span>Narx etiketkasi</span></a>
-                <a href="{{ back_url|default:'/products/' }}" id="backBtn" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Orqaga</span></a>
-            </div>
-        </div>
-    </header>
+    {% hero "Termal etiketkalar" icon="bi-tag" eyebrow="Etiketka" %}
+        {% herosub %}
+            <span>{{ labels|length }} ta yorliq · har biri: barcode + QR + narx</span>
+        {% endherosub %}
+        <button onclick="window.print()" class="dash-btn dash-btn--primary"><i class="bi bi-printer"></i> <span>Chop etish (dialog)</span></button>
+        <a href="{% url 'price_labels' %}?ids={{ ids }}&size=58x40&back={{ back_url|urlencode }}" class="dash-btn dash-btn--ghost"><i class="bi bi-tag"></i> <span>Narx etiketkasi</span></a>
+        <a href="{{ back_url|default:'/products/' }}" id="backBtn" class="dash-btn dash-btn--ghost"><i class="bi bi-arrow-left"></i> <span>Orqaga</span></a>
+    {% endhero %}
     <div class="card p-3 mb-3">
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <label class="form-label mb-0" for="copiesSel">Har turdan nusxa:</label>

@@ -32,6 +32,8 @@
         })();
     </script>
     <script src="/static/js/i18n.js" defer></script>
+    {# CORE-6: umumiy JS (Y.csrf/num/money/post) — inline skriptlardan OLDIN. #}
+    <script src="{% static 'js/yurit-common.js' %}"></script>
     <style>
         /* Dark mode color variables (Bootstrap 5.3 native) */
         [data-bs-theme="dark"] body { background: #15171c; color: #d4d6db; }
@@ -3728,16 +3730,9 @@
     /* ── Shared Executive Glass chart helpers (window.srtChart) ──
        Avoids each chart page redefining the same utilities. */
     window.srtChart = window.srtChart || {
-        // Uzbek-compact: 2 412 000 -> "2.4mln"
-        shortSom(v) {
-            if (v == null) return '';
-            if (v === 0) return '0';
-            const a = Math.abs(v);
-            if (a >= 1e9) return (v/1e9).toFixed(1).replace('.0','') + 'mlrd';
-            if (a >= 1e6) return (v/1e6).toFixed(1).replace('.0','') + 'mln';
-            if (a >= 1e3) return (v/1e3).toFixed(a >= 1e4 ? 0 : 1).replace('.0','') + 'k';
-            return Math.round(v);
-        },
+        // CORE-6: ta'rif static/js/yurit-common.js da (Y.fmtShort).
+        // Ilgari shu funksiya to'rt joyda qayta yozilgan edi.
+        shortSom: Y.fmtShort,
         css(name, fb) {
             return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
         },

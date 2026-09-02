@@ -104,7 +104,7 @@ tugmalari bo'lishi kifoya.
     const modalEl = document.getElementById('refundModal');
     if (!modalEl) return;
     // O'z CSRF va fmt'i — boshqa skriptlarga bog'liq emas
-    const CSRF = '{{ csrf_token }}';
+    const CSRF = Y.csrf();   // CORE-6: keshlangan ESKI token emas, jonli cookie
     const fmt = (n) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
 
     let _bsModal = null;

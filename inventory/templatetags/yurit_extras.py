@@ -189,3 +189,169 @@ def audit_val(value):
     if isinstance(value, (list, tuple)):
         return mark_safe('<br>'.join(escape(str(x)[:120]) for x in value[:50]))
     return escape(str(value)[:200])
+
+
+# ===========================================================================
+# CORE-4 — sahifa sarlavhasi (dash-hero) bitta joyda
+# ===========================================================================
+# 40 ta blok, 33 ta fayl, aynan bir xil skelet. Endi bitta teg.
+
+from django.template import Node, TemplateSyntaxError   # noqa: E402
+from django.template.base import token_kwargs           # noqa: E402
+from django.template.loader import render_to_string     # noqa: E402
+
+
+class _HeroSlotNode(Node):
+    """{% herosub %} / {% heroeyebrow %} — HTML bo'lgan matn uchun.
+
+    Oddiy matnni teg argumenti sifatida yozish mumkin
+    (`sub="..."`), lekin ichida `<span>` yoki `{{ ... }}` bo'lsa
+    argumentga sig'maydi — o'sha holatda shu ichki teg ishlatiladi.
+    """
+
+    def __init__(self, slot, nodelist):
+        self.slot = slot
+        self.nodelist = nodelist
+
+    def render(self, context):
+        try:
+            slots = context.render_context[_HERO_SLOTS]
+        except KeyError:
+            slots = None
+        html = self.nodelist.render(context).strip()
+        if slots is not None:
+            slots[self.slot] = mark_safe(html)
+            return ''          # amallar orasida chizilmaydi
+        return html
+
+
+_HERO_SLOTS = object()
+
+
+class _HeroNode(Node):
+    def __init__(self, kwargs, nodelist):
+        self.kwargs = kwargs
+        self.nodelist = nodelist
+
+    def render(self, context):
+        ctx = {k: v.resolve(context) for k, v in self.kwargs.items()}
+        slots = {}
+        context.render_context[_HERO_SLOTS] = slots
+        try:
+            body = self.nodelist.render(context).strip()
+        finally:
+            # RenderContext.pop() Context APIsi — kalit bo'yicha o'chirmaydi.
+            try:
+                del context.render_context[_HERO_SLOTS]
+            except KeyError:
+                pass
+        ctx.update(slots)
+        ctx['actions'] = mark_safe(body) if body else ''
+        ctx.setdefault('title', '')
+        return render_to_string('inventory/_hero.html', ctx)
+
+
+def _slot_tag(name, slot):
+    def compile_slot(parser, token):
+        nodelist = parser.parse((f'end{name}',))
+        parser.delete_first_token()
+        return _HeroSlotNode(slot, nodelist)
+    return compile_slot
+
+
+register.tag('herosub', _slot_tag('herosub', 'sub'))
+register.tag('heroeyebrow', _slot_tag('heroeyebrow', 'eyebrow'))
+register.tag('herotitle', _slot_tag('herotitle', 'title'))
+# {% heroextra %} — sarlavha yonidagi standart bo'lmagan blok
+# (masalan "Jami ochiq qarz" ustuni). Amallar tugmasi EMAS.
+register.tag('heroextra', _slot_tag('heroextra', 'extra'))
+
+
+@register.tag('hero')
+def hero_tag(parser, token):
+    """{% hero "Sarlavha" icon=... eyebrow=... sub=... %} ... {% endhero %}"""
+    bits = token.split_contents()[1:]
+    kwargs = {}
+    title = None
+    if bits and '=' not in bits[0]:
+        title = parser.compile_filter(bits.pop(0))
+    kwargs = token_kwargs(bits, parser, support_legacy=False) if bits else {}
+    if bits:
+        raise TemplateSyntaxError(f'hero: tushunarsiz argument: {bits}')
+    if title is not None:
+        kwargs['title'] = title
+    if 'title' not in kwargs:
+        raise TemplateSyntaxError('hero: sarlavha (title) kerak')
+    nodelist = parser.parse(('endhero',))
+    parser.delete_first_token()
+    return _HeroNode(kwargs, nodelist)
+
+
+# ===========================================================================
+# CORE-5 — modal qobig'i bitta joyda
+# ===========================================================================
+
+_MODAL_SLOTS = object()
+
+
+class _ModalSlotNode(Node):
+    def __init__(self, slot, nodelist):
+        self.slot = slot
+        self.nodelist = nodelist
+
+    def render(self, context):
+        html = self.nodelist.render(context).strip()
+        try:
+            slots = context.render_context[_MODAL_SLOTS]
+        except KeyError:
+            return html
+        slots[self.slot] = mark_safe(html)
+        return ''
+
+
+class _ModalNode(Node):
+    def __init__(self, kwargs, nodelist):
+        self.kwargs = kwargs
+        self.nodelist = nodelist
+
+    def render(self, context):
+        ctx = {k: v.resolve(context) for k, v in self.kwargs.items()}
+        slots = {}
+        context.render_context[_MODAL_SLOTS] = slots
+        try:
+            body = self.nodelist.render(context).strip()
+        finally:
+            try:
+                del context.render_context[_MODAL_SLOTS]
+            except KeyError:
+                pass
+        ctx.update(slots)
+        ctx['body'] = mark_safe(body)
+        ctx.setdefault('footer', '')
+        return render_to_string('inventory/_modal.html', ctx)
+
+
+@register.tag('modal')
+def modal_tag(parser, token):
+    bits = token.split_contents()[1:]
+    kwargs = {}
+    mid = None
+    if bits and '=' not in bits[0]:
+        mid = parser.compile_filter(bits.pop(0))
+    kwargs = token_kwargs(bits, parser, support_legacy=False) if bits else {}
+    if bits:
+        raise TemplateSyntaxError(f'modal: tushunarsiz argument: {bits}')
+    if mid is not None:
+        kwargs['id'] = mid
+    if 'id' not in kwargs:
+        raise TemplateSyntaxError('modal: id kerak')
+    nodelist = parser.parse(('endmodal',))
+    parser.delete_first_token()
+    return _ModalNode(kwargs, nodelist)
+
+
+@register.tag('modalfooter')
+def modalfooter_tag(parser, token):
+    nodelist = parser.parse(('endmodalfooter',))
+    parser.delete_first_token()
+    return _ModalSlotNode('footer', nodelist)

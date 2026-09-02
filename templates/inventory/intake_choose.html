@@ -5,24 +5,14 @@
 
 {% block content %}
 <div class="container dash-page">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Yangi qabul</span>
-                <h1 class="dash-hero__title"><i class="bi bi-box-arrow-in-down"></i> Qabul rejimini tanlang</h1>
-                <p class="dash-hero__sub">Tezkor, matritsa yoki sessiya — vazifaga qarab tanlang.</p>
-            </div>
-            <div class="dash-hero__actions">
-                <a href="{% url 'intake_import' %}" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-file-earmark-spreadsheet"></i> <span>Excel import</span>
-                </a>
-                <a href="{% url 'supplier_list' %}" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-people"></i> <span>Yetkazib beruvchilar</span>
-                </a>
-            </div>
-        </div>
-    </header>
+    {% hero "Qabul rejimini tanlang" icon="bi-box-arrow-in-down" eyebrow="Yangi qabul" sub="Tezkor, matritsa yoki sessiya — vazifaga qarab tanlang." %}
+        <a href="{% url 'intake_import' %}" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-file-earmark-spreadsheet"></i> <span>Excel import</span>
+        </a>
+        <a href="{% url 'supplier_list' %}" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-people"></i> <span>Yetkazib beruvchilar</span>
+        </a>
+    {% endhero %}
 
     <!-- 3 ta kirish nuqtasi -->
     <div class="row g-3 mb-4">

@@ -8,41 +8,31 @@
 <div class="container-fluid px-3 dash-page">
 
     <!-- ── Aurora hero header ───────────────────────────────────────────── -->
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow">
-                    <span class="dash-pulse"></span>
-                    Live · {{ today|date:"l, d F Y" }}
-                </span>
-                <h1 class="dash-hero__title">Boshqaruv</h1>
-                <p class="dash-hero__sub">Bugungi savdo va omborning bir qarashdagi xulosasi.</p>
-            </div>
-            <div class="dash-hero__actions">
-                <a href="{% url 'pos_terminal' %}" class="dash-btn dash-btn--primary">
-                    <i class="bi bi-upc-scan"></i>
-                    <span>POS ochish</span>
-                </a>
-                <a href="{% url 'intake_mixed' %}" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-lightning-charge"></i>
-                    <span>Aralash qabul</span>
-                </a>
-                <a href="{% url 'insights' %}" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-graph-up-arrow"></i>
-                    <span>Tahlil</span>
-                </a>
-                <form method="post" action="{% url 'send_daily_summary_now' %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="dash-btn dash-btn--icon"
-                            title="Telegram'ga kunlik xulosa yuborish"
-                            aria-label="Telegram'ga kunlik xulosa yuborish">
-                        <i class="bi bi-telegram"></i>
-                    </button>
-                </form>
-            </div>
-        </div>
-    </header>
+    {% hero "Boshqaruv" sub="Bugungi savdo va omborning bir qarashdagi xulosasi." %}
+        {% heroeyebrow %}
+            Live · {{ today|date:"l, d F Y" }}
+        {% endheroeyebrow %}
+        <a href="{% url 'pos_terminal' %}" class="dash-btn dash-btn--primary">
+            <i class="bi bi-upc-scan"></i>
+            <span>POS ochish</span>
+        </a>
+        <a href="{% url 'intake_mixed' %}" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-lightning-charge"></i>
+            <span>Aralash qabul</span>
+        </a>
+        <a href="{% url 'insights' %}" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-graph-up-arrow"></i>
+            <span>Tahlil</span>
+        </a>
+        <form method="post" action="{% url 'send_daily_summary_now' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="dash-btn dash-btn--icon"
+                    title="Telegram'ga kunlik xulosa yuborish"
+                    aria-label="Telegram'ga kunlik xulosa yuborish">
+                <i class="bi bi-telegram"></i>
+            </button>
+        </form>
+    {% endhero %}
 
     <!-- ── KPI hero strip (lead + 3 satellites) ─────────────────────────── -->
     <section class="dash-kpis yrt-stagger" role="group" aria-label="Bugungi asosiy ko'rsatkichlar">
@@ -496,14 +486,7 @@
     if (window.ChartDataLabels) Chart.register(ChartDataLabels);
 
     /* Uzbek-friendly compact: 2 412 000 -> "2.4mln" */
-    function shortSom(v) {
-        if (v == null || v === 0) return v === 0 ? '0' : '';
-        const a = Math.abs(v);
-        if (a >= 1000000000) return (v/1000000000).toFixed(1).replace('.0','') + 'mlrd';
-        if (a >= 1000000)    return (v/1000000).toFixed(1).replace('.0','') + 'mln';
-        if (a >= 1000)       return (v/1000).toFixed(a >= 10000 ? 0 : 1).replace('.0','') + 'k';
-        return Math.round(v);
-    }
+    const shortSom = Y.fmtShort;   // CORE-6: ta'rif static/js/yurit-common.js da
     function srtCss(name, fb) {
         return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
     }

@@ -1,4 +1,5 @@
 {% extends 'inventory/base.html' %}
+{% load yurit_extras %}
 {% load static %}
 {% load yurit_extras l10n %}
 
@@ -7,32 +8,23 @@
 
 {% block content %}
 <div class="container dash-page">
-    <header class="dash-hero">
-        <div class="dash-hero__glow"></div>
-        <div class="dash-hero__inner">
-            <div class="dash-hero__heading">
-                <span class="dash-hero__eyebrow"><span class="dash-pulse"></span> Turlarni tahrirlash</span>
-                <h1 class="dash-hero__title"><i class="bi bi-table"></i> {{ product.name }}</h1>
-                <p class="dash-hero__sub">
-                    <span class="code-pill">{{ product.code }}</span>
-                    <span>·</span>
-                    <span>Rang, o'lcham, shtrix-kod — umumiy; narx va ombor — filial bo'yicha</span>
-                </p>
-            </div>
-            <div class="dash-hero__actions">
-                {% if variant_ids %}
-                <a href="{% url 'variant_labels' %}?ids={{ variant_ids }}&copies=1"
-                   class="dash-btn dash-btn--ghost"
-                   title="Har turga shtrix-kodli termal etiketka">
-                    <i class="bi bi-tag"></i> <span>Etiketka</span>
-                </a>
-                {% endif %}
-                <a href="{% url 'product_detail' product.code %}" class="dash-btn dash-btn--ghost">
-                    <i class="bi bi-arrow-left"></i> <span>Mahsulotga qaytish</span>
-                </a>
-            </div>
-        </div>
-    </header>
+    {% hero product.name icon="bi-table" eyebrow="Turlarni tahrirlash" %}
+        {% herosub %}
+            <span class="code-pill">{{ product.code }}</span>
+            <span>·</span>
+            <span>Rang, o'lcham, shtrix-kod — umumiy; narx va ombor — filial bo'yicha</span>
+        {% endherosub %}
+        {% if variant_ids %}
+        <a href="{% url 'variant_labels' %}?ids={{ variant_ids }}&copies=1"
+           class="dash-btn dash-btn--ghost"
+           title="Har turga shtrix-kodli termal etiketka">
+            <i class="bi bi-tag"></i> <span>Etiketka</span>
+        </a>
+        {% endif %}
+        <a href="{% url 'product_detail' product.code %}" class="dash-btn dash-btn--ghost">
+            <i class="bi bi-arrow-left"></i> <span>Mahsulotga qaytish</span>
+        </a>
+    {% endhero %}
 
     <div class="card p-3 mb-3">
         <form method="get" class="d-flex align-items-center gap-2 flex-wrap">
@@ -353,36 +345,26 @@ document.getElementById('editForm') && document.getElementById('editForm')
 </style>
 
 <!-- Kamera skaner modali (telefon uchun) -->
-<div class="modal fade" id="editScanModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-camera"></i> Kamera bilan skanerlash</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="editScanStatus" class="alert alert-info py-2 mb-2">
-          <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
-        </div>
-        <!-- Hozir qaysi turni skanerlash kerak -->
-        <div class="text-center p-2 mb-2 rounded" style="background:#EEF2FF; border:1px solid #C7D2FE;">
-          <div class="small text-muted">Hozir shu turni skanerlang:</div>
-          <div id="editScanTarget" style="font-size:1.3rem; font-weight:800; line-height:1.2;">—</div>
-          <div class="small text-muted mt-1">Bajarildi: <strong id="editScanProgress">0 / 0</strong></div>
-        </div>
-        <div id="editScanReader" style="width:100%; max-width:480px; margin:0 auto;"></div>
-        <div class="text-center mt-2 small text-muted">
-          Skanerlangach — keyingi tur avtomatik ko'rsatiladi. Modalni yopish shart emas.
-        </div>
-        <div id="editScanList" class="d-flex flex-wrap gap-1 mt-2"></div>
-      </div>
-      <div class="modal-footer">
+{% modal "editScanModal" title="Kamera bilan skanerlash" icon="bi-camera" %}
+    <div id="editScanStatus" class="alert alert-info py-2 mb-2">
+      <i class="bi bi-camera-video"></i> Kamerani yuklayapti...
+    </div>
+    <!-- Hozir qaysi turni skanerlash kerak -->
+    <div class="text-center p-2 mb-2 rounded" style="background:#EEF2FF; border:1px solid #C7D2FE;">
+      <div class="small text-muted">Hozir shu turni skanerlang:</div>
+      <div id="editScanTarget" style="font-size:1.3rem; font-weight:800; line-height:1.2;">—</div>
+      <div class="small text-muted mt-1">Bajarildi: <strong id="editScanProgress">0 / 0</strong></div>
+    </div>
+    <div id="editScanReader" style="width:100%; max-width:480px; margin:0 auto;"></div>
+    <div class="text-center mt-2 small text-muted">
+      Skanerlangach — keyingi tur avtomatik ko'rsatiladi. Modalni yopish shart emas.
+    </div>
+    <div id="editScanList" class="d-flex flex-wrap gap-1 mt-2"></div>
+    {% modalfooter %}
         <span class="me-auto small text-muted"><strong id="editScanCount">0</strong> ta skanerlandi</span>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tugatish</button>
-      </div>
-    </div>
-  </div>
-</div>
+    {% endmodalfooter %}
+{% endmodal %}
 
 <script>
 // ---- Shtrix-kod skaner: apparat (USB/BT) + kamera — tahrirlash jadvali ----
@@ -555,12 +537,7 @@ document.getElementById('editForm') && document.getElementById('editForm')
 (function () {
     const body = document.getElementById('editRows');
     if (!body) return;
-    function num(s) {
-        s = (s || '').toString().replace(/[^0-9.\-]/g, '');
-        if (s === '' || s === '-' || s === '.') return null;
-        const v = parseFloat(s);
-        return isNaN(v) ? null : v;
-    }
+    const num = Y.num;      // CORE-6: ta'rif static/js/yurit-common.js da
     const asInt = v => String(Math.round(v));
     function asMarja(v) {
         const r = Math.round(v * 10) / 10;
