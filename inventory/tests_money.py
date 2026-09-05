@@ -31,6 +31,7 @@ from inventory.models import (
     Branch, Product, ProductVariant, BranchStock, Shift,
     SaleTransaction, Sale, CashPayout, PaymentIntent, Return,
     split_breakdown, _dec, Customer, Category, AuditLog,
+    Transfer, Stocktake, StockWriteOff,          # ROLE-6
 )
 
 User = get_user_model()
@@ -43,7 +44,7 @@ class Sec17RecoveryCodes(TestCase):
 
     def test_roundtrip_and_single_use(self):
         from inventory.twofa import gen_recovery_codes, hash_code, use_recovery_code
-        u = User.objects.create_user(username='r1', password='x', role=User.Role.ADMIN)
+        u = User.objects.create_user(username='r1', password='x', role=User.Role.SUPERUSER)
         codes = gen_recovery_codes(3)
         u.recovery_codes = [hash_code(c) for c in codes]
         u.save(update_fields=['recovery_codes'])
@@ -55,7 +56,7 @@ class Sec17RecoveryCodes(TestCase):
 
     def test_legacy_sha256_still_accepted(self):
         from inventory.twofa import _legacy_sha256, use_recovery_code
-        u = User.objects.create_user(username='r2', password='x', role=User.Role.ADMIN)
+        u = User.objects.create_user(username='r2', password='x', role=User.Role.SUPERUSER)
         u.recovery_codes = [_legacy_sha256('old-code')]
         u.save(update_fields=['recovery_codes'])
         self.assertTrue(use_recovery_code(u, 'old-code'))
@@ -620,7 +621,7 @@ class Stk9StocktakeDelta(MoneyTestBase):
     def test_apply_uses_delta_not_absolute(self):
         from inventory.models import Stocktake, StocktakeCount
         admin = User.objects.create_user(
-            username='boss2', password='x', role=User.Role.ADMIN, branch=self.branch)
+            username='boss2', password='x', role=User.Role.SUPERUSER, branch=self.branch)
         c = Client()
         c.force_login(admin)
         # Snapshot: tizim 10, sanab 8 topildi (2 kam). Keyin 3 dona sotildi → 7.
@@ -750,7 +751,7 @@ class Stk1WriteOff(MoneyTestBase):
 
     def _admin(self):
         return User.objects.create_user(
-            username='boss', password='x', role=User.Role.ADMIN,
+            username='boss', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
 
     def test_writeoff_decrements_stock_and_records(self):
@@ -907,7 +908,7 @@ class SalesPageRefundMatchesZReport(MoneyTestBase):
         super().setUp()
         self.shift = self.open_shift()
         self.admin = User.objects.create_user(
-            username='admin_sales', password='x', role=User.Role.ADMIN,
+            username='admin_sales', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
 
     def _discounted_sale_fully_returned(self):
@@ -1266,7 +1267,7 @@ class SalesPageVsZReport(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_sync', password='x', role=User.Role.ADMIN,
+            username='admin_sync', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -1446,7 +1447,7 @@ class SalesPageEdgeRows(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_edge', password='x', role=User.Role.ADMIN,
+            username='admin_edge', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -1522,7 +1523,7 @@ class SalesPageQueryBudget(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_q', password='x', role=User.Role.ADMIN,
+            username='admin_q', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -1578,7 +1579,7 @@ class SalesPagePeriodRefundScope(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_scope', password='x', role=User.Role.ADMIN,
+            username='admin_scope', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.other = User.objects.create_user(
             username='kassir2', password='x', role=User.Role.SOTUVCHI,
@@ -1653,7 +1654,7 @@ class Sal6EveryPageAgreesOnRevenue(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='B')
         self.u = User.objects.create_user(username='k', password='x',
-                                          role=User.Role.ADMIN, is_staff=True,
+                                          role=User.Role.SUPERUSER, is_staff=True,
                                           branch=self.branch, commission_percent=10)
         cat = Category.objects.create(name='Kiyim')
         p = Product.objects.create(name='P', code='P-0001', category=cat,
@@ -1824,7 +1825,7 @@ class RealDayPageEqualsSumOfZReports(TestCase):
     def setUp(self):
         self.b = Branch.objects.create(name='B')
         self.u = User.objects.create_user(username='k', password='x',
-                                          role=User.Role.ADMIN, is_staff=True,
+                                          role=User.Role.SUPERUSER, is_staff=True,
                                           branch=self.b)
         p = Product.objects.create(name='P', code='P-0001',
                                    default_sale_price=D('100000'))
@@ -1948,7 +1949,7 @@ class Disc1DiscountSplit(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_disc', password='x', role=User.Role.ADMIN,
+            username='admin_disc', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -2219,7 +2220,7 @@ class Disc2PromoBackfillCorrection(MoneyTestBase):
     def test_reported_split_after_the_fix(self):
         """Sahifa endi buni QO'LDA chegirma sifatida ko'rsatsin."""
         admin = User.objects.create_user(
-            username='admin_d2', password='x', role=User.Role.ADMIN,
+            username='admin_d2', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         c = Client(); c.force_login(admin)
         t = self._txn('30000', '30000')
@@ -2254,7 +2255,7 @@ class Disc3DiscountFilter(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_df', password='x', role=User.Role.ADMIN,
+            username='admin_df', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -2396,7 +2397,7 @@ class Ret1ReturnsAffectProfit(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_ret', password='x', role=User.Role.ADMIN,
+            username='admin_ret', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -2556,7 +2557,7 @@ class Disc4ExchangeCreditOnTheReceipt(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_d4', password='x', role=User.Role.ADMIN,
+            username='admin_d4', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -2615,7 +2616,7 @@ class Disc5ShiftReceiptShowsDiscount(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_d5', password='x', role=User.Role.ADMIN,
+            username='admin_d5', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -2719,7 +2720,7 @@ class Mon26ZReportEndToEnd(TestCase):
     def setUp(self):
         self.b = Branch.objects.create(name='B')
         self.u = User.objects.create_user(username='admin', password='x',
-                                       role=User.Role.ADMIN, is_staff=True, branch=self.b)
+                                       role=User.Role.SUPERUSER, is_staff=True, branch=self.b)
         p = Product.objects.create(name='P', code='P-0001',
                                    default_sale_price=Decimal('100000'))
         self.v = ProductVariant.objects.create(product=p, size='M', color='A',
@@ -2824,7 +2825,7 @@ class Disc6RoundingIsNotADiscount(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_d6', password='x', role=User.Role.ADMIN,
+            username='admin_d6', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3225,7 +3226,7 @@ class Stk14LockingNeverJoinsNullableSide(MoneyTestBase):
     def test_price_apply_actually_works(self):
         """Uchdan-uchgacha: sahifa 500 bermasin va narx yangilansin."""
         admin = User.objects.create_user(
-            username='admin_stk14', password='x', role=User.Role.ADMIN,
+            username='admin_stk14', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         c = Client()
         c.force_login(admin)
@@ -3278,7 +3279,7 @@ class Disc8RoundingButtonBoundary(MoneyTestBase):
 
     def test_pos_page_offers_15_not_20(self):
         admin = User.objects.create_user(
-            username='admin_d8', password='x', role=User.Role.ADMIN,
+            username='admin_d8', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         c = Client()
         c.force_login(admin)
@@ -3310,7 +3311,7 @@ class Ux9PayModalResetsChange(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_ux9', password='x', role=User.Role.ADMIN,
+            username='admin_ux9', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3354,7 +3355,7 @@ class Ux10EmptyCartClearsDiscount(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_ux10', password='x', role=User.Role.ADMIN,
+            username='admin_ux10', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3399,7 +3400,7 @@ class Kbd1ScreenKeyboardIsAdaptive(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_kbd', password='x', role=User.Role.ADMIN,
+            username='admin_kbd', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3460,7 +3461,7 @@ class Kbd3ModesAreSeparateAndRemembered(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_kbd3', password='x', role=User.Role.ADMIN,
+            username='admin_kbd3', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3539,7 +3540,7 @@ class Scan1SingleScanAddsOnce(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_scan', password='x', role=User.Role.ADMIN,
+            username='admin_scan', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3588,7 +3589,7 @@ class Pos1CheckoutHasAClientTimeout(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_pos1', password='x', role=User.Role.ADMIN,
+            username='admin_pos1', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3687,7 +3688,7 @@ class Off8OfflineCatalog(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_off8', password='x', role=User.Role.ADMIN,
+            username='admin_off8', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3786,7 +3787,7 @@ class Off10SyncNeverBlocksSales(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_off10', password='x', role=User.Role.ADMIN,
+            username='admin_off10', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3878,7 +3879,7 @@ class Pos2OneKeyCashCheckout(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_pos2', password='x', role=User.Role.ADMIN,
+            username='admin_pos2', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -3935,7 +3936,7 @@ class Stk15BulkPricingDoesNotHoldTheCatalogue(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_stk15', password='x', role=User.Role.ADMIN,
+            username='admin_stk15', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -4012,7 +4013,7 @@ class Pos3SpeedFeaturesAreVisible(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='admin_pos3', password='x', role=User.Role.ADMIN,
+            username='admin_pos3', password='x', role=User.Role.SUPERUSER,
             is_staff=True, branch=self.branch)
         self.client = Client()
         self.client.force_login(self.admin)
@@ -4302,7 +4303,7 @@ class Rpt1SalesPageIsPaginated(MoneyTestBase):
     def setUp(self):
         super().setUp()
         self.admin = User.objects.create_user(
-            username='rpt1_admin', password='x', role=User.Role.ADMIN,
+            username='rpt1_admin', password='x', role=User.Role.SUPERUSER,
         )
         self.stock.stock_count = 500
         self.stock.save(update_fields=['stock_count'])
@@ -4596,7 +4597,7 @@ class Prn2ReceiptCanBeFramedBySelf(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial')
         self.admin = User.objects.create_user(
-            username='prn2', password='x', role=User.Role.ADMIN)
+            username='prn2', password='x', role=User.Role.SUPERUSER)
         self.shift = Shift.objects.create(
             branch=self.branch, opened_by=self.admin, opening_cash=Decimal('0'))
         self.txn = SaleTransaction.objects.create(
@@ -4885,7 +4886,7 @@ class Pay1FixPaymentMethodOnly(MoneyTestBase):
         self.txn.sold_by = other
         self.txn.save(update_fields=['sold_by'])
         admin = User.objects.create_user(
-            username='pay_admin', password='x', role=User.Role.ADMIN,
+            username='pay_admin', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         self.client.force_login(admin)
         r = self.fix('card')
@@ -4933,7 +4934,7 @@ class Pay1FixPaymentMethodOnly(MoneyTestBase):
         kerak — kassani sanashdan oldin ko'zga tashlanadigan joyda.
         """
         admin = User.objects.create_user(
-            username='pay_admin2', password='x', role=User.Role.ADMIN,
+            username='pay_admin2', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         self.fix('card', reason='karta bilan to\'landi')
         self.client.force_login(admin)
@@ -5093,7 +5094,7 @@ class Var1RenameThenReuseAColour(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial')
         self.admin = User.objects.create_user(
-            username='var1_admin', password='x', role=User.Role.ADMIN,
+            username='var1_admin', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         self.product = Product.objects.create(
             name='Женский', code='ICH-0001', default_sale_price=Decimal('10000'))
@@ -5598,7 +5599,7 @@ class Kpi9BranchTotalsAreNotMultipliedByStaff(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial-KPI9')
         self.admin = User.objects.create_user(
-            username='kpi9admin', password='x', role=User.Role.ADMIN,
+            username='kpi9admin', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         # yana 2 ta xodim — jami 3 ta (fan-out bo'lsa 3 baravar bo'lardi)
         for i in range(2):
@@ -5652,7 +5653,7 @@ class Aud1OneActionOneAuditRow(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial-AUD1')
         self.admin = User.objects.create_user(
-            username='aud1admin', password='x', role=User.Role.ADMIN,
+            username='aud1admin', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         cat = Category.objects.create(name='AUD1')
         self.product = Product.objects.create(
@@ -5790,7 +5791,7 @@ class Aud1PaymentFixIsOneRow(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial-AUD1P')
         self.admin = User.objects.create_user(
-            username='aud1p', password='x', role=User.Role.ADMIN,
+            username='aud1p', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         self.shift = Shift.objects.create(
             branch=self.branch, opened_by=self.admin,
@@ -5834,7 +5835,7 @@ class Aud2RenameDiffIsReadable(TestCase):
     def test_no_tmp_marker_in_the_log(self):
         branch = Branch.objects.create(name='Filial-AUD2')
         admin = User.objects.create_user(
-            username='aud2', password='x', role=User.Role.ADMIN, branch=branch)
+            username='aud2', password='x', role=User.Role.SUPERUSER, branch=branch)
         cat = Category.objects.create(name='AUD2')
         p = Product.objects.create(code='AU2-0001', name='T', category=cat)
         vs = []
@@ -5913,7 +5914,7 @@ class Aud3SaleIsOneAuditRow(TestCase):
         page = self.c.get(reverse('audit_list'))
         # sotuvchi audit sahifasini ocholmasligi mumkin — admin bilan
         admin = User.objects.create_user(username='aud3a', password='x',
-                                         role=User.Role.ADMIN,
+                                         role=User.Role.SUPERUSER,
                                          branch=self.branch)
         c2 = Client()
         c2.force_login(admin)
@@ -6116,7 +6117,7 @@ class Core2OneRevenueFormula(TestCase):
                                      line_revenue_expr)
         branch = Branch.objects.create(name='CORE2')
         u = User.objects.create_user(username='core2', password='x',
-                                     role=User.Role.ADMIN, branch=branch)
+                                     role=User.Role.SUPERUSER, branch=branch)
         cat = Category.objects.create(name='C2')
         p = Product.objects.create(code='C2-0001', name='T', category=cat)
         v = ProductVariant.objects.create(product=p, size='M', color='Q')
@@ -6146,7 +6147,7 @@ class Core2CategoryExportSubtractsLineDiscount(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial-C2X')
         self.admin = User.objects.create_user(
-            username='c2x', password='x', role=User.Role.ADMIN,
+            username='c2x', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         cat = Category.objects.create(name='Koylak')
         p = Product.objects.create(code='C2X-0001', name='Koylak',
@@ -6181,7 +6182,7 @@ class Core3OneRequestShape(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name='Filial-C3')
         self.admin = User.objects.create_user(
-            username='c3admin', password='x', role=User.Role.ADMIN,
+            username='c3admin', password='x', role=User.Role.SUPERUSER,
             branch=self.branch)
         self.c = Client()
         self.c.force_login(self.admin)
@@ -6704,3 +6705,521 @@ class Scan4ScannerWithoutEnterAndClearButton(TestCase):
 
     def test_the_help_table_tells_the_cashier_about_esc(self):
         self.assertIn('Qidiruv katagini tozalash', self._pos())
+
+
+class Role5BranchAdminSeesOnlyOwnBranch(TestCase):
+    """ROLE-5 — SIZIB CHIQISHNI qidiradigan test.
+
+    Bu testning maqsadi bitta sahifani emas, CHEGARANI qulflash. Filial
+    admini sifatida barcha admin sahifalari aylanib chiqiladi va har
+    birida boshqa filialning belgilari qidiriladi: filial nomi, u yerdagi
+    sotuvchi, faqat o'sha filialda turgan tovar va o'sha filialdagi
+    sotuv summasi. Bittasi ham ko'rinmasligi kerak.
+
+    Nega shunday: filial chegarasi 70 dan ortiq sahifaga tegadi. Har
+    birini qo'lda tekshirish — bir martalik ish, va yangi sahifa qo'shsa
+    yana ochiladi. Bu test esa YANGI sahifa qo'shilganda ham ishlaydi:
+    ro'yxatga URL qo'shilsa, u ham shu tekshiruvdan o'tadi.
+    """
+
+    # boshqa filialga tegishli, sahifada CHIQMASLIGI kerak bo'lgan matnlar
+    SECRET_BRANCH = 'FILIALB-MAXFIY'
+    SECRET_SELLER = 'sotuvchibmaxfiy'
+    SECRET_PRODUCT = 'MAXFIYTOVARB'
+    SECRET_CODE = 'MXB-0001'
+
+    @classmethod
+    def setUpTestData(cls):
+        from decimal import Decimal
+        cls.a = Branch.objects.create(name='FilialA-Ochiq')
+        cls.b = Branch.objects.create(name=cls.SECRET_BRANCH)
+
+        cls.owner = User.objects.create_user(
+            username='role5owner', password='x',
+            role=User.Role.SUPERUSER, is_superuser=True, is_staff=True)
+        cls.admin_a = User.objects.create_user(
+            username='role5admina', password='x',
+            role=User.Role.ADMIN, branch=cls.a)
+        cls.seller_b = User.objects.create_user(
+            username=cls.SECRET_SELLER, password='x',
+            role=User.Role.SOTUVCHI, branch=cls.b)
+
+        cat = Category.objects.create(name='Role5')
+        # A filialidagi oddiy tovar
+        pa = Product.objects.create(code='ROL-0001', name='Ochiq tovar',
+                                    category=cat)
+        va = ProductVariant.objects.create(product=pa, size='M', color='Oq',
+                                           barcode='7000000000001')
+        BranchStock.objects.create(variant=va, branch=cls.a, stock_count=5,
+                                   cost_price=Decimal('1000'),
+                                   sale_price=Decimal('2000'))
+        # FAQAT B filialida turgan tovar
+        pb = Product.objects.create(code=cls.SECRET_CODE,
+                                    name=cls.SECRET_PRODUCT, category=cat)
+        vb = ProductVariant.objects.create(product=pb, size='L', color='Qora',
+                                           barcode='7000000000002')
+        BranchStock.objects.create(variant=vb, branch=cls.b, stock_count=9,
+                                   cost_price=Decimal('1000'),
+                                   sale_price=Decimal('3000'))
+
+        # Har ikkala filialda smena + sotuv (B dagi summa o'ziga xos)
+        for br, user, price, qty in ((cls.a, cls.admin_a, Decimal('2000'), 1),
+                                     (cls.b, cls.seller_b, Decimal('3000'), 3)):
+            sh = Shift.objects.create(branch=br, opened_by=user,
+                                      status=Shift.Status.OPEN,
+                                      opening_cash=Decimal('0'))
+            tx = SaleTransaction.objects.create(
+                branch=br, sold_by=user, shift=sh, payment_method='cash')
+            Sale.objects.create(
+                transaction=tx, variant=(va if br == cls.a else vb),
+                branch=br, sold_by=user, quantity=qty,
+                sale_price=price, cost_at_sale=Decimal('1000'))
+
+    # ---- tekshiriladigan sahifalar ---------------------------------
+    ADMIN_PAGES = [
+        'dashboard', 'product_list', 'warehouse', 'reorder_page',
+        'sales_list', 'shift_list', 'stocktake_list', 'stocktake_create',
+        'transfer_list', 'transfer_create', 'writeoff_list',
+        'employee_debt_list', 'user_list', 'customer_list', 'reports',
+        'insights', 'intake_new', 'intake_variants', 'intake_photo',
+        'intake_import', 'supplier_list', 'lookup', 'product_requests',
+        'payment_qr_list', 'web_orders', 'variant_labels', 'cashier_stats',
+    ]
+    # butun tizimga tegadigan — filial admini UMUMAN kira olmasin
+    # ROLE-7: egasining qoidasi — "admin egasi qila oladigan hamma ishni
+    # qiladi, LEKIN faqat o'z filialida". Shu bois bu ro'yxatda faqat
+    # FILIAL O'LCHOVI BO'LMAGAN, ya'ni butun tizimga tegadigan sahifalar
+    # qoladi: filiallarning o'zi, global katalog, global aksiya.
+    OWNER_ONLY_PAGES = [
+        'branch_list', 'branch_create', 'promotion_list',
+        'quick_sell_settings', 'category_list', 'csv_import',
+        'product_create',
+    ]
+    # Filial o'lchovi BOR — adminga ochiq, lekin o'z filiali bilan.
+    SCOPED_PAGES = ['price_list', 'price_history', 'audit_list']
+
+    # Katalog (mahsulot nomi/kodi) ATAYLAB global: filial admini boshqa
+    # filialdagi tovarni ko'rib, uni o'ziga ko'chirishni so'rashi kerak.
+    # Shu sahifalarda tovar nomi ko'rinsa — bu nuqson emas. Filial nomi
+    # va boshqa filial xodimi esa HECH QAYERDA ko'rinmasin.
+    CATALOG_PAGES = {'product_list', 'lookup', 'intake_new', 'intake_photo',
+                     'intake_variants', 'intake_import', 'variant_labels',
+                     'reorder_page', 'product_requests'}
+
+    def _secrets_in(self, text, page=None):
+        markers = [self.SECRET_BRANCH, self.SECRET_SELLER]
+        if page not in self.CATALOG_PAGES:
+            markers += [self.SECRET_PRODUCT, self.SECRET_CODE]
+        return [m for m in markers if m in text]
+
+    def test_no_page_leaks_another_branch(self):
+        self.client.force_login(self.admin_a)
+        leaks = {}
+        for name in self.ADMIN_PAGES + self.SCOPED_PAGES:
+            try:
+                url = reverse(name)
+            except Exception:
+                continue
+            r = self.client.get(url)
+            if r.status_code != 200:
+                continue
+            found = self._secrets_in(r.content.decode('utf-8', 'replace'), name)
+            if found:
+                leaks[name] = found
+        self.assertFalse(
+            leaks, 'boshqa filial ma\'lumoti sizib chiqdi: %r' % leaks)
+
+    def test_a_hand_typed_branch_id_changes_nothing(self):
+        """?branch=<boshqa filial> — filtr O'ZGARMASIN."""
+        self.client.force_login(self.admin_a)
+        leaks = {}
+        for name in ('sales_list', 'shift_list', 'warehouse', 'user_list',
+                     'stocktake_list', 'transfer_list', 'reorder_page',
+                     'insights'):
+            try:
+                url = reverse(name)
+            except Exception:
+                continue
+            r = self.client.get(url, {'branch': self.b.pk})
+            if r.status_code != 200:
+                continue
+            found = self._secrets_in(r.content.decode('utf-8', 'replace'), name)
+            if found:
+                leaks[name] = found
+        self.assertFalse(leaks, '?branch= bilan sizib chiqdi: %r' % leaks)
+
+    def test_owner_only_pages_are_closed_to_a_branch_admin(self):
+        self.client.force_login(self.admin_a)
+        open_pages = {}
+        for name in self.OWNER_ONLY_PAGES:
+            try:
+                url = reverse(name)
+            except Exception:
+                continue
+            r = self.client.get(url)
+            if r.status_code == 200:
+                open_pages[name] = r.status_code
+        self.assertFalse(
+            open_pages,
+            'butun tizimga tegadigan sahifa filial adminiga ochiq: %r'
+            % open_pages)
+
+    def test_branch_scoped_pages_are_open_to_a_branch_admin(self):
+        """Narx va audit — filial o'lchovi bor, demak admin ham ko'rsin."""
+        self.client.force_login(self.admin_a)
+        closed = {}
+        for name in self.SCOPED_PAGES:
+            r = self.client.get(reverse(name))
+            if r.status_code != 200:
+                closed[name] = r.status_code
+        self.assertFalse(closed,
+                         'filial o\'lchovi bor sahifa yopilib qolgan: %r'
+                         % closed)
+
+    def test_the_owner_still_sees_everything(self):
+        """Chegara egasiga TEGMASIN — aks holda tuzatish o'zi nuqson."""
+        self.client.force_login(self.owner)
+        r = self.client.get(reverse('branch_list'))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(self.SECRET_BRANCH, r.content.decode('utf-8', 'replace'),
+                      'egasi barcha filiallarni ko\'rishi kerak')
+        r = self.client.get(reverse('warehouse'))
+        self.assertEqual(r.status_code, 200)
+
+    def test_a_seller_cannot_open_admin_pages_at_all(self):
+        self.client.force_login(self.seller_b)
+        for name in ('dashboard', 'sales_list', 'warehouse', 'user_list'):
+            r = self.client.get(reverse(name))
+            self.assertIn(r.status_code, (302, 403),
+                          f'{name}: sotuvchiga ochiq qolgan')
+
+    def test_an_admin_without_a_branch_is_locked_out_not_given_everything(self):
+        """Filiali yo'q admin — HAMMA narsani emas, HECH NARSANI ko'rmasin."""
+        stray = User.objects.create_user(username='role5stray', password='x',
+                                         role=User.Role.ADMIN, branch=None)
+        self.assertIs(stray.scope_branch(), False)
+        self.client.force_login(stray)
+        r = self.client.get(reverse('dashboard'))
+        self.assertEqual(r.status_code, 403)
+
+    def test_the_role_helpers_agree_with_each_other(self):
+        self.assertTrue(self.owner.is_owner())
+        self.assertTrue(self.owner.is_admin())
+        self.assertFalse(self.owner.is_branch_admin())
+        self.assertIsNone(self.owner.scope_branch())
+
+        self.assertFalse(self.admin_a.is_owner())
+        self.assertTrue(self.admin_a.is_admin())
+        self.assertTrue(self.admin_a.is_branch_admin())
+        self.assertEqual(self.admin_a.scope_branch(), self.a)
+        self.assertTrue(self.admin_a.can_see_branch(self.a))
+        self.assertFalse(self.admin_a.can_see_branch(self.b))
+
+        self.assertFalse(self.seller_b.is_admin())
+        self.assertTrue(self.seller_b.is_seller())
+        self.assertFalse(self.seller_b.can_see_branch(self.a))
+
+
+class Role4BranchAdminManagesOnlyOwnSellers(TestCase):
+    """ROLE-4 — xodimlar boshqaruvi filial bilan chegaralangan.
+
+    Egasining qarori: filial admini o'z filialiga SOTUVCHI qo'sha oladi
+    (komissiya, parol tiklash ham), lekin:
+      * boshqa filial xodimini ko'rmaydi ham, tahrirlay olmaydi ham;
+      * ADMIN yoki EGASI yarata olmaydi — aks holda u o'ziga yoki
+        boshqasiga o'zidan katta huquq berib qo'yardi;
+      * yangi xodimni boshqa filialga biriktira olmaydi.
+
+    Tekshiruv ko'rinish darajasida emas, FORMA darajasida: qo'lda
+    yasalgan POST ham o'tmasligi kerak.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.a = Branch.objects.create(name='R4-A')
+        cls.b = Branch.objects.create(name='R4-B')
+        cls.owner = User.objects.create_user(
+            username='r4owner', password='x', role=User.Role.SUPERUSER,
+            is_superuser=True, is_staff=True)
+        cls.admin_a = User.objects.create_user(
+            username='r4admina', password='x', role=User.Role.ADMIN,
+            branch=cls.a)
+        cls.seller_a = User.objects.create_user(
+            username='r4sellera', password='x', role=User.Role.SOTUVCHI,
+            branch=cls.a)
+        cls.seller_b = User.objects.create_user(
+            username='r4sellerb', password='x', role=User.Role.SOTUVCHI,
+            branch=cls.b)
+
+    def _post_new(self, **over):
+        data = {'username': 'r4new', 'first_name': '', 'last_name': '',
+                'email': '', 'role': User.Role.SOTUVCHI, 'branch': self.a.pk,
+                'commission_percent': '0', 'is_active': 'on',
+                'password': 'parol123'}
+        data.update(over)
+        return self.client.post(reverse('user_create'), data)
+
+    def test_a_branch_admin_can_add_a_seller_to_its_own_branch(self):
+        self.client.force_login(self.admin_a)
+        self._post_new()
+        u = User.objects.filter(username='r4new').first()
+        self.assertIsNotNone(u, 'o\'z filialiga sotuvchi qo\'sha olishi kerak')
+        self.assertEqual(u.branch, self.a)
+        self.assertEqual(u.role, User.Role.SOTUVCHI)
+
+    def test_a_branch_admin_cannot_create_another_admin(self):
+        self.client.force_login(self.admin_a)
+        self._post_new(username='r4badadmin', role=User.Role.ADMIN)
+        self.assertFalse(User.objects.filter(username='r4badadmin').exists(),
+                         'filial admini yangi ADMIN yarata olmasligi kerak')
+
+    def test_a_branch_admin_cannot_create_an_owner(self):
+        self.client.force_login(self.admin_a)
+        self._post_new(username='r4badowner', role=User.Role.SUPERUSER)
+        self.assertFalse(User.objects.filter(username='r4badowner').exists(),
+                         'filial admini EGASI yarata olmasligi kerak')
+
+    def test_a_branch_admin_cannot_place_a_seller_in_another_branch(self):
+        self.client.force_login(self.admin_a)
+        self._post_new(username='r4wrongbranch', branch=self.b.pk)
+        self.assertFalse(User.objects.filter(username='r4wrongbranch').exists(),
+                         'boshqa filialga xodim qo\'sha olmasligi kerak')
+
+    def test_a_branch_admin_cannot_edit_a_seller_from_another_branch(self):
+        self.client.force_login(self.admin_a)
+        r = self.client.get(reverse('user_edit', args=[self.seller_b.pk]))
+        self.assertEqual(r.status_code, 403)
+
+    def test_a_branch_admin_may_edit_itself_but_not_its_own_role(self):
+        """O'z parolini o'zgartira olsin — lekin rolini KO'TARA olmasin.
+
+        Ikki yoqlama tuzoq: sahifani butunlay yopsak, admin o'z parolini
+        tiklay olmaydi; ochiq qoldirsak-u rol ro'yxatini cheklamasak, u
+        o'zini egasi qilib qo'yadi (yoki bexosdan sotuvchiga tushiradi).
+        """
+        self.client.force_login(self.admin_a)
+        r = self.client.get(reverse('user_edit', args=[self.admin_a.pk]))
+        self.assertEqual(r.status_code, 200, "o'zini tahrirlay olsin")
+
+        self.client.post(reverse('user_edit', args=[self.admin_a.pk]), {
+            'first_name': 'Yangi', 'last_name': '', 'email': '',
+            'role': User.Role.SUPERUSER, 'branch': self.b.pk,
+            'commission_percent': '0', 'is_active': 'on', 'new_password': ''})
+        self.admin_a.refresh_from_db()
+        self.assertEqual(self.admin_a.role, User.Role.ADMIN,
+                         "o'zini EGASI qila olmasligi kerak")
+        self.assertEqual(self.admin_a.branch, self.a,
+                         "o'z filialini almashtira olmasligi kerak")
+        self.assertFalse(self.admin_a.is_owner())
+
+    def test_a_branch_admin_can_edit_its_own_seller(self):
+        self.client.force_login(self.admin_a)
+        r = self.client.get(reverse('user_edit', args=[self.seller_a.pk]))
+        self.assertEqual(r.status_code, 200)
+
+    def test_the_owner_can_still_create_an_admin_anywhere(self):
+        self.client.force_login(self.owner)
+        self._post_new(username='r4newadmin', role=User.Role.ADMIN,
+                       branch=self.b.pk)
+        u = User.objects.filter(username='r4newadmin').first()
+        self.assertIsNotNone(u, 'egasi admin yarata olishi kerak')
+        self.assertEqual(u.role, User.Role.ADMIN)
+        self.assertEqual(u.branch, self.b)
+
+    def test_the_list_shows_only_own_branch_staff(self):
+        self.client.force_login(self.admin_a)
+        html = self.client.get(reverse('user_list')).content.decode()
+        self.assertIn('r4sellera', html)
+        self.assertNotIn('r4sellerb', html,
+                         'boshqa filial xodimi ro\'yxatda ko\'rinmasin')
+        self.assertNotIn('r4owner', html, 'egasi ro\'yxatda ko\'rinmasin')
+
+
+class Role6DirectUrlsAreGuardedToo(TestCase):
+    """ROLE-6 — ro'yxat qisilgani YETARLI EMAS.
+
+    Sahifadagi ro'yxat to'g'ri filtrlansa ham, kimdir manzil qatoriga
+    /shifts/57/ yoki /products/.../ deb yozib, boshqa filial yozuviga
+    to'g'ridan-to'g'ri kirishi mumkin. Bu test aynan shu yo'lni
+    tekshiradi: DETAL sahifalari va O'ZGARTIRUVCHI (POST) manzillar.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from decimal import Decimal
+        cls.a = Branch.objects.create(name='R6-A')
+        cls.b = Branch.objects.create(name='R6-BSIR')
+        cls.owner = User.objects.create_user(
+            username='r6owner', password='x', role=User.Role.SUPERUSER)
+        cls.admin_a = User.objects.create_user(
+            username='r6admina', password='x', role=User.Role.ADMIN,
+            branch=cls.a)
+        cls.seller_b = User.objects.create_user(
+            username='r6sellerb', password='x', role=User.Role.SOTUVCHI,
+            branch=cls.b)
+
+        cat = Category.objects.create(name='R6')
+        p = Product.objects.create(code='R6-0001', name='R6 tovar',
+                                   category=cat)
+        cls.v = ProductVariant.objects.create(product=p, size='M', color='Oq',
+                                              barcode='7600000000001')
+        cls.stock_b = BranchStock.objects.create(
+            variant=cls.v, branch=cls.b, stock_count=7,
+            cost_price=Decimal('1000'), sale_price=Decimal('5000'))
+        cls.shift_b = Shift.objects.create(
+            branch=cls.b, opened_by=cls.seller_b, status=Shift.Status.OPEN,
+            opening_cash=Decimal('0'))
+        cls.tx_b = SaleTransaction.objects.create(
+            branch=cls.b, sold_by=cls.seller_b, shift=cls.shift_b,
+            payment_method='cash')
+        Sale.objects.create(transaction=cls.tx_b, variant=cls.v, branch=cls.b,
+                            sold_by=cls.seller_b, quantity=1,
+                            sale_price=Decimal('5000'),
+                            cost_at_sale=Decimal('1000'))
+
+    def test_another_branch_shift_is_not_readable_by_url(self):
+        self.client.force_login(self.admin_a)
+        for name in ('shift_detail', 'shift_receipt', 'shift_returns'):
+            try:
+                url = reverse(name, args=[self.shift_b.pk])
+            except Exception:
+                continue
+            r = self.client.get(url)
+            self.assertNotEqual(
+                r.status_code, 200,
+                f'{name}: boshqa filial smenasi manzil orqali ochildi')
+
+    def test_another_branch_receipt_is_not_readable_by_url(self):
+        self.client.force_login(self.admin_a)
+        try:
+            url = reverse('transaction_detail', args=[self.tx_b.pk])
+        except Exception:
+            self.skipTest('transaction_detail yo\'q')
+        r = self.client.get(url)
+        if r.status_code == 200:
+            self.assertNotIn('R6-BSIR', r.content.decode('utf-8', 'replace'),
+                             'boshqa filial cheki ochildi')
+
+    def test_the_owner_can_still_open_them(self):
+        self.client.force_login(self.owner)
+        r = self.client.get(reverse('shift_detail', args=[self.shift_b.pk]))
+        self.assertEqual(r.status_code, 200)
+
+    def test_a_transfer_cannot_be_sent_from_someone_elses_branch(self):
+        """Eng qimmat teshik: boshqa filial omborini bo'shatib yuborish."""
+        self.client.force_login(self.admin_a)
+        self.client.post(reverse('transfer_create'), {
+            'from_branch': self.b.pk, 'to_branch': self.a.pk,
+            f'qty[{self.v.pk}]': '5'})
+        self.stock_b.refresh_from_db()
+        self.assertEqual(self.stock_b.stock_count, 7,
+                         'boshqa filial zaxirasi tegilmasligi kerak')
+        self.assertFalse(
+            Transfer.objects.filter(from_branch=self.b).exists(),
+            'boshqa filialdan ko\'chirish yaratilmasligi kerak')
+
+    def test_a_writeoff_cannot_be_booked_against_another_branch(self):
+        self.client.force_login(self.admin_a)
+        self.client.post(reverse('writeoff_list'), {
+            'branch': self.b.pk, 'barcode': self.v.barcode,
+            'quantity': '3', 'reason': 'damaged', 'note': ''})
+        self.stock_b.refresh_from_db()
+        self.assertEqual(self.stock_b.stock_count, 7,
+                         'boshqa filialdan hisobdan chiqarilmasin')
+
+    def test_a_stocktake_cannot_be_started_in_another_branch(self):
+        self.client.force_login(self.admin_a)
+        self.client.post(reverse('stocktake_create'), {'branch': self.b.pk})
+        self.assertFalse(
+            Stocktake.objects.filter(branch=self.b).exists(),
+            'boshqa filialda inventarizatsiya ochilmasin')
+
+
+class Role7AdminIsAnOwnerScopedToOneBranch(TestCase):
+    """ROLE-7 — egasining qoidasi aynan shu:
+
+        "SuperUser hamma filialda hamma ishni qiladi; admin AYNAN
+         shularni qiladi, lekin faqat o'ziga biriktirilgan filialda."
+
+    Demak sahifani yopish emas, uni QISISH to'g'ri javob — filial
+    o'lchovi bor har qanday ish adminga ochiq bo'lishi kerak. Narx aynan
+    shunday: har filialning o'z sotuv narxi bor (BranchStock), ya'ni
+    admin o'z filiali narxini o'zgartira olishi SHART, boshqa filial
+    narxiga esa tega olmasligi SHART.
+
+    Filial o'lchovi BO'LMAGAN narsalar (katalog, kategoriya, aksiya,
+    filiallarning o'zi) butun tizimga tegadi — ular egasida qoladi,
+    chunki ularni "bitta filial ichida" bajarib bo'lmaydi.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from decimal import Decimal
+        cls.a = Branch.objects.create(name='R7-A')
+        cls.b = Branch.objects.create(name='R7-B')
+        cls.admin_a = User.objects.create_user(
+            username='r7admina', password='x', role=User.Role.ADMIN,
+            branch=cls.a)
+        cat = Category.objects.create(name='R7')
+        p = Product.objects.create(code='R7-0001', name='R7 tovar',
+                                   category=cat)
+        cls.v = ProductVariant.objects.create(product=p, size='M', color='Oq',
+                                              barcode='7700000000001')
+        cls.stock_a = BranchStock.objects.create(
+            variant=cls.v, branch=cls.a, stock_count=3,
+            cost_price=Decimal('1000'), sale_price=Decimal('2000'))
+        cls.stock_b = BranchStock.objects.create(
+            variant=cls.v, branch=cls.b, stock_count=3,
+            cost_price=Decimal('1000'), sale_price=Decimal('2000'))
+
+    def test_the_admin_can_change_its_own_branch_price(self):
+        self.client.force_login(self.admin_a)
+        self.client.post(reverse('price_apply'), {
+            'mode': 'rows', 'row_id': [str(self.stock_a.pk)],
+            'row_cost': [''], 'row_sale': ['5500'], 'row_ws': ['']})
+        self.stock_a.refresh_from_db()
+        self.assertEqual(int(self.stock_a.sale_price), 5500,
+                         "admin o'z filiali narxini o'zgartira olishi kerak")
+
+    def test_the_admin_cannot_change_another_branch_price(self):
+        self.client.force_login(self.admin_a)
+        self.client.post(reverse('price_apply'), {
+            'mode': 'rows', 'row_id': [str(self.stock_b.pk)],
+            'row_cost': [''], 'row_sale': ['9999'], 'row_ws': ['']})
+        self.stock_b.refresh_from_db()
+        self.assertEqual(int(self.stock_b.sale_price), 2000,
+                         'boshqa filial narxi tegilmasligi kerak')
+
+    def test_a_mixed_submission_only_touches_the_own_row(self):
+        """Ikkala filial qatori bitta formada yuborilsa — bittasi o'tsin."""
+        self.client.force_login(self.admin_a)
+        self.client.post(reverse('price_apply'), {
+            'mode': 'rows',
+            'row_id': [str(self.stock_a.pk), str(self.stock_b.pk)],
+            'row_cost': ['', ''], 'row_sale': ['3300', '8888'],
+            'row_ws': ['', '']})
+        self.stock_a.refresh_from_db(); self.stock_b.refresh_from_db()
+        self.assertEqual(int(self.stock_a.sale_price), 3300)
+        self.assertEqual(int(self.stock_b.sale_price), 2000,
+                         'aralash yuborishda ham boshqa filial saqlansin')
+
+    def test_the_price_page_counts_only_own_branch_rows(self):
+        self.client.force_login(self.admin_a)
+        r = self.client.get(reverse('price_list'))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(list(r.context['rows'])), 1,
+                         'jadvalda faqat o\'z filiali qatori bo\'lsin')
+
+    def test_the_audit_log_shows_only_own_branch_staff(self):
+        """Audit yozuvida filial yo'q — u XODIM orqali bog'lanadi."""
+        other = User.objects.create_user(
+            username='r7otherstaff', password='x',
+            role=User.Role.SOTUVCHI, branch=self.b)
+        AuditLog.objects.create(
+            user=other, username_snapshot=other.username,
+            action=AuditLog.Action.UPDATE, model_name='BranchStock',
+            object_id='1', object_repr='r7-boshqa-filial-izi')
+        self.client.force_login(self.admin_a)
+        html = self.client.get(reverse('audit_list')).content.decode()
+        self.assertNotIn('r7otherstaff', html,
+                         'boshqa filial xodimining izi ko\'rinmasin')

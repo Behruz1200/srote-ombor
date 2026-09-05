@@ -44,6 +44,7 @@ from .access import (
     admin_required, get_user_branch, normalize_code,
 )
 from .access import pos_api                  # CORE-3
+from .access import scoped, visible_branches  # ROLE-3
 from .web import (                           # CORE-3
     api_err, api_ok, csv_response, csv_safe, csv_writer,
     filter_by_day_range,
@@ -239,9 +240,12 @@ def pos_terminal(request):
             'sold_qty': qty_by_id.get(pid, 0),
         })
 
+    # ROLE-3: kassa filialini ALMASHTIRISH — faqat egasida. Filial
+    # admini o'z kassasida qoladi (ro'yxat bo'sh bo'lsa shablon filial
+    # nomini oddiy matn qilib ko'rsatadi).
     branches_list = []
-    if request.user.is_admin():
-        branches_list = list(Branch.objects.filter(is_active=True).order_by('name'))
+    if request.user.is_owner():
+        branches_list = list(visible_branches(request))
 
     parked_sales = list(ParkedSale.objects
                         .filter(branch=branch)
@@ -1144,13 +1148,13 @@ def payment_qr_list(request):
                 pk = int(request.POST.get('pk') or 0)
             except ValueError:
                 pk = 0
-            PaymentQR.objects.filter(pk=pk).delete()
+            scoped(PaymentQR.objects.filter(pk=pk), request).delete()
             messages.success(request, "QR o'chirildi.")
             return redirect('payment_qr_list')
         # create
         try:
             branch_id = int(request.POST.get('branch') or 0)
-            branch_obj = Branch.objects.filter(pk=branch_id, is_active=True).first()
+            branch_obj = visible_branches(request, order=None).filter(pk=branch_id).first()
             provider = (request.POST.get('provider') or '').strip()
             if not branch_obj or not provider:
                 messages.error(request, "Filial va provider tanlang.")
@@ -1176,9 +1180,9 @@ def payment_qr_list(request):
             messages.error(request, f"Xatolik: {e}")
         return redirect('payment_qr_list')
 
-    qrs = (PaymentQR.objects.select_related('branch')
+    qrs = (scoped(PaymentQR.objects.select_related('branch'), request)
            .order_by('branch__name', 'provider'))
-    branches = Branch.objects.filter(is_active=True).order_by('name')
+    branches = visible_branches(request)
     return render(request, 'inventory/payment_qr_list.html', {
         'qrs': qrs, 'branches': branches,
         'providers': PaymentQR.Provider.choices,

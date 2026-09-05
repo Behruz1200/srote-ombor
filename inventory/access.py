@@ -11,6 +11,7 @@ import qilmaydi — ikkalasi buni import qiladi.
 """
 import re
 
+from django.db.models import Q
 from django.shortcuts import redirect
 from django.http import HttpResponseForbidden
 
@@ -27,8 +28,154 @@ def admin_required(view_func):
             return HttpResponseForbidden(
                 "<h3>Ruxsat yo'q. Bu sahifa faqat administrator uchun.</h3>"
             )
+        # ROLE-1: filiali biriktirilmagan admin — YOPIQ. Aks holda
+        # scope_branch() False qaytarib, sahifalar bo'sh chiqardi va
+        # sababi tushunarsiz bo'lardi.
+        if request.user.scope_branch() is False:
+            return HttpResponseForbidden(
+                "<h3>Filial biriktirilmagan.</h3>"
+                "<p>Hisobingizga filial biriktirilmaguncha bu sahifa "
+                "ochilmaydi. Do'kon egasiga murojaat qiling.</p>"
+            )
         return view_func(request, *args, **kwargs)
     return wrapper
+
+def owner_required(view_func):
+    """ROLE-2 — faqat EGASI (SuperUser).
+
+    Butun tizimga tegadigan ishlar shu yerdan o'tadi: filial ochish,
+    global katalog, umumiy narx ro'yxati, aksiyalar, audit jurnali,
+    admin tayinlash. Filial admini bularni ko'rmasin ham, o'zgartira
+    olmasin ham — bitta filialdagi qaror boshqa filialga tegib ketmasin.
+    """
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('login')
+        if not request.user.is_owner():
+            return HttpResponseForbidden(
+                "<h3>Ruxsat yo'q.</h3>"
+                "<p>Bu sahifa butun tizimga tegadi, shuning uchun faqat "
+                "do'kon egasi (SuperUser) uchun ochiq.</p>"
+            )
+        return view_func(request, *args, **kwargs)
+    wrapper.__name__ = getattr(view_func, '__name__', 'wrapped')
+    wrapper.__doc__ = view_func.__doc__
+    return wrapper
+
+
+# ---------------------------------------------------------------- ROLE-3
+# FILIAL CHEGARASI — bitta joyda.
+#
+# Ilgari har bir sahifa filialni o'zi tanlardi:
+#     branch_id = request.GET.get('branch') or ''
+#     qs = qs.filter(branch_id=int(branch_id))
+# va ro'yxatni `Branch.objects.filter(is_active=True)` dan qurardi.
+# Ya'ni ?branch=2 deb yozgan HAR KIM boshqa filial raqamlarini ko'rardi.
+#
+# Endi uchala savolga uchta funksiya javob beradi va ular MAJBURLAYDI:
+#   visible_branches(request) — tanlash ro'yxati (adminga faqat o'ziniki)
+#   scoped(qs, request, field) — so'rovni filialga qisadi
+#   picked_branch_id(request, raw) — GET dagi tanlovni tekshiradi
+
+
+def visible_branches(request, *, active_only=True, order='name'):
+    """Bu foydalanuvchiga ko'rinadigan filiallar.
+
+    Egasi — hammasi; boshqasi — faqat o'ziniki (biriktirilmagan bo'lsa
+    bo'sh ro'yxat). Sahifalardagi "Filial" ochiladigan ro'yxati SHU
+    yerdan qurilsin — shunda adminda tanlov bitta bo'ladi va u boshqa
+    filial nomini bilib ham olmaydi.
+    """
+    qs = Branch.objects.all()
+    if active_only:
+        qs = qs.filter(is_active=True)
+    scope = request.user.scope_branch()
+    if scope is None:
+        return qs.order_by(order) if order else qs
+    if scope is False:
+        return qs.none()
+    qs = qs.filter(pk=scope.pk)
+    return qs.order_by(order) if order else qs
+
+
+def scoped(qs, request, field='branch'):
+    """So'rovni foydalanuvchi filiali bilan cheklaydi.
+
+    Egasi uchun so'rov o'zgarmaydi. Filial admini/sotuvchisi uchun
+    `field` bo'yicha qisiladi; filiali yo'q bo'lsa — BO'SH natija
+    (ochiq qoldirilmaydi).
+
+    `field` ko'p pog'onali bo'lishi mumkin ("sale__branch"), va bir
+    nechta yo'lni vergul bilan berish mumkin ("from_branch,to_branch") —
+    u holda ULARDAN BIRI mos kelsa yetarli (transfer ikki filialga
+    tegadi: admin o'ziniki ishtirok etgan transferni ko'rishi kerak).
+    """
+    scope = request.user.scope_branch()
+    if scope is None:
+        return qs
+    if scope is False:
+        return qs.none()
+    fields = [f.strip() for f in field.split(',') if f.strip()]
+    if not fields:
+        return qs.none()
+    cond = Q()
+    for f in fields:
+        cond |= Q(**{f: scope})
+    return qs.filter(cond)
+
+
+def visible_users(request, *, active_only=True, order='username'):
+    """Bu foydalanuvchiga ko'rinadigan xodimlar.
+
+    Egasi — hammasi; filial admini — FAQAT o'z filiali xodimlari.
+    "Sotuvchi bo'yicha" filtrlari shu yerdan qurilsin: ilgari ular
+    `User.objects.filter(is_active=True)` dan qurilar va Xonqa
+    adminiga Koreys Bozor kassirlarining ismini ko'rsatardi.
+    """
+    from .models import User
+    qs = User.objects.all()
+    if active_only:
+        qs = qs.filter(is_active=True)
+    scope = request.user.scope_branch()
+    if scope is False:
+        return qs.none()
+    if scope is not None:
+        qs = qs.filter(branch=scope)
+    return qs.order_by(order) if order else qs
+
+
+def picked_branch_id(request, raw):
+    """Sahifadagi "Filial" filtri uchun yakuniy qiymat.
+
+    Egasi nimani tanlagan bo'lsa — o'shani (yaroqsiz bo'lsa bo'sh).
+    Boshqa hamma uchun — HAR DOIM o'z filiali, GET nima deyishidan
+    qat'i nazar. Qaytadi: (branch_id_str, branch_obj_or_None).
+    """
+    scope = request.user.scope_branch()
+    if scope is not None:
+        return ('' if scope is False else str(scope.pk)), (scope or None)
+    if not raw:
+        return '', None
+    try:
+        b = Branch.objects.filter(pk=int(raw)).first()
+    except (TypeError, ValueError):
+        return '', None
+    return (str(b.pk), b) if b else ('', None)
+
+
+def branch_or_403(request, branch):
+    """Bitta yozuvni ochishdan oldin: u shu foydalanuvchinikimi?
+
+    Sahifa ro'yxatni to'g'ri qisgani bilan, kimdir /shifts/57/ deb
+    to'g'ridan-to'g'ri kirishi mumkin. Har bir DETAL sahifasi shu
+    tekshiruvdan o'tsin.
+    """
+    if request.user.can_see_branch(branch):
+        return None
+    return HttpResponseForbidden(
+        "<h3>Ruxsat yo'q.</h3><p>Bu yozuv boshqa filialga tegishli.</p>"
+    )
+
 
 def get_user_branch(user):
     """Sotuvchi uchun majburiy filial. Admin uchun None bo'lishi mumkin."""
@@ -61,7 +208,11 @@ def _user_branch_or_403(request):
       5) any open shift's branch
       6) first active branch
     """
-    if not request.user.is_admin():
+    # ROLE-3: pastdagi "boshqa filialga o'tish" zanjiri FAQAT egasi
+    # uchun. Ilgari sharti is_admin() edi — ya'ni filial admini
+    # ?branch_id= bilan yoki hatto biriktirilmagan bo'lsa "birinchi
+    # ochiq smena" orqali BOSHQA filial kassasiga tushib qolardi.
+    if not request.user.is_owner():
         return request.user.branch
 
     sb_id = request.session.get(POS_BRANCH_SESSION_KEY)

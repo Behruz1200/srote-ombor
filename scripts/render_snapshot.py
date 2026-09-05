@@ -60,8 +60,11 @@ def build_world():
         Transfer, CashPayout, AuditLog, Promotion,
     )
     br = Branch.objects.create(name='Markaz', monthly_rent=Decimal('1000000'))
+    # ROLE-1: surat EGASI ko'zi bilan olinadi — u barcha sahifalarni
+    # ochadi. Filial admini ko'radigan cheklangan ko'rinish alohida
+    # tekshiriladi (scripts/browser_check_roles.py).
     admin = User.objects.create_user(username='snapadmin', password='x',
-                                     role=User.Role.ADMIN, branch=br)
+                                     role=User.Role.SUPERUSER, branch=br)
     User.objects.create_user(username='snapseller', password='x',
                              role=User.Role.SOTUVCHI, branch=br)
     Supplier.objects.create(name='Yetkazuvchi 1')

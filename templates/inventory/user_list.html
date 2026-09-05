@@ -112,12 +112,14 @@
                                 {% if u.first_name or u.last_name %}
                                     <div class="small text-muted">{{ u.first_name }} {{ u.last_name }}</div>
                                 {% endif %}
-                                {% if u.is_superuser %}
-                                    <span class="yrt-tag">superuser</span>
+                                {% if u.is_owner %}
+                                    <span class="yrt-tag">butun tizim</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if u.role == 'admin' %}
+                                {% if u.is_owner %}
+                                    <span class="yrt-tag dark">Egasi</span>
+                                {% elif u.role == 'admin' %}
                                     <span class="yrt-tag danger">Admin</span>
                                 {% else %}
                                     <span class="yrt-tag primary">Sotuvchi</span>

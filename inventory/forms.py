@@ -237,8 +237,43 @@ class UserCreateForm(forms.ModelForm):
             'is_active': 'Faol',
         }
 
-    def __init__(self, *args, **kwargs):
+    # ---- ROLE-4 -----------------------------------------------------
+    # Filial admini o'z filialiga SOTUVCHI qo'sha oladi, xolos. Ikki
+    # cheklov ham forma DARAJASIDA turadi (nafaqat ko'rinishda):
+    # ModelChoiceField/ChoiceField yuborilgan qiymatni tekshiradi, ya'ni
+    # qo'lda yasalgan POST ham o'tmaydi.
+    def _limit_to(self, user):
+        if user is None:
+            return
+        scope = user.scope_branch()
+        if scope is None:                      # egasi — cheklov yo'q
+            return
+        if scope is False:                     # filiali yo'q — hech nima
+            self.fields['branch'].queryset = Branch.objects.none()
+            self.fields['role'].choices = []
+            return
+        self.fields['branch'].queryset = Branch.objects.filter(pk=scope.pk)
+        self.fields['branch'].initial = scope.pk
+        self.fields['branch'].required = True
+        # Bo'sh ("---------") band ham olib tashlanadi: tanlov bitta,
+        # va uni bo'sh qoldirib filialsiz xodim yaratib bo'lmasin.
+        self.fields['branch'].empty_label = None
+        allowed = [(User.Role.SOTUVCHI, User.Role.SOTUVCHI.label)]
+        # O'ZINI tahrirlayotgan bo'lsa — o'z roli ro'yxatda qolsin, aks
+        # holda parolini o'zgartirgani kirgan admin saqlash bosishi bilan
+        # O'ZINI sotuvchiga tushirib qo'yardi. Ro'yxatda faqat shu ikkisi
+        # bo'lgani uchun u baribir huquqini OSHIRA olmaydi.
+        inst = getattr(self, 'instance', None)
+        if inst is not None and inst.pk == user.pk and inst.role:
+            allowed = [(inst.role, inst.get_role_display())]
+            self.fields['role'].disabled = True
+            self.fields['branch'].disabled = True
+        self.fields['role'].choices = allowed
+        self.fields['role'].initial = allowed[0][0]
+
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self._limit_to(user)
         self.fields['commission_percent'].required = False
         self.fields['commission_percent'].initial = 0
 
@@ -280,8 +315,43 @@ class UserEditForm(forms.ModelForm):
             'is_active': 'Faol',
         }
 
-    def __init__(self, *args, **kwargs):
+    # ---- ROLE-4 -----------------------------------------------------
+    # Filial admini o'z filialiga SOTUVCHI qo'sha oladi, xolos. Ikki
+    # cheklov ham forma DARAJASIDA turadi (nafaqat ko'rinishda):
+    # ModelChoiceField/ChoiceField yuborilgan qiymatni tekshiradi, ya'ni
+    # qo'lda yasalgan POST ham o'tmaydi.
+    def _limit_to(self, user):
+        if user is None:
+            return
+        scope = user.scope_branch()
+        if scope is None:                      # egasi — cheklov yo'q
+            return
+        if scope is False:                     # filiali yo'q — hech nima
+            self.fields['branch'].queryset = Branch.objects.none()
+            self.fields['role'].choices = []
+            return
+        self.fields['branch'].queryset = Branch.objects.filter(pk=scope.pk)
+        self.fields['branch'].initial = scope.pk
+        self.fields['branch'].required = True
+        # Bo'sh ("---------") band ham olib tashlanadi: tanlov bitta,
+        # va uni bo'sh qoldirib filialsiz xodim yaratib bo'lmasin.
+        self.fields['branch'].empty_label = None
+        allowed = [(User.Role.SOTUVCHI, User.Role.SOTUVCHI.label)]
+        # O'ZINI tahrirlayotgan bo'lsa — o'z roli ro'yxatda qolsin, aks
+        # holda parolini o'zgartirgani kirgan admin saqlash bosishi bilan
+        # O'ZINI sotuvchiga tushirib qo'yardi. Ro'yxatda faqat shu ikkisi
+        # bo'lgani uchun u baribir huquqini OSHIRA olmaydi.
+        inst = getattr(self, 'instance', None)
+        if inst is not None and inst.pk == user.pk and inst.role:
+            allowed = [(inst.role, inst.get_role_display())]
+            self.fields['role'].disabled = True
+            self.fields['branch'].disabled = True
+        self.fields['role'].choices = allowed
+        self.fields['role'].initial = allowed[0][0]
+
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self._limit_to(user)
         self.fields['commission_percent'].required = False
         self.fields['commission_percent'].initial = 0
 
@@ -361,6 +431,25 @@ class ReportForm(forms.Form):
         required=False, empty_label='— Barcha filiallar —',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+
+    def __init__(self, *args, user=None, **kwargs):
+        """ROLE-3: filial admini uchun ro'yxat BITTA filialdan iborat.
+
+        Bu shunchaki ko'rinish emas — ModelChoiceField tanlovni ham
+        TEKSHIRADI, ya'ni ?branch=<boshqa filial> deb yuborilsa forma
+        yaroqsiz bo'ladi va hisobot umuman qurilmaydi.
+        """
+        super().__init__(*args, **kwargs)
+        scope = user.scope_branch() if user is not None else None
+        if scope is None:
+            return
+        if scope is False:
+            self.fields['branch'].queryset = Branch.objects.none()
+            return
+        self.fields['branch'].queryset = Branch.objects.filter(pk=scope.pk)
+        self.fields['branch'].empty_label = None
+        self.fields['branch'].required = True
+        self.fields['branch'].initial = scope.pk
 
     # Pivot-only controls (ignored for other report types)
     pivot_rows = forms.MultipleChoiceField(

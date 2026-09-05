@@ -143,7 +143,28 @@ class Branch(models.Model):
 
 
 class User(AbstractUser):
+    """ROLE-1 — uchta rol.
+
+    Ilgari ikkita rol bor edi va "admin" HAMMA filialni ko'rardi. Ikki
+    filialli do'konda bu noto'g'ri: Xonqa administratori Koreys Bozor
+    tushumini, xodimlarini va zaxirasini ko'rib turardi.
+
+    Endi:
+      * SUPERUSER (egasi) — hamma narsa, hamma filial. Katalog, umumiy
+        narx, aksiya, filial ochish, admin tayinlash — faqat shu rol.
+      * ADMIN        — FAQAT o'z filiali. Ichida to'liq nazorat: qabul,
+        inventarizatsiya, smena, kassa, qaytarish, hisobot, transfer va
+        o'z filialiga sotuvchi qo'shish.
+      * SOTUVCHI     — FAQAT o'z filialida sotadi.
+
+    `is_admin()` "admin darajasidagi huquq" degani (egasi ham, filial
+    admini ham) — u SAHIFAGA kirishni hal qiladi. Sahifa ichida QAYSI
+    ma'lumot ko'rinishini `scope_branch()` hal qiladi: egasi uchun None
+    (cheklovsiz), filial admini uchun esa o'z filiali.
+    """
+
     class Role(models.TextChoices):
+        SUPERUSER = 'superuser', 'Egasi (SuperUser)'
         ADMIN = 'admin', 'Administrator'
         SOTUVCHI = 'sotuvchi', 'Sotuvchi'
 
@@ -164,8 +185,53 @@ class User(AbstractUser):
     # ishlatilmasin (replay). Ushlangan kod 90 soniya amal qilardi.
     last_totp_step = models.BigIntegerField(null=True, blank=True, editable=False)
 
+    # ---- ROL TEKSHIRUVLARI ------------------------------------------
+    # Bu yerdagi to'rt metod butun tizimdagi YAGONA manba. Boshqa hech
+    # qayerda `role == 'admin'` deb yozilmasin.
+
+    def is_owner(self):
+        """Egasi — hamma filial, hamma sahifa. Django'ning is_superuser
+        bayrog'i ham shu darajani beradi (eski hisoblar shu bilan
+        yaratilgan va ular egasi bo'lib qolishi kerak)."""
+        return self.role == self.Role.SUPERUSER or self.is_superuser
+
     def is_admin(self):
-        return self.role == self.Role.ADMIN or self.is_superuser
+        """Admin darajasidagi huquq: egasi YOKI filial admini.
+
+        Bu FAQAT "sahifaga kira oladimi" degan savolga javob beradi.
+        "Qaysi ma'lumotni ko'radi" — bu scope_branch() ning ishi.
+        """
+        return self.is_owner() or self.role == self.Role.ADMIN
+
+    def is_branch_admin(self):
+        """Faqat o'z filiali bilan cheklangan admin (egasi EMAS)."""
+        return self.role == self.Role.ADMIN and not self.is_owner()
+
+    def is_seller(self):
+        return self.role == self.Role.SOTUVCHI and not self.is_owner()
+
+    def scope_branch(self):
+        """Bu foydalanuvchi uchun majburiy filial, yoki None (cheklovsiz).
+
+        None FAQAT egasida bo'ladi. Filial admini yoki sotuvchiga filial
+        biriktirilmagan bo'lsa — None emas, FALSE qaytadi: bu "hech nima
+        ko'rmaydi" degani. Shunday qilib biriktirilmagan hisob
+        xatolik tufayli HAMMA narsani ko'rib qolmaydi.
+        """
+        if self.is_owner():
+            return None
+        return self.branch or False
+
+    def can_see_branch(self, branch):
+        if branch is None:
+            return False
+        scope = self.scope_branch()
+        if scope is None:
+            return True
+        if scope is False:
+            return False
+        bid = getattr(branch, 'pk', branch)
+        return scope.pk == bid
 
 
 class Group(models.Model):

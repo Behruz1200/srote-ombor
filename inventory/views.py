@@ -70,7 +70,8 @@ from .audit import BATCH_PREVIEW, audit_batch, log_action   # AUD-1
 from .signals import pin_before                             # AUD-2
 from .access import (          # ARCH-2
     POS_BRANCH_SESSION_KEY, _open_shift_for, _user_branch_or_403,
-    admin_required, get_user_branch, normalize_code,
+    admin_required, owner_required, visible_branches, visible_users, scoped,
+    picked_branch_id, branch_or_403, get_user_branch, normalize_code,
 )
 from .views_pos import (      # ARCH-2 — urls.py hali views.pos_* deb chaqiradi
     QUICK_SELL_CATEGORY,
@@ -394,11 +395,8 @@ def lookup(request):
             sizes = sorted({v.size for v in variants}, key=lambda s: (len(s), s))
             colors = sorted({v.color for v in variants})
 
-            if request.user.is_admin():
-                branches = Branch.objects.filter(is_active=True)
-            else:
-                branches = Branch.objects.filter(pk=request.user.branch_id) \
-                    if request.user.branch_id else Branch.objects.none()
+            # ROLE-3: egasi — hammasi, qolgani — faqat o'z filiali.
+            branches = visible_branches(request, order=None)
 
             # Aggregate stats across all branches (admin) or single branch
             total_stock = 0
@@ -503,17 +501,37 @@ def lookup(request):
 
 # ---------- DASHBOARD ----------
 
-DASHBOARD_CACHE_KEY = 'dashboard:hq:v5'
+DASHBOARD_CACHE_KEY = 'dashboard:hq:v6'
+
+
+def dashboard_cache_key(branch_id=None):
+    """ROLE-3: boshqaruv paneli endi FILIAL bo'yicha keshlanadi.
+
+    Ilgari bitta global kesh bor edi — filial admini ochsa, unga butun
+    do'kon raqamlari (hamma filial tushumi) ko'rinardi. Endi egasi
+    "all" keshini, har bir filial admini esa o'z filiali keshini oladi.
+    """
+    return f'{DASHBOARD_CACHE_KEY}:{branch_id or "all"}'
 DASHBOARD_CACHE_TTL = 60  # seconds — heavy aggregates only; recent_sales stays live
 
 
-def _dashboard_aggregates():
+def _dashboard_aggregates(branch_id=None):
     """Compute the cacheable, expensive part of the dashboard.
+
+    branch_id=None — butun do'kon (egasi). Aks holda FAQAT shu filial:
+    har bir so'rov `branch_id` bo'yicha qisiladi, shu jumladan zaxira,
+    pul oqimi va "filiallar bo'yicha" qatori ham.
 
     Returned dict is JSON-serializable (Branch model is keyed by id, looked up
     on render). TTL is short (60s) so per-shift drift is invisible to users.
     Invalidated explicitly when a SaleTransaction is saved (see signals.py).
     """
+    # ROLE-3: bitta joyda filial cheklovi. Har bir so'rov shundan o'tadi,
+    # shunda yangi ko'rsatkich qo'shilganda uni scope qilish esdan
+    # chiqmaydi — `_b()` ni chaqirmasa, so'rov umuman tuzilmaydi.
+    def _b(qs, field='branch_id'):
+        return qs if branch_id is None else qs.filter(**{field: branch_id})
+
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)
 
@@ -551,8 +569,8 @@ def _dashboard_aggregates():
             'txns': a['txns'] or 0,
         }
 
-    today_stats = _agg(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
-    yesterday_stats = _agg(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
+    today_stats = _agg(_b(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)))
+    yesterday_stats = _agg(_b(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end)))
 
     # Bugungi pul oqimi — to'lov turi bo'yicha. "Aralash" (mixed) cheklar
     # payment_breakdown bo'yicha naqd/karta/o'tkazma qismlariga BO'LINADI —
@@ -577,7 +595,7 @@ def _dashboard_aggregates():
             else:
                 out['other'] += rev
         if mixed_rev:
-            txns = (SaleTransaction.objects.filter(id__in=list(mixed_rev.keys()))
+            txns = (_b(SaleTransaction.objects.filter(id__in=list(mixed_rev.keys())))
                     .values('id', 'payment_breakdown'))
             for t in txns:
                 rev = mixed_rev.get(t['id'], 0.0)
@@ -588,14 +606,15 @@ def _dashboard_aggregates():
         return out
 
     today_by_method = _by_method(
-        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
+        _b(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)))
     yesterday_by_method = _by_method(
-        Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end))
+        _b(Sale.objects.filter(sold_at__gte=yesterday_start, sold_at__lt=yesterday_end)))
 
     # Bugungi qaytarishlar — ASL to'lov turi bo'yicha (sof savdoni ko'rsatish uchun)
     def _returns_by_method(start, end):
         out = {'cash': 0.0, 'card': 0.0, 'transfer': 0.0}
-        rets = (Return.objects.filter(refunded_at__gte=start, refunded_at__lt=end)
+        rets = (_b(Return.objects.filter(refunded_at__gte=start, refunded_at__lt=end),
+                   'sale__branch_id')
                 .select_related('sale__transaction'))
         for r in rets:
             amt = float(r.effective_cash_refund)
@@ -617,14 +636,14 @@ def _dashboard_aggregates():
     # 7-day trend — single annotated query
     week_start = today_start - timedelta(days=6)
     trend_qs = (
-        Sale.objects.filter(sold_at__gte=week_start, sold_at__lt=today_end)
+        _b(Sale.objects.filter(sold_at__gte=week_start, sold_at__lt=today_end))
         .annotate(day=TruncDate('sold_at'))
         .values('day')
         .annotate(rev=Sum(revenue_expr), q=Sum('quantity'))
     )
     day_map = {r['day']: r for r in trend_qs}
     _, _od_by_day = _order_discount_share(
-        Sale.objects.filter(sold_at__gte=week_start, sold_at__lt=today_end),
+        _b(Sale.objects.filter(sold_at__gte=week_start, sold_at__lt=today_end)),
         'sold_at__date')
     trend_labels, trend_revenue, trend_qty = [], [], []
     for i in range(6, -1, -1):
@@ -635,7 +654,7 @@ def _dashboard_aggregates():
         trend_qty.append(r.get('q') or 0)
 
     # Inventory snapshot — one aggregate covers stock count + value
-    inv_totals = BranchStock.objects.aggregate(
+    inv_totals = _b(BranchStock.objects.all()).aggregate(
         s=Sum('stock_count'),
         v=Sum(ExpressionWrapper(F('stock_count') * F('cost_price'),
                                 output_field=DecimalField(max_digits=14, decimal_places=2))),
@@ -646,7 +665,7 @@ def _dashboard_aggregates():
     # Per-branch today — 2 aggregated queries, independent of branch count
     rev_by_branch = {
         r['branch_id']: r for r in
-        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)
+        _b(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
         .values('branch_id')
         .annotate(
             revenue=Sum(revenue_expr),
@@ -656,11 +675,11 @@ def _dashboard_aggregates():
     }
     stock_by_branch = {
         r['branch_id']: r['stock_count__sum']
-        for r in BranchStock.objects.values('branch_id').annotate(stock_count__sum=Sum('stock_count'))
+        for r in _b(BranchStock.objects.all()).values('branch_id').annotate(stock_count__sum=Sum('stock_count'))
     }
 
     _, _od_by_branch = _order_discount_share(
-        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end),
+        _b(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)),
         'branch_id')
     branch_today_raw = [
         {
@@ -672,11 +691,13 @@ def _dashboard_aggregates():
             'txns': (rev_by_branch.get(bid) or {}).get('txns') or 0,
             'stock': stock_by_branch.get(bid, 0),
         }
-        for bid in Branch.objects.filter(is_active=True).values_list('id', flat=True)
+        for bid in (Branch.objects.filter(is_active=True)
+                    if branch_id is None else
+                    Branch.objects.filter(pk=branch_id)).values_list('id', flat=True)
     ]
 
     top_today = list(
-        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)
+        _b(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end))
         .values('variant__product__code', 'variant__product__name')
         .annotate(qty=Sum('quantity'), revenue=Sum(revenue_expr))
         .order_by('-qty')[:5]
@@ -687,7 +708,7 @@ def _dashboard_aggregates():
     # emas (egasining qoidasi), shuning uchun qatorlar O'Z narxida qoladi va
     # chegirma alohida ko'rsatiladi (SAL-6).
     _od_today, _, _disc_split = _order_discount_share(
-        Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end),
+        _b(Sale.objects.filter(sold_at__gte=today_start, sold_at__lt=today_end)),
         split=True)
 
     return {
@@ -712,7 +733,13 @@ def _dashboard_aggregates():
 
 @admin_required
 def dashboard(request):
-    agg = cache.get_or_set(DASHBOARD_CACHE_KEY, _dashboard_aggregates, DASHBOARD_CACHE_TTL)
+    # ROLE-3: filial admini uchun BUTUN panel o'z filiali raqamlaridan
+    # quriladi — jami tushum, foyda, pul oqimi, zaxira, hammasi.
+    _scope = request.user.scope_branch()
+    _bid = None if _scope is None else (_scope.pk if _scope else 0)
+    agg = cache.get_or_set(dashboard_cache_key(_bid),
+                           lambda: _dashboard_aggregates(_bid),
+                           DASHBOARD_CACHE_TTL)
 
     today = date.fromisoformat(agg['today_iso'])
     yesterday = date.fromisoformat(agg['yesterday_iso'])
@@ -749,7 +776,7 @@ def dashboard(request):
 
     # Hydrate branch_today_raw with live Branch objects (Branch model not cached
     # in case is_active toggles during the 60s window)
-    active_branches = {b.id: b for b in Branch.objects.filter(is_active=True)}
+    active_branches = {b.id: b for b in visible_branches(request, order=None)}
     branch_today = []
     for row in agg['branch_today_raw']:
         br = active_branches.get(row['branch_id'])
@@ -763,24 +790,34 @@ def dashboard(request):
             'stock': row['stock'],
         })
 
+    # Katalog global — mahsulot soni hamma uchun bir xil.
     total_products = Product.objects.count()
     total_branches = len(active_branches)
 
     # ---- Live (uncached) data: attention widgets + recent activity ----
-    low_stock_count = BranchStock.objects.filter(stock_count__lte=3).count()
-    low_stock_preview = list(BranchStock.objects.filter(stock_count__lte=3)
-                             .select_related('variant__product', 'branch')
-                             .order_by('stock_count')[:5])
-    out_of_stock_count = BranchStock.objects.filter(stock_count=0).count()
-    open_shifts_count = Shift.objects.filter(status=Shift.Status.OPEN).count()
-    pending_intents_count = PaymentIntent.objects.filter(
+    # ROLE-3: bu blok keshdan TASHQARIDA, shuning uchun uni ham alohida
+    # qisamiz. Ilgari filial admini o'z panelida boshqa filialning
+    # oxirgi cheklarini, kassirlarini va tugagan tovarlarini ko'rardi.
+    low_stock_count = scoped(
+        BranchStock.objects.filter(stock_count__lte=3), request).count()
+    low_stock_preview = list(
+        scoped(BranchStock.objects.filter(stock_count__lte=3), request)
+        .select_related('variant__product', 'branch')
+        .order_by('stock_count')[:5])
+    out_of_stock_count = scoped(
+        BranchStock.objects.filter(stock_count=0), request).count()
+    open_shifts_count = scoped(
+        Shift.objects.filter(status=Shift.Status.OPEN), request).count()
+    pending_intents_count = scoped(PaymentIntent.objects.filter(
         status=PaymentIntent.Status.PENDING,
         created_at__gte=timezone.now() - timedelta(hours=24),
-    ).count()
-    in_transit_count = Transfer.objects.filter(status=Transfer.Status.IN_TRANSIT).count()
-    open_parked_count = ParkedSale.objects.count()
+    ), request).count()
+    in_transit_count = scoped(
+        Transfer.objects.filter(status=Transfer.Status.IN_TRANSIT),
+        request, 'from_branch,to_branch').count()
+    open_parked_count = scoped(ParkedSale.objects.all(), request).count()
 
-    recent_sales = (SaleTransaction.objects
+    recent_sales = (scoped(SaleTransaction.objects.all(), request)
                     .select_related('branch', 'sold_by')
                     .prefetch_related('lines')
                     .order_by('-sold_at')[:8])
@@ -1408,7 +1445,7 @@ def employee_debt_list(request):
         messages.success(request, "Qarz qo'shildi.")
         return redirect('employee_debt_list')
 
-    debts = list(EmployeeDebt.objects.select_related('employee', 'created_by')
+    debts = list(scoped(EmployeeDebt.objects.select_related('employee', 'created_by'), request)
                  .prefetch_related('items')
                  .order_by('is_paid', '-created_at'))
     open_debts = [d for d in debts if not d.is_paid]
@@ -1420,7 +1457,7 @@ def employee_debt_list(request):
     per_emp = sorted(per_emp.items(), key=lambda x: -x[1])
     total_open = sum(float(d.amount) for d in open_debts)
     from django.contrib.auth import get_user_model
-    employees = get_user_model().objects.filter(is_active=True).order_by('username')
+    employees = visible_users(request)      # ROLE-3
     return render(request, 'inventory/employee_debt_list.html', {
         'open_debts': open_debts, 'paid_debts': paid_debts,
         'per_emp': per_emp, 'total_open': total_open,
@@ -1428,7 +1465,7 @@ def employee_debt_list(request):
     })
 
 
-@admin_required
+@owner_required
 def product_resolve_name(request):
     """Nom ziddiyatini hal qilish: bir xil shtrix-kodga 2 xil nom bo'lsa,
     foydalanuvchi qaysi birini qoldirishni tanlaydi.
@@ -1457,7 +1494,7 @@ def product_resolve_name(request):
     return redirect(request.META.get('HTTP_REFERER') or 'product_list')
 
 
-@admin_required
+@owner_required
 def product_create(request):
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES)
@@ -1491,7 +1528,7 @@ def product_create(request):
     })
 
 
-@admin_required
+@owner_required
 def product_delete(request, code):
     """Mahsulotni o'chirish (POST). Sotuv tarixi bo'lsa DB himoya qiladi
     (PROTECT) — aniq xabar bilan rad etiladi."""
@@ -1518,7 +1555,7 @@ def product_delete(request, code):
     return redirect('product_list')
 
 
-@admin_required
+@owner_required
 def variant_delete(request, pk):
     """Turni (rang/o'lcham) o'chirish. Sotuv/transfer/inventarizatsiya
     tarixi bo'lsa DB himoyasi (PROTECT) — aniq xabar bilan rad etiladi."""
@@ -1548,7 +1585,7 @@ def variant_delete(request, pk):
     return redirect(back)
 
 
-@admin_required
+@owner_required
 def product_variants_move(request, code):
     """Tanlangan turlarni boshqa mahsulotga ko'chirish."""
     product = get_object_or_404(Product, code=normalize_code(code))
@@ -1594,7 +1631,7 @@ def product_variants_move(request, code):
     return redirect(back)
 
 
-@admin_required
+@owner_required
 def product_merge(request):
     """Bir nechta mahsulotni bittasiga birlashtirish.
 
@@ -1782,7 +1819,7 @@ def product_search_for_attach(request):
     ]})
 
 
-@admin_required
+@owner_required
 def product_attach_barcode(request):
     """POST /products/attach-barcode/  body: code, barcode
     Attach an external_barcode to an existing product. Refuses if the
@@ -1838,7 +1875,7 @@ def product_detail(request, code):
         stocks_by_branch.setdefault(st.branch_id, []).append(st)
 
     branches_data = []
-    for br in Branch.objects.filter(is_active=True):
+    for br in visible_branches(request, order=None):
         stocks = stocks_by_branch.get(br.id, [])
         matrix = {(s.variant.size, s.variant.color): s for s in stocks}
         total = sum(s.stock_count for s in stocks)
@@ -2131,7 +2168,7 @@ def product_detail(request, code):
     })
 
 
-@admin_required
+@owner_required
 def product_edit(request, code):
     product = get_object_or_404(Product, code=normalize_code(code))
     if request.method == 'POST':
@@ -2170,7 +2207,7 @@ def intake_for_product(request, code):
     if request.method == 'POST':
         try:
             branch_id = int(request.POST.get('branch') or 0)
-            branch = Branch.objects.filter(pk=branch_id, is_active=True).first()
+            branch = visible_branches(request, order=None).filter(pk=branch_id).first()
             if not branch:
                 messages.error(request, "Filial tanlang.")
                 return redirect('intake_for_product', code=product.code)
@@ -2286,7 +2323,7 @@ def intake_for_product(request, code):
 
     return render(request, 'inventory/intake_form.html', {
         'product': product,
-        'branches': Branch.objects.filter(is_active=True),
+        'branches': visible_branches(request, order=None),
         'existing_sizes': existing_sizes,
         'existing_colors': existing_colors,
         'last_intakes': last_intakes,
@@ -2306,7 +2343,7 @@ def product_variants_edit(request, code):
     from decimal import Decimal, InvalidOperation
 
     product = get_object_or_404(Product, code=normalize_code(code))
-    branches = Branch.objects.filter(is_active=True)
+    branches = visible_branches(request, order=None)
     try:
         branch = branches.get(pk=int(request.GET.get('branch')
                                      or request.POST.get('branch') or 0))
@@ -2614,7 +2651,7 @@ def clothes_intake(request):
     keyin termal etiketka chop etiladi."""
     from decimal import Decimal, InvalidOperation
     categories = Category.objects.order_by('name')
-    branches = Branch.objects.filter(is_active=True)
+    branches = visible_branches(request, order=None)
 
     if request.method == 'POST':
         errors = []
@@ -2627,8 +2664,8 @@ def clothes_intake(request):
         if not category:
             errors.append("Kategoriya (tur) ni tanlang.")
 
-        branch = Branch.objects.filter(
-            pk=request.POST.get('branch') or 0, is_active=True).first()
+        branch = visible_branches(request, order=None).filter(
+            pk=request.POST.get('branch') or 0).first()
         if not branch:
             errors.append("Filial tanlang.")
 
@@ -2929,7 +2966,7 @@ def intake_variants(request):
     from decimal import Decimal, InvalidOperation
 
     categories = Category.objects.order_by('name')
-    branches = Branch.objects.filter(is_active=True)
+    branches = visible_branches(request, order=None)
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
 
     prefill_product = None
@@ -2959,8 +2996,8 @@ def intake_variants(request):
         else:
             errors.append("Mahsulot tanlang yoki yangi mahsulot nomini kiriting.")
 
-        branch = Branch.objects.filter(
-            pk=request.POST.get('branch') or 0, is_active=True).first()
+        branch = visible_branches(request, order=None).filter(
+            pk=request.POST.get('branch') or 0).first()
         if not branch:
             errors.append("Filial tanlang.")
 
@@ -3285,13 +3322,13 @@ def intake_import(request):
     """
     from decimal import Decimal
 
-    branches = Branch.objects.filter(is_active=True)
+    branches = visible_branches(request, order=None)
 
     if request.method == 'POST' and request.FILES.get('file'):
         from openpyxl import load_workbook
 
-        branch = Branch.objects.filter(
-            pk=request.POST.get('branch') or 0, is_active=True).first()
+        branch = visible_branches(request, order=None).filter(
+            pk=request.POST.get('branch') or 0).first()
         if not branch:
             messages.error(request, "Filial tanlang.")
             return redirect('intake_import')
@@ -3568,7 +3605,7 @@ def intake_supplier_search(request):
     })
 
 
-@admin_required
+@owner_required
 def send_daily_summary_now(request):
     """POST /dashboard/send-daily/ — Telegram'ga kunlik xulosa yuborish."""
     if request.method != 'POST':
@@ -3625,7 +3662,7 @@ def _clean_text(s, max_len=None):
     return s
 
 
-@admin_required
+@owner_required
 def csv_import(request):
     """CSV import: mahsulot, mijoz yoki zaxira.
 
@@ -4002,7 +4039,9 @@ def reorder_page(request):
     """
     BUFFER_DAYS = int(request.GET.get('buffer') or 14)
     LOW_THRESHOLD = int(request.GET.get('threshold') or 5)
-    branch_id = request.GET.get('branch') or ''
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
 
     since_30d = timezone.now() - timedelta(days=30)
 
@@ -4149,7 +4188,7 @@ def reorder_page(request):
         'buffer_days': BUFFER_DAYS,
         'low_threshold': LOW_THRESHOLD,
         'branch_id': branch_id,
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'branches': visible_branches(request),
     })
 
 
@@ -4229,7 +4268,7 @@ def intake_photo(request):
         if not draft_data['pages'] and draft_data['image_url']:
             draft_data['pages'] = [draft_data['image_url']]
     return render(request, 'inventory/intake_photo.html', {
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'branches': visible_branches(request),
         'categories': Category.objects.order_by('name'),
         'suppliers': Supplier.objects.filter(is_active=True).order_by('name'),
         'product_names': list(Product.objects.order_by('name')
@@ -4293,8 +4332,8 @@ def intake_photo_draft(request):
             pk=payload['draft_id'], created_by=request.user).first()
     if draft is None:
         draft = InvoiceDraft(created_by=request.user)
-    draft.branch = Branch.objects.filter(
-        pk=data['branch'] or 0, is_active=True).first()
+    draft.branch = visible_branches(request, order=None).filter(
+        pk=data['branch'] or 0).first()
     draft.supplier_text = data['supplier']
     draft.invoice_number = data['invoice_no']
     draft.payload = data
@@ -4415,8 +4454,8 @@ def intake_photo_save(request):
     if payload is None:
         return api_err('bad JSON', 400)
 
-    branch = Branch.objects.filter(
-        pk=payload.get('branch') or 0, is_active=True).first()
+    branch = visible_branches(request, order=None).filter(
+        pk=payload.get('branch') or 0).first()
     if not branch:
         return JsonResponse({'ok': False, 'error': 'Filial tanlang.'}, status=400)
 
@@ -4709,7 +4748,9 @@ def intake_session_detail(request, pk):
 def stocktake_list(request):
     """Inventarizatsiyalar + filtrlar + ochiq sessiyalar banner."""
     status = request.GET.get('status') or ''
-    branch_id = request.GET.get('branch') or ''
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
 
     qs = (Stocktake.objects.select_related('branch', 'started_by', 'applied_by'))
     if status:
@@ -4738,20 +4779,20 @@ def stocktake_list(request):
         'open_sessions': open_sessions,
         'status': status,
         'branch_id': branch_id,
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'branches': visible_branches(request),
         'status_choices': Stocktake.Status.choices,
     })
 
 
 @admin_required
 def stocktake_create(request):
-    branches = Branch.objects.filter(is_active=True)
+    branches = visible_branches(request, order=None)
     if request.method == 'POST':
         try:
             branch_id = int(request.POST.get('branch') or 0)
         except ValueError:
             branch_id = 0
-        branch = Branch.objects.filter(pk=branch_id, is_active=True).first()
+        branch = visible_branches(request, order=None).filter(pk=branch_id).first()
         if not branch:
             messages.error(request, "Filial tanlang.")
             return redirect('stocktake_create')
@@ -4888,7 +4929,9 @@ def stocktake_detail(request, pk):
 def transfer_list(request):
     """Ko'chirishlar ro'yxati + filtrlar + overdue alert + status counts."""
     status = request.GET.get('status') or ''
-    branch_id = request.GET.get('branch') or ''
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
 
     qs = (Transfer.objects.select_related('from_branch', 'to_branch',
                                           'created_by', 'received_by')
@@ -4922,7 +4965,7 @@ def transfer_list(request):
         'transfers': transfers,
         'status': status,
         'branch_id': branch_id,
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'branches': visible_branches(request),
         'status_choices': Transfer.Status.choices,
         'counts': counts,
         'overdue_transfers': overdue_transfers,
@@ -4931,7 +4974,7 @@ def transfer_list(request):
 
 @admin_required
 def transfer_create(request):
-    branches = Branch.objects.filter(is_active=True)
+    branches = visible_branches(request, order=None)
     if request.method == 'POST':
         try:
             from_id = int(request.POST.get('from_branch') or 0)
@@ -4945,6 +4988,14 @@ def transfer_create(request):
         to_branch = Branch.objects.filter(pk=to_id).first()
         if not from_branch or not to_branch:
             messages.error(request, "Filiallar topilmadi."); return redirect('transfer_create')
+        # ROLE-3: ko'chirish IKKI filialga tegadi. Filial admini faqat
+        # O'Z filialidan jo'nata oladi (kelayotganini qabul qilish
+        # transfer_receive'da). Aks holda u boshqa filial omborini
+        # bo'shatib yuborishi mumkin edi.
+        if not request.user.can_see_branch(from_branch):
+            messages.error(
+                request, "Faqat o'z filialingizdan tovar jo'nata olasiz.")
+            return redirect('transfer_create')
 
         # Parse line items: qty[<variant_id>]
         lines_data = []
@@ -5062,7 +5113,7 @@ def writeoff_list(request):
     POST: variantni shtrix-kod bo'yicha topadi, zaxirani atomik kamaytiradi,
     StockWriteOff + AuditLog yozadi. Bu yozuv ombor tenglamasiga kiradi.
     """
-    branches = Branch.objects.filter(is_active=True).order_by('name')
+    branches = visible_branches(request)
 
     if request.method == 'POST':
         raw = (request.POST.get('code') or '').strip()
@@ -5078,7 +5129,7 @@ def writeoff_list(request):
         note = (request.POST.get('note') or '').strip()[:200]
 
         valid_reasons = {r for r, _ in StockWriteOff.Reason.choices}
-        branch = Branch.objects.filter(pk=branch_id).first()
+        branch = visible_branches(request, order=None).filter(pk=branch_id).first()
         # Variantni shtrix-kod bo'yicha aniqlaymiz (jismoniy tovardagi kod)
         variant = (ProductVariant.objects.filter(barcode=raw)
                    .select_related('product').first())
@@ -5262,7 +5313,10 @@ def shift_close(request):
 @login_required
 def shift_detail(request, pk):
     shift = get_object_or_404(Shift, pk=pk)
-    if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
+    # ROLE-3: egasi — hammasi; boshqasi — FAQAT o'z filiali.
+    # Ilgari sharti is_admin() edi, ya'ni filial admini boshqa
+    # filial yozuvini manzil orqali ochib ko'rardi.
+    if not request.user.can_see_branch(shift.branch):
         return HttpResponseForbidden()
     txns = list(shift.transactions.select_related('sold_by')
                 .prefetch_related('lines')
@@ -5364,7 +5418,10 @@ def shift_receipt(request, pk):
     """
     shift = get_object_or_404(Shift.objects.select_related(
         'branch', 'opened_by', 'closed_by'), pk=pk)
-    if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
+    # ROLE-3: egasi — hammasi; boshqasi — FAQAT o'z filiali.
+    # Ilgari sharti is_admin() edi, ya'ni filial admini boshqa
+    # filial yozuvini manzil orqali ochib ko'rardi.
+    if not request.user.can_see_branch(shift.branch):
         return HttpResponseForbidden()
 
     # ARCH-5/MON-26: SOTUV bloki ham KASSA bloki bilan AYNAN bir xil cheklar
@@ -5562,7 +5619,10 @@ def shift_returns(request, pk):
     """
     from decimal import Decimal
     shift = get_object_or_404(Shift.objects.select_related('branch'), pk=pk)
-    if not request.user.is_admin() and request.user.branch_id != shift.branch_id:
+    # ROLE-3: egasi — hammasi; boshqasi — FAQAT o'z filiali.
+    # Ilgari sharti is_admin() edi, ya'ni filial admini boshqa
+    # filial yozuvini manzil orqali ochib ko'rardi.
+    if not request.user.can_see_branch(shift.branch):
         return HttpResponseForbidden()
 
     rows = []
@@ -5866,7 +5926,9 @@ def cash_in(request):
 @admin_required
 def shift_list(request):
     """Smenlar ro'yxati + filtrlar + ochiq smenlar banner."""
-    branch_id = request.GET.get('branch') or ''
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
     status = request.GET.get('status') or ''
     seller_id = request.GET.get('seller') or ''
     date_from = request.GET.get('date_from') or ''
@@ -5893,9 +5955,13 @@ def shift_list(request):
     shifts = list(qs.order_by('-opened_at')[:100])
 
     # Ochiq smenlar — har doim alohida ko'rsatamiz
-    open_shifts = (Shift.objects.filter(status=Shift.Status.OPEN)
-                   .select_related('branch', 'opened_by')
-                   .order_by('-opened_at'))
+    # ROLE-3: "ochiq smenlar" banneri filtrdan TASHQARIDA quriladi —
+    # shuning uchun uni alohida qisamiz, aks holda u boshqa filialning
+    # ochiq smenasini va kassirini ko'rsatib qo'yardi.
+    open_shifts = scoped(
+        Shift.objects.filter(status=Shift.Status.OPEN)
+        .select_related('branch', 'opened_by')
+        .order_by('-opened_at'), request)
 
     # Variance stats — total positive vs negative variance from closed shifts.
     # Shift.variance is a method, so call it (cache per row).
@@ -5923,8 +5989,8 @@ def shift_list(request):
         'seller_id': seller_id,
         'date_from': date_from,
         'date_to': date_to,
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
-        'sellers': User.objects.filter(is_active=True).order_by('username'),
+        'branches': visible_branches(request),
+        'sellers': visible_users(request),     # ROLE-3
     })
 
 
@@ -6001,7 +6067,7 @@ def sale_create(request, stock_id):
 
 # ---------- BRANCHES ----------
 
-@admin_required
+@owner_required
 def branch_list(request):
     """Filiallar ro'yxati: 30 kunlik tushum + P&L + xodimlar."""
     since_30d = timezone.now() - timedelta(days=30)
@@ -6092,7 +6158,7 @@ def branch_list(request):
     })
 
 
-@admin_required
+@owner_required
 def branch_create(request):
     if request.method == 'POST':
         form = BranchForm(request.POST)
@@ -6107,7 +6173,7 @@ def branch_create(request):
     })
 
 
-@admin_required
+@owner_required
 def branch_edit(request, pk):
     branch = get_object_or_404(Branch, pk=pk)
     if request.method == 'POST':
@@ -6129,10 +6195,13 @@ def branch_edit(request, pk):
 def user_list(request):
     """Foydalanuvchilar: 30 kunlik performans + oxirgi kirish."""
     role_filter = request.GET.get('role') or ''
-    branch_id = request.GET.get('branch') or ''
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
     only_active = request.GET.get('active') == '1'
 
-    users = User.objects.select_related('branch')
+    # ROLE-4: filial admini FAQAT o'z filiali xodimlarini ko'radi.
+    users = scoped(User.objects.select_related('branch'), request)
     if role_filter:
         users = users.filter(role=role_filter)
     if branch_id:
@@ -6177,7 +6246,7 @@ def user_list(request):
         'role_filter': role_filter,
         'branch_id': branch_id,
         'only_active': only_active,
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'branches': visible_branches(request),
         'role_choices': User.Role.choices,
     })
 
@@ -6185,7 +6254,7 @@ def user_list(request):
 @admin_required
 def user_create(request):
     if request.method == 'POST':
-        form = UserCreateForm(request.POST)
+        form = UserCreateForm(request.POST, user=request.user)
         if form.is_valid():
             user = form.save()
             # H7 fix: audit account creation (password set is implicit)
@@ -6197,7 +6266,7 @@ def user_create(request):
             messages.success(request, f"Foydalanuvchi yaratildi: {user.username}")
             return redirect('user_list')
     else:
-        form = UserCreateForm()
+        form = UserCreateForm(user=request.user)
     return render(request, 'inventory/user_form.html', {
         'form': form, 'title': "Yangi foydalanuvchi", 'is_create': True,
     })
@@ -6206,8 +6275,17 @@ def user_create(request):
 @admin_required
 def user_edit(request, pk):
     target = get_object_or_404(User, pk=pk)
+    # ROLE-4: filial admini FAQAT o'z filialidagi SOTUVCHIni tahrirlaydi.
+    # Boshqa filial xodimi ham, admin/egasi ham unga berilmaydi —
+    # aks holda u o'zini yoki egasini o'zgartirib huquq oshirardi.
+    if not request.user.is_owner() and target.pk != request.user.pk:
+        if not request.user.can_see_branch(target.branch) \
+                or not target.is_seller():
+            return HttpResponseForbidden(
+                "<h3>Ruxsat yo'q.</h3>"
+                "<p>Faqat o'z filialingizdagi sotuvchini tahrirlay olasiz.</p>")
     if request.method == 'POST':
-        form = UserEditForm(request.POST, instance=target)
+        form = UserEditForm(request.POST, instance=target, user=request.user)
         if form.is_valid():
             new_password = (form.cleaned_data.get('new_password') or '').strip()
             user = form.save()
@@ -6222,7 +6300,7 @@ def user_edit(request, pk):
             messages.success(request, 'Foydalanuvchi yangilandi.')
             return redirect('user_list')
     else:
-        form = UserEditForm(instance=target)
+        form = UserEditForm(instance=target, user=request.user)
     return render(request, 'inventory/user_form.html', {
         'form': form, 'title': f'Tahrirlash — {target.username}',
         'target_user': target, 'is_create': False,
@@ -6231,7 +6309,7 @@ def user_edit(request, pk):
 
 # ---------- CATEGORIES ----------
 
-@admin_required
+@owner_required
 def category_list(request):
     if request.method == 'POST':
         action = request.POST.get('action') or 'create'
@@ -6415,7 +6493,9 @@ def sales_list(request):
     q = (request.GET.get('q') or '').strip()
     date_from_raw = request.GET.get('date_from') or ''
     date_to_raw = request.GET.get('date_to') or ''
-    branch_id = request.GET.get('branch') or ''
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
     seller_id = request.GET.get('seller') or ''
     payment_method = request.GET.get('payment_method') or ''
     returned = request.GET.get('returned') or ''   # '', 'yes', 'no'
@@ -6748,8 +6828,8 @@ def sales_list(request):
         'returned': returned,
         'discount': discount,
         # Choices
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
-        'sellers': User.objects.filter(is_active=True).order_by('username'),
+        'branches': visible_branches(request),
+        'sellers': visible_users(request),     # ROLE-3
         'payment_methods': SaleTransaction.PaymentMethod.choices,
     })
 
@@ -6976,7 +7056,8 @@ def _build_pivot(sale_qs, rows_dims, cols_dim, metric):
 
 @admin_required
 def reports(request):
-    form = ReportForm(request.GET or None, initial={'period': 'week', 'report_type': 'sales'})
+    form = ReportForm(request.GET or None, user=request.user,
+                      initial={'period': 'week', 'report_type': 'sales'})
     rows = []
     headers = []
     title = ''
@@ -6988,7 +7069,10 @@ def reports(request):
         period = form.cleaned_data['period']
         date_from = form.cleaned_data.get('date_from')
         date_to = form.cleaned_data.get('date_to')
-        branch = form.cleaned_data.get('branch')
+        # ROLE-3: filial admini uchun "barcha filiallar" degan tanlov
+        # yo'q — bo'sh qoldirsa ham o'z filiali qo'yiladi.
+        branch = form.cleaned_data.get('branch') or (
+            request.user.scope_branch() or None)
 
         d_start, d_end, dt_start, dt_end = _resolve_period(period, date_from, date_to)
 
@@ -7342,7 +7426,10 @@ def cart_count(request):
 def cart_add(request, stock_id):
     """POST /cart/add/<stock_id>/  with qty (default 1)."""
     stock = get_object_or_404(BranchStock.objects.select_related('branch'), pk=stock_id)
-    if not request.user.is_admin() and request.user.branch_id != stock.branch_id:
+    # ROLE-3: egasi — hammasi; boshqasi — FAQAT o'z filiali.
+    # Ilgari sharti is_admin() edi, ya'ni filial admini boshqa
+    # filial yozuvini manzil orqali ochib ko'rardi.
+    if not request.user.can_see_branch(stock.branch):
         return HttpResponseForbidden("Bu filialda sotishga ruxsat yo'q.")
 
     try:
@@ -7495,7 +7582,10 @@ def transaction_detail(request, token):
             .prefetch_related('lines__variant__product'),
         public_id=token,   # SEC-6: ketma-ket PK emas, tasodifiy token
     )
-    if not request.user.is_admin() and request.user.branch_id != txn.branch_id:
+    # ROLE-3: egasi — hammasi; boshqasi — FAQAT o'z filiali.
+    # Ilgari sharti is_admin() edi, ya'ni filial admini boshqa
+    # filial yozuvini manzil orqali ochib ko'rardi.
+    if not request.user.can_see_branch(txn.branch):
         return HttpResponseForbidden("Bu chekni ko'rishga ruxsat yo'q.")
     # PAY-1: to'lov turini shu yerdan ham tuzatish mumkin — lekin AYNAN
     # POS'dagi shartlar bilan: ochiq smena, aralash emas, va sotuvchi faqat
@@ -7522,7 +7612,10 @@ def transaction_detail(request, token):
 def return_create(request, sale_id):
     sale = get_object_or_404(Sale.objects.select_related('variant__product', 'branch'),
                              pk=sale_id)
-    if not request.user.is_admin() and request.user.branch_id != sale.branch_id:
+    # ROLE-3: egasi — hammasi; boshqasi — FAQAT o'z filiali.
+    # Ilgari sharti is_admin() edi, ya'ni filial admini boshqa
+    # filial yozuvini manzil orqali ochib ko'rardi.
+    if not request.user.can_see_branch(sale.branch):
         return HttpResponseForbidden()
 
     max_returnable = sale.quantity - sale.returned_qty
@@ -7591,7 +7684,17 @@ def _changes_text(changes):
 
 @admin_required
 def audit_list(request):
+    # ROLE-7: audit yozuvida filial maydoni yo'q — u AMALNI bajargan
+    # foydalanuvchiga bog'langan. Shu bois filial admini uchun O'Z
+    # FILIALI xodimlarining izini ko'rsatamiz (o'zi ham shu ro'yxatda).
     logs = AuditLog.objects.select_related('user').all()
+    _scope = request.user.scope_branch()
+    if _scope is False:
+        logs = logs.none()
+    elif _scope is not None:
+        _staff = list(visible_users(request, active_only=False)
+                      .values_list('username', flat=True))
+        logs = logs.filter(username_snapshot__in=_staff)
     # AUD-1: bitta foydalanuvchi amali — bitta satr. Partiya ichidagi
     # qatorlar (batch_id bor, batch_count == 0) ro'yxatda YASHIRILADI va
     # bosh qatorni ochganda ko'rinadi. ?raw=1 — hammasini ko'rsatadi
@@ -7660,7 +7763,10 @@ def audit_list(request):
     page, page_qs = paginate(request, logs, 50)     # CORE-3
 
     actions = AuditLog.Action.choices
-    users = (AuditLog.objects.values_list('username_snapshot', flat=True)
+    # "Kim" filtrining ro'yxati ham qisilsin — aks holda jadval bo'sh
+    # bo'lsa ham ochiladigan ro'yxat boshqa filial xodimlari ismini
+    # ko'rsatib turardi.
+    users = (logs.values_list('username_snapshot', flat=True)
              .distinct().order_by('username_snapshot'))
     users = [u for u in users if u]
     models_list = (AuditLog.objects.values_list('model_name', flat=True)
@@ -8051,7 +8157,9 @@ def price_labels(request):
 def _insights_context(request):
     """Insights view va export uchun barcha hisoblar."""
     period = request.GET.get('period', 'month')
-    branch_id = request.GET.get('branch') or ''
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
 
     today = timezone.localdate()
     end_date = today   # davr oxirgi (kiritilgan) kuni; odatda bugun
@@ -8092,11 +8200,11 @@ def _insights_context(request):
     prev_dt_end = dt_start
 
     sales = Sale.objects.filter(sold_at__gte=dt_start, sold_at__lt=dt_end)
-    branches_all = Branch.objects.filter(is_active=True)
+    branches_all = visible_branches(request, order=None)
     selected_branch = None
     if branch_id:
         try:
-            selected_branch = Branch.objects.get(pk=int(branch_id))
+            selected_branch = visible_branches(request, order=None).get(pk=int(branch_id))
             sales = sales.filter(branch=selected_branch)
         except (Branch.DoesNotExist, ValueError):
             pass
@@ -8258,8 +8366,8 @@ def _insights_context(request):
     for pid, pdata in sorted(profit_by_product.items(),
                              key=lambda x: x[1]['qty'], reverse=True)[:10]:
         daily_avg = pdata['qty'] / days if days else 0
-        current_stock = BranchStock.objects.filter(
-            variant__product_id=pid
+        current_stock = scoped(BranchStock.objects.filter(
+            variant__product_id=pid), request
         ).aggregate(s=Sum('stock_count'))['s'] or 0
         days_left = (current_stock / daily_avg) if daily_avg else None
         turnover.append({
@@ -8285,8 +8393,14 @@ def _insights_context(request):
 
     # SLOW MOVERS — bu davrda umuman sotilmagan mahsulotlar
     sold_product_ids = sales.values_list('variant__product_id', flat=True).distinct()
+    # ROLE-3: "sekin sotiladigan" ro'yxati SHU filial zaxirasidan
+    # qurilsin — boshqa filialda yotgan tovar bu yerda ko'rinmasin.
+    _stock_ids = list(scoped(BranchStock.objects.filter(stock_count__gt=0),
+                             request)
+                      .values_list('variant__product_id', flat=True).distinct())
     slow_products = list(
         Product.objects.exclude(id__in=sold_product_ids)
+        .filter(id__in=_stock_ids)
         .select_related('category')
         .annotate(stock=Sum('variants__branch_stocks__stock_count'))[:15]
     )
@@ -8420,7 +8534,7 @@ def _insights_context(request):
 
     # Ombor risk: sof aksiya, narx
     out_of_stock = list(
-        BranchStock.objects.filter(stock_count=0)
+        scoped(BranchStock.objects.filter(stock_count=0), request)
         .select_related('variant__product', 'branch')[:20]
     )
 
@@ -8468,9 +8582,14 @@ def _insights_context(request):
             'reasons': [r['reason'] for r in reasons],
         })
 
-    # Foyda yuqori mahsulotlar (markup bo'yicha eng yuqori)
+    # Foyda yuqori mahsulotlar (markup bo'yicha eng yuqori).
+    # ROLE-3: katalog global bo'lsa ham, bu ro'yxat SHU filial
+    # zaxirasidagi tovarlardan qurilsin — do'konda yo'q tovarning
+    # markupi filial adminiga hech nima bermaydi, ustiga-ustak boshqa
+    # filial assortimentini oshkor qiladi.
     high_margin = list(
-        Product.objects.order_by('-markup_percent')[:8]
+        Product.objects.filter(id__in=_stock_ids)
+        .order_by('-markup_percent')[:8]
     )
 
     context = {
@@ -8721,9 +8840,10 @@ def _insights_context(request):
 
     # Dead stock: products with zero sales in last 90 days but stock > 0
     cutoff_90d = timezone.now() - timedelta(days=90)
-    recently_sold_ids = set(Sale.objects.filter(sold_at__gte=cutoff_90d)
-                            .values_list('variant__product_id', flat=True).distinct())
-    has_stock = (BranchStock.objects.filter(stock_count__gt=0)
+    recently_sold_ids = set(
+        scoped(Sale.objects.filter(sold_at__gte=cutoff_90d), request)
+        .values_list('variant__product_id', flat=True).distinct())
+    has_stock = (scoped(BranchStock.objects.filter(stock_count__gt=0), request)
                  .values_list('variant__product_id', flat=True).distinct())
     dead_ids = set(has_stock) - recently_sold_ids
     dead_products = list(Product.objects
@@ -9122,7 +9242,7 @@ def _request_branch(request):
     if b:
         return b
     if request.user.is_admin():
-        return Branch.objects.filter(is_active=True).order_by('name').first()
+        return visible_branches(request).first()
     return None
 
 
@@ -9287,11 +9407,15 @@ def _price_qs(request, params=None):
           .select_related('variant__product__category', 'branch')
           .order_by('variant__product__name', 'variant__color', 'variant__size'))
 
-    branch_id = (params.get('branch') or '').strip()
+    # ROLE-7: filial chegarasi BIRINCHI qo'llanadi. Ilgari bu yerda
+    # `request.user.role != 'admin'` sharti bor edi — ya'ni har qanday
+    # admin butun tizim narxlarini ko'rar va o'zgartira olardi. Endi
+    # scoped() egasidan boshqa hammani o'z filialiga qisadi, GET dagi
+    # ?branch= esa faqat egasi uchun ma'noga ega.
+    qs = scoped(qs, request)
+    branch_id, _ = picked_branch_id(request, params.get('branch'))
     if branch_id:
         qs = qs.filter(branch_id=branch_id)
-    elif getattr(request.user, 'branch_id', None) and request.user.role != 'admin':
-        qs = qs.filter(branch=request.user.branch)
 
     q = (params.get('q') or '').strip()
     if q:
@@ -9330,8 +9454,11 @@ def price_list(request):
     from django.core.paginator import Paginator
     qs = _price_qs(request)
 
-    base = BranchStock.objects.all()
-    branch_id = (request.GET.get('branch') or '').strip()
+    # Yuqoridagi "muammo" kartochkalari ham SHU filial bo'yicha sanalsin.
+    base = scoped(BranchStock.objects.all(), request)
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
     if branch_id:
         base = base.filter(branch_id=branch_id)
     counts = {
@@ -9358,7 +9485,7 @@ def price_list(request):
         'rows': page.object_list,
         'total_count': paginator.count,
         'categories': Category.objects.order_by('name'),
-        'branches': Branch.objects.filter(is_active=True).order_by('name'),
+        'branches': visible_branches(request),
         'issues': PRICE_ISSUES,
         'issue_cards': issue_cards,
         'cur': {
@@ -9403,9 +9530,10 @@ def price_apply(request):
                 'Narxlar tahrirlandi (qatorlab)',
                 model_name='BranchStock') as _batch:
             for i, sid in enumerate(ids):
-                stock = BranchStock.objects.select_for_update().filter(pk=sid).first()
+                stock = (scoped(BranchStock.objects.select_for_update(),
+                                request).filter(pk=sid).first())
                 if not stock:
-                    continue
+                    continue        # ROLE-7: boshqa filial qatori — tegmaymiz
                 get = lambda n: (request.POST.getlist(n)[i]
                                  if i < len(request.POST.getlist(n)) else '')
                 rc, rs, rw = get('row_cost'), get('row_sale'), get('row_ws')
@@ -9454,7 +9582,8 @@ def price_apply(request):
         if not sel:
             messages.error(request, "Hech qanday qator tanlanmagan.")
             return redirect(back)
-        targets = BranchStock.objects.filter(pk__in=sel)
+        # ROLE-7: ommaviy amal ham FAQAT o'z filiali qatorlariga.
+        targets = scoped(BranchStock.objects.filter(pk__in=sel), request)
     else:
         # STK-9: filtrlarni POST'dan o'qiymiz (GET bo'sh). Va agar HECH QANDAY
         # filtr bo'lmasa — bu BUTUN katalogni qamrab oladi. Tasodifan hammani
@@ -9501,7 +9630,7 @@ def price_apply(request):
         _batch.note('foiz', str(pct))
         for _chunk in _chunked(_ids):
             with transaction.atomic():
-                for stock in (BranchStock.objects.select_for_update()
+                for stock in (scoped(BranchStock.objects.select_for_update(), request)
                               .filter(pk__in=_chunk)):
                     ch = {}
                     if op == 'margin_from_cost':
@@ -9611,7 +9740,7 @@ def price_history(request):
 
 # ---------- AKSIYALAR (Promotion) ----------
 
-@admin_required
+@owner_required
 def promotion_list(request):
     """Aksiyalar ro'yxati. Model va POS mantiqi bor edi — endi boshqaruvi ham."""
     promos = (Promotion.objects
@@ -9630,7 +9759,7 @@ def promotion_list(request):
     })
 
 
-@admin_required
+@owner_required
 def promotion_save(request):
     """Aksiya yaratish yoki tahrirlash (bitta forma)."""
     from decimal import Decimal, InvalidOperation
@@ -9710,7 +9839,7 @@ def promotion_save(request):
     return redirect('promotion_list')
 
 
-@admin_required
+@owner_required
 def promotion_delete(request, pk):
     if request.method != 'POST':
         return redirect('promotion_list')
@@ -9726,7 +9855,7 @@ def promotion_delete(request, pk):
 
 # ---------- TEZKOR SOTUV toifalari (POS paneli sozlamasi) ----------
 
-@admin_required
+@owner_required
 def quick_sell_settings(request):
     """POS 'Tezkor sotuv' toifalari va narxlarini tahrirlash."""
     if request.method == 'POST':
@@ -9975,8 +10104,9 @@ def variant_split_batch(request):
 
     src = get_object_or_404(ProductVariant.objects.select_related('product'),
                             pk=request.POST.get('variant') or 0)
-    branch = Branch.objects.filter(pk=request.POST.get('branch') or 0).first() \
-        or getattr(request.user, 'branch', None)
+    branch = (visible_branches(request, order=None)
+              .filter(pk=request.POST.get('branch') or 0).first()
+              or getattr(request.user, 'branch', None))
     back = request.POST.get('back') or reverse('product_detail',
                                                args=[src.product.code])
     if branch is None:
@@ -10059,7 +10189,7 @@ def intake_mixed(request):
     birlashtirilgan: har mahsulot uchun qulay usulni tanlaysiz, hammasi
     bitta qabulga yoziladi.
     """
-    branches = Branch.objects.filter(is_active=True).order_by('name')
+    branches = visible_branches(request)
     return render(request, 'inventory/intake_mixed.html', {
         'branches': branches,
         'categories': Category.objects.all().order_by('name'),
@@ -10088,8 +10218,8 @@ def intake_mixed_save(request):
         # CORE-1: ilgari bu nusxa 'inf' ni ham, 10 xonadan katta sonni ham
         # o'tkazib yuborardi — ular bazada InvalidOperation berib 500 qilardi.
         return parse_money(v, default=_dec(default))
-    branch = Branch.objects.filter(pk=data.get('branch') or 0,
-                                   is_active=True).first()
+    branch = visible_branches(request, order=None).filter(
+        pk=data.get('branch') or 0).first()
     if branch is None:
         return JsonResponse({'ok': False, 'error': 'Filial tanlanmagan'}, status=400)
 
@@ -10393,8 +10523,10 @@ def warehouse(request):
     ~19 000 dona bo'lgani uchun har qator bo'yicha alohida so'rov yubormaymiz.
     """
     from decimal import Decimal
-    branches = list(Branch.objects.filter(is_active=True).order_by('name'))
-    branch_id = request.GET.get('branch') or ''
+    branches = list(visible_branches(request))
+    # ROLE-3: egasi tanlaganini oladi; filial admini/sotuvchisi uchun
+    # bu HAR DOIM o'z filiali — ?branch=2 deb yozib ham o'zgarmaydi.
+    branch_id, _sel_branch = picked_branch_id(request, request.GET.get('branch'))
     branch = next((b for b in branches if str(b.pk) == str(branch_id)), None)
 
     stock = BranchStock.objects.select_related(

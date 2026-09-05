@@ -3272,6 +3272,7 @@
                     </ul>
                 </li>
 
+                {% comment %} ROLE-7: Narx — filial darajasidagi ish (har filialning o'z sotuv narxi bor), shuning uchun menyu adminda ham turadi va o'z filiali qatorlarini ko'rsatadi. Aksiya va tezkor sotuv esa BUTUN tizimga tegadi — ular egasida qoladi. {% endcomment %}
                 <!-- Narxlar guruhi -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" href="#">
@@ -3283,10 +3284,12 @@
                         <li><a class="dropdown-item" href="{% url 'price_list' %}?issue=zero">
                             <i class="bi bi-exclamation-triangle me-1 text-warning"></i>
                             <small>&#8627; Marjasiz mahsulotlar</small></a></li>
+                        {% if user.is_owner %}
                         <li><a class="dropdown-item" href="{% url 'promotion_list' %}">
                             <i class="bi bi-percent me-1 text-success"></i> Aksiyalar</a></li>
                         <li><a class="dropdown-item" href="{% url 'quick_sell_settings' %}">
                             <i class="bi bi-lightning-charge-fill me-1 text-warning"></i> Tezkor sotuv (POS)</a></li>
+                        {% endif %}
                         <li><a class="dropdown-item" href="{% url 'price_history' %}">
                             <i class="bi bi-clock-history me-1 text-secondary"></i> Narx tarixi</a></li>
                     </ul>
@@ -3318,16 +3321,20 @@
                     </a>
                     <ul class="dropdown-menu shadow">
                         <li class="dropdown-header small text-uppercase">Direktoriyalar</li>
+                        {% if user.is_owner %}
                         <li><a class="dropdown-item" href="{% url 'branch_list' %}">
                             <i class="bi bi-building me-1 text-primary"></i> Filiallar</a></li>
+                        {% endif %}
                         <li><a class="dropdown-item" href="{% url 'user_list' %}">
                             <i class="bi bi-people me-1 text-info"></i> Foydalanuvchilar</a></li>
                         <li><a class="dropdown-item" href="{% url 'customer_list' %}">
                             <i class="bi bi-person-rolodex me-1 text-success"></i> Mijozlar</a></li>
                         <li><a class="dropdown-item" href="{% url 'supplier_list' %}">
                             <i class="bi bi-truck me-1 text-warning"></i> Yetkazib beruvchilar</a></li>
+                        {% if user.is_owner %}
                         <li><a class="dropdown-item" href="{% url 'category_list' %}">
                             <i class="bi bi-tags me-1 text-secondary"></i> Kategoriyalar</a></li>
+                        {% endif %}
                         <li><a class="dropdown-item" href="{% url 'employee_debt_list' %}">
                             <i class="bi bi-person-badge me-1 text-danger"></i> Xodim qarzlari</a></li>
                         <li><a class="dropdown-item" href="{% url 'security_2fa' %}">
@@ -3337,8 +3344,10 @@
                         <li><a class="dropdown-item" href="{% url 'payment_qr_list' %}">
                             <i class="bi bi-qr-code me-1 text-dark"></i> To'lov QR'lari</a></li>
                         <li><hr class="dropdown-divider"></li>
+                        {% if user.is_owner %}
                         <li><a class="dropdown-item" href="{% url 'csv_import' %}">
                             <i class="bi bi-file-earmark-spreadsheet me-1 text-success"></i> CSV import</a></li>
+                        {% endif %}
                         <li><a class="dropdown-item" href="{% url 'audit_list' %}">
                             <i class="bi bi-clipboard-data me-1 text-muted"></i> Audit log</a></li>
                     </ul>
@@ -3360,6 +3369,16 @@
 
             <!-- O'ng tomon: status + user dropdown -->
             <ul class="navbar-nav align-items-lg-center">
+                {% comment %} ROLE-3: filial admini/sotuvchi QAYSI filialda ishlayotganini har sahifada ko'rib tursin — hamma raqam shu filialniki. {% endcomment %}
+                {% if not user.is_owner and user.branch %}
+                <li class="nav-item d-none d-md-flex align-items-center me-2">
+                    <span class="badge yurit-status-badge bg-primary-subtle text-primary-emphasis"
+                          title="Siz shu filial bilan ishlayapsiz">
+                        <i class="bi bi-building"></i>
+                        <span class="ms-1">{{ user.branch.name }}</span>
+                    </span>
+                </li>
+                {% endif %}
                 <li class="nav-item d-flex align-items-center me-2">
                     <span id="connStatus" class="badge yurit-status-badge bg-secondary"
                           title="Internet holati">
@@ -3379,8 +3398,8 @@
                                 <span class="yurit-avatar me-2">{{ user.username|slice:":1"|upper }}</span>
                                 <div>
                                     <div class="fw-bold">{{ user.username }}</div>
-                                    <span class="badge bg-{% if user.is_admin %}danger{% else %}info{% endif %} small">
-                                        {% if user.is_admin %}Administrator{% else %}Sotuvchi{% endif %}
+                                    <span class="badge bg-{% if user.is_owner %}dark{% elif user.is_admin %}danger{% else %}info{% endif %} small">
+                                        {% if user.is_owner %}Egasi{% elif user.is_admin %}Administrator{% else %}Sotuvchi{% endif %}
                                     </span>
                                 </div>
                             </div>

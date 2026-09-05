@@ -151,8 +151,17 @@ def post_save_handler(sender, instance, created, **kwargs):
     if sender in (SaleTransaction, Sale, BranchStock, Transfer):
         try:
             from django.core.cache import cache
-            from .views import DASHBOARD_CACHE_KEY
-            cache.delete(DASHBOARD_CACHE_KEY)
+            from .views import dashboard_cache_key
+            # ROLE-3: panel endi filial bo'yicha keshlanadi — egasining
+            # "hammasi" keshini ham, tegishli filialnikini ham tozalaymiz.
+            cache.delete(dashboard_cache_key(None))
+            _bid = (getattr(instance, 'branch_id', None)
+                    or getattr(instance, 'from_branch_id', None))
+            if _bid:
+                cache.delete(dashboard_cache_key(_bid))
+            _to = getattr(instance, 'to_branch_id', None)
+            if _to:
+                cache.delete(dashboard_cache_key(_to))
         except Exception:
             pass
 
